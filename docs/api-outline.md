@@ -1,20 +1,42 @@
 # API Outline
 
+## Response Envelope
+
+Success:
+```json
+{ "ok": true, "data": {}, "requestId": "optional" }
+```
+
+Error:
+```json
+{ "ok": false, "error": { "message": "string", "code": "optional", "details": ["optional"] }, "requestId": "optional" }
+```
+
 ## Auth
 
-- `POST /api/auth/register`
-- `POST /api/auth/*` (Auth.js / NextAuth handlers)
+- `GET /health`
+- `POST /auth/register`
+- `POST /auth/user/session`
+- `POST /auth/admin/login`
 
 ## User
 
-- `GET /api/wallet`
-- `GET /api/transactions?limit=50`
-- `POST /api/draw`
+- `GET /wallet`
+- `GET /transactions?limit=50`
+- `POST /draw`
+- `GET /bank-cards`
+- `POST /bank-cards`
+- `PATCH /bank-cards/{bankCardId}/default`
+- `GET /top-ups`
+- `POST /top-ups`
+- `GET /withdrawals`
+- `POST /withdrawals`
 
 ## Admin
 
-- `GET /api/admin/prizes`
-- `POST /api/admin/prizes`
-- `PATCH /api/admin/prizes/{prizeId}`
-- `PATCH /api/admin/prizes/{prizeId}/toggle`
-- `GET /api/admin/analytics/summary`
+- `GET /admin/prizes`
+- `POST /admin/prizes`
+- `PATCH /admin/prizes/{prizeId}`
+- `PATCH /admin/prizes/{prizeId}/toggle`
+- `DELETE /admin/prizes/{prizeId}` (soft delete)
+- `GET /admin/analytics/summary`

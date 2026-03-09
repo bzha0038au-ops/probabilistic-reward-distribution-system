@@ -1,0 +1,161 @@
+{
+  "common": {
+    "appName": "Prize Pool Engine",
+    "dashboard": "Dashboard",
+    "signIn": "Sign In",
+    "signOut": "Sign Out",
+    "signUp": "Sign up",
+    "getStarted": "Get Started",
+    "createAccount": "Create Account",
+    "openDashboard": "Open Dashboard",
+    "loading": "Loading",
+    "submit": "Submit form",
+    "email": "Email Address",
+    "password": "Password",
+    "emailPlaceholder": "user@acme.com",
+    "admin": "Admin"
+  },
+  "auth": {
+    "loginTitle": "Sign In",
+    "loginDescription": "Access your wallet and draw history.",
+    "invalidCredentials": "Invalid email or password.",
+    "loginFailed": "Unable to sign in. Please try again.",
+    "missingFields": "Email and password are required.",
+    "registerFailed": "Failed to register. Please try again.",
+    "noAccount": "Don't have an account?",
+    "haveAccount": "Already have an account?",
+    "registerTitle": "Create Account",
+    "registerDescription": "Start your virtual wallet and try the draw engine."
+  },
+  "app": {
+    "title": "User Dashboard",
+    "signedInAs": "Signed in as {email}",
+    "balanceNotesTitle": "Balance & Ledger Notes",
+    "notes": [
+      "All debits and credits are written to the ledger.",
+      "Draws run inside a single atomic transaction.",
+      "Inventory is locked before stock deduction."
+    ]
+  },
+  "draw": {
+    "title": "Draw Console",
+    "currentBalance": "Current balance",
+    "runDraw": "Run Draw",
+    "drawing": "Drawing...",
+    "errorFallback": "Draw failed",
+    "statusLabel": "Status",
+    "rewardLabel": "Reward Amount",
+    "prizeLabel": "Prize ID",
+    "na": "N/A"
+  },
+  "marketing": {
+    "nav": {
+      "brand": "Prize Pool Engine",
+      "dashboard": "Dashboard",
+      "signIn": "Sign In",
+      "getStarted": "Get Started"
+    },
+    "hero": {
+      "badge": "Probabilistic Reward Distribution",
+      "title": "Transaction-safe prize draws with configurable probability and ledger accuracy.",
+      "description": "Model wallet-backed draws, dynamic prize pools, and operations visibility inside a full-stack system built for concurrency, audits, and clean service boundaries.",
+      "primaryCta": "Launch the Demo",
+      "secondaryCta": "View Dashboard",
+      "stats": {
+        "transactionIntegrity": "Transaction integrity",
+        "modularDomains": "Modular domains",
+        "paymentRisk": "Payment risk"
+      },
+      "card1": {
+        "title": "Draw Engine Snapshot",
+        "description": "Balance lock → Weighted pick → Inventory lock → Ledger",
+        "items": [
+          { "label": "Wallet balance check", "value": "Atomic" },
+          { "label": "Prize eligibility filter", "value": "Dynamic" },
+          { "label": "Inventory lock", "value": "Row-level" },
+          { "label": "Ledger logging", "value": "Guaranteed" }
+        ]
+      },
+      "card2": {
+        "title": "Operations Control Surface",
+        "description": "Adjust weights, monitor pool balance, audit draw stats.",
+        "body": "Live configuration with audit trails. Every change is reflected instantly in the draw engine."
+      }
+    },
+    "stack": {
+      "title": "Built on a modern stack",
+      "description": "This portfolio system prioritizes type safety, transactional integrity, and fast iteration.",
+      "items": [
+        "Next.js App Router",
+        "PostgreSQL",
+        "Auth.js",
+        "Drizzle ORM",
+        "Shadcn UI",
+        "Row-Level Locking"
+      ]
+    },
+    "metrics": [
+      {
+        "value": "6+",
+        "label": "Domain modules wired",
+        "detail": "Users, wallet, prizes, draw engine, analytics, system config."
+      },
+      {
+        "value": "100%",
+        "label": "Transactional coverage",
+        "detail": "Draw operations execute inside atomic transactions."
+      },
+      {
+        "value": "0",
+        "label": "Real payment risk",
+        "detail": "Virtual balance only. Perfect for portfolio demos."
+      }
+    ],
+    "features": {
+      "eyebrow": "Core Modules",
+      "title": "A full-stack reward platform, wired end to end",
+      "description": "Borrowing structure from the landing template, these sections highlight the data consistency, concurrency controls, and operational tooling that make the system portfolio-grade.",
+      "rows": [
+        {
+          "title": "Wallet + Ledger Integrity",
+          "description": "Every draw uses atomic balance locks, immutable ledger entries, and clear audit trails for both debits and rewards.",
+          "image": "/assets/landing/feature.svg",
+          "bullets": [
+            { "label": "Atomic updates", "copy": "Balance and inventory are locked per draw." },
+            { "label": "Clear audit trail", "copy": "Transactions are immutable and traceable." }
+          ]
+        },
+        {
+          "title": "Dynamic Prize Pool Control",
+          "description": "Configurable weights, threshold gating, and stock locks prevent overselling while keeping probability updates instant.",
+          "image": "/assets/landing/feature2.svg",
+          "reverse": true,
+          "bullets": [
+            { "label": "Atomic updates", "copy": "Balance and inventory are locked per draw." },
+            { "label": "Clear audit trail", "copy": "Transactions are immutable and traceable." }
+          ]
+        },
+        {
+          "title": "Analytics Surface",
+          "description": "Monitor draw volume, reward distribution, pool balance, and user spend ranking with real-time visibility.",
+          "image": "/assets/landing/feature3.svg",
+          "bullets": [
+            { "label": "Atomic updates", "copy": "Balance and inventory are locked per draw." },
+            { "label": "Clear audit trail", "copy": "Transactions are immutable and traceable." }
+          ]
+        }
+      ]
+    },
+    "cta": {
+      "title": "Ready to stress-test the engine?",
+      "description": "Spin up the demo, configure prizes, and watch the ledger update in real time.",
+      "primary": "Create Account",
+      "secondary": "Open Dashboard"
+    },
+    "footer": {
+      "copyright": "© 2026 Prize Pool Engine. Portfolio prototype.",
+      "app": "App",
+      "signIn": "Sign In"
+    }
+  }
+}

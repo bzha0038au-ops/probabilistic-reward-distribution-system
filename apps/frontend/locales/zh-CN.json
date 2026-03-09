@@ -1,0 +1,161 @@
+{
+  "common": {
+    "appName": "奖池引擎",
+    "dashboard": "仪表盘",
+    "signIn": "登录",
+    "signOut": "退出登录",
+    "signUp": "注册",
+    "getStarted": "立即开始",
+    "createAccount": "创建账号",
+    "openDashboard": "打开控制台",
+    "loading": "加载中",
+    "submit": "提交表单",
+    "email": "邮箱",
+    "password": "密码",
+    "emailPlaceholder": "user@acme.com",
+    "admin": "管理员"
+  },
+  "auth": {
+    "loginTitle": "登录",
+    "loginDescription": "访问你的钱包与抽奖记录。",
+    "invalidCredentials": "邮箱或密码错误。",
+    "loginFailed": "登录失败，请重试。",
+    "missingFields": "邮箱和密码不能为空。",
+    "registerFailed": "注册失败，请重试。",
+    "noAccount": "还没有账号？",
+    "haveAccount": "已有账号？",
+    "registerTitle": "创建账号",
+    "registerDescription": "开启虚拟钱包，体验抽奖引擎。"
+  },
+  "app": {
+    "title": "用户仪表盘",
+    "signedInAs": "登录账号：{email}",
+    "balanceNotesTitle": "余额与账本说明",
+    "notes": [
+      "所有扣款与入账都会记录在账本中。",
+      "抽奖在单一原子事务中完成。",
+      "扣减库存前会先锁定库存。"
+    ]
+  },
+  "draw": {
+    "title": "抽奖控制台",
+    "currentBalance": "当前余额",
+    "runDraw": "开始抽奖",
+    "drawing": "抽奖中...",
+    "errorFallback": "抽奖失败",
+    "statusLabel": "状态",
+    "rewardLabel": "奖励金额",
+    "prizeLabel": "奖品 ID",
+    "na": "无"
+  },
+  "marketing": {
+    "nav": {
+      "brand": "奖池引擎",
+      "dashboard": "仪表盘",
+      "signIn": "登录",
+      "getStarted": "立即开始"
+    },
+    "hero": {
+      "badge": "概率奖赏分发",
+      "title": "事务安全的抽奖引擎，支持可配置概率与账本准确性。",
+      "description": "构建基于钱包的抽奖、动态奖池与运营可视化，适配并发控制、审计与清晰的服务边界。",
+      "primaryCta": "启动演示",
+      "secondaryCta": "查看控制台",
+      "stats": {
+        "transactionIntegrity": "事务完整性",
+        "modularDomains": "模块化领域",
+        "paymentRisk": "支付风险"
+      },
+      "card1": {
+        "title": "抽奖引擎快照",
+        "description": "余额锁定 → 加权抽取 → 库存锁定 → 账本记录",
+        "items": [
+          { "label": "钱包余额校验", "value": "原子级" },
+          { "label": "奖品资格过滤", "value": "动态" },
+          { "label": "库存锁定", "value": "行级" },
+          { "label": "账本记录", "value": "可靠" }
+        ]
+      },
+      "card2": {
+        "title": "运营控制面板",
+        "description": "调整权重、监控奖池余额、审计抽奖数据。",
+        "body": "配置变更可追踪且即时生效，抽奖引擎实时同步。"
+      }
+    },
+    "stack": {
+      "title": "现代技术栈驱动",
+      "description": "该作品集系统强调类型安全、事务一致性与快速迭代。",
+      "items": [
+        "Next.js App Router",
+        "PostgreSQL",
+        "Auth.js",
+        "Drizzle ORM",
+        "Shadcn UI",
+        "Row-Level Locking"
+      ]
+    },
+    "metrics": [
+      {
+        "value": "6+",
+        "label": "已接入核心模块",
+        "detail": "用户、钱包、奖品、抽奖引擎、分析、系统配置。"
+      },
+      {
+        "value": "100%",
+        "label": "事务覆盖率",
+        "detail": "所有抽奖都在原子事务内完成。"
+      },
+      {
+        "value": "0",
+        "label": "真实支付风险",
+        "detail": "仅虚拟余额，适合作品集展示。"
+      }
+    ],
+    "features": {
+      "eyebrow": "核心模块",
+      "title": "端到端打通的奖赏平台",
+      "description": "借助落地页结构，突出数据一致性、并发控制与运营工具，使项目具备作品集价值。",
+      "rows": [
+        {
+          "title": "钱包与账本完整性",
+          "description": "每次抽奖都使用原子余额锁、不可变账本与完整审计轨迹。",
+          "image": "/assets/landing/feature.svg",
+          "bullets": [
+            { "label": "原子更新", "copy": "抽奖过程中锁定余额与库存。" },
+            { "label": "清晰审计", "copy": "交易记录不可篡改、可追溯。" }
+          ]
+        },
+        {
+          "title": "动态奖池控制",
+          "description": "权重配置、阈值门控与库存锁定，避免超卖并保持概率更新实时。",
+          "image": "/assets/landing/feature2.svg",
+          "reverse": true,
+          "bullets": [
+            { "label": "原子更新", "copy": "抽奖过程中锁定余额与库存。" },
+            { "label": "清晰审计", "copy": "交易记录不可篡改、可追溯。" }
+          ]
+        },
+        {
+          "title": "分析视图",
+          "description": "实时查看抽奖量、派奖分布、奖池余额与用户消费排行。",
+          "image": "/assets/landing/feature3.svg",
+          "bullets": [
+            { "label": "原子更新", "copy": "抽奖过程中锁定余额与库存。" },
+            { "label": "清晰审计", "copy": "交易记录不可篡改、可追溯。" }
+          ]
+        }
+      ]
+    },
+    "cta": {
+      "title": "准备好压力测试引擎了吗？",
+      "description": "启动演示、配置奖品，观察账本实时更新。",
+      "primary": "创建账号",
+      "secondary": "打开控制台"
+    },
+    "footer": {
+      "copyright": "© 2026 奖池引擎。作品集原型。",
+      "app": "应用",
+      "signIn": "登录"
+    }
+  }
+}

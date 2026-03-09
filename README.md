@@ -1,8 +1,10 @@
 # Prize Pool & Probability Engine System
 
 A portfolio-grade, full-stack **virtual balance draw platform** built with:
-- **Next.js** (UI + API routes)
-- **Auth.js / NextAuth** (credentials auth)
+- **Next.js** (user-facing web)
+- **SvelteKit** (admin console)
+- **Fastify** (backend API)
+- **Auth.js / NextAuth** (web credentials auth) + backend-issued admin sessions
 - **PostgreSQL + Drizzle ORM** (transaction-safe ledger and inventory)
 - **shadcn/ui** components for the frontend
 
@@ -19,7 +21,10 @@ A portfolio-grade, full-stack **virtual balance draw platform** built with:
 ```
 .
 ├── apps
-│   └── web              # Next.js app (UI + API routes)
+│   ├── frontend         # Client app (user-facing UI)
+│   ├── admin            # Admin console (SvelteKit, admin UI lives here)
+│   ├── backend          # HTTP API + domain services
+│   └── database         # Drizzle schema + migrations (no business logic)
 ├── docs
 │   ├── architecture.md
 │   └── api-outline.md
@@ -34,6 +39,13 @@ A portfolio-grade, full-stack **virtual balance draw platform** built with:
 - Draw engine (weighted selection + row locks)
 - Admin analytics (distribution, spend, pool balance)
 
+## Database Tables
+
+- `users` (merged user + balance)
+- `admins`, `admin_permissions`
+- `bank_cards`, `top_ups`, `withdrawals`
+- `prizes`, `draw_records`, `transactions`, `system_config`
+
 ## Concurrency Strategy
 
 - All draw mutations run in a **single DB transaction**
@@ -41,18 +53,28 @@ A portfolio-grade, full-stack **virtual balance draw platform** built with:
 - Stock decrements happen only after lock
 - Every balance change is logged in `transactions`
 
+## Runtime Topology
+
+- `apps/frontend` and `apps/admin` are separate frontends.
+- Both call the same backend API (`apps/backend`) and share the same database.
+
 ## Quick Start (Local)
 
-1. `cd apps/web`
-2. `pnpm install`
-3. Copy env: `cp .env.example .env`
-4. Set `POSTGRES_URL` + `AUTH_SECRET`
-5. Run migrations:
+1. `pnpm install`
+2. `cd apps/database`
+3. Copy env: `cp .env.example .env` (or set `DATABASE_URL`)
+4. Run migrations:
    - `pnpm db:generate`
    - `pnpm db:migrate`
-6. Start: `pnpm dev`
+5. Start the backend API: `cd ../backend && pnpm dev`
+6. Start the client: `cd ../frontend && pnpm dev` (no DB connection needed)
+7. Start the admin console: `cd ../admin && pnpm dev` (no DB connection needed, visit `/admin`)
 
 ## Notes
 
-The `references/` folder contains the five source repos used for UI and structure inspiration. It is ignored in git to keep the main codebase clean.
-
+The `references/` folder contains the five source repos used for UI and structure inspiration:
+- `nextjs-postgres-auth-starter` (base auth + credentials flow)
+- `ui` (shadcn/ui components)
+- `Next-JS-Landing-Page-Starter-Template` (marketing layout patterns + assets)
+- `CMSaasStarter` (CMS shell)
+- `practica` (backend config/logging structure inspiration)

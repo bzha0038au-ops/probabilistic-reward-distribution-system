@@ -2,22 +2,27 @@
 
 ## Stack
 
-- Next.js App Router
-- API routes for server-side logic
+- Next.js App Router (user-facing web)
+- SvelteKit (admin console)
+- Fastify API service (backend)
 - Drizzle ORM with PostgreSQL
-- Auth.js / NextAuth for credentials auth
+- Auth.js / NextAuth (web) + backend-issued admin sessions
 
 ## Layering
 
-- Route handlers: request parsing + response mapping
-- Service layer: draw orchestration, wallet mutations, analytics
+- Fastify routes: request parsing + response mapping
+- Service layer: draw orchestration, balance mutations, analytics
 - Data access: Drizzle schema + SQL transactions
+
+## Wallet Model
+
+User balances are stored directly on the `users` table (wallets merged).
 
 ## Transaction Boundary
 
 `executeDraw(userId)` is the main critical section:
 
-1. Lock wallet row (`FOR UPDATE`)
+1. Lock user balance row (`FOR UPDATE`)
 2. Deduct draw cost + log transaction
 3. Determine eligible prizes by pool balance + weight
 4. Lock selected prize row
@@ -39,4 +44,3 @@ A prize is eligible when:
 - Ledger keeps every balance movement
 - Draw records store outcome and metadata
 - Admin summary aggregates wins, distributions, spend
-

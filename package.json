@@ -1,0 +1,16 @@
+{
+  "name": "reward-system",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter ./apps/frontend --filter ./apps/admin --filter ./apps/backend dev",
+    "dev:frontend": "pnpm --dir apps/frontend dev",
+    "dev:admin": "pnpm --dir apps/admin dev",
+    "dev:backend": "pnpm --dir apps/backend dev",
+    "build": "pnpm -r --filter ./apps/frontend --filter ./apps/admin --filter ./apps/backend --filter ./apps/database build",
+    "check": "pnpm -r --filter ./apps/frontend --filter ./apps/admin --filter ./apps/backend --filter ./apps/database check",
+    "lint": "pnpm -r --filter ./apps/frontend --filter ./apps/admin --filter ./apps/backend --filter ./apps/database lint",
+    "db:generate": "pnpm --dir apps/database db:generate",
+    "db:migrate": "pnpm --dir apps/database db:migrate",
+    "db:studio": "pnpm --dir apps/database db:studio"
+  }
+}
