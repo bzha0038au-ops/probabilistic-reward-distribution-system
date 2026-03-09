@@ -1,93 +1,58 @@
-# Probabilistic Reward Distribution System
+# Prize Pool & Probability Engine System
 
-A portfolio-oriented full-stack project for **virtual-balance draws**, focused on:
-- transaction-safe wallet operations
-- configurable prize pool management
-- weighted probability engine
-- concurrency-safe inventory deduction
-- admin analytics and controls
+A portfolio-grade, full-stack **virtual balance draw platform** built with:
+- **Next.js** (UI + API routes)
+- **Auth.js / NextAuth** (credentials auth)
+- **PostgreSQL + Drizzle ORM** (transaction-safe ledger and inventory)
+- **shadcn/ui** components for the frontend
 
-## Tech Stack
+## Project Goals
 
-- Backend: Laravel (PHP), MySQL/PostgreSQL, Sanctum/JWT-style token auth
-- Frontend: React (planned; Blade can be used for MVP)
-- Architecture: Controller -> Service -> Repository -> Model
-
-## Core Goals
-
-- Keep all financial mutations atomic
-- Prevent negative balances and oversold inventory
-- Keep business logic in Service layer (not Controller)
-- Maintain extensible design for future production hardening
+- Transaction-safe wallet operations
+- Configurable prize pools with weighted probabilities
+- Row-level inventory locking
+- Full audit trail of balance changes
+- Admin controls + analytics dashboard
 
 ## Repository Structure
 
-```text
+```
 .
-├── backend
-│   ├── app
-│   │   ├── Http/Controllers
-│   │   ├── Models
-│   │   ├── Repositories
-│   │   └── Services
-│   ├── config
-│   ├── database/migrations
-│   ├── routes
-│   └── tests
-├── frontend
-│   └── src
-└── docs
+├── apps
+│   └── web              # Next.js app (UI + API routes)
+├── docs
+│   ├── architecture.md
+│   └── api-outline.md
+└── references           # Source templates (ignored from git)
 ```
 
-## Database Tables (Planned)
+## Core Modules
 
-- `users`
-- `wallets`
-- `transactions`
-- `prizes`
-- `draw_records`
-- `system_config`
+- Authentication (credentials) + role-based access
+- Wallet + transactions (atomic balance mutations)
+- Prize pool management (weights, thresholds, stock)
+- Draw engine (weighted selection + row locks)
+- Admin analytics (distribution, spend, pool balance)
 
-## Concurrency & Consistency Strategy
+## Concurrency Strategy
 
-- Use `DB::transaction()` for draw flow and balance changes
-- Use row-level lock (`lockForUpdate`) on wallet and prize rows
-- Verify stock and balance after locking
-- Record every balance mutation in `transactions`
-- Roll back on all domain/technical exceptions
+- All draw mutations run in a **single DB transaction**
+- `SELECT ... FOR UPDATE` on wallet + prize rows
+- Stock decrements happen only after lock
+- Every balance change is logged in `transactions`
 
-## Draw Flow (Service-level)
+## Quick Start (Local)
 
-1. Lock wallet row and validate available balance
-2. Deduct draw cost and record `debit_draw`
-3. Select eligible prize by weighted random algorithm
-4. Lock selected prize row and verify stock/threshold
-5. Decrement stock
-6. Credit reward and record `credit_reward`
-7. Record draw history
-8. Commit transaction
+1. `cd apps/web`
+2. `pnpm install`
+3. Copy env: `cp .env.example .env`
+4. Set `POSTGRES_URL` + `AUTH_SECRET`
+5. Run migrations:
+   - `pnpm db:generate`
+   - `pnpm db:migrate`
+6. Start: `pnpm dev`
 
-## Non-Goals
+## Notes
 
-- No real payment gateway
-- No WebSocket
-- No microservices
-- No blockchain
-
-## Future Extensions
-
-- Idempotency keys for draw requests
-- Retry + dead-letter strategy for async settlement
-- Feature flags for probability experiments
-- Fraud/risk control module
-- A/B testing for prize configuration
-
-## Status
-
-This repository currently contains an initial, Laravel-style skeleton:
-- migrations
-- model definitions
-- service layer skeleton
-- API route draft
-- admin analytics service
+The `references/` folder contains the five source repos used for UI and structure inspiration. It is ignored in git to keep the main codebase clean.
 

@@ -1,16 +1,16 @@
 # macOS
 .DS_Store
 
-# Laravel / PHP
-backend/vendor/
-backend/.env
-backend/storage/*.key
-backend/storage/logs/
-backend/bootstrap/cache/
+# References (source repos)
+references/
 
-# Node
-frontend/node_modules/
-frontend/dist/
+# Next.js / Node
+apps/**/node_modules/
+apps/**/.next/
+apps/**/out/
+apps/**/.turbo/
+apps/**/.env
+apps/**/.env.*
 
 # IDE
 .vscode/

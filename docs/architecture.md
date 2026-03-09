@@ -1,36 +1,42 @@
 # Architecture Notes
 
+## Stack
+
+- Next.js App Router
+- API routes for server-side logic
+- Drizzle ORM with PostgreSQL
+- Auth.js / NextAuth for credentials auth
+
 ## Layering
 
-- Controller: request validation + response mapping
-- Service: business orchestration and transaction boundaries
-- Repository: reusable data-access queries
-- Model: ORM mapping and relationships
+- Route handlers: request parsing + response mapping
+- Service layer: draw orchestration, wallet mutations, analytics
+- Data access: Drizzle schema + SQL transactions
 
-## Critical Transaction Boundary
+## Transaction Boundary
 
-`DrawService::executeDraw()` is the single critical transaction boundary for draw behavior.
-It must lock wallet and prize rows before mutation.
+`executeDraw(userId)` is the main critical section:
 
-## Prize Eligibility Rules
+1. Lock wallet row (`FOR UPDATE`)
+2. Deduct draw cost + log transaction
+3. Determine eligible prizes by pool balance + weight
+4. Lock selected prize row
+5. Decrement stock
+6. Credit reward + log transaction
+7. Record draw history
+8. Update pool balance
 
-A prize is eligible only when:
+## Eligibility Rules
+
+A prize is eligible when:
 - `is_active = true`
 - `stock > 0`
-- `pool_threshold <= current_pool_balance`
+- `pool_threshold <= pool_balance`
+- `weight > 0`
 
-## Weighted Selection
+## Observability
 
-Given eligible prizes and positive integer weights:
-- total weight = sum(weight)
-- random integer in `[1, totalWeight]`
-- cumulative scan to select target prize
-
-## Operational Metrics
-
-- total draw count
-- win/miss ratio
-- prize distribution histogram
-- total system pool movement
-- top user spending leaderboard
+- Ledger keeps every balance movement
+- Draw records store outcome and metadata
+- Admin summary aggregates wins, distributions, spend
 

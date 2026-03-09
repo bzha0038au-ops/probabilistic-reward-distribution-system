@@ -3,19 +3,18 @@
 ## Auth
 
 - `POST /api/auth/register`
-- `POST /api/auth/login`
-- `POST /api/auth/logout`
+- `POST /api/auth/*` (Auth.js / NextAuth handlers)
 
 ## User
 
 - `GET /api/wallet`
-- `GET /api/wallet/history?limit=50`
+- `GET /api/transactions?limit=50`
 - `POST /api/draw`
 
 ## Admin
 
 - `GET /api/admin/prizes`
 - `POST /api/admin/prizes`
-- `PUT /api/admin/prizes/{prize}`
-- `PATCH /api/admin/prizes/{prize}/toggle`
+- `PATCH /api/admin/prizes/{prizeId}`
+- `PATCH /api/admin/prizes/{prizeId}/toggle`
 - `GET /api/admin/analytics/summary`
