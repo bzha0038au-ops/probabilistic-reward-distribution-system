@@ -19,10 +19,6 @@
   setContext("i18n", { t, locale: getLocale, messages: getMessages })
 </script>
 
-<svelte:head>
-  <html lang={locale}></html>
-</svelte:head>
-
 {#if $navigating}
   <!-- 
     Loading animation for next page since svelte doesn't show any indicator. 

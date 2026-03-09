@@ -9,7 +9,10 @@ const createSchema = {
     stock: { type: ['number', 'string'] },
     weight: { type: ['number', 'string'] },
     poolThreshold: { type: ['number', 'string'] },
+    userPoolThreshold: { type: ['number', 'string'] },
     rewardAmount: { type: ['number', 'string'] },
+    payoutBudget: { type: ['number', 'string'] },
+    payoutPeriodDays: { type: ['number', 'string'] },
     isActive: { type: 'boolean' },
   },
 } as const;

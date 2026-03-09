@@ -19,9 +19,12 @@ export const users = pgTable(
     email: varchar('email', { length: 255 }).notNull(),
     passwordHash: varchar('password_hash', { length: 255 }).notNull(),
     role: varchar('role', { length: 20 }).notNull().default('user'),
-    balance: numeric('balance', { precision: 14, scale: 2 })
+    userPoolBalance: numeric('user_pool_balance', { precision: 14, scale: 2 })
       .notNull()
       .default('0'),
+    pityStreak: integer('pity_streak').notNull().default(0),
+    lastDrawAt: timestamp('last_draw_at', { withTimezone: true }),
+    lastWinAt: timestamp('last_win_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -31,7 +34,9 @@ export const users = pgTable(
   },
   (table) => ({
     emailUnique: uniqueIndex('users_email_unique').on(table.email),
-    balanceIdx: index('users_balance_idx').on(table.balance),
+    userPoolBalanceIdx: index('users_user_pool_balance_idx').on(
+      table.userPoolBalance
+    ),
   })
 );
 
@@ -151,42 +156,6 @@ export const withdrawals = pgTable(
     userStatusIdx: index('withdrawals_user_status_idx').on(
       table.userId,
       table.status
-    ),
-  })
-);
-
-export const transactions = pgTable(
-  'transactions',
-  {
-    id: serial('id').primaryKey(),
-    userId: integer('user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    type: varchar('type', { length: 32 }).notNull(),
-    amount: numeric('amount', { precision: 14, scale: 2 }).notNull(),
-    balanceBefore: numeric('balance_before', { precision: 14, scale: 2 })
-      .notNull(),
-    balanceAfter: numeric('balance_after', { precision: 14, scale: 2 })
-      .notNull(),
-    referenceType: varchar('reference_type', { length: 64 }),
-    referenceId: integer('reference_id'),
-    metadata: jsonb('metadata'),
-    createdAt: timestamp('created_at', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-  (table) => ({
-    userCreatedIdx: index('transactions_user_created_idx').on(
-      table.userId,
-      table.createdAt
-    ),
-    typeCreatedIdx: index('transactions_type_created_idx').on(
-      table.type,
-      table.createdAt
-    ),
-    referenceIdx: index('transactions_reference_idx').on(
-      table.referenceType,
-      table.referenceId
     ),
   })
 );

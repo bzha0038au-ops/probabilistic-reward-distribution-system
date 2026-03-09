@@ -8,7 +8,10 @@
     stock: number
     weight: number
     poolThreshold: string
+    userPoolThreshold: string
     rewardAmount: string
+    payoutBudget: string
+    payoutPeriodDays: number
     isActive: boolean
   }
 
@@ -17,13 +20,26 @@
     wonCount: number
     missCount: number
     winRate: number
-    systemPoolBalance: number
+    systemPoolBalance: string
     topSpenders: { userId: number; spent: number }[]
+  }
+
+  interface SystemConfig {
+    poolBalance: string
+    drawCost: string
+    weightJitterEnabled: boolean
+    weightJitterPct: string
+    bonusAutoReleaseEnabled: boolean
+    bonusUnlockWagerRatio: string
+    authFailureWindowMinutes: string
+    authFailureFreezeThreshold: string
+    adminFailureFreezeThreshold: string
   }
 
   interface PageData {
     prizes: Prize[]
     analytics: AnalyticsSummary | null
+    config: SystemConfig | null
     error: string | null
   }
 
@@ -34,15 +50,35 @@
     stock: "0",
     weight: "1",
     poolThreshold: "0",
+    userPoolThreshold: "0",
     rewardAmount: "0",
+    payoutBudget: "0",
+    payoutPeriodDays: "1",
     isActive: true,
   })
 
   let editForm = $state<(typeof createForm & { id: number }) | null>(null)
+  let configForm = $state({
+    poolBalance: "0",
+    drawCost: "0",
+    weightJitterEnabled: false,
+    weightJitterPct: "0.05",
+    bonusAutoReleaseEnabled: false,
+    bonusUnlockWagerRatio: "1",
+    authFailureWindowMinutes: "15",
+    authFailureFreezeThreshold: "8",
+    adminFailureFreezeThreshold: "5",
+  })
+
+  let bonusReleaseForm = $state({
+    userId: "",
+    amount: "",
+  })
 
   const { t } = getContext("i18n") as { t: (key: string) => string }
 
   const analytics = $derived(data.analytics)
+  const config = $derived(data.config)
   const prizes = $derived(data.prizes)
   const winRateLabel = $derived(
     analytics ? `${(analytics.winRate * 100).toFixed(2)}%` : "0%"
@@ -57,10 +93,32 @@
       stock: String(prize.stock ?? 0),
       weight: String(prize.weight ?? 0),
       poolThreshold: String(prize.poolThreshold ?? "0"),
+      userPoolThreshold: String(prize.userPoolThreshold ?? "0"),
       rewardAmount: String(prize.rewardAmount ?? "0"),
+      payoutBudget: String(prize.payoutBudget ?? "0"),
+      payoutPeriodDays: String(prize.payoutPeriodDays ?? 1),
       isActive: Boolean(prize.isActive),
     }
   }
+
+  $effect(() => {
+    if (!config) return
+    configForm.poolBalance = String(config.poolBalance ?? "0")
+    configForm.drawCost = String(config.drawCost ?? "0")
+    configForm.weightJitterEnabled = Boolean(config.weightJitterEnabled)
+    configForm.weightJitterPct = String(config.weightJitterPct ?? "0")
+    configForm.bonusAutoReleaseEnabled = Boolean(config.bonusAutoReleaseEnabled)
+    configForm.bonusUnlockWagerRatio = String(config.bonusUnlockWagerRatio ?? "1")
+    configForm.authFailureWindowMinutes = String(
+      config.authFailureWindowMinutes ?? "15"
+    )
+    configForm.authFailureFreezeThreshold = String(
+      config.authFailureFreezeThreshold ?? "8"
+    )
+    configForm.adminFailureFreezeThreshold = String(
+      config.adminFailureFreezeThreshold ?? "5"
+    )
+  })
 
   const confirmDelete = (event: SubmitEvent) => {
     if (!confirm(t("admin.confirmDelete"))) {
@@ -115,6 +173,178 @@
 </section>
 
 <section class="mt-8 grid gap-6 lg:grid-cols-2">
+  <div class="card bg-base-100 shadow">
+    <div class="card-body space-y-4">
+      <div>
+        <h2 class="card-title">{t("admin.config.title")}</h2>
+        <p class="text-sm text-slate-500">{t("admin.config.description")}</p>
+      </div>
+
+      <form method="post" action="?/config" class="grid gap-4">
+        <div class="grid gap-4 md:grid-cols-2">
+          <div class="form-control">
+            <label class="label" for="config-pool">
+              <span class="label-text">{t("admin.config.poolBalance")}</span>
+            </label>
+            <input
+              id="config-pool"
+              name="poolBalance"
+              type="number"
+              class="input input-bordered"
+              bind:value={configForm.poolBalance}
+            />
+          </div>
+          <div class="form-control">
+            <label class="label" for="config-drawcost">
+              <span class="label-text">{t("admin.config.drawCost")}</span>
+            </label>
+            <input
+              id="config-drawcost"
+              name="drawCost"
+              type="number"
+              class="input input-bordered"
+              bind:value={configForm.drawCost}
+            />
+          </div>
+          <div class="form-control">
+            <label class="label" for="config-jitter">
+              <span class="label-text">{t("admin.config.weightJitterPct")}</span>
+            </label>
+            <input
+              id="config-jitter"
+              name="weightJitterPct"
+              type="number"
+              step="0.01"
+              class="input input-bordered"
+              bind:value={configForm.weightJitterPct}
+            />
+          </div>
+          <div class="form-control">
+            <label class="label" for="config-bonus-ratio">
+              <span class="label-text">{t("admin.config.bonusUnlockWagerRatio")}</span>
+            </label>
+            <input
+              id="config-bonus-ratio"
+              name="bonusUnlockWagerRatio"
+              type="number"
+              step="0.01"
+              class="input input-bordered"
+              bind:value={configForm.bonusUnlockWagerRatio}
+            />
+          </div>
+          <label class="label cursor-pointer justify-start gap-3">
+            <input
+              type="checkbox"
+              name="weightJitterEnabled"
+              class="checkbox checkbox-primary"
+              bind:checked={configForm.weightJitterEnabled}
+            />
+            <span class="label-text">{t("admin.config.weightJitterEnabled")}</span>
+          </label>
+          <label class="label cursor-pointer justify-start gap-3">
+            <input
+              type="checkbox"
+              name="bonusAutoReleaseEnabled"
+              class="checkbox checkbox-primary"
+              bind:checked={configForm.bonusAutoReleaseEnabled}
+            />
+            <span class="label-text">{t("admin.config.bonusAutoReleaseEnabled")}</span>
+          </label>
+          <div class="form-control">
+            <label class="label" for="config-auth-window">
+              <span class="label-text">{t("admin.config.authFailureWindowMinutes")}</span>
+            </label>
+            <input
+              id="config-auth-window"
+              name="authFailureWindowMinutes"
+              type="number"
+              class="input input-bordered"
+              bind:value={configForm.authFailureWindowMinutes}
+            />
+          </div>
+          <div class="form-control">
+            <label class="label" for="config-auth-threshold">
+              <span class="label-text">{t("admin.config.authFailureFreezeThreshold")}</span>
+            </label>
+            <input
+              id="config-auth-threshold"
+              name="authFailureFreezeThreshold"
+              type="number"
+              class="input input-bordered"
+              bind:value={configForm.authFailureFreezeThreshold}
+            />
+          </div>
+          <div class="form-control">
+            <label class="label" for="config-admin-threshold">
+              <span class="label-text">{t("admin.config.adminFailureFreezeThreshold")}</span>
+            </label>
+            <input
+              id="config-admin-threshold"
+              name="adminFailureFreezeThreshold"
+              type="number"
+              class="input input-bordered"
+              bind:value={configForm.adminFailureFreezeThreshold}
+            />
+          </div>
+        </div>
+        <button class="btn btn-primary" type="submit">
+          {t("admin.config.submit")}
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card bg-base-100 shadow">
+    <div class="card-body space-y-4">
+      <div>
+        <h2 class="card-title">{t("admin.bonus.title")}</h2>
+        <p class="text-sm text-slate-500">{t("admin.bonus.description")}</p>
+      </div>
+
+      <form method="post" action="?/bonusRelease" class="grid gap-4">
+        <div class="grid gap-4 md:grid-cols-2">
+          <div class="form-control">
+            <label class="label" for="bonus-user-id">
+              <span class="label-text">{t("admin.bonus.userId")}</span>
+            </label>
+            <input
+              id="bonus-user-id"
+              name="userId"
+              type="number"
+              class="input input-bordered"
+              bind:value={bonusReleaseForm.userId}
+              required
+            />
+          </div>
+          <div class="form-control">
+            <label class="label" for="bonus-amount">
+              <span class="label-text">{t("admin.bonus.amount")}</span>
+            </label>
+            <input
+              id="bonus-amount"
+              name="amount"
+              type="number"
+              step="0.01"
+              class="input input-bordered"
+              bind:value={bonusReleaseForm.amount}
+              placeholder={t("admin.bonus.amountPlaceholder")}
+            />
+          </div>
+        </div>
+        <button
+          class="btn btn-primary"
+          type="submit"
+          disabled={configForm.bonusAutoReleaseEnabled}
+        >
+          {t("admin.bonus.release")}
+        </button>
+        {#if configForm.bonusAutoReleaseEnabled}
+          <p class="text-xs text-slate-500">{t("admin.bonus.autoReleaseHint")}</p>
+        {/if}
+      </form>
+    </div>
+  </div>
+
   <div class="card bg-base-100 shadow">
     <div class="card-body space-y-4">
       <div>
@@ -173,6 +403,18 @@
             />
           </div>
           <div class="form-control">
+            <label class="label" for="create-user-threshold">
+              <span class="label-text">{t("admin.form.userPoolThreshold")}</span>
+            </label>
+            <input
+              id="create-user-threshold"
+              name="userPoolThreshold"
+              type="number"
+              class="input input-bordered"
+              bind:value={createForm.userPoolThreshold}
+            />
+          </div>
+          <div class="form-control">
             <label class="label" for="create-reward">
               <span class="label-text">{t("admin.form.rewardAmount")}</span>
             </label>
@@ -182,6 +424,30 @@
               type="number"
               class="input input-bordered"
               bind:value={createForm.rewardAmount}
+            />
+          </div>
+          <div class="form-control">
+            <label class="label" for="create-budget">
+              <span class="label-text">{t("admin.form.payoutBudget")}</span>
+            </label>
+            <input
+              id="create-budget"
+              name="payoutBudget"
+              type="number"
+              class="input input-bordered"
+              bind:value={createForm.payoutBudget}
+            />
+          </div>
+          <div class="form-control">
+            <label class="label" for="create-period">
+              <span class="label-text">{t("admin.form.payoutPeriodDays")}</span>
+            </label>
+            <input
+              id="create-period"
+              name="payoutPeriodDays"
+              type="number"
+              class="input input-bordered"
+              bind:value={createForm.payoutPeriodDays}
             />
           </div>
           <label class="label cursor-pointer justify-start gap-3">
@@ -260,6 +526,18 @@
               />
             </div>
           <div class="form-control">
+            <label class="label" for="edit-user-threshold">
+              <span class="label-text">{t("admin.form.userPoolThreshold")}</span>
+            </label>
+              <input
+                id="edit-user-threshold"
+                name="userPoolThreshold"
+                type="number"
+                class="input input-bordered"
+                bind:value={editForm.userPoolThreshold}
+              />
+            </div>
+          <div class="form-control">
             <label class="label" for="edit-reward">
               <span class="label-text">{t("admin.form.rewardAmount")}</span>
             </label>
@@ -269,6 +547,30 @@
                 type="number"
                 class="input input-bordered"
                 bind:value={editForm.rewardAmount}
+              />
+            </div>
+          <div class="form-control">
+            <label class="label" for="edit-budget">
+              <span class="label-text">{t("admin.form.payoutBudget")}</span>
+            </label>
+              <input
+                id="edit-budget"
+                name="payoutBudget"
+                type="number"
+                class="input input-bordered"
+                bind:value={editForm.payoutBudget}
+              />
+            </div>
+          <div class="form-control">
+            <label class="label" for="edit-period">
+              <span class="label-text">{t("admin.form.payoutPeriodDays")}</span>
+            </label>
+              <input
+                id="edit-period"
+                name="payoutPeriodDays"
+                type="number"
+                class="input input-bordered"
+                bind:value={editForm.payoutPeriodDays}
               />
             </div>
           </div>
@@ -309,7 +611,10 @@
             <th>{t("admin.table.headers.stock")}</th>
             <th>{t("admin.table.headers.weight")}</th>
             <th>{t("admin.table.headers.threshold")}</th>
+            <th>{t("admin.table.headers.userThreshold")}</th>
             <th>{t("admin.table.headers.reward")}</th>
+            <th>{t("admin.table.headers.budget")}</th>
+            <th>{t("admin.table.headers.period")}</th>
             <th>{t("admin.table.headers.status")}</th>
             <th class="text-right">{t("admin.table.headers.actions")}</th>
           </tr>
@@ -321,7 +626,10 @@
               <td>{prize.stock}</td>
               <td>{prize.weight}</td>
               <td>{prize.poolThreshold}</td>
+              <td>{prize.userPoolThreshold}</td>
               <td>{prize.rewardAmount}</td>
+              <td>{prize.payoutBudget}</td>
+              <td>{prize.payoutPeriodDays}</td>
               <td>
                 <span class={prize.isActive ? "badge badge-primary" : "badge"}>
                   {prize.isActive
@@ -356,7 +664,7 @@
           {/each}
           {#if prizes.length === 0}
             <tr>
-              <td colspan="7" class="text-center text-slate-500">
+              <td colspan="10" class="text-center text-slate-500">
                 {t("admin.table.empty")}
               </td>
             </tr>

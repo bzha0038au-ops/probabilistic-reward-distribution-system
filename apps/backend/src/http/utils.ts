@@ -18,3 +18,33 @@ export const toAmountString = (value: unknown) => {
     return null;
   }
 };
+
+export const toObject = (value: unknown) => {
+  if (typeof value !== 'object' || value === null) {
+    return {} as Record<string, unknown>;
+  }
+
+  return Object.fromEntries(Object.entries(value));
+};
+
+export const readStringValue = (source: unknown, key: string) => {
+  const value = Reflect.get(toObject(source), key);
+  if (typeof value === 'string') return value;
+  if (value === undefined || value === null) return undefined;
+  return String(value);
+};
+
+export const parsePositiveInt = (source: unknown, key: string) => {
+  const raw = readStringValue(source, key);
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+export const readRecordValue = (source: unknown, key: string) => {
+  const value = Reflect.get(toObject(source), key);
+  if (typeof value !== 'object' || value === null) {
+    return null;
+  }
+
+  return Object.fromEntries(Object.entries(value));
+};

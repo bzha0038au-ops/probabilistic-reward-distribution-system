@@ -23,9 +23,24 @@ export const prizes = pgTable(
     poolThreshold: numeric('pool_threshold', { precision: 14, scale: 2 })
       .notNull()
       .default('0'),
+    userPoolThreshold: numeric('user_pool_threshold', { precision: 14, scale: 2 })
+      .notNull()
+      .default('0'),
     rewardAmount: numeric('reward_amount', { precision: 14, scale: 2 })
       .notNull()
       .default('0'),
+    payoutBudget: numeric('payout_budget', { precision: 14, scale: 2 })
+      .notNull()
+      .default('0'),
+    payoutSpent: numeric('payout_spent', { precision: 14, scale: 2 })
+      .notNull()
+      .default('0'),
+    payoutPeriodDays: integer('payout_period_days').notNull().default(1),
+    payoutPeriodStartedAt: timestamp('payout_period_started_at', {
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
     isActive: boolean('is_active').notNull().default(true),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true })
@@ -42,6 +57,9 @@ export const prizes = pgTable(
     ),
     deletedAtIdx: index('prizes_deleted_at_idx').on(table.deletedAt),
     poolThresholdIdx: index('prizes_pool_threshold_idx').on(table.poolThreshold),
+    userPoolThresholdIdx: index('prizes_user_pool_threshold_idx').on(
+      table.userPoolThreshold
+    ),
   })
 );
 
@@ -75,5 +93,9 @@ export const drawRecords = pgTable(
       table.status
     ),
     statusIdx: index('draw_records_status_idx').on(table.status),
+    statusCreatedIdx: index('draw_records_status_created_idx').on(
+      table.status,
+      table.createdAt
+    ),
   })
 );

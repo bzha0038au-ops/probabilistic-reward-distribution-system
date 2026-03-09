@@ -1,108 +1,284 @@
 # Prize Pool & Probability Engine System
 
-A portfolio-grade, full-stack **virtual balance draw platform** built with:
-- **Next.js** (user-facing web)
-- **SvelteKit** (admin console)
-- **Fastify** (backend API)
-- **Auth.js / NextAuth** (web credentials auth) + backend-issued admin sessions
-- **PostgreSQL + Drizzle ORM** (transaction-safe ledger and inventory)
-- **shadcn/ui** components for the frontend
+A full-stack reward and draw system with wallet accounting, prize-pool controls, admin operations, and audit-friendly financial flows.
 
-## Project Goals
+This repo is designed as a practical system skeleton for products such as spin-the-wheel, prize-pool, or reward-center apps, where financial correctness matters more than demo-only UI.
 
-- Transaction-safe wallet operations
-- Configurable prize pools with weighted probabilities
-- Row-level inventory locking
-- Full audit trail of balance changes
-- Admin controls + analytics dashboard
+## Why This Repo
 
-## Repository Structure
+- Transaction-safe wallet flows for top-up, draw, and withdrawal paths
+- Separate user and admin frontends, so product logic and operations logic stay isolated
+- Backend-owned financial mutations with ledger-style records and DB transaction boundaries
+- Shared contracts, schema, and migrations inside one workspace, so changes move together
 
-```
-.
-├── apps
-│   ├── frontend         # Client app (user-facing UI)
-│   ├── admin            # Admin console (SvelteKit, admin UI lives here)
-│   ├── backend          # HTTP API + domain services
-│   ├── database         # Drizzle schema + migrations (no business logic)
-│   └── shared-types     # Shared API contracts (Zod + TS types)
-├── docs
-│   ├── architecture.md
-│   └── api-outline.md
-└── references           # Source templates (ignored from git)
+## Quick Start
+
+If this is your first time in the repo, follow this section exactly. It is the shortest reliable path to a working local environment.
+
+### Prerequisites
+
+- Node.js 20+
+- pnpm 9+
+- Docker
+- Free local ports: `3000`, `4000`, `5173`, `5433`, `6379`
+
+### 1. Install dependencies
+
+```bash
+pnpm install
 ```
 
-## Core Modules
+### 2. Create local env files
 
-- Authentication (credentials) + role-based access
-- Wallet + transactions (atomic balance mutations)
-- Prize pool management (weights, thresholds, stock)
-- Draw engine (weighted selection + row locks)
-- Admin analytics (distribution, spend, pool balance)
+```bash
+cp apps/database/.env.example apps/database/.env
+cp apps/backend/.env.example apps/backend/.env
+cp apps/frontend/.env.example apps/frontend/.env
+cp apps/admin/.env.example apps/admin/.env
+```
 
-## Database Tables
+### 3. Fill the minimum local values
 
-- `users` (merged user + balance)
-- `admins`, `admin_permissions`
-- `bank_cards`, `top_ups`, `withdrawals`
-- `prizes`, `draw_records`, `transactions`, `system_config`
+`apps/database/.env`
 
-## Operational Config
+```dotenv
+DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5433/reward_local
+POSTGRES_URL=postgresql://postgres:postgres@127.0.0.1:5433/reward_local
+POSTGRES_SSL=false
+```
 
-- `system_config` stores runtime parameters like `pool_balance` and `draw_cost`
-  as numeric values (adjustable without redeploy).
+`apps/backend/.env`
 
-## Concurrency Strategy
+```dotenv
+DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5433/reward_local
+POSTGRES_URL=postgresql://postgres:postgres@127.0.0.1:5433/reward_local
+ADMIN_JWT_SECRET=local_admin_secret_change_me_123456
+USER_JWT_SECRET=local_user_secret_change_me_123456
+WEB_BASE_URL=http://localhost:3000
+ADMIN_BASE_URL=http://localhost:5173
+PORT=4000
+REDIS_URL=redis://127.0.0.1:6379
+```
 
-- All draw mutations run in a **single DB transaction**
-- `SELECT ... FOR UPDATE` on wallet + prize rows
-- Stock decrements happen only after lock
-- Every balance change is logged in `transactions`
+`apps/frontend/.env`
 
-## Runtime Topology
+```dotenv
+AUTH_SECRET=local_frontend_auth_secret_change_me_123456
+API_BASE_URL=http://localhost:4000
+NEXT_PUBLIC_API_BASE_URL=http://localhost:4000
+```
 
-- `apps/frontend` (web) and `apps/admin` (admin console) are separate frontends.
-- Both call the same backend API (`apps/backend`) and share the same Postgres database.
-- Frontends do not access the database directly.
+`apps/admin/.env`
 
-## Auth Flow
+```dotenv
+API_BASE_URL=http://localhost:4000
+ADMIN_JWT_SECRET=local_admin_secret_change_me_123456
+```
 
-- Web: NextAuth credentials flow calls `POST /auth/user/session` to obtain a backend token.
-- API calls from the web include `Authorization: Bearer <token>`.
-- Admin: SvelteKit console calls `POST /auth/admin/login` and stores the token in
-  `reward_admin_session` for admin-only routes.
+Important:
 
-## Quick Start (Local)
+- `ADMIN_JWT_SECRET` must match between `apps/backend/.env` and `apps/admin/.env`
+- For local development, placeholder secrets are fine; for production, use real 32+ character secrets
 
-1. `pnpm install`
-2. `cd apps/database`
-3. Copy env: `cp .env.example .env` (or set `DATABASE_URL`)
-4. Run migrations:
-   - `pnpm db:migrate`
-5. Start the backend API: `cd ../backend && pnpm dev`
-6. Start the client: `cd ../frontend && pnpm dev` (no DB connection needed)
-7. Start the admin console: `cd ../admin && pnpm dev` (no DB connection needed, visit `/admin`)
+### 4. Start Postgres and Redis
+
+```bash
+pnpm db:up
+```
+
+### 5. Run migrations
+
+```bash
+pnpm db:migrate
+```
+
+### 6. Start all apps
+
+```bash
+pnpm dev
+```
+
+### 7. Open the local apps
+
+- User app: [http://localhost:3000](http://localhost:3000)
+- Admin app: [http://localhost:5173](http://localhost:5173)
+- Backend health check: [http://localhost:4000/health](http://localhost:4000/health)
+
+### Useful next commands
+
+```bash
+pnpm db:seed:manual
+pnpm test
+pnpm test:integration
+pnpm build
+pnpm db:reset
+```
+
+## Manual QA Data
+
+If you want the UI populated with realistic test records instead of starting from an empty database:
+
+```bash
+pnpm db:seed:manual
+```
+
+This inserts:
+
+- 1 admin account
+- 4 user accounts
+- prizes, draw history, deposits, withdrawals
+- audit events, admin actions, freeze records, suspicious account data
+
+Default local accounts:
+
+- Admin: `admin.manual@example.com` / `Admin123!`
+- User: `alice.manual@example.com` / `User123!`
+- User: `bob.manual@example.com` / `User123!`
+- User: `carol.manual@example.com` / `User123!`
+- User: `frozen.manual@example.com` / `User123!`
+
+## Project At A Glance
+
+- User app: [`apps/frontend`](./apps/frontend)
+- Admin app: [`apps/admin`](./apps/admin)
+- Backend and financial logic: [`apps/backend`](./apps/backend)
+- Database schema and migrations: [`apps/database`](./apps/database)
+- Shared API contracts: [`apps/shared-types`](./apps/shared-types)
+
+If you want the architecture view after bootstrapping, start with [`docs/architecture.md`](./docs/architecture.md).
+
+## System Map
+
+```mermaid
+flowchart LR
+    A["User Frontend<br/>Next.js"] --> C["Backend API<br/>Fastify"]
+    B["Admin Frontend<br/>SvelteKit"] --> C
+    C --> D["PostgreSQL"]
+    C --> E["Redis"]
+    C --> F["Shared Contracts<br/>Zod + TypeScript"]
+```
+
+## What This Project Does
+
+- Lets users register, log in, top up, withdraw, draw rewards, and inspect wallet history
+- Gives operators a separate admin console to manage prizes, update runtime config, inspect finance data, and review audit/security records
+- Keeps draw execution and balance mutation logic inside the backend, protected by DB transactions and ledger entries
+- Keeps schema, migrations, and shared contracts inside the same workspace so the system evolves together
+
+The highest-risk path is `executeDraw(userId)`: debit the draw cost, evaluate prize eligibility, write ledger entries, update the house account, and persist the result inside one transaction.
+
+## Highlights
+
+- Weighted draw execution with prize eligibility checks
+- Prize-pool and payout controls in the backend
+- Wallet ledger and transaction boundaries for financial flows
+- Admin audit and finance surfaces separated from the public app
+- Workspace-level tests plus backend integration tests against local Postgres
+
+## Workspace Map
+
+| Path | Role |
+| --- | --- |
+| [`apps/frontend`](./apps/frontend) | User-facing product UI |
+| [`apps/admin`](./apps/admin) | Internal operations and finance console |
+| [`apps/backend`](./apps/backend) | HTTP API, auth, wallet flows, draw engine |
+| [`apps/database`](./apps/database) | Drizzle schema and migrations |
+| [`apps/shared-types`](./apps/shared-types) | Shared request/response contracts |
+| [`docs`](./docs) | Architecture, environment, deployment, and test docs |
+
+## Tech Stack
+
+| Layer | Choice |
+| --- | --- |
+| User web | Next.js App Router |
+| Admin console | SvelteKit |
+| Backend API | Fastify |
+| Database | PostgreSQL |
+| ORM / schema | Drizzle ORM |
+| Shared contracts | TypeScript + Zod |
+| Tooling | pnpm workspace, Vitest, GitHub Actions |
+
+### Why Are There Two Frontends?
+
+The main reason is logical isolation.
+
+- The user app and the admin app serve different audiences and different risk levels
+- The user app is public-facing and optimized for customer flows
+- The admin app is an internal tool for higher-risk actions like finance review, config changes, and operations work
+- Keeping them separate prevents admin auth, admin dependencies, and admin UI complexity from leaking into the public product
+- It also makes deployment, performance tuning, and incident blast radius easier to control
+
+This is a system-boundary decision, not a framework collection exercise.
+
+### Why So Many Languages?
+
+The repo looks polyglot, but the main business logic is still TypeScript. The other languages exist because each layer has a different job.
+
+| Language | Why it exists here |
+| --- | --- |
+| TypeScript | Services, routes, business rules, shared contracts |
+| SQL | Migrations and schema changes |
+| Svelte / TSX / JSX | UI code in each frontend |
+| JSON | Locale files and structured configuration |
+| CSS | Styling |
+| YAML | CI and deployment workflows |
+
+The point is directness, not variety for its own sake.
+
+## Common Commands
+
+Run from the repo root:
+
+```bash
+pnpm dev
+pnpm build
+pnpm check
+pnpm lint
+pnpm test
+pnpm test:integration
+
+pnpm db:generate
+pnpm db:migrate
+pnpm db:studio
+pnpm db:seed:manual
+pnpm db:up
+pnpm db:down
+pnpm db:reset
+```
 
 ## Environment
 
-- Backend: `DATABASE_URL`, `AUTH_SECRET`, optional `DRAW_COST`
+Minimum required values:
+
+- Backend: `DATABASE_URL` or `POSTGRES_URL`, `ADMIN_JWT_SECRET`, `USER_JWT_SECRET`
 - Frontend: `AUTH_SECRET`, `API_BASE_URL`, `NEXT_PUBLIC_API_BASE_URL`
-- Admin: `API_BASE_URL`, `AUTH_SECRET`
+- Admin: `ADMIN_JWT_SECRET`, `API_BASE_URL`
 
-`ADMIN_JWT_SECRET` **must match** between backend/admin. See
-`docs/environment.md` for full details.
+Full details live in [`docs/environment.md`](./docs/environment.md).
 
-## Docs
+## Testing
 
-- `docs/environment.md` (required env vars + consistency rules)
-- `docs/test-strategy.md` (testing scope and commands)
-- `docs/observability.md` (logging + tracing)
+- `pnpm test`: workspace-level tests
+- `pnpm test:integration`: backend integration tests against local Postgres
 
-## Notes
+Test coverage is intentionally backend-heavy because the biggest risk in this system is financial correctness, not visual polish. See [`docs/test-strategy.md`](./docs/test-strategy.md).
 
-The `references/` folder contains the five source repos used for UI and structure inspiration:
-- `nextjs-postgres-auth-starter` (base auth + credentials flow)
-- `ui` (shadcn/ui components)
-- `Next-JS-Landing-Page-Starter-Template` (marketing layout patterns + assets)
-- `CMSaasStarter` (CMS shell)
-- `practica` (backend config/logging structure inspiration)
+## Deployment
+
+- CI: [`.github/workflows/ci.yml`](./.github/workflows/ci.yml)
+- Manual deploy workflow: [`.github/workflows/deploy.yml`](./.github/workflows/deploy.yml)
+- Checklist: [`docs/deployment-checklist.md`](./docs/deployment-checklist.md)
+
+## Troubleshooting
+
+- If admin login works in the backend but fails in the admin UI, check that `ADMIN_JWT_SECRET` matches in `apps/backend/.env` and `apps/admin/.env`.
+- If the frontend shows session or auth decryption errors, clear browser cookies for `localhost:3000` and make sure `AUTH_SECRET` has not changed.
+- If `pnpm test:integration` fails immediately, make sure Docker is running and `pnpm db:up` has already started Postgres on `5433`.
+
+## Reference Docs
+
+- Architecture: [`docs/architecture.md`](./docs/architecture.md)
+- API outline: [`docs/api-outline.md`](./docs/api-outline.md)
+- Environment: [`docs/environment.md`](./docs/environment.md)
+- Config reference: [`docs/config-reference.md`](./docs/config-reference.md)
+- Observability: [`docs/observability.md`](./docs/observability.md)

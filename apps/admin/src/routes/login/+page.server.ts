@@ -3,9 +3,11 @@ import type { Actions, PageServerLoad } from './$types';
 
 import {
   ADMIN_SESSION_COOKIE,
+  ADMIN_CSRF_COOKIE,
   ADMIN_SESSION_TTL_SECONDS,
 } from '$lib/server/admin-session';
 import { apiRequest } from '$lib/server/api';
+import { randomBytes } from 'node:crypto';
 
 export const load: PageServerLoad = async ({ locals }) => {
   return {
@@ -53,6 +55,18 @@ export const actions: Actions = {
       maxAge: ADMIN_SESSION_TTL_SECONDS,
       path: '/',
     });
+
+    const existingCsrf = cookies.get(ADMIN_CSRF_COOKIE);
+    if (!existingCsrf) {
+      const csrfToken = randomBytes(32).toString('hex');
+      cookies.set(ADMIN_CSRF_COOKIE, csrfToken, {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: ADMIN_SESSION_TTL_SECONDS,
+        path: '/',
+      });
+    }
 
     throw redirect(303, '/admin');
   },

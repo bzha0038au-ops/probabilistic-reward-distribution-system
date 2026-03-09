@@ -27,5 +27,7 @@ export const handle: Handle = async ({ event, resolve }) => {
     throw redirect(303, '/admin');
   }
 
-  return resolve(event);
+  return resolve(event, {
+    transformPageChunk: ({ html }) => html.replace('%lang%', event.locals.locale),
+  });
 };

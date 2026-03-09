@@ -7,9 +7,13 @@ and admin console.
 
 - `modules/admin` (prize pool + analytics)
 - `modules/auth` (credential verification helpers)
+- `modules/bonus` (bonus grants + release flows)
 - `modules/draw` (weighted draw engine)
+- `modules/fairness` (commit / reveal seed lifecycle)
+- `modules/house` (house account + pool balance mutations)
+- `modules/risk` (freeze + suspicious activity)
 - `modules/user` (registration + lookup)
-- `modules/wallet` (balance + transactions)
+- `modules/wallet` (balance + ledger history)
 - `modules/bank-card`, `modules/top-up`, `modules/withdraw`
 - `modules/system` (system config + pool balance)
 - `shared` (config + lightweight logging inspired by Practica)

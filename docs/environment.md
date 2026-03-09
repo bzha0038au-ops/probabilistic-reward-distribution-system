@@ -12,6 +12,8 @@ These values must be identical for auth/session verification to work:
 - `ADMIN_JWT_SECRET` (required)
 - `USER_JWT_SECRET` (required)
 - `DRAW_COST` (optional seed value for `system_config.draw_cost`)
+- `DRAW_POOL_CACHE_TTL_SECONDS` (optional, probability pool cache TTL; `0` disables)
+- `REDIS_URL` (optional, enables shared rate limiting + probability pool cache)
 - `WEB_BASE_URL`, `ADMIN_BASE_URL`, `PORT`
 - `ADMIN_JWT_SECRET` (optional override)
 - `ADMIN_SESSION_TTL`, `USER_SESSION_TTL` (optional)

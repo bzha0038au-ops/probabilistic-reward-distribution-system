@@ -4,6 +4,7 @@ import { env } from '$env/dynamic/private';
 const encoder = new TextEncoder();
 
 export const ADMIN_SESSION_COOKIE = 'reward_admin_session';
+export const ADMIN_CSRF_COOKIE = 'reward_csrf';
 export const ADMIN_SESSION_TTL_SECONDS =
   Number(env.ADMIN_SESSION_TTL ?? '') || 60 * 60 * 8;
 

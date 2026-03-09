@@ -8,23 +8,50 @@ on:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: reward_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d reward_test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/reward_test
+      POSTGRES_URL: postgresql://postgres:postgres@127.0.0.1:5432/reward_test
+      ADMIN_JWT_SECRET: ci-admin-secret-1234567890abcdefghij
+      USER_JWT_SECRET: ci-user-secret-1234567890abcdefghij
+      AUTH_SECRET: ci-web-secret-1234567890abcdefghij
+      API_BASE_URL: http://127.0.0.1:4000
+      NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:4000
+      RUN_INTEGRATION_TESTS: 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Setup PNPM
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 10
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
       - name: Install
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
+      - name: Database Migrate Smoke
+        run: pnpm --dir apps/database db:migrate
       - name: Check
         run: pnpm check
       - name: Lint
         run: pnpm lint
+      - name: Build
+        run: pnpm build
       - name: Test
         run: pnpm test

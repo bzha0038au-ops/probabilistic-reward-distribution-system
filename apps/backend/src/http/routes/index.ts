@@ -1,10 +1,8 @@
-import type { FastifyInstance } from 'fastify';
+import type { AppInstance } from './types';
 
 import { registerAdminRoutes } from './admin';
 import { registerAuthRoutes } from './auth';
 import { registerUserRoutes } from './user';
-
-type AppInstance = FastifyInstance<any, any, any, any, any>;
 
 export async function registerRoutes(app: AppInstance) {
   await registerAuthRoutes(app);

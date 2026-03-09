@@ -27,8 +27,11 @@ Error:
 
 ## User
 
+- `GET /stats`
+- `GET /fairness/commit`
+- `GET /fairness/reveal?epoch=...`
 - `GET /wallet`
-- `GET /transactions?limit=50`
+- `GET /transactions?limit=50` (returns `ledger_entries` history)
 - `POST /draw`
 - `GET /bank-cards`
 - `POST /bank-cards`
@@ -46,3 +49,12 @@ Error:
 - `PATCH /admin/prizes/{prizeId}/toggle`
 - `DELETE /admin/prizes/{prizeId}` (soft delete)
 - `GET /admin/analytics/summary`
+- `GET /admin/auth-events?cursor=...&direction=next`
+- `GET /admin/auth-events/export`
+- `GET /admin/admin-actions?cursor=...&direction=next`
+- `GET /admin/admin-actions/export`
+- `GET /admin/freeze-records?page=1`
+- `POST /admin/freeze-records`
+- `POST /admin/freeze-records/{userId}/release`
+- `GET /admin/system-config`
+- `PATCH /admin/system-config`

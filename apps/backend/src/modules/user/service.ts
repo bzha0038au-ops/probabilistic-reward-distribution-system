@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { genSaltSync, hashSync } from 'bcrypt-ts';
 
 import { db } from '../../db';
-import { users } from '@reward/database';
+import { userWallets, users } from '@reward/database';
 
 export async function getUserByEmail(email: string) {
   const [user] = await db
@@ -24,9 +24,11 @@ export async function createUserWithWallet(email: string, password: string) {
         email,
         passwordHash,
         role: 'user',
-        balance: '0',
+        userPoolBalance: '0',
       })
       .returning();
+
+    await tx.insert(userWallets).values({ userId: user.id }).onConflictDoNothing();
 
     return user;
   });

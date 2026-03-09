@@ -4,6 +4,9 @@ import { context } from '../shared/context';
 import { ADMIN_SESSION_COOKIE, verifyAdminSessionToken } from '../shared/admin-session';
 import { USER_SESSION_COOKIE, verifyUserSessionToken } from '../shared/user-session';
 import { sendError } from './respond';
+import { isUserFrozen } from '../modules/risk/service';
+import { getSystemFlags } from '../modules/system/service';
+import { db } from '../db';
 
 const setActorContext = (payload: { userId: number; role: 'user' | 'admin' }) => {
   const store = context().getStore();
@@ -41,6 +44,14 @@ export const requireUserGuard = async (
   if (!user) {
     return sendError(reply, 401, 'Unauthorized');
   }
+  const systemFlags = await getSystemFlags(db);
+  if (systemFlags.maintenanceMode) {
+    return sendError(reply, 503, 'System under maintenance.');
+  }
+  const frozen = await isUserFrozen(user.userId);
+  if (frozen) {
+    return sendError(reply, 423, 'Account locked.');
+  }
   request.user = user;
 };
 
@@ -51,6 +62,10 @@ export const requireAdminGuard = async (
   const admin = await requireAdmin(request);
   if (!admin) {
     return sendError(reply, 401, 'Unauthorized');
+  }
+  const frozen = await isUserFrozen(admin.userId);
+  if (frozen) {
+    return sendError(reply, 423, 'Account locked.');
   }
   request.admin = admin;
 };

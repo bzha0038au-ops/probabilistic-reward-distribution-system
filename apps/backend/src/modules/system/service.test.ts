@@ -9,6 +9,7 @@ vi.mock('../../shared/config', () => ({
     webBaseUrl: 'http://localhost:3000',
     adminBaseUrl: 'http://localhost:5173',
     port: 4000,
+    drawPoolCacheTtlSeconds: 60,
   }),
 }));
 

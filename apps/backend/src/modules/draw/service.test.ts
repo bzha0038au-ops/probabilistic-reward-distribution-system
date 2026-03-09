@@ -9,13 +9,32 @@ vi.mock('../../shared/config', () => ({
     webBaseUrl: 'http://localhost:3000',
     adminBaseUrl: 'http://localhost:5173',
     port: 4000,
+    drawPoolCacheTtlSeconds: 60,
   }),
 }));
 
 vi.mock('../../db', () => ({
   db: {
-    transaction: async (fn: (tx: { execute: () => Promise<{ rows: unknown[] }> }) => unknown) =>
+    transaction: async (
+      fn: (tx: {
+        select: () => {
+          from: () => {
+            where: () => {
+              limit: () => Promise<unknown[]>;
+            };
+          };
+        };
+        execute: () => Promise<{ rows: unknown[] }>;
+      }) => unknown
+    ) =>
       fn({
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              limit: async () => [],
+            }),
+          }),
+        }),
         execute: async () => ({ rows: [] }),
       }),
   },

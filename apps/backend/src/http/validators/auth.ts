@@ -3,6 +3,7 @@ import { createValidator } from '../../shared/validation';
 export type AuthPayload = {
   email: string;
   password: string;
+  referrerId?: number;
 };
 
 const schema = {
@@ -12,6 +13,7 @@ const schema = {
   properties: {
     email: { type: 'string', minLength: 3, maxLength: 255 },
     password: { type: 'string', minLength: 6, maxLength: 255 },
+    referrerId: { type: 'integer', minimum: 1 },
   },
 } as const;
 

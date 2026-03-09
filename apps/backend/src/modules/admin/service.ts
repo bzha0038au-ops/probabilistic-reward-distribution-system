@@ -1,9 +1,10 @@
-import { and, desc, eq, isNotNull, isNull, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull, lte, ne, sql } from 'drizzle-orm';
 
 import { db } from '../../db';
-import { drawRecords, prizes, transactions } from '@reward/database';
+import { drawRecords, ledgerEntries, prizes } from '@reward/database';
 import { getPoolBalance } from '../system/service';
 import { toMoneyString } from '../../shared/money';
+import { invalidateProbabilityPool } from '../draw/pool-cache';
 
 export async function listPrizes() {
   return db
@@ -18,7 +19,10 @@ export async function createPrize(payload: {
   stock: number;
   weight: number;
   poolThreshold: string;
+  userPoolThreshold: string;
   rewardAmount: string;
+  payoutBudget: string;
+  payoutPeriodDays: number;
   isActive: boolean;
 }) {
   const [created] = await db
@@ -26,6 +30,7 @@ export async function createPrize(payload: {
     .values(payload)
     .returning();
 
+  await invalidateProbabilityPool();
   return created;
 }
 
@@ -36,7 +41,10 @@ export async function updatePrize(
     stock: number;
     weight: number;
     poolThreshold: string;
+    userPoolThreshold: string;
     rewardAmount: string;
+    payoutBudget: string;
+    payoutPeriodDays: number;
     isActive: boolean;
   }>
 ) {
@@ -49,6 +57,9 @@ export async function updatePrize(
     .where(and(eq(prizes.id, id), isNull(prizes.deletedAt)))
     .returning();
 
+  if (updated) {
+    await invalidateProbabilityPool();
+  }
   return updated;
 }
 
@@ -67,6 +78,9 @@ export async function togglePrize(id: number) {
     .where(and(eq(prizes.id, id), isNull(prizes.deletedAt)))
     .returning();
 
+  if (updated) {
+    await invalidateProbabilityPool();
+  }
   return updated;
 }
 
@@ -77,6 +91,9 @@ export async function softDeletePrize(id: number) {
     .where(and(eq(prizes.id, id), isNull(prizes.deletedAt)))
     .returning();
 
+  if (deleted) {
+    await invalidateProbabilityPool();
+  }
   return deleted;
 }
 
@@ -107,16 +124,18 @@ export async function getAnalyticsSummary() {
 
   const topSpenders = await db
     .select({
-      userId: transactions.userId,
-      spent: sql<number>`abs(sum(${transactions.amount}))`,
+      userId: ledgerEntries.userId,
+      spent: sql<number>`abs(sum(${ledgerEntries.amount}))`,
     })
-    .from(transactions)
-    .where(eq(transactions.type, 'debit_draw'))
-    .groupBy(transactions.userId)
-    .orderBy(desc(sql`abs(sum(${transactions.amount}))`))
+    .from(ledgerEntries)
+    .where(
+      and(eq(ledgerEntries.entryType, 'draw_cost'), isNotNull(ledgerEntries.userId))
+    )
+    .groupBy(ledgerEntries.userId)
+    .orderBy(desc(sql`abs(sum(${ledgerEntries.amount}))`))
     .limit(20);
 
-  const poolBalance = await getPoolBalance(db, 0);
+  const poolBalance = await getPoolBalance(db);
 
   return {
     totalDrawCount: Number(total ?? 0),
@@ -126,5 +145,56 @@ export async function getAnalyticsSummary() {
     distribution,
     systemPoolBalance: toMoneyString(poolBalance),
     topSpenders,
+  };
+}
+
+export async function getPublicStats(options: {
+  cutoff: Date;
+  includePoolBalance: boolean;
+}) {
+  const [{ total = 0 }] = await db
+    .select({ total: sql<number>`count(*)` })
+    .from(drawRecords)
+    .where(lte(drawRecords.createdAt, options.cutoff));
+
+  const [{ won = 0 }] = await db
+    .select({ won: sql<number>`count(*)` })
+    .from(drawRecords)
+    .where(
+      and(eq(drawRecords.status, 'won'), lte(drawRecords.createdAt, options.cutoff))
+    );
+
+  const [{ miss = 0 }] = await db
+    .select({ miss: sql<number>`count(*)` })
+    .from(drawRecords)
+    .where(
+      and(
+        isNotNull(drawRecords.status),
+        ne(drawRecords.status, 'won'),
+        lte(drawRecords.createdAt, options.cutoff)
+      )
+    );
+
+  const distribution = await db
+    .select({
+      prizeId: drawRecords.prizeId,
+      total: sql<number>`count(*)`,
+    })
+    .from(drawRecords)
+    .where(
+      and(isNotNull(drawRecords.prizeId), lte(drawRecords.createdAt, options.cutoff))
+    )
+    .groupBy(drawRecords.prizeId)
+    .orderBy(desc(sql`count(*)`));
+
+  const poolBalance = options.includePoolBalance ? await getPoolBalance(db) : null;
+
+  return {
+    totalDrawCount: Number(total ?? 0),
+    wonCount: Number(won ?? 0),
+    missCount: Number(miss ?? 0),
+    winRate: total ? Number(won) / Number(total) : 0,
+    distribution,
+    systemPoolBalance: poolBalance ? toMoneyString(poolBalance) : null,
   };
 }

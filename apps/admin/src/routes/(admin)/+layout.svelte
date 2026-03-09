@@ -18,6 +18,11 @@
   <nav class="navbar border-b border-base-300 bg-base-100">
     <div class="flex-1">
       <a href="/admin" class="btn btn-ghost text-xl">{t("common.appName")}</a>
+      <div class="ml-4 flex items-center gap-2">
+        <a href="/admin" class="btn btn-ghost btn-sm">{t("common.navAdmin")}</a>
+        <a href="/finance" class="btn btn-ghost btn-sm">{t("common.navFinance")}</a>
+        <a href="/security" class="btn btn-ghost btn-sm">{t("common.navSecurity")}</a>
+      </div>
     </div>
     <div class="flex items-center gap-3">
       <span class="text-sm text-slate-600">{adminEmail}</span>

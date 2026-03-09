@@ -6,7 +6,7 @@ export function Form({
   children,
   labels,
 }: {
-  action: any;
+  action: React.ComponentProps<'form'>['action'];
   children: React.ReactNode;
   labels: {
     emailLabel: string;

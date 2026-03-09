@@ -12,6 +12,11 @@
     "test": "pnpm -r --if-present test",
     "db:generate": "pnpm --dir apps/database db:generate",
     "db:migrate": "pnpm --dir apps/database db:migrate",
-    "db:studio": "pnpm --dir apps/database db:studio"
+    "db:studio": "pnpm --dir apps/database db:studio",
+    "db:seed:manual": "pnpm --dir apps/backend seed:manual",
+    "db:up": "docker compose up -d postgres redis",
+    "db:down": "docker compose down",
+    "db:reset": "docker compose down -v && docker compose up -d postgres redis",
+    "test:integration": "RUN_INTEGRATION_TESTS=true DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5433/reward_local POSTGRES_URL=postgresql://postgres:postgres@127.0.0.1:5433/reward_local pnpm --dir apps/backend test"
   }
 }

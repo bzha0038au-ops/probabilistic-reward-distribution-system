@@ -29,6 +29,62 @@
       "when": 1773051174748,
       "tag": "0003_system_config_numeric",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1773054725349,
+      "tag": "0004_pool_budget_random",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1773055996131,
+      "tag": "0005_finance_risk_seed",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1773071088000,
+      "tag": "0006_auth_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1773073769362,
+      "tag": "0007_house_account_singleton",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1773075622113,
+      "tag": "0008_reward_daily_amount",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1773075994303,
+      "tag": "0009_fairness_pity",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1773091200000,
+      "tag": "0010_drop_legacy_transactions",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1773082989090,
+      "tag": "0011_index_optimizations",
+      "breakpoints": true
     }
   ]
 }
