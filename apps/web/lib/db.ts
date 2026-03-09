@@ -3,7 +3,8 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 
 import * as schema from './schema';
 
-const connectionString = process.env.POSTGRES_URL;
+const connectionString =
+  process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
 
 if (!connectionString) {
   throw new Error('POSTGRES_URL is not set');
