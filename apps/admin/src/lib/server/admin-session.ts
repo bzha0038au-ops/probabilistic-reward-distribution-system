@@ -14,9 +14,9 @@ export type AdminSessionPayload = {
 };
 
 const getSessionSecret = () => {
-  const secret = env.ADMIN_JWT_SECRET || env.AUTH_SECRET || '';
+  const secret = env.ADMIN_JWT_SECRET || '';
   if (!secret) {
-    throw new Error('AUTH_SECRET is not set');
+    throw new Error('ADMIN_JWT_SECRET is not set');
   }
 
   return encoder.encode(secret);

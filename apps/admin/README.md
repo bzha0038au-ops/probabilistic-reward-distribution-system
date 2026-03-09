@@ -15,7 +15,7 @@ This app is a SvelteKit frontend that calls the shared backend API. It does not 
 Create `.env` from `.env.example` and set:
 
 - `API_BASE_URL` (backend base URL, e.g. `http://localhost:4000`)
-- `AUTH_SECRET` (must match backend `AUTH_SECRET`)
+- `ADMIN_JWT_SECRET` (must match backend `ADMIN_JWT_SECRET`)
 
 ## Development
 

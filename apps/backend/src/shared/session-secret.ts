@@ -1,14 +1,15 @@
 const encoder = new TextEncoder();
 
-export function getSessionSecret() {
+type SessionKind = 'admin' | 'user';
+
+export function getSessionSecret(kind: SessionKind) {
   const secret =
-    process.env.ADMIN_JWT_SECRET ??
-    process.env.AUTH_SECRET ??
-    process.env.NEXTAUTH_SECRET ??
-    '';
+    kind === 'admin' ? process.env.ADMIN_JWT_SECRET : process.env.USER_JWT_SECRET;
 
   if (!secret) {
-    throw new Error('ADMIN_JWT_SECRET or AUTH_SECRET is not set');
+    throw new Error(
+      `${kind.toUpperCase()}_JWT_SECRET is not set (required for ${kind} sessions).`
+    );
   }
 
   return encoder.encode(secret);

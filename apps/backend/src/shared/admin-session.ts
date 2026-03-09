@@ -25,7 +25,7 @@ export async function createAdminSessionToken(payload: AdminSessionPayload) {
     .setSubject(String(payload.userId))
     .setIssuedAt(now)
     .setExpirationTime(expiresAt)
-    .sign(getSessionSecret());
+    .sign(getSessionSecret('admin'));
 
   return { token, expiresAt };
 }
@@ -34,7 +34,7 @@ export async function verifyAdminSessionToken(token?: string | null) {
   if (!token) return null;
 
   try {
-    const { payload } = await jwtVerify(token, getSessionSecret());
+    const { payload } = await jwtVerify(token, getSessionSecret('admin'));
     if (payload.role !== 'admin') return null;
 
     const userId = Number(payload.userId ?? payload.sub ?? 0);

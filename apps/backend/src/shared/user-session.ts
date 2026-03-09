@@ -25,7 +25,7 @@ export async function createUserSessionToken(payload: UserSessionPayload) {
     .setSubject(String(payload.userId))
     .setIssuedAt(now)
     .setExpirationTime(expiresAt)
-    .sign(getSessionSecret());
+    .sign(getSessionSecret('user'));
 
   return { token, expiresAt };
 }
@@ -34,7 +34,7 @@ export async function verifyUserSessionToken(token?: string | null) {
   if (!token) return null;
 
   try {
-    const { payload } = await jwtVerify(token, getSessionSecret());
+    const { payload } = await jwtVerify(token, getSessionSecret('user'));
     const userId = Number(payload.userId ?? payload.sub ?? 0);
     if (!userId) return null;
 

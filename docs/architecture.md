@@ -58,3 +58,5 @@ A prize is eligible when:
 - The web app includes `Authorization: Bearer <token>` on API calls.
 - Admin login uses `POST /auth/admin/login` and stores the token in
   `reward_admin_session`.
+- Secrets are split: `USER_JWT_SECRET` (backend only), `ADMIN_JWT_SECRET`
+  (backend + admin), `AUTH_SECRET` (web only).

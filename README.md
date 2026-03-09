@@ -89,7 +89,7 @@ A portfolio-grade, full-stack **virtual balance draw platform** built with:
 - Frontend: `AUTH_SECRET`, `API_BASE_URL`, `NEXT_PUBLIC_API_BASE_URL`
 - Admin: `API_BASE_URL`, `AUTH_SECRET`
 
-`AUTH_SECRET` **must match** across backend/web/admin. See
+`ADMIN_JWT_SECRET` **must match** between backend/admin. See
 `docs/environment.md` for full details.
 
 ## Docs
