@@ -1,4 +1,4 @@
-# CMS (Admin)
+# Admin Console
 
 Admin console for the Prize Pool & Probability Engine System.
 
@@ -29,5 +29,5 @@ pnpm dev
 
 ## Auth Flow
 
-Admin login calls `POST /auth/admin/login` on the backend.
-The backend sets the `reward_admin_session` cookie, which the CMS uses for all admin API calls.
+Admin login calls `POST /auth/admin/login` on the backend and stores the returned token in
+the `reward_admin_session` cookie. The console includes that cookie on subsequent admin API calls.

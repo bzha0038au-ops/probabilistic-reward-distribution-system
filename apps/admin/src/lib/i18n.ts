@@ -83,7 +83,7 @@ export const SUPPORTED_LOCALES: Locale[] = ['en', 'zh-CN'];
 const translations: Record<Locale, Messages> = {
   en: {
     common: {
-      appName: 'Prize Pool CMS',
+      appName: 'Prize Pool Admin',
       signIn: 'Sign In',
       signOut: 'Sign Out',
       email: 'Email',
@@ -156,7 +156,7 @@ const translations: Record<Locale, Messages> = {
   },
   'zh-CN': {
     common: {
-      appName: '奖池 CMS',
+      appName: '奖池管理后台',
       signIn: '登录',
       signOut: '退出登录',
       email: '邮箱',

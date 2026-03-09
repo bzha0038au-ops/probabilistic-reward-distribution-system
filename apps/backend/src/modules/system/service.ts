@@ -1,71 +1,120 @@
-import { eq, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
+import Decimal from 'decimal.js';
 
 import { systemConfig } from '@reward/database';
+import type { DbClient, DbTransaction } from '../../db';
+import { getConfig } from '../../shared/config';
+import { toDecimal, toMoneyString } from '../../shared/money';
 
 const DEFAULT_POOL_KEY = 'pool_balance';
+const DEFAULT_DRAW_COST_KEY = 'draw_cost';
+const { drawCost: DEFAULT_DRAW_COST } = getConfig();
 
-export async function getConfigNumber(
-  db: any,
+type DbExecutor = DbClient | DbTransaction;
+
+type ConfigRow = {
+  config_number: string | number | null;
+  config_value: { value?: string | number } | null;
+};
+
+const readConfigRow = async (
+  db: DbExecutor,
   key: string,
-  fallback = 0,
-  lock = false
-) {
+  lock: boolean
+): Promise<ConfigRow | null> => {
   const lockClause = lock ? sql.raw('FOR UPDATE') : sql.raw('');
-
-  const { rows } = await db.execute(sql`
-    SELECT config_value
+  const result = (await db.execute(sql`
+    SELECT config_number, config_value
     FROM ${systemConfig}
     WHERE ${systemConfig.configKey} = ${key}
     ${lockClause}
-  `);
+  `)) as unknown as { rows: ConfigRow[] };
 
-  if (!rows?.length) {
-    await db
-      .insert(systemConfig)
-      .values({
-        configKey: key,
-        configValue: { value: fallback },
-        description: 'Auto-created config entry',
-      })
-      .onConflictDoNothing();
+  return result.rows?.[0] ?? null;
+};
 
-    const { rows: retryRows } = await db.execute(sql`
-      SELECT config_value
-      FROM ${systemConfig}
-      WHERE ${systemConfig.configKey} = ${key}
-      ${lockClause}
-    `);
-
-    if (!retryRows?.length) return fallback;
-
-    const stored = retryRows[0]?.config_value;
-    return typeof stored?.value === 'number' ? stored.value : fallback;
+const parseConfigNumber = (row: ConfigRow | null, fallback: Decimal.Value) => {
+  if (row?.config_number !== null && row?.config_number !== undefined) {
+    return toDecimal(row.config_number);
   }
 
-  const stored = rows[0]?.config_value;
-  return typeof stored?.value === 'number' ? stored.value : fallback;
-}
+  const legacy = row?.config_value;
+  if (legacy && (typeof legacy.value === 'string' || typeof legacy.value === 'number')) {
+    return toDecimal(legacy.value);
+  }
 
-export async function setConfigNumber(
-  db: any,
+  return toDecimal(fallback);
+};
+
+export async function setConfigDecimal(
+  db: DbExecutor,
   key: string,
-  value: number,
+  value: Decimal.Value,
   description?: string
 ) {
+  const normalized = toMoneyString(value);
+  const updateValues = {
+    configNumber: normalized,
+    configValue: null,
+    updatedAt: new Date(),
+    ...(description ? { description } : {}),
+  };
+
   await db
-    .update(systemConfig)
-    .set({
-      configValue: { value },
+    .insert(systemConfig)
+    .values({
+      configKey: key,
+      configNumber: normalized,
+      configValue: null,
       description,
-      updatedAt: new Date(),
     })
-    .where(eq(systemConfig.configKey, key));
+    .onConflictDoUpdate({
+      target: systemConfig.configKey,
+      set: updateValues,
+    });
 }
 
-export async function getPoolBalance(db: any, fallback = 0, lock = false) {
-  return getConfigNumber(db, DEFAULT_POOL_KEY, fallback, lock);
+export async function getConfigDecimal(
+  db: DbExecutor,
+  key: string,
+  fallback: Decimal.Value = 0,
+  lock = false
+) {
+  const row = await readConfigRow(db, key, lock);
+
+  if (!row) {
+    await setConfigDecimal(db, key, fallback, 'Auto-created config entry');
+    return toDecimal(fallback);
+  }
+
+  return parseConfigNumber(row, fallback);
 }
 
-export async function setPoolBalance(db: any, value: number) {
-  return setConfigNumber(db, DEFAULT_POOL_KEY, value, 'Current system pool balance');
+export async function getPoolBalance(
+  db: DbExecutor,
+  fallback: Decimal.Value = 0,
+  lock = false
+) {
+  return getConfigDecimal(db, DEFAULT_POOL_KEY, fallback, lock);
+}
+
+export async function setPoolBalance(db: DbExecutor, value: Decimal.Value) {
+  return setConfigDecimal(
+    db,
+    DEFAULT_POOL_KEY,
+    value,
+    'Current system pool balance'
+  );
+}
+
+export async function getDrawCost(
+  db: DbExecutor,
+  fallback: Decimal.Value = DEFAULT_DRAW_COST,
+  lock = false
+) {
+  return getConfigDecimal(db, DEFAULT_DRAW_COST_KEY, fallback, lock);
+}
+
+export async function setDrawCost(db: DbExecutor, value: Decimal.Value) {
+  return setConfigDecimal(db, DEFAULT_DRAW_COST_KEY, value, 'Draw cost');
 }

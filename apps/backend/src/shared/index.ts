@@ -7,3 +7,4 @@ export * from './i18n';
 export * from './validation';
 export * from './admin-session';
 export * from './user-session';
+export * from './money';

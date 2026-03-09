@@ -21,5 +21,5 @@ pnpm dev
 
 ## API Routes
 
-All API traffic now goes to the backend service (`apps/backend`).
-Set `NEXT_PUBLIC_API_BASE_URL` in `.env`.
+All API traffic goes to the backend service (`apps/backend`).
+Set `API_BASE_URL` (server) and `NEXT_PUBLIC_API_BASE_URL` (client) in `.env`.

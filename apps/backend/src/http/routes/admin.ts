@@ -8,142 +8,116 @@ import {
   softDeletePrize,
   getAnalyticsSummary,
 } from '../../modules/admin/service';
-import { requireAdmin } from '../guards';
+import { requireAdminGuard } from '../guards';
 import { sendError, sendSuccess } from '../respond';
 import { validatePrizeCreate, validatePrizeUpdate } from '../validators';
 
 export async function registerAdminRoutes(app: FastifyInstance) {
-  app.get('/admin/prizes', async (request, reply) => {
-    const admin = await requireAdmin(request);
-    if (!admin) {
-      return sendError(reply, 401, 'Unauthorized');
-    }
+  app.register(async (protectedRoutes) => {
+    protectedRoutes.addHook('preHandler', requireAdminGuard);
 
-    const prizes = await listPrizes();
-    return sendSuccess(reply, prizes);
-  });
-
-  app.post('/admin/prizes', async (request, reply) => {
-    const admin = await requireAdmin(request);
-    if (!admin) {
-      return sendError(reply, 401, 'Unauthorized');
-    }
-
-    const payload = request.body as {
-      name?: string;
-      stock?: number;
-      weight?: number;
-      poolThreshold?: string;
-      rewardAmount?: string;
-      isActive?: boolean;
-    };
-    const validation = validatePrizeCreate(payload);
-    if (!validation.isValid) {
-      return sendError(reply, 400, 'Invalid request.', validation.errors);
-    }
-
-    const created = await createPrize({
-      name: String(payload.name ?? ''),
-      stock: Number(payload.stock ?? 0),
-      weight: Number(payload.weight ?? 1),
-      poolThreshold: String(payload.poolThreshold ?? '0'),
-      rewardAmount: String(payload.rewardAmount ?? '0'),
-      isActive: Boolean(payload.isActive ?? true),
+    protectedRoutes.get('/admin/prizes', async (request, reply) => {
+      const prizes = await listPrizes();
+      return sendSuccess(reply, prizes);
     });
 
-    return sendSuccess(reply, created, 201);
-  });
+    protectedRoutes.post('/admin/prizes', async (request, reply) => {
+      const payload = request.body as {
+        name?: string;
+        stock?: number;
+        weight?: number;
+        poolThreshold?: string;
+        rewardAmount?: string;
+        isActive?: boolean;
+      };
+      const validation = validatePrizeCreate(payload);
+      if (!validation.isValid) {
+        return sendError(reply, 400, 'Invalid request.', validation.errors);
+      }
 
-  app.patch('/admin/prizes/:prizeId', async (request, reply) => {
-    const admin = await requireAdmin(request);
-    if (!admin) {
-      return sendError(reply, 401, 'Unauthorized');
-    }
+      const created = await createPrize({
+        name: String(payload.name ?? ''),
+        stock: Number(payload.stock ?? 0),
+        weight: Number(payload.weight ?? 1),
+        poolThreshold: String(payload.poolThreshold ?? '0'),
+        rewardAmount: String(payload.rewardAmount ?? '0'),
+        isActive: Boolean(payload.isActive ?? true),
+      });
 
-    const { prizeId } = request.params as { prizeId: string };
-    const parsedPrizeId = Number(prizeId);
-    if (!Number.isFinite(parsedPrizeId) || parsedPrizeId <= 0) {
-      return sendError(reply, 400, 'Invalid prize id.');
-    }
-
-    const payload = request.body as {
-      name?: string;
-      stock?: number;
-      weight?: number;
-      poolThreshold?: string;
-      rewardAmount?: string;
-      isActive?: boolean;
-    };
-    const validation = validatePrizeUpdate(payload);
-    if (!validation.isValid) {
-      return sendError(reply, 400, 'Invalid request.', validation.errors);
-    }
-
-    const updated = await updatePrize(parsedPrizeId, {
-      name: payload.name,
-      stock: payload.stock,
-      weight: payload.weight,
-      poolThreshold: payload.poolThreshold,
-      rewardAmount: payload.rewardAmount,
-      isActive: payload.isActive,
+      return sendSuccess(reply, created, 201);
     });
 
-    if (!updated) {
-      return sendError(reply, 404, 'Prize not found.');
-    }
+    protectedRoutes.patch('/admin/prizes/:prizeId', async (request, reply) => {
+      const { prizeId } = request.params as { prizeId: string };
+      const parsedPrizeId = Number(prizeId);
+      if (!Number.isFinite(parsedPrizeId) || parsedPrizeId <= 0) {
+        return sendError(reply, 400, 'Invalid prize id.');
+      }
 
-    return sendSuccess(reply, updated);
-  });
+      const payload = request.body as {
+        name?: string;
+        stock?: number;
+        weight?: number;
+        poolThreshold?: string;
+        rewardAmount?: string;
+        isActive?: boolean;
+      };
+      const validation = validatePrizeUpdate(payload);
+      if (!validation.isValid) {
+        return sendError(reply, 400, 'Invalid request.', validation.errors);
+      }
 
-  app.patch('/admin/prizes/:prizeId/toggle', async (request, reply) => {
-    const admin = await requireAdmin(request);
-    if (!admin) {
-      return sendError(reply, 401, 'Unauthorized');
-    }
+      const updated = await updatePrize(parsedPrizeId, {
+        name: payload.name,
+        stock: payload.stock,
+        weight: payload.weight,
+        poolThreshold: payload.poolThreshold,
+        rewardAmount: payload.rewardAmount,
+        isActive: payload.isActive,
+      });
 
-    const { prizeId } = request.params as { prizeId: string };
-    const parsedPrizeId = Number(prizeId);
-    if (!Number.isFinite(parsedPrizeId) || parsedPrizeId <= 0) {
-      return sendError(reply, 400, 'Invalid prize id.');
-    }
+      if (!updated) {
+        return sendError(reply, 404, 'Prize not found.');
+      }
 
-    const updated = await togglePrize(parsedPrizeId);
+      return sendSuccess(reply, updated);
+    });
 
-    if (!updated) {
-      return sendError(reply, 404, 'Prize not found.');
-    }
+    protectedRoutes.patch('/admin/prizes/:prizeId/toggle', async (request, reply) => {
+      const { prizeId } = request.params as { prizeId: string };
+      const parsedPrizeId = Number(prizeId);
+      if (!Number.isFinite(parsedPrizeId) || parsedPrizeId <= 0) {
+        return sendError(reply, 400, 'Invalid prize id.');
+      }
 
-    return sendSuccess(reply, updated);
-  });
+      const updated = await togglePrize(parsedPrizeId);
 
-  app.delete('/admin/prizes/:prizeId', async (request, reply) => {
-    const admin = await requireAdmin(request);
-    if (!admin) {
-      return sendError(reply, 401, 'Unauthorized');
-    }
+      if (!updated) {
+        return sendError(reply, 404, 'Prize not found.');
+      }
 
-    const { prizeId } = request.params as { prizeId: string };
-    const parsedPrizeId = Number(prizeId);
-    if (!Number.isFinite(parsedPrizeId) || parsedPrizeId <= 0) {
-      return sendError(reply, 400, 'Invalid prize id.');
-    }
+      return sendSuccess(reply, updated);
+    });
 
-    const deleted = await softDeletePrize(parsedPrizeId);
+    protectedRoutes.delete('/admin/prizes/:prizeId', async (request, reply) => {
+      const { prizeId } = request.params as { prizeId: string };
+      const parsedPrizeId = Number(prizeId);
+      if (!Number.isFinite(parsedPrizeId) || parsedPrizeId <= 0) {
+        return sendError(reply, 400, 'Invalid prize id.');
+      }
 
-    if (!deleted) {
-      return sendError(reply, 404, 'Prize not found.');
-    }
+      const deleted = await softDeletePrize(parsedPrizeId);
 
-    return sendSuccess(reply, deleted);
-  });
+      if (!deleted) {
+        return sendError(reply, 404, 'Prize not found.');
+      }
 
-  app.get('/admin/analytics/summary', async (request, reply) => {
-    const admin = await requireAdmin(request);
-    if (!admin) {
-      return sendError(reply, 401, 'Unauthorized');
-    }
+      return sendSuccess(reply, deleted);
+    });
 
-    const summary = await getAnalyticsSummary();
-    return sendSuccess(reply, summary);
+    protectedRoutes.get('/admin/analytics/summary', async (request, reply) => {
+      const summary = await getAnalyticsSummary();
+      return sendSuccess(reply, summary);
+    });
   });
 }

@@ -6,21 +6,28 @@
       "idx": 0,
       "version": "6",
       "when": 1773023657638,
-      "tag": "0000_unknown_skaar",
+      "tag": "0000_init",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "6",
       "when": 1773027391757,
-      "tag": "0001_careless_shotgun",
+      "tag": "0001_prize_soft_delete",
       "breakpoints": true
     },
     {
       "idx": 2,
       "version": "6",
       "when": 1773028732266,
-      "tag": "0002_plain_nick_fury",
+      "tag": "0002_wallet_merge_admins",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1773051174748,
+      "tag": "0003_system_config_numeric",
       "breakpoints": true
     }
   ]

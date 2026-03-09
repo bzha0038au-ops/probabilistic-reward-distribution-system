@@ -22,7 +22,7 @@ const schema = {
     env: 'DATABASE_URL',
   },
   drawCost: {
-    doc: 'Wallet draw cost',
+    doc: 'Default draw cost (used to seed system_config)',
     format: 'int',
     default: 10,
     env: 'DRAW_COST',

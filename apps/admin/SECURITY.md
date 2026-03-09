@@ -2,6 +2,5 @@
 
 ## Reporting a Vulnerability
 
-Please report any vulnerabilities via GitHub: https://github.com/CriticalMoments/CMSaasStarter/security
-
-This allows us to privately fix and publish the fix before public disclosure.
+Please report any vulnerabilities directly to the maintainers of this repository.
+If this project is hosted on GitHub, you can use the repository Security tab.

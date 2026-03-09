@@ -3,6 +3,7 @@ import { and, desc, eq, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import { db } from '../../db';
 import { drawRecords, prizes, transactions } from '@reward/database';
 import { getPoolBalance } from '../system/service';
+import { toMoneyString } from '../../shared/money';
 
 export async function listPrizes() {
   return db
@@ -115,13 +116,15 @@ export async function getAnalyticsSummary() {
     .orderBy(desc(sql`abs(sum(${transactions.amount}))`))
     .limit(20);
 
+  const poolBalance = await getPoolBalance(db, 0);
+
   return {
     totalDrawCount: Number(total ?? 0),
     wonCount: Number(won ?? 0),
     missCount: Number(miss ?? 0),
     winRate: total ? Number(won) / Number(total) : 0,
     distribution,
-    systemPoolBalance: await getPoolBalance(db, 0),
+    systemPoolBalance: toMoneyString(poolBalance),
     topSpenders,
   };
 }

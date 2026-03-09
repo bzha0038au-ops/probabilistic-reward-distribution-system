@@ -1,4 +1,5 @@
 import { getClientLocale } from '@/lib/i18n/client';
+import { getSession } from 'next-auth/react';
 
 import { parseApiResponse, type ApiResult } from './shared';
 
@@ -8,11 +9,17 @@ const API_BASE_URL =
 export async function apiRequestClient<T>(
   path: string,
   init: RequestInit = {},
-  options: { baseUrl?: string; locale?: string } = {}
+  options: { baseUrl?: string; locale?: string; auth?: boolean } = {}
 ): Promise<ApiResult<T>> {
   const headers = new Headers(init.headers ?? {});
   const locale = options.locale ?? getClientLocale();
   if (locale) headers.set('x-locale', locale);
+  if (options.auth !== false) {
+    const session = await getSession();
+    if (session?.backendToken) {
+      headers.set('Authorization', `Bearer ${session.backendToken}`);
+    }
+  }
 
   const response = await fetch(`${options.baseUrl ?? API_BASE_URL}${path}`, {
     ...init,

@@ -21,14 +21,8 @@ export function DrawPanel() {
   const [result, setResult] = useState<DrawResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function ensureUserSession() {
-    await fetch('/api/auth/user-session', { method: 'POST' });
-  }
-
   async function refreshBalance() {
-    const response = await apiRequestClient<{ balance: string }>('/wallet', {
-      credentials: 'include',
-    });
+    const response = await apiRequestClient<{ balance: string }>('/wallet');
     if (response.ok) {
       setBalance(response.data.balance ?? '0');
     }
@@ -36,7 +30,6 @@ export function DrawPanel() {
 
   useEffect(() => {
     (async () => {
-      await ensureUserSession();
       await refreshBalance();
     })();
   }, []);
@@ -45,10 +38,8 @@ export function DrawPanel() {
     setLoading(true);
     setError(null);
 
-    await ensureUserSession();
     const response = await apiRequestClient<DrawResult>('/draw', {
       method: 'POST',
-      credentials: 'include',
     });
 
     if (!response.ok) {

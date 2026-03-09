@@ -14,10 +14,14 @@ apps/**/.svelte-kit/
 apps/**/.vite/
 apps/**/dist/
 apps/**/coverage/
+apps/**/.vercel/
+apps/**/.eslintcache
 apps/**/.env
 apps/**/.env.*
+!apps/**/.env.example
 pnpm-debug.log*
 *.log
+*.tsbuildinfo
 
 # IDE
 .vscode/

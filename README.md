@@ -46,6 +46,11 @@ A portfolio-grade, full-stack **virtual balance draw platform** built with:
 - `bank_cards`, `top_ups`, `withdrawals`
 - `prizes`, `draw_records`, `transactions`, `system_config`
 
+## Operational Config
+
+- `system_config` stores runtime parameters like `pool_balance` and `draw_cost`
+  as numeric values (adjustable without redeploy).
+
 ## Concurrency Strategy
 
 - All draw mutations run in a **single DB transaction**
@@ -55,8 +60,16 @@ A portfolio-grade, full-stack **virtual balance draw platform** built with:
 
 ## Runtime Topology
 
-- `apps/frontend` and `apps/admin` are separate frontends.
-- Both call the same backend API (`apps/backend`) and share the same database.
+- `apps/frontend` (web) and `apps/admin` (admin console) are separate frontends.
+- Both call the same backend API (`apps/backend`) and share the same Postgres database.
+- Frontends do not access the database directly.
+
+## Auth Flow
+
+- Web: NextAuth credentials flow calls `POST /auth/user/session` to obtain a backend token.
+- API calls from the web include `Authorization: Bearer <token>`.
+- Admin: SvelteKit console calls `POST /auth/admin/login` and stores the token in
+  `reward_admin_session` for admin-only routes.
 
 ## Quick Start (Local)
 
@@ -64,11 +77,16 @@ A portfolio-grade, full-stack **virtual balance draw platform** built with:
 2. `cd apps/database`
 3. Copy env: `cp .env.example .env` (or set `DATABASE_URL`)
 4. Run migrations:
-   - `pnpm db:generate`
    - `pnpm db:migrate`
 5. Start the backend API: `cd ../backend && pnpm dev`
 6. Start the client: `cd ../frontend && pnpm dev` (no DB connection needed)
 7. Start the admin console: `cd ../admin && pnpm dev` (no DB connection needed, visit `/admin`)
+
+## Environment
+
+- Backend: `DATABASE_URL`, `AUTH_SECRET`, optional `DRAW_COST`
+- Frontend: `AUTH_SECRET`, `API_BASE_URL`, `NEXT_PUBLIC_API_BASE_URL`
+- Admin: `API_BASE_URL`, `AUTH_SECRET`
 
 ## Notes
 

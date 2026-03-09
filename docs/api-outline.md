@@ -16,8 +16,13 @@ Error:
 
 - `GET /health`
 - `POST /auth/register`
-- `POST /auth/user/session`
-- `POST /auth/admin/login`
+- `POST /auth/user/session` (returns backend token for web sessions)
+- `POST /auth/admin/login` (returns admin token; stored as `reward_admin_session`)
+
+## Auth Headers
+
+- User routes require `Authorization: Bearer <token>`
+- Admin routes require the `reward_admin_session` cookie
 
 ## User
 

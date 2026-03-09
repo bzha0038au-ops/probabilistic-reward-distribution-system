@@ -18,6 +18,12 @@
 
 User balances are stored directly on the `users` table (wallets merged).
 
+## Runtime Config
+
+Operational values are stored in `system_config` with numeric precision:
+- `pool_balance`
+- `draw_cost`
+
 ## Transaction Boundary
 
 `executeDraw(userId)` is the main critical section:
@@ -44,3 +50,10 @@ A prize is eligible when:
 - Ledger keeps every balance movement
 - Draw records store outcome and metadata
 - Admin summary aggregates wins, distributions, spend
+
+## Auth Notes
+
+- Web credentials flow obtains a backend session token via `POST /auth/user/session`.
+- The web app includes `Authorization: Bearer <token>` on API calls.
+- Admin login uses `POST /auth/admin/login` and stores the token in
+  `reward_admin_session`.

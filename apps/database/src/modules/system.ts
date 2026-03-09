@@ -1,4 +1,13 @@
-import { jsonb, pgTable, serial, text, timestamp, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
+import {
+  jsonb,
+  numeric,
+  pgTable,
+  serial,
+  text,
+  timestamp,
+  uniqueIndex,
+  varchar,
+} from 'drizzle-orm/pg-core';
 
 export const systemConfig = pgTable(
   'system_config',
@@ -6,6 +15,7 @@ export const systemConfig = pgTable(
     id: serial('id').primaryKey(),
     configKey: varchar('config_key', { length: 128 }).notNull(),
     configValue: jsonb('config_value'),
+    configNumber: numeric('config_number', { precision: 14, scale: 2 }),
     description: text('description'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()

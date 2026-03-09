@@ -1,28 +1,39 @@
 import { and, eq, gt, isNull, lte, sql } from 'drizzle-orm';
+import Decimal from 'decimal.js';
+import { randomInt } from 'node:crypto';
 
 import { db } from '../../db';
 import { drawRecords, prizes, transactions, users } from '@reward/database';
-import { getPoolBalance, setPoolBalance } from '../system/service';
-import { getConfig } from '../../shared/config';
+import { getDrawCost, getPoolBalance, setPoolBalance } from '../system/service';
 import { logger } from '../../shared/logger';
+import { toDecimal, toMoneyString } from '../../shared/money';
 
-const { drawCost: DRAW_COST } = getConfig();
+type WeightedPick<T> = {
+  item: T;
+  randomPick: number;
+  totalWeight: number;
+};
 
-const toDecimalString = (value: number) => value.toFixed(2);
-
-function pickByWeight<T extends { weight: number }>(items: T[]): T | null {
+export function pickByWeight<T extends { weight: number }>(
+  items: T[],
+  rng: (totalWeight: number) => number = (totalWeight) =>
+    randomInt(1, totalWeight + 1)
+): WeightedPick<T> | null {
   const totalWeight = items.reduce((sum, item) => sum + item.weight, 0);
   if (totalWeight <= 0) return null;
 
-  const pick = Math.floor(Math.random() * totalWeight) + 1;
+  const pick = rng(totalWeight);
   let cursor = 0;
 
   for (const item of items) {
     cursor += item.weight;
-    if (pick <= cursor) return item;
+    if (pick <= cursor) {
+      return { item, randomPick: pick, totalWeight };
+    }
   }
 
-  return items[items.length - 1] ?? null;
+  const fallback = items[items.length - 1];
+  return fallback ? { item: fallback, randomPick: pick, totalWeight } : null;
 }
 
 export async function executeDraw(userId: number) {
@@ -39,17 +50,18 @@ export async function executeDraw(userId: number) {
       throw new Error('User not found.');
     }
 
-    const balanceBefore = Number(user.balance ?? 0);
-    if (balanceBefore < DRAW_COST) {
+    const drawCost = await getDrawCost(tx);
+    const balanceBefore = toDecimal(user.balance ?? 0);
+    if (balanceBefore.lt(drawCost)) {
       throw new Error('Insufficient balance.');
     }
 
-    const balanceAfter = balanceBefore - DRAW_COST;
+    const balanceAfter = balanceBefore.minus(drawCost);
 
     await tx
       .update(users)
       .set({
-        balance: toDecimalString(balanceAfter),
+        balance: toMoneyString(balanceAfter),
         updatedAt: new Date(),
       })
       .where(eq(users.id, user.id));
@@ -57,9 +69,9 @@ export async function executeDraw(userId: number) {
     await tx.insert(transactions).values({
       userId,
       type: 'debit_draw',
-      amount: toDecimalString(-DRAW_COST),
-      balanceBefore: toDecimalString(balanceBefore),
-      balanceAfter: toDecimalString(balanceAfter),
+      amount: toMoneyString(drawCost.negated()),
+      balanceBefore: toMoneyString(balanceBefore),
+      balanceAfter: toMoneyString(balanceAfter),
       metadata: { reason: 'draw_cost' },
     });
 
@@ -80,17 +92,18 @@ export async function executeDraw(userId: number) {
           isNull(prizes.deletedAt),
           gt(prizes.stock, 0),
           gt(prizes.weight, 0),
-          lte(prizes.poolThreshold, toDecimalString(poolBalance))
+          lte(prizes.poolThreshold, toMoneyString(poolBalance))
         )
       );
 
     let status: 'miss' | 'won' | 'out_of_stock' = 'miss';
-    let rewardAmount = 0;
+    let rewardAmount = toDecimal(0);
     let prizeId: number | null = null;
 
-    const candidate = pickByWeight(eligible);
+    const selection = pickByWeight(eligible);
 
-    if (candidate) {
+    if (selection) {
+      const { item: candidate, randomPick, totalWeight } = selection;
       const prizeResult = (await tx.execute(sql`
         SELECT id, stock, reward_amount, is_active
         FROM ${prizes}
@@ -118,15 +131,15 @@ export async function executeDraw(userId: number) {
 
         status = 'won';
         prizeId = lockedPrize.id;
-        rewardAmount = Number(lockedPrize.reward_amount ?? 0);
+        rewardAmount = toDecimal(lockedPrize.reward_amount ?? 0);
 
-        if (rewardAmount > 0) {
-          const creditedBalance = balanceAfter + rewardAmount;
+        if (rewardAmount.gt(0)) {
+          const creditedBalance = balanceAfter.plus(rewardAmount);
 
           await tx
             .update(users)
             .set({
-              balance: toDecimalString(creditedBalance),
+              balance: toMoneyString(creditedBalance),
               updatedAt: new Date(),
             })
             .where(eq(users.id, user.id));
@@ -134,9 +147,9 @@ export async function executeDraw(userId: number) {
           await tx.insert(transactions).values({
             userId,
             type: 'credit_reward',
-            amount: toDecimalString(rewardAmount),
-            balanceBefore: toDecimalString(balanceAfter),
-            balanceAfter: toDecimalString(creditedBalance),
+            amount: toMoneyString(rewardAmount),
+            balanceBefore: toMoneyString(balanceAfter),
+            balanceAfter: toMoneyString(creditedBalance),
             referenceType: 'prize',
             referenceId: lockedPrize.id,
             metadata: { reason: 'draw_reward' },
@@ -147,8 +160,8 @@ export async function executeDraw(userId: number) {
       }
     }
 
-    const updatedPoolBalance = Math.max(
-      poolBalance + DRAW_COST - rewardAmount,
+    const updatedPoolBalance = Decimal.max(
+      poolBalance.plus(drawCost).minus(rewardAmount),
       0
     );
     await setPoolBalance(tx, updatedPoolBalance);
@@ -158,10 +171,18 @@ export async function executeDraw(userId: number) {
       .values({
         userId,
         prizeId,
-        drawCost: toDecimalString(DRAW_COST),
-        rewardAmount: toDecimalString(rewardAmount),
+        drawCost: toMoneyString(drawCost),
+        rewardAmount: toMoneyString(rewardAmount),
         status,
-        metadata: { poolBalanceBefore: poolBalance },
+        metadata: {
+          poolBalanceBefore: toMoneyString(poolBalance),
+          randomPick: selection?.randomPick ?? null,
+          totalWeight: selection?.totalWeight ?? null,
+          eligiblePrizes: eligible.map((item) => ({
+            id: item.id,
+            weight: item.weight,
+          })),
+        },
       })
       .returning();
 
@@ -169,10 +190,10 @@ export async function executeDraw(userId: number) {
       userId,
       status,
       prizeId,
-      rewardAmount,
-      drawCost: DRAW_COST,
-      poolBalanceBefore: poolBalance,
-      poolBalanceAfter: updatedPoolBalance,
+      rewardAmount: toMoneyString(rewardAmount),
+      drawCost: toMoneyString(drawCost),
+      poolBalanceBefore: toMoneyString(poolBalance),
+      poolBalanceAfter: toMoneyString(updatedPoolBalance),
     });
 
     return record;

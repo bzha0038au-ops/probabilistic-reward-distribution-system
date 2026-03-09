@@ -32,7 +32,7 @@ export const {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password }),
           cache: 'no-store',
-        });
+        }, { auth: false });
 
         if (!result.ok || !result.data?.token || !result.data.user) {
           return null;
