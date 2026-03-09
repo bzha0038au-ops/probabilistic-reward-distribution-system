@@ -32,4 +32,5 @@ These values must be identical for auth/session verification to work:
 - `ADMIN_JWT_SECRET` must match between backend and admin.
 - `USER_JWT_SECRET` must not be shared with the admin or web secrets.
 - `AUTH_SECRET` is only for NextAuth in the web app.
+- In production, JWT secrets must be at least 32 characters.
 - `API_BASE_URL` and `NEXT_PUBLIC_API_BASE_URL` should point to the same backend.

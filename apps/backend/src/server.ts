@@ -10,9 +10,11 @@ import {
   getConfig,
   getPinoLogger,
   installProcessHandlers,
+  validateSessionSecrets,
 } from './shared';
 import { registerRoutes } from './http/routes';
 
+validateSessionSecrets();
 const config = getConfig();
 const app = fastify({ logger: getPinoLogger() });
 installProcessHandlers(app.server);

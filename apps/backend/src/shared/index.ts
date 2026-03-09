@@ -9,3 +9,4 @@ export * from './validation';
 export * from './admin-session';
 export * from './user-session';
 export * from './money';
+export { validateSessionSecrets } from './session-secret';
