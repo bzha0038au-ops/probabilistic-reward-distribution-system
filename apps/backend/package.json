@@ -17,6 +17,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@reward/shared-types": "workspace:*",
     "@reward/database": "workspace:*",
     "@fastify/cookie": "^9.4.0",
     "@fastify/cors": "^8.5.0",

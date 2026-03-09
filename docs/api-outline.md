@@ -23,6 +23,7 @@ Error:
 
 - User routes require `Authorization: Bearer <token>`
 - Admin routes require the `reward_admin_session` cookie
+- Use `x-trace-id` to correlate requests across systems
 
 ## User
 

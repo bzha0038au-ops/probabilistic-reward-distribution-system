@@ -1,22 +1,6 @@
-export type ApiError = {
-  message: string;
-  code?: string;
-  details?: string[];
-};
+import type { ApiError, ApiResponse } from '@reward/shared-types';
 
-export type ApiSuccess<T> = {
-  ok: true;
-  data: T;
-  requestId?: string;
-};
-
-export type ApiFailure = {
-  ok: false;
-  error: ApiError;
-  requestId?: string;
-};
-
-export type ApiResult<T> = ApiSuccess<T> | ApiFailure;
+export type ApiResult<T> = ApiResponse<T>;
 
 const fallbackError: ApiError = { message: 'Request failed.' };
 

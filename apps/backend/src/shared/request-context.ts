@@ -4,6 +4,7 @@ import fastifyPlugin from 'fastify-plugin';
 
 import { context } from './context';
 import { resolveLocaleFromRequest } from './i18n';
+import { ensureTraceId, TRACE_ID_HEADER } from './trace';
 
 const REQUEST_ID_HEADER = 'x-request';
 
@@ -29,18 +30,25 @@ function requestContextPlugin(
         request.headers[REQUEST_ID_HEADER] = requestId;
       }
 
+      const traceHeader = request.headers[TRACE_ID_HEADER];
+      const traceId = ensureTraceId(
+        Array.isArray(traceHeader) ? traceHeader[0] : traceHeader ?? requestId
+      );
+
       reply.header(REQUEST_ID_HEADER, requestId);
+      reply.header(TRACE_ID_HEADER, traceId);
 
       const locale = resolveLocaleFromRequest(request);
       const store = context().getStore();
       if (store) {
         store.requestId = requestId;
+        store.traceId = traceId;
         store.locale = locale;
         hookDone();
         return;
       }
 
-      context().run({ requestId, locale }, hookDone);
+      context().run({ requestId, traceId, locale }, hookDone);
     }
   );
 

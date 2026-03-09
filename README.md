@@ -24,7 +24,8 @@ A portfolio-grade, full-stack **virtual balance draw platform** built with:
 │   ├── frontend         # Client app (user-facing UI)
 │   ├── admin            # Admin console (SvelteKit, admin UI lives here)
 │   ├── backend          # HTTP API + domain services
-│   └── database         # Drizzle schema + migrations (no business logic)
+│   ├── database         # Drizzle schema + migrations (no business logic)
+│   └── shared-types     # Shared API contracts (Zod + TS types)
 ├── docs
 │   ├── architecture.md
 │   └── api-outline.md
@@ -87,6 +88,15 @@ A portfolio-grade, full-stack **virtual balance draw platform** built with:
 - Backend: `DATABASE_URL`, `AUTH_SECRET`, optional `DRAW_COST`
 - Frontend: `AUTH_SECRET`, `API_BASE_URL`, `NEXT_PUBLIC_API_BASE_URL`
 - Admin: `API_BASE_URL`, `AUTH_SECRET`
+
+`AUTH_SECRET` **must match** across backend/web/admin. See
+`docs/environment.md` for full details.
+
+## Docs
+
+- `docs/environment.md` (required env vars + consistency rules)
+- `docs/test-strategy.md` (testing scope and commands)
+- `docs/observability.md` (logging + tracing)
 
 ## Notes
 

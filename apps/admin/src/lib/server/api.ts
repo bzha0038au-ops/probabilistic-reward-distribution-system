@@ -1,6 +1,7 @@
 import { env } from '$env/dynamic/private';
 import { ADMIN_SESSION_COOKIE } from '$lib/server/admin-session';
 import { LOCALE_COOKIE } from '$lib/i18n';
+import type { ApiResponse } from '@reward/shared-types';
 
 const defaultBaseUrl = 'http://localhost:4000';
 
@@ -31,13 +32,7 @@ export async function apiFetch(
   });
 }
 
-export type ApiResult<T> = {
-  ok: boolean;
-  data?: T;
-  error?: { message?: string; code?: string; details?: string[] };
-  requestId?: string;
-  status: number;
-};
+export type ApiResult<T> = ApiResponse<T> & { status: number };
 
 export async function apiRequest<T>(
   fetcher: typeof fetch,

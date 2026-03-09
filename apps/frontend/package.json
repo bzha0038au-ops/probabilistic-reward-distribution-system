@@ -8,6 +8,7 @@
     "check": "next lint"
   },
   "dependencies": {
+    "@reward/shared-types": "workspace:*",
     "@radix-ui/react-label": "^2.0.2",
     "@radix-ui/react-slot": "^1.0.2",
     "@types/node": "^20.10.5",

@@ -13,6 +13,7 @@
 - Fastify routes: request parsing + response mapping
 - Service layer: draw orchestration, balance mutations, analytics
 - Data access: Drizzle schema + SQL transactions
+- Shared contracts: `apps/shared-types` (Zod + TS types)
 
 ## Wallet Model
 

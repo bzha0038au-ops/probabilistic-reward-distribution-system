@@ -38,6 +38,7 @@
   },
   "type": "module",
   "dependencies": {
+    "@reward/shared-types": "workspace:*",
     "jose": "^5.5.1"
   },
   "overrides": {}

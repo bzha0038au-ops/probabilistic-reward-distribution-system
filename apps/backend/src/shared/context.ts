@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 
 export type RequestContext = {
   requestId?: string;
+  traceId?: string;
   userId?: number;
   role?: 'user' | 'admin';
   locale?: 'en' | 'zh-CN';
