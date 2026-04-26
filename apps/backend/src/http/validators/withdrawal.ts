@@ -6,6 +6,7 @@ const schema = {
   additionalProperties: false,
   properties: {
     amount: { type: ['number', 'string'] },
+    payoutMethodId: { type: ['number', 'string'], nullable: true },
     bankCardId: { type: ['number', 'string'], nullable: true },
     metadata: { type: 'object', nullable: true },
   },

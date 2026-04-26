@@ -8,10 +8,21 @@
     "dev:mobile": "pnpm --dir apps/mobile dev",
     "dev:admin": "pnpm --dir apps/admin dev",
     "dev:backend": "pnpm --dir apps/backend dev",
+    "dev:notifications": "pnpm --dir apps/backend dev:worker:notifications",
+    "dev:reconciliation": "pnpm --dir apps/backend dev:worker:reconciliation",
+    "dev:payment-webhooks": "pnpm --dir apps/backend dev:worker:payment-webhooks",
     "mobile:ios": "pnpm --dir apps/mobile ios",
     "mobile:android": "pnpm --dir apps/mobile android",
+    "mobile:release:preview": "pnpm --dir apps/mobile release:preview",
+    "mobile:release:production": "pnpm --dir apps/mobile release:production",
+    "mobile:release:ios": "pnpm --dir apps/mobile release:ios",
+    "mobile:release:android": "pnpm --dir apps/mobile release:android",
+    "mobile:submit:android:internal": "pnpm --dir apps/mobile submit:android:internal",
+    "mobile:submit:android:production": "pnpm --dir apps/mobile submit:android:production",
+    "mobile:submit:ios": "pnpm --dir apps/mobile submit:ios",
+    "guard:generated-src-js": "node scripts/check-generated-src-js.mjs",
     "build": "pnpm -r --filter ./apps/frontend --filter ./apps/admin --filter ./apps/backend --filter ./apps/database --filter ./apps/shared-types --filter ./packages/user-core build",
-    "check": "pnpm -r --filter ./apps/frontend --filter ./apps/mobile --filter ./apps/admin --filter ./apps/backend --filter ./apps/database --filter ./apps/shared-types --filter ./packages/user-core check",
+    "check": "pnpm guard:generated-src-js && pnpm -r --filter ./apps/frontend --filter ./apps/mobile --filter ./apps/admin --filter ./apps/backend --filter ./apps/database --filter ./apps/shared-types --filter ./packages/user-core check",
     "lint": "pnpm -r --filter ./apps/frontend --filter ./apps/mobile --filter ./apps/admin --filter ./apps/backend --filter ./apps/database --filter ./apps/shared-types --filter ./packages/user-core lint",
     "test": "pnpm -r --if-present test",
     "db:generate": "pnpm --dir apps/database db:generate",
@@ -21,6 +32,18 @@
     "db:up": "docker compose up -d postgres redis",
     "db:down": "docker compose down",
     "db:reset": "docker compose down -v && docker compose up -d postgres redis",
-    "test:integration": "RUN_INTEGRATION_TESTS=true DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5433/reward_local POSTGRES_URL=postgresql://postgres:postgres@127.0.0.1:5433/reward_local pnpm --dir apps/backend test"
+    "test:integration": "env -u NO_COLOR tsx tests/integration/run.ts",
+    "test:integration:critical": "env -u NO_COLOR tsx tests/integration/run.ts --critical",
+    "test:e2e": "env -u NO_COLOR tsx tests/e2e/run.ts",
+    "test:e2e:critical": "env -u NO_COLOR tsx tests/e2e/run.ts --critical",
+    "test:e2e:install": "playwright install chromium",
+    "test:load": "tsx tests/load/wallet-smoke.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "autocannon": "^8.0.0",
+    "pg-embedded": "^0.2.3",
+    "postgres": "^3.4.8",
+    "tsx": "^4.21.0"
   }
 }

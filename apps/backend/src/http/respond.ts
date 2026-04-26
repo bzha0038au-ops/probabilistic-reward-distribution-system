@@ -18,6 +18,8 @@ export const sendSuccess = <T>(
 
   const requestId = context().getStore()?.requestId;
   if (requestId) payload.requestId = requestId;
+  const traceId = context().getStore()?.traceId;
+  if (traceId) payload.traceId = traceId;
 
   return reply.status(status).send(payload);
 };
@@ -42,6 +44,8 @@ export const sendError = (
 
   const requestId = context().getStore()?.requestId;
   if (requestId) payload.requestId = requestId;
+  const traceId = context().getStore()?.traceId;
+  if (traceId) payload.traceId = traceId;
 
   return reply.status(status).send(payload);
 };

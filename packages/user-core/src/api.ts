@@ -1,12 +1,23 @@
 import type {
+  AcceptedResponse,
   ApiError,
   ApiResponse,
   AuthCredentials,
+  CompletedResponse,
+  CurrentUserSessionResponse,
   DrawRequest,
   DrawResult,
+  EmailVerificationRequest,
+  EmailVerificationResponse,
+  PasswordResetConfirmRequest,
+  PasswordResetRequest,
   RegisterRequest,
   RegisterResponse,
+  SessionBulkRevocationResponse,
+  SessionRevocationResponse,
   UserSessionResponse,
+  UserSessionsResponse,
+  VerificationTokenConfirmRequest,
   WalletBalanceResponse,
 } from '@reward/shared-types';
 
@@ -16,6 +27,12 @@ export const USER_API_ROUTES = {
   auth: {
     register: '/auth/register',
     session: '/auth/user/session',
+    sessions: '/auth/user/sessions',
+    sessionsRevokeAll: '/auth/user/sessions/revoke-all',
+    passwordResetRequest: '/auth/password-reset/request',
+    passwordResetConfirm: '/auth/password-reset/confirm',
+    emailVerificationRequest: '/auth/email-verification/request',
+    emailVerificationConfirm: '/auth/email-verification/confirm',
   },
   wallet: '/wallet',
   draw: '/draw',
@@ -46,6 +63,7 @@ export const parseApiResponse = async <T>(
       ok: false,
       error: payload?.error ?? fallbackError,
       requestId: payload?.requestId,
+      status: response.status,
     };
   }
 
@@ -53,6 +71,7 @@ export const parseApiResponse = async <T>(
     ok: true,
     data: payload.data as T,
     requestId: payload?.requestId,
+    status: response.status,
   };
 };
 
@@ -168,17 +187,131 @@ export function createUserApiClient(runtime: UserApiRuntime) {
         { auth: false }
       );
     },
-    getWalletBalance() {
-      return request<WalletBalanceResponse>(USER_API_ROUTES.wallet);
+    getCurrentSession(overrides: UserApiOverrides = {}) {
+      return request<CurrentUserSessionResponse>(
+        USER_API_ROUTES.auth.session,
+        { cache: 'no-store' },
+        overrides
+      );
     },
-    runDraw(payload: DrawRequest = {}) {
+    deleteCurrentSession(overrides: UserApiOverrides = {}) {
+      return request<SessionRevocationResponse>(
+        USER_API_ROUTES.auth.session,
+        {
+          method: 'DELETE',
+          cache: 'no-store',
+        },
+        overrides
+      );
+    },
+    listSessions(overrides: UserApiOverrides = {}) {
+      return request<UserSessionsResponse>(
+        USER_API_ROUTES.auth.sessions,
+        { cache: 'no-store' },
+        overrides
+      );
+    },
+    revokeSession(sessionId: string, overrides: UserApiOverrides = {}) {
+      return request<SessionRevocationResponse>(
+        `${USER_API_ROUTES.auth.sessions}/${encodeURIComponent(sessionId)}`,
+        {
+          method: 'DELETE',
+          cache: 'no-store',
+        },
+        overrides
+      );
+    },
+    revokeAllSessions(overrides: UserApiOverrides = {}) {
+      return request<SessionBulkRevocationResponse>(
+        USER_API_ROUTES.auth.sessionsRevokeAll,
+        {
+          method: 'POST',
+          cache: 'no-store',
+        },
+        overrides
+      );
+    },
+    requestPasswordReset(
+      payload: PasswordResetRequest,
+      overrides: UserApiOverrides = {}
+    ) {
+      return request<AcceptedResponse>(
+        USER_API_ROUTES.auth.passwordResetRequest,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          cache: 'no-store',
+        },
+        {
+          ...overrides,
+          auth: false,
+        }
+      );
+    },
+    confirmPasswordReset(
+      payload: PasswordResetConfirmRequest,
+      overrides: UserApiOverrides = {}
+    ) {
+      return request<CompletedResponse>(
+        USER_API_ROUTES.auth.passwordResetConfirm,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          cache: 'no-store',
+        },
+        {
+          ...overrides,
+          auth: false,
+        }
+      );
+    },
+    requestEmailVerification(
+      payload: EmailVerificationRequest = {},
+      overrides: UserApiOverrides = {}
+    ) {
+      return request<AcceptedResponse>(
+        USER_API_ROUTES.auth.emailVerificationRequest,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          cache: 'no-store',
+        },
+        overrides
+      );
+    },
+    confirmEmailVerification(
+      payload: VerificationTokenConfirmRequest,
+      overrides: UserApiOverrides = {}
+    ) {
+      return request<EmailVerificationResponse>(
+        USER_API_ROUTES.auth.emailVerificationConfirm,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          cache: 'no-store',
+        },
+        {
+          ...overrides,
+          auth: false,
+        }
+      );
+    },
+    getWalletBalance(overrides: UserApiOverrides = {}) {
+      return request<WalletBalanceResponse>(USER_API_ROUTES.wallet, {}, overrides);
+    },
+    runDraw(payload: DrawRequest = {}, overrides: UserApiOverrides = {}) {
       return request<DrawResult>(
         USER_API_ROUTES.draw,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
-        }
+        },
+        overrides
       );
     },
   };

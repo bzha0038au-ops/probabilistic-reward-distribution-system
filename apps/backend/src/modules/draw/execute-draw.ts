@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, sql } from '@reward/database/orm';
 import Decimal from 'decimal.js';
 import { randomBytes } from 'node:crypto';
 

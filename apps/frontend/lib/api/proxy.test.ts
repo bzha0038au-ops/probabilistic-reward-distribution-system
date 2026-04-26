@@ -30,9 +30,30 @@ describe('api proxy helpers', () => {
       methodAllowed: true,
     });
 
+    expect(resolveBackendProxyRoute('GET', '/auth/user/sessions')).toEqual({
+      matched: true,
+      normalizedPath: '/auth/user/sessions',
+      requiresAuth: true,
+      methods: ['GET'],
+      methodAllowed: true,
+    });
+
+    expect(
+      resolveBackendProxyRoute('POST', '/auth/phone-verification/request')
+    ).toEqual({
+      matched: true,
+      normalizedPath: '/auth/phone-verification/request',
+      requiresAuth: true,
+      methods: ['POST'],
+      methodAllowed: true,
+    });
+
     expect(resolveBackendProxyRoute('POST', '/auth/user/session')).toEqual({
-      matched: false,
+      matched: true,
       normalizedPath: '/auth/user/session',
+      requiresAuth: true,
+      methods: ['GET', 'DELETE'],
+      methodAllowed: false,
     });
   });
 

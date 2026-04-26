@@ -1,6 +1,9 @@
 export { validateAuth } from './auth';
 export { validatePrizeCreate, validatePrizeUpdate } from './prize';
 export { validateBankCardCreate } from './bank-card';
+export { validateCryptoDepositChannelCreate } from './crypto-deposit-channel';
+export { validateCryptoDepositCreate } from './crypto-deposit';
+export { validateCryptoWithdrawAddressCreate } from './crypto-withdraw-address';
 export { validateTopUpCreate } from './top-up';
 export { validateWithdrawalCreate } from './withdrawal';
 export { validateSystemConfig } from './system';

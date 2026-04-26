@@ -1,9 +1,10 @@
 {
   "private": true,
   "scripts": {
-    "dev": "next dev --turbo",
+    "dev": "next dev --hostname localhost --port 3000",
+    "dev:turbo": "next dev --turbo --hostname localhost --port 3000",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -H 0.0.0.0 -p 3000",
     "lint": "next lint",
     "check": "next lint",
     "test": "vitest run",
@@ -11,10 +12,12 @@
   },
   "dependencies": {
     "@auth/core": "0.18.4",
-    "@reward/user-core": "workspace:*",
-    "@reward/shared-types": "workspace:*",
     "@radix-ui/react-label": "^2.0.2",
     "@radix-ui/react-slot": "^1.0.2",
+    "@reward/shared-types": "workspace:*",
+    "@reward/user-core": "workspace:*",
+    "@sentry/browser": "^10.50.0",
+    "@sentry/node": "^10.50.0",
     "@types/node": "^20.10.5",
     "@types/react": "^18.2.45",
     "@types/react-dom": "^18.2.18",

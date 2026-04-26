@@ -1,0 +1,66 @@
+groups:
+  - name: reward-backend
+    interval: 30s
+    rules:
+      - alert: RewardBackendNotReady
+        expr: max_over_time(reward_backend_dependency_status{required="true",status="down"}[5m]) > 0
+        for: 5m
+        labels:
+          severity: page
+          service: reward-backend
+        annotations:
+          summary: Reward backend is not ready
+          description: A required dependency has been unhealthy for at least 5 minutes.
+
+      - alert: RewardBackend5xxRateHigh
+        expr: |
+          (
+            sum(rate(reward_backend_http_requests_total{status_code=~"5.."}[5m]))
+            /
+            clamp_min(sum(rate(reward_backend_http_requests_total[5m])), 1)
+          ) > 0.05
+        for: 10m
+        labels:
+          severity: page
+          service: reward-backend
+        annotations:
+          summary: Reward backend 5xx ratio is high
+          description: More than 5% of backend requests have returned 5xx for 10 minutes.
+
+      - alert: RewardBackendDrawErrorRateHigh
+        expr: |
+          (
+            sum(rate(reward_backend_draw_requests_total{outcome="error"}[10m]))
+            /
+            clamp_min(sum(rate(reward_backend_draw_requests_total[10m])), 1)
+          ) > 0.02
+        for: 10m
+        labels:
+          severity: page
+          service: reward-backend
+        annotations:
+          summary: Reward draw error rate is high
+          description: More than 2% of draw attempts have failed for 10 minutes.
+
+      - alert: RewardBackendWithdrawalsStuck
+        expr: sum(reward_backend_withdrawals_stuck_total) > 0
+        for: 15m
+        labels:
+          severity: page
+          service: reward-backend
+        annotations:
+          summary: Reward withdrawals are stuck
+          description: At least one withdrawal has exceeded the stuck threshold.
+
+      - alert: RewardBackendNotificationBacklogGrowing
+        expr: |
+          reward_backend_auth_notification_oldest_pending_age_seconds > 300
+          or
+          sum(reward_backend_auth_notification_deliveries{status=~"pending|processing|failed"}) > 25
+        for: 10m
+        labels:
+          severity: page
+          service: reward-backend
+        annotations:
+          summary: Reward notification backlog is unhealthy
+          description: Notification backlog age or queue depth is above threshold.

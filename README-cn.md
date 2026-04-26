@@ -4,6 +4,15 @@
 
 这个仓库更像一套“能落地的系统骨架”，适合转盘、奖池、奖励中心这类产品。重点不是做一个演示页，而是把财务正确性、运营控制和系统边界先设计清楚。
 
+> 支付边界：充值和提现目前仍然是人工审核财务流。
+> 这套后端还没有实现真实资金自动闭环所需的出入金网关调用、签名
+> webhook、幂等重试和故障补偿恢复。现在已经有定时对账任务和人工差异
+> 队列，但这还不足以支撑真实资金自动结算。请保持
+> `PAYMENT_OPERATING_MODE=manual_review`，不要把真实资金自动出入金直接接到
+> 这套 backend 上。
+> 即使未来补齐自动执行，也应该按通道灰度放量：先只放自动充值，再限白名单 /
+> 小额单，最后再按国家、币种、金额分层，不要靠单一全局开关一次性全量放开。
+
 ## 为什么值得看
 
 - 充值、抽奖、提现这些高风险路径都按事务边界处理
@@ -56,6 +65,7 @@ POSTGRES_URL=postgresql://postgres:postgres@127.0.0.1:5433/reward_local
 ADMIN_JWT_SECRET=local_admin_secret_change_me_123456
 USER_JWT_SECRET=local_user_secret_change_me_123456
 ADMIN_MFA_ENCRYPTION_SECRET=local_admin_mfa_secret_change_me_123456
+ADMIN_MFA_BREAK_GLASS_SECRET=local_admin_break_glass_secret_change_me_123456
 WEB_BASE_URL=http://localhost:3000
 ADMIN_BASE_URL=http://localhost:5173
 PORT=4000
@@ -86,7 +96,8 @@ EXPO_PUBLIC_API_BASE_URL=http://127.0.0.1:4000
 注意：
 
 - `apps/backend/.env` 和 `apps/admin/.env` 里的 `ADMIN_JWT_SECRET` 必须一致
-- 生产环境建议单独设置 `ADMIN_MFA_ENCRYPTION_SECRET`，不要直接复用 JWT secret
+- 生产环境必须单独设置 `ADMIN_MFA_ENCRYPTION_SECRET`，不要直接复用任何 JWT secret
+- 生产环境必须设置 `ADMIN_MFA_BREAK_GLASS_SECRET`，用于管理员丢设备时的受审计应急恢复
 - 本地开发可以先用占位 secret，生产环境必须换成真实的 32 位以上密钥
 
 ### 4. 启动 Postgres 和 Redis
@@ -105,6 +116,12 @@ pnpm db:migrate
 
 ```bash
 pnpm dev
+```
+
+如果你要在本地把鉴权通知 outbox 一起消费掉，再开一个终端启动独立 worker：
+
+```bash
+pnpm dev:notifications
 ```
 
 如果你要把用户三端一起拉起来：
@@ -128,6 +145,8 @@ pnpm dev:user
 pnpm db:seed:manual
 pnpm test
 pnpm test:integration
+pnpm test:e2e
+pnpm test:load
 pnpm build
 pnpm db:reset
 ```
@@ -167,6 +186,11 @@ pnpm db:seed:manual
 
 如果你在系统跑起来之后想继续看架构，先读 [`docs/architecture.md`](./docs/architecture.md)。
 
+如果你在评估生产可用性，再继续看
+[`docs/operations/README.md`](./docs/operations/README.md)。这里集中放了备份、
+恢复、灾备切换、值班 runbook，以及 `deploy/` 下面可直接执行的
+PostgreSQL 备份 / 恢复脚本。
+
 ## 系统关系
 
 ```mermaid
@@ -198,30 +222,30 @@ flowchart LR
 
 ## 仓库结构
 
-| 路径 | 作用 |
-| --- | --- |
-| [`apps/frontend`](./apps/frontend) | 面向用户的 Web 前台 |
-| [`apps/mobile`](./apps/mobile) | 面向 iOS 和 Android 的原生用户端 |
-| [`apps/admin`](./apps/admin) | 面向运营和财务的后台控制台 |
-| [`apps/backend`](./apps/backend) | HTTP API、鉴权、钱包流程、抽奖引擎 |
-| [`apps/database`](./apps/database) | Drizzle schema 与 migration |
-| [`apps/shared-types`](./apps/shared-types) | 前后端共享请求 / 响应契约 |
+| 路径                                         | 作用                                          |
+| -------------------------------------------- | --------------------------------------------- |
+| [`apps/frontend`](./apps/frontend)           | 面向用户的 Web 前台                           |
+| [`apps/mobile`](./apps/mobile)               | 面向 iOS 和 Android 的原生用户端              |
+| [`apps/admin`](./apps/admin)                 | 面向运营和财务的后台控制台                    |
+| [`apps/backend`](./apps/backend)             | HTTP API、鉴权、钱包流程、抽奖引擎            |
+| [`apps/database`](./apps/database)           | Drizzle schema 与 migration                   |
+| [`apps/shared-types`](./apps/shared-types)   | 前后端共享请求 / 响应契约                     |
 | [`packages/user-core`](./packages/user-core) | 用户侧共享 API client、路由常量和平台辅助能力 |
-| [`docs`](./docs) | 架构、环境、部署、测试文档 |
+| [`docs`](./docs)                             | 架构、环境、部署、测试文档                    |
 
 ## 技术栈
 
-| 层 | 选型 |
-| --- | --- |
-| 用户 Web | Next.js App Router |
-| 用户原生端 | Expo + React Native |
-| 管理后台 | SvelteKit |
-| 后端 API | Fastify |
-| 数据库 | PostgreSQL |
-| ORM / schema | Drizzle ORM |
-| 共享契约 | TypeScript + Zod |
+| 层             | 选型                                    |
+| -------------- | --------------------------------------- |
+| 用户 Web       | Next.js App Router                      |
+| 用户原生端     | Expo + React Native                     |
+| 管理后台       | SvelteKit                               |
+| 后端 API       | Fastify                                 |
+| 数据库         | PostgreSQL                              |
+| ORM / schema   | Drizzle ORM                             |
+| 共享契约       | TypeScript + Zod                        |
 | 用户共享基础层 | Workspace package (`@reward/user-core`) |
-| 工程工具 | pnpm workspace、Vitest、GitHub Actions |
+| 工程工具       | pnpm workspace、Vitest、GitHub Actions  |
 
 ### 为什么是 Web + Native + Admin？
 
@@ -240,14 +264,14 @@ flowchart LR
 
 看起来语言很多，但核心业务逻辑仍然主要是 TypeScript。其他语言的存在，是因为每一层承担的职责不同。
 
-| 语言 | 在这个仓库里的作用 |
-| --- | --- |
-| TypeScript | 服务、路由、业务规则、共享契约 |
-| SQL | migration 和 schema 变更 |
-| Svelte / TSX / JSX | 两个前端各自的 UI 代码 |
-| JSON | 多语言文案和结构化配置 |
-| CSS | 样式 |
-| YAML | CI 和部署流程 |
+| 语言               | 在这个仓库里的作用             |
+| ------------------ | ------------------------------ |
+| TypeScript         | 服务、路由、业务规则、共享契约 |
+| SQL                | migration 和 schema 变更       |
+| Svelte / TSX / JSX | 两个前端各自的 UI 代码         |
+| JSON               | 多语言文案和结构化配置         |
+| CSS                | 样式                           |
+| YAML               | CI 和部署流程                  |
 
 重点是直接表达，不是为了堆技术名词。
 
@@ -266,6 +290,8 @@ pnpm check
 pnpm lint
 pnpm test
 pnpm test:integration
+pnpm test:e2e
+pnpm test:load
 
 pnpm db:generate
 pnpm db:migrate
@@ -290,7 +316,12 @@ pnpm db:reset
 ## 测试
 
 - `pnpm test`：workspace 级测试
-- `pnpm test:integration`：基于本地 Postgres 的 backend 集成测试
+- `pnpm test:integration`：基于自举真实 Postgres 的 backend 全量集成测试，不再依赖本机 Docker daemon
+- `pnpm test:integration:critical`：CI 阻断的抽奖 / 资金 / 管理高风险链路门禁
+- `pnpm test:e2e`：基于 Playwright 的全量浏览器回归流
+- `pnpm test:e2e:critical`：CI 阻断的认证 + 用户/管理员关键业务链路门禁
+- `pnpm test:load`：基于 `autocannon` 的认证 `/wallet` + `/draw` 压测 smoke
+- 首次在某台机器上跑浏览器用例前，先执行一次 `pnpm test:e2e:install`。
 
 当前测试重点明显偏后端，这是刻意的。这个系统最大的风险是财务路径出错，而不是页面细节不够漂亮。详细说明见 [`docs/test-strategy.md`](./docs/test-strategy.md)。
 
@@ -304,7 +335,8 @@ pnpm db:reset
 
 - 如果 backend 能登录但 admin 侧登录失败，先检查 `apps/backend/.env` 和 `apps/admin/.env` 里的 `ADMIN_JWT_SECRET` 是否一致。
 - 如果 frontend 出现 session 或 auth 解密错误，先清掉 `localhost:3000` 的浏览器 cookie，再确认 `AUTH_SECRET` 没被改过。
-- 如果 `pnpm test:integration` 一启动就失败，先确认 Docker 已启动，并且已经执行过 `pnpm db:up`，本地 Postgres 监听在 `5433`。
+- 如果 `pnpm test:e2e` 还没启动浏览器就失败，先执行 `pnpm test:e2e:install`。
+- 如果 `pnpm test:integration` 现在失败，通常已经是测试或代码本身的问题，而不是 Docker daemon 缺失。`pnpm db:up` 只用于按 `docker-compose.yml` 做手工本地联调。
 
 ## 参考文档
 

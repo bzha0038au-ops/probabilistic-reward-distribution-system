@@ -1,8 +1,9 @@
 import 'dotenv/config';
 
 import { buildApp } from './app';
-import { getConfig } from './shared';
+import { getConfig, initializeObservability } from './shared';
 
+initializeObservability();
 const config = getConfig();
 const app = await buildApp();
 const port = config.port;

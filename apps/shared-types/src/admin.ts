@@ -12,7 +12,7 @@ import {
   OptionalPositiveIntSchema,
   OptionalStringSchema,
   SortOrderSchema,
-} from './common';
+} from './common.js';
 
 export const PrizeCreateSchema = z.object({
   name: z.string().min(1).max(255),

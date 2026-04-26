@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from '@reward/database/orm';
 
 import { db } from '../../db';
 import { adminPermissions, admins } from '@reward/database';

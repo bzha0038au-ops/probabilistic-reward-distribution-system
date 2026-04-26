@@ -5,6 +5,7 @@
   let email = $state("")
   let password = $state("")
   let totpCode = $state("")
+  let breakGlassCode = $state("")
 
   const errorMessage = $derived($page.form?.error as string | undefined)
   const { t } = getContext("i18n") as { t: (key: string) => string }
@@ -14,7 +15,9 @@
   <title>{t("login.title")}</title>
 </svelte:head>
 
-<div class="min-h-screen bg-base-200 flex items-center justify-center px-6 py-12">
+<div
+  class="min-h-screen bg-base-200 flex items-center justify-center px-6 py-12"
+>
   <div class="w-full max-w-sm space-y-6">
     <div class="space-y-2 text-center">
       <p class="text-xs uppercase tracking-[0.3em] text-primary">
@@ -42,6 +45,7 @@
           placeholder={t("login.emailPlaceholder")}
           class="input input-bordered"
           bind:value={email}
+          autocomplete="email"
           required
         />
       </div>
@@ -56,6 +60,7 @@
           type="password"
           class="input input-bordered"
           bind:value={password}
+          autocomplete="current-password"
           required
         />
       </div>
@@ -68,11 +73,26 @@
           id="totpCode"
           name="totpCode"
           type="text"
-          inputmode="numeric"
+          inputmode="text"
           autocomplete="one-time-code"
           class="input input-bordered"
           bind:value={totpCode}
           placeholder={t("login.totpPlaceholder")}
+        />
+      </div>
+
+      <div class="form-control">
+        <label class="label" for="breakGlassCode">
+          <span class="label-text">{t("login.breakGlassCode")}</span>
+        </label>
+        <input
+          id="breakGlassCode"
+          name="breakGlassCode"
+          type="password"
+          class="input input-bordered"
+          bind:value={breakGlassCode}
+          autocomplete="one-time-code"
+          placeholder={t("login.breakGlassPlaceholder")}
         />
       </div>
 

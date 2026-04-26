@@ -21,6 +21,8 @@ import { approveDeposit, createTopUp, failDeposit } from '../src/modules/top-up/
 import {
   approveWithdrawal,
   createWithdrawal,
+  markWithdrawalProviderProcessing,
+  markWithdrawalProviderSubmitted,
   payWithdrawal,
   rejectWithdrawal,
 } from '../src/modules/withdraw/service';
@@ -53,6 +55,7 @@ const ADMIN_PASSWORD = 'Admin123!';
 const USER_PASSWORD = 'User123!';
 const SEED_VERSION_KEY = 'manual_test.seed_version';
 const SEED_VERSION = '1';
+const MANUAL_PROCESSING_CHANNEL = 'manual_bank_transfer';
 
 type SeedUserSpec = {
   email: string;
@@ -136,6 +139,18 @@ const seedUsers: SeedUserSpec[] = [
 ];
 
 const hashPassword = (password: string) => hashSync(password, genSaltSync(10));
+
+const buildManualReview = (params: {
+  note: string;
+  settlementReference?: string;
+  processingChannel?: string;
+}) => ({
+  adminId: null,
+  sourceType: 'system' as const,
+  operatorNote: params.note,
+  settlementReference: params.settlementReference,
+  processingChannel: params.processingChannel,
+});
 
 const ensureFreshSeed = async () => {
   const existing = await db
@@ -414,7 +429,12 @@ const seedFinance = async (params: {
     bankCardId: params.aliceCardId,
     metadata: { scenario: 'approved' },
   });
-  await approveWithdrawal(approvedWithdrawal.id);
+  await approveWithdrawal(
+    approvedWithdrawal.id,
+    buildManualReview({
+      note: 'Manual seed approved the withdrawal for finance review.',
+    })
+  );
 
   const paidWithdrawal = await createWithdrawal({
     userId: params.bobId,
@@ -422,8 +442,36 @@ const seedFinance = async (params: {
     bankCardId: params.bobCardId,
     metadata: { scenario: 'paid' },
   });
-  await approveWithdrawal(paidWithdrawal.id);
-  await payWithdrawal(paidWithdrawal.id);
+  await approveWithdrawal(
+    paidWithdrawal.id,
+    buildManualReview({
+      note: 'Manual seed approved the payout request.',
+    })
+  );
+  await markWithdrawalProviderSubmitted(
+    paidWithdrawal.id,
+    buildManualReview({
+      note: 'Manual seed submitted the payout to the provider.',
+      processingChannel: MANUAL_PROCESSING_CHANNEL,
+      settlementReference: `manual-seed-submit-${paidWithdrawal.id}`,
+    })
+  );
+  await markWithdrawalProviderProcessing(
+    paidWithdrawal.id,
+    buildManualReview({
+      note: 'Manual seed moved the payout into processing.',
+      processingChannel: MANUAL_PROCESSING_CHANNEL,
+      settlementReference: `manual-seed-processing-${paidWithdrawal.id}`,
+    })
+  );
+  await payWithdrawal(
+    paidWithdrawal.id,
+    buildManualReview({
+      note: 'Manual seed completed the payout.',
+      processingChannel: MANUAL_PROCESSING_CHANNEL,
+      settlementReference: `manual-seed-paid-${paidWithdrawal.id}`,
+    })
+  );
 
   const pendingWithdrawal = await createWithdrawal({
     userId: params.carolId,
@@ -438,7 +486,12 @@ const seedFinance = async (params: {
     bankCardId: params.frozenCardId,
     metadata: { scenario: 'rejected' },
   });
-  await rejectWithdrawal(rejectedWithdrawal.id);
+  await rejectWithdrawal(
+    rejectedWithdrawal.id,
+    buildManualReview({
+      note: 'Manual seed rejected the payout request.',
+    })
+  );
 
   return {
     pendingDeposit,

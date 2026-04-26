@@ -1,5 +1,5 @@
 import Decimal from 'decimal.js';
-import { and, eq, gte, sql } from 'drizzle-orm';
+import { and, eq, gte, sql } from '@reward/database/orm';
 
 import { drawRecords } from '@reward/database';
 import { type DbTransaction } from '../../db';

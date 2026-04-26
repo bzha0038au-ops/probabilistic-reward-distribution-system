@@ -7,5 +7,11 @@ declare module 'fastify' {
   interface FastifyRequest {
     user?: UserSessionPayload;
     admin?: AuthenticatedAdmin;
+    adminStepUp?: {
+      verified: true;
+      method: 'totp' | 'recovery_code';
+      verifiedAt: string;
+      recoveryCodesRemaining: number;
+    };
   }
 }

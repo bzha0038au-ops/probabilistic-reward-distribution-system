@@ -1,4 +1,4 @@
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from '@reward/database/orm';
 import Decimal from 'decimal.js';
 import { ledgerEntries, prizes, userWallets, users } from '@reward/database';
 import { type DbTransaction } from '../../db';

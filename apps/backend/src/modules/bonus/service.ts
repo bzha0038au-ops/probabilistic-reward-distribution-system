@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { eq, sql } from '@reward/database/orm';
 import Decimal from 'decimal.js';
 
 import { db } from '../../db';

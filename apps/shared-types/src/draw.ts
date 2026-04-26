@@ -1,18 +1,21 @@
 import { z } from 'zod';
 
+export const drawStatusValues = [
+  'miss',
+  'won',
+  'out_of_stock',
+  'budget_exhausted',
+  'payout_limited',
+] as const;
+
 export const DrawRequestSchema = z.object({
   clientNonce: z.string().min(1).max(128).nullable().optional(),
 });
 
 export type DrawRequest = z.infer<typeof DrawRequestSchema>;
 
-export const DrawStatusSchema = z.enum([
-  'miss',
-  'won',
-  'out_of_stock',
-  'budget_exhausted',
-  'payout_limited',
-]);
+export const DrawStatusSchema = z.enum(drawStatusValues);
+export type DrawStatus = z.infer<typeof DrawStatusSchema>;
 
 export const DrawFairnessSchema = z
   .object({

@@ -4,6 +4,7 @@ import fastifyPlugin from 'fastify-plugin';
 
 import { context } from './context';
 import { resolveLocaleFromRequest } from './i18n';
+import { bindRequestObservability, getActiveTraceId } from './telemetry';
 import { ensureTraceId, TRACE_ID_HEADER } from './trace';
 
 const REQUEST_ID_HEADER = 'x-request';
@@ -31,8 +32,10 @@ function requestContextPlugin(
       }
 
       const traceHeader = request.headers[TRACE_ID_HEADER];
+      const activeTraceId = getActiveTraceId();
       const traceId = ensureTraceId(
-        Array.isArray(traceHeader) ? traceHeader[0] : traceHeader ?? requestId
+        activeTraceId ??
+          (Array.isArray(traceHeader) ? traceHeader[0] : traceHeader ?? requestId)
       );
 
       reply.header(REQUEST_ID_HEADER, requestId);
@@ -44,11 +47,27 @@ function requestContextPlugin(
         store.requestId = requestId;
         store.traceId = traceId;
         store.locale = locale;
+        bindRequestObservability({
+          requestId,
+          traceId,
+          locale,
+          method: request.method,
+          route: request.routeOptions?.url ?? request.url,
+        });
         hookDone();
         return;
       }
 
-      context().run({ requestId, traceId, locale }, hookDone);
+      context().run({ requestId, traceId, locale }, () => {
+        bindRequestObservability({
+          requestId,
+          traceId,
+          locale,
+          method: request.method,
+          route: request.routeOptions?.url ?? request.url,
+        });
+        hookDone();
+      });
     }
   );
 

@@ -29,12 +29,18 @@ export const parseApiResponse = async <T>(
   response: Response
 ): Promise<ApiResult<T>> => {
   const payload = await response.json().catch(() => ({}));
+  const traceId =
+    payload?.traceId ??
+    response.headers.get('x-trace-id') ??
+    undefined;
 
   if (!response.ok || !payload?.ok) {
     return {
       ok: false,
       error: payload?.error ?? fallbackError,
       requestId: payload?.requestId,
+      traceId,
+      status: response.status,
     };
   }
 
@@ -42,6 +48,8 @@ export const parseApiResponse = async <T>(
     ok: true,
     data: payload.data as T,
     requestId: payload?.requestId,
+    traceId,
+    status: response.status,
   };
 };
 
@@ -72,12 +80,43 @@ export async function requestUserApi<T>({
     headers.set('Authorization', `Bearer ${authToken}`);
   }
 
-  const response = await fetchImpl(`${trimTrailingSlash(baseUrl)}${path}`, {
-    ...init,
-    headers,
-  });
+  let response: Response;
 
-  return parseApiResponse<T>(response);
+  try {
+    response = await fetchImpl(`${trimTrailingSlash(baseUrl)}${path}`, {
+      ...init,
+      headers,
+    });
+  } catch (error) {
+    if (typeof window !== 'undefined') {
+      const { captureFrontendApiFailure } = await import(
+        '@/lib/observability/client'
+      );
+      captureFrontendApiFailure({
+        path,
+        message:
+          error instanceof Error ? error.message : 'Network request failed.',
+      });
+    }
+    throw error;
+  }
+
+  const parsed = await parseApiResponse<T>(response);
+
+  if (!parsed.ok && typeof window !== 'undefined') {
+    const { captureFrontendApiFailure } = await import(
+      '@/lib/observability/client'
+    );
+    captureFrontendApiFailure({
+      path,
+      status: parsed.status,
+      requestId: parsed.requestId,
+      traceId: parsed.traceId,
+      message: parsed.error.message,
+    });
+  }
+
+  return parsed;
 }
 
 type AsyncValue<T> = T | Promise<T>;

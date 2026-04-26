@@ -7,6 +7,7 @@ export function Form({
   action,
   children,
   labels,
+  method,
 }: {
   action: string | ((formData: FormData) => void | Promise<void>);
   children: ReactNode;
@@ -15,9 +16,10 @@ export function Form({
     passwordLabel: string;
     emailPlaceholder: string;
   };
+  method?: 'get' | 'post';
 }) {
   return (
-    <form action={action} className="flex flex-col space-y-4">
+    <form action={action} method={method} className="flex flex-col space-y-4">
       <div className="space-y-2">
         <Label htmlFor="email">{labels.emailLabel}</Label>
         <Input

@@ -17,12 +17,24 @@ apps/**/dist/
 apps/**/coverage/
 apps/**/.vercel/
 apps/**/.eslintcache
+apps/backend/src/**/*.js
+apps/backend/src/**/*.js.map
+apps/database/src/**/*.js
+apps/database/src/**/*.js.map
+apps/shared-types/src/**/*.js
+apps/shared-types/src/**/*.js.map
 apps/**/.env
 apps/**/.env.*
 !apps/**/.env.example
+.env.d/
+deploy/env/*.env
+!deploy/env/*.env.example
 pnpm-debug.log*
 *.log
 *.tsbuildinfo
+.tmp/
+test-results/
+playwright-report/
 
 # IDE
 .vscode/

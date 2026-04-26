@@ -47,6 +47,11 @@
   "app": {
     "title": "用户仪表盘",
     "signedInAs": "登录账号：{email}",
+    "verificationGateTitle": "请先完成邮箱验证",
+    "verificationGateDescription": "当前账号可以登录，但在邮箱验证完成前，高风险操作会继续被拦截。",
+    "verificationGateBody": "请先验证当前邮箱，再继续进行抽奖等受保护操作。如有需要，可以重新发送验证邮件。",
+    "resendVerificationEmail": "重新发送验证邮件",
+    "verificationEmailSent": "如果账号仍未完成验证，我们已经重新发送了一封验证邮件。",
     "balanceNotesTitle": "余额与账本说明",
     "notes": [
       "所有扣款与入账都会记录在账本中。",

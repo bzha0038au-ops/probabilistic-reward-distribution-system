@@ -8,7 +8,7 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 
-import { users } from './user';
+import { users } from './user.js';
 
 export const authSessions = pgTable(
   'auth_sessions',

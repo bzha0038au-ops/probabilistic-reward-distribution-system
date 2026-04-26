@@ -30,7 +30,6 @@ jobs:
       AUTH_SECRET: ci-web-secret-1234567890abcdefghij
       API_BASE_URL: http://127.0.0.1:4000
       NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:4000
-      RUN_INTEGRATION_TESTS: 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -45,6 +44,8 @@ jobs:
           cache: pnpm
       - name: Install
         run: pnpm install --frozen-lockfile
+      - name: Guard Generated Src Artifacts
+        run: pnpm guard:generated-src-js
       - name: Database Migrate Smoke
         run: pnpm --dir apps/database db:migrate
       - name: Check
@@ -55,3 +56,9 @@ jobs:
         run: pnpm build
       - name: Test
         run: pnpm test
+      - name: Test Integration Critical Gate
+        run: pnpm test:integration:critical
+      - name: Install Playwright
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Test E2E Critical Gate
+        run: pnpm test:e2e:critical

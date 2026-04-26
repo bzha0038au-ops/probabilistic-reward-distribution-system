@@ -15,9 +15,35 @@
   - `system_config` read/write helpers and command writers
   - auth guards
 - **Integration tests** for backend API routes against a real Postgres instance
-  (guarded by `RUN_INTEGRATION_TESTS=true`).
+  (guarded by `RUN_INTEGRATION_TESTS=true` and now self-bootstrapped by the test runner).
 - **Admin page-server tests** for action wiring and backend API request shapes.
 - **Frontend unit tests** for shared UI helpers.
+- **Critical integration gates** for:
+  - draw success / failure (`out_of_stock`, `budget_exhausted`, `payout_limited`)
+  - `executeDraw` concurrent inventory consistency
+  - admin MFA enrollment + login step-up
+  - deposit / withdrawal duplicate submissions and out-of-order review actions
+  - freeze / release and config mutation routes
+- **Browser e2e regression** for:
+  - auth baseline (register -> verify email -> sign in)
+  - user main flow (top-up request -> admin approve -> draw -> phone verify -> bank card -> withdrawal request)
+  - admin high-risk actions exercised against the real backend (withdraw approval / reject / pay, freeze / release, notification retry, system config change)
+- **Load smoke** for authenticated user APIs (`/wallet`, `/draw`) to catch obvious throughput regressions.
+
+## Critical Regression Matrix
+
+| Flow | Coverage | Gate |
+| --- | --- | --- |
+| Register / verify email / login | `tests/e2e/user-auth.spec.ts` | CI blocking |
+| Draw win path | `tests/e2e/critical-flows.spec.ts`, `apps/backend/src/integration/backend.integration.test.ts` | CI blocking |
+| Draw failure paths (`out_of_stock`, `budget_exhausted`, `payout_limited`) | `apps/backend/src/integration/backend.integration.test.ts` | CI blocking |
+| Draw concurrency consistency | `apps/backend/src/integration/backend.integration.test.ts` | CI blocking |
+| Top-up request + admin approve | `tests/e2e/critical-flows.spec.ts`, `apps/backend/src/integration/backend.integration.test.ts` | CI blocking |
+| Withdrawal request + approve / reject / pay | `tests/e2e/critical-flows.spec.ts`, `apps/backend/src/integration/backend.integration.test.ts` | CI blocking |
+| Admin MFA | `apps/backend/src/integration/backend.integration.test.ts` | CI blocking |
+| Freeze / release | `tests/e2e/critical-flows.spec.ts`, `apps/backend/src/integration/backend.integration.test.ts` | CI blocking |
+| Notification retry | `tests/e2e/critical-flows.spec.ts` | CI blocking |
+| System config change | `tests/e2e/critical-flows.spec.ts`, `apps/backend/src/integration/backend.integration.test.ts` | CI blocking |
 
 ## Where Tests Live
 
@@ -29,6 +55,10 @@
 
 - `pnpm test` (workspace)
 - `pnpm --dir apps/backend test`
-- `pnpm test:integration` (requires local Postgres; see `docker-compose.yml`)
+- `pnpm test:integration` (full backend integration suite against an ephemeral real Postgres instance)
+- `pnpm test:integration:critical` (CI gate for draw / finance / admin-risk regressions)
+- `pnpm test:e2e` (full Playwright browser regression suite; requires `pnpm test:e2e:install` once per machine)
+- `pnpm test:e2e:critical` (CI gate for auth + core user/admin business flows)
+- `pnpm test:load` (`/wallet` + `/draw` authenticated smoke)
 
-CI runs `pnpm test` as part of the main workflow.
+CI runs `pnpm test` plus blocking `pnpm test:integration:critical` and `pnpm test:e2e:critical` gates. Those two commands are the merge guard for core draw / funds / admin-risk regressions, while the full `pnpm test:integration` and `pnpm test:e2e` suites remain available for broader sweeps. `pnpm test:load` remains a repeatable smoke gate for throughput regressions.

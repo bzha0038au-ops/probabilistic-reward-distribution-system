@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { MoneyLikeSchema, OptionalPositiveIntSchema } from './common';
+import { MoneyLikeSchema, OptionalPositiveIntSchema } from './common.js';
 
 export const AuthCredentialsSchema = z.object({
   email: z.string().email(),
@@ -24,6 +24,8 @@ export const UserSchema = z.object({
   id: z.number().int(),
   email: z.string().email(),
   role: z.enum(['user', 'admin']),
+  emailVerifiedAt: z.string().datetime().nullable(),
+  phoneVerifiedAt: z.string().datetime().nullable(),
 });
 
 export type User = z.infer<typeof UserSchema>;
@@ -75,38 +77,109 @@ export const CompletedResponseSchema = z.object({
   completed: z.literal(true),
 });
 
+export type AcceptedResponse = z.infer<typeof AcceptedResponseSchema>;
+export type CompletedResponse = z.infer<typeof CompletedResponseSchema>;
+
 export const PasswordResetRequestSchema = z.object({
   email: z.string().email(),
 });
+
+export type PasswordResetRequest = z.infer<typeof PasswordResetRequestSchema>;
 
 export const PasswordResetConfirmSchema = z.object({
   token: z.string().min(20).max(255),
   password: z.string().min(6).max(255),
 });
 
+export type PasswordResetConfirmRequest = z.infer<typeof PasswordResetConfirmSchema>;
+
 export const EmailVerificationRequestSchema = z.object({
   resend: z.boolean().optional(),
 });
 
+export type EmailVerificationRequest = z.infer<typeof EmailVerificationRequestSchema>;
+
 export const VerificationTokenConfirmSchema = z.object({
   token: z.string().min(20).max(255),
 });
+
+export type VerificationTokenConfirmRequest = z.infer<
+  typeof VerificationTokenConfirmSchema
+>;
 
 export const EmailVerificationResponseSchema = z.object({
   verified: z.literal(true),
   email: z.string().email(),
 });
 
+export type EmailVerificationResponse = z.infer<typeof EmailVerificationResponseSchema>;
+
 export const PhoneVerificationRequestSchema = z.object({
   phone: PhoneNumberSchema,
 });
+
+export type PhoneVerificationRequest = z.infer<typeof PhoneVerificationRequestSchema>;
 
 export const PhoneVerificationConfirmSchema = z.object({
   phone: PhoneNumberSchema,
   code: z.string().regex(/^\d{6}$/, 'Invalid verification code.'),
 });
 
+export type PhoneVerificationConfirmRequest = z.infer<
+  typeof PhoneVerificationConfirmSchema
+>;
+
 export const PhoneVerificationResponseSchema = z.object({
   verified: z.literal(true),
   phone: PhoneNumberSchema,
 });
+
+export type PhoneVerificationResponse = z.infer<typeof PhoneVerificationResponseSchema>;
+
+export const AuthSessionSummarySchema = z.object({
+  sessionId: z.string(),
+  kind: z.enum(['user', 'admin']),
+  role: z.enum(['user', 'admin']),
+  ip: z.string().nullable(),
+  userAgent: z.string().nullable(),
+  createdAt: z.string().datetime().nullable(),
+  lastSeenAt: z.string().datetime().nullable(),
+  expiresAt: z.string().datetime().nullable(),
+  current: z.boolean(),
+});
+
+export type AuthSessionSummary = z.infer<typeof AuthSessionSummarySchema>;
+
+export const CurrentUserSessionResponseSchema = z.object({
+  user: UserSchema,
+  session: AuthSessionSummarySchema,
+});
+
+export type CurrentUserSessionResponse = z.infer<
+  typeof CurrentUserSessionResponseSchema
+>;
+
+export const UserSessionsResponseSchema = z.object({
+  items: z.array(AuthSessionSummarySchema),
+});
+
+export type UserSessionsResponse = z.infer<typeof UserSessionsResponseSchema>;
+
+export const SessionRevocationResponseSchema = z.object({
+  revoked: z.literal(true),
+  scope: z.enum(['current', 'single']),
+  sessionId: z.string().optional(),
+});
+
+export type SessionRevocationResponse = z.infer<
+  typeof SessionRevocationResponseSchema
+>;
+
+export const SessionBulkRevocationResponseSchema = z.object({
+  revokedCount: z.number().int().nonnegative(),
+  scope: z.literal('all'),
+});
+
+export type SessionBulkRevocationResponse = z.infer<
+  typeof SessionBulkRevocationResponseSchema
+>;

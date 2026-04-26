@@ -13,3 +13,5 @@ export * from './money';
 export { validateSessionSecrets } from './session-secret';
 export { getRedis } from './redis';
 export { applyAuthFailureDelay } from './auth-delay';
+export { getRuntimeMetadata } from './runtime-metadata';
+export * from './telemetry';

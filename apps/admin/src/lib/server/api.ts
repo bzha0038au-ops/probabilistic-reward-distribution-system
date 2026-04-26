@@ -1,6 +1,7 @@
 import { env } from '$env/dynamic/private';
 import { ADMIN_CSRF_COOKIE, ADMIN_SESSION_COOKIE } from '$lib/server/admin-session';
 import { LOCALE_COOKIE } from '$lib/i18n';
+import { captureAdminServerException } from '$lib/observability/server';
 import type { ApiResponse } from '@reward/shared-types';
 
 const defaultBaseUrl = 'http://localhost:4000';
@@ -51,14 +52,51 @@ export async function apiRequest<T>(
   path: string,
   init: RequestInit = {}
 ): Promise<ApiResult<T>> {
-  const response = await apiFetch(fetcher, cookies, path, init);
+  let response: Response;
+
+  try {
+    response = await apiFetch(fetcher, cookies, path, init);
+  } catch (error) {
+    captureAdminServerException(error, {
+      tags: {
+        kind: 'backend_api_network_failure',
+      },
+      extra: {
+        backendPath: path,
+      },
+    });
+    throw error;
+  }
+
   const payload = await response.json().catch(() => ({}));
+  const traceId =
+    payload?.traceId ??
+    response.headers.get('x-trace-id') ??
+    undefined;
 
   if (!response.ok || !payload?.ok) {
+    if (response.status >= 500) {
+      captureAdminServerException(
+        new Error(payload?.error?.message ?? `Backend request failed for ${path}`),
+        {
+          tags: {
+            kind: 'backend_api_failure',
+            status_code: response.status,
+          },
+          extra: {
+            backendPath: path,
+            requestId: payload?.requestId,
+            traceId,
+          },
+        }
+      );
+    }
+
     return {
       ok: false,
       error: payload?.error ?? { message: 'Request failed.' },
       requestId: payload?.requestId,
+      traceId,
       status: response.status,
     };
   }
@@ -67,6 +105,7 @@ export async function apiRequest<T>(
     ok: true,
     data: payload.data as T,
     requestId: payload?.requestId,
+    traceId,
     status: response.status,
   };
 }

@@ -60,6 +60,11 @@ import {
   SYSTEM_MAINTENANCE_MODE_KEY,
   SYSTEM_REGISTRATION_ENABLED_KEY,
   SYSTEM_SITE_NAME_KEY,
+  WITHDRAW_RISK_LARGE_AMOUNT_SECOND_APPROVAL_THRESHOLD_KEY,
+  WITHDRAW_RISK_NEW_CARD_REVIEW_ENABLED_KEY,
+  WITHDRAW_RISK_SHARED_DEVICE_USER_THRESHOLD_KEY,
+  WITHDRAW_RISK_SHARED_IP_USER_THRESHOLD_KEY,
+  WITHDRAW_RISK_SHARED_PAYOUT_USER_THRESHOLD_KEY,
 } from './keys';
 import {
   type DbExecutor,
@@ -276,6 +281,34 @@ export async function getPaymentConfig(db: DbExecutor) {
     maxDepositAmount,
     minWithdrawAmount,
     maxWithdrawAmount,
+  };
+}
+
+export async function getWithdrawalRiskConfig(db: DbExecutor) {
+  const [
+    newCardFirstWithdrawalReviewEnabled,
+    largeAmountSecondApprovalThreshold,
+    sharedIpUserThreshold,
+    sharedDeviceUserThreshold,
+    sharedPayoutUserThreshold,
+  ] = await Promise.all([
+    getConfigBool(db, WITHDRAW_RISK_NEW_CARD_REVIEW_ENABLED_KEY, true),
+    getConfigDecimal(
+      db,
+      WITHDRAW_RISK_LARGE_AMOUNT_SECOND_APPROVAL_THRESHOLD_KEY,
+      500
+    ),
+    getConfigDecimal(db, WITHDRAW_RISK_SHARED_IP_USER_THRESHOLD_KEY, 3),
+    getConfigDecimal(db, WITHDRAW_RISK_SHARED_DEVICE_USER_THRESHOLD_KEY, 2),
+    getConfigDecimal(db, WITHDRAW_RISK_SHARED_PAYOUT_USER_THRESHOLD_KEY, 2),
+  ]);
+
+  return {
+    newCardFirstWithdrawalReviewEnabled,
+    largeAmountSecondApprovalThreshold,
+    sharedIpUserThreshold,
+    sharedDeviceUserThreshold,
+    sharedPayoutUserThreshold,
   };
 }
 

@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { eq, sql } from '@reward/database/orm';
 
 import { houseAccount, houseTransactions, ledgerEntries } from '@reward/database';
 import type { DbClient, DbTransaction } from '../../db';

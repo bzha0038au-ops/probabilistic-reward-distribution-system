@@ -2,6 +2,12 @@ export const USER_API_ROUTES = {
     auth: {
         register: '/auth/register',
         session: '/auth/user/session',
+        sessions: '/auth/user/sessions',
+        sessionsRevokeAll: '/auth/user/sessions/revoke-all',
+        passwordResetRequest: '/auth/password-reset/request',
+        passwordResetConfirm: '/auth/password-reset/confirm',
+        emailVerificationRequest: '/auth/email-verification/request',
+        emailVerificationConfirm: '/auth/email-verification/confirm',
     },
     wallet: '/wallet',
     draw: '/draw',
@@ -21,12 +27,14 @@ export const parseApiResponse = async (response) => {
             ok: false,
             error: payload?.error ?? fallbackError,
             requestId: payload?.requestId,
+            status: response.status,
         };
     }
     return {
         ok: true,
         data: payload.data,
         requestId: payload?.requestId,
+        status: response.status,
     };
 };
 export async function requestUserApi({ path, baseUrl, init = {}, locale, authToken, fetchImpl = fetch, }) {
@@ -84,15 +92,80 @@ export function createUserApiClient(runtime) {
                 cache: 'no-store',
             }, { auth: false });
         },
-        getWalletBalance() {
-            return request(USER_API_ROUTES.wallet);
+        getCurrentSession(overrides = {}) {
+            return request(USER_API_ROUTES.auth.session, { cache: 'no-store' }, overrides);
         },
-        runDraw(payload = {}) {
+        deleteCurrentSession(overrides = {}) {
+            return request(USER_API_ROUTES.auth.session, {
+                method: 'DELETE',
+                cache: 'no-store',
+            }, overrides);
+        },
+        listSessions(overrides = {}) {
+            return request(USER_API_ROUTES.auth.sessions, { cache: 'no-store' }, overrides);
+        },
+        revokeSession(sessionId, overrides = {}) {
+            return request(`${USER_API_ROUTES.auth.sessions}/${encodeURIComponent(sessionId)}`, {
+                method: 'DELETE',
+                cache: 'no-store',
+            }, overrides);
+        },
+        revokeAllSessions(overrides = {}) {
+            return request(USER_API_ROUTES.auth.sessionsRevokeAll, {
+                method: 'POST',
+                cache: 'no-store',
+            }, overrides);
+        },
+        requestPasswordReset(payload, overrides = {}) {
+            return request(USER_API_ROUTES.auth.passwordResetRequest, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+                cache: 'no-store',
+            }, {
+                ...overrides,
+                auth: false,
+            });
+        },
+        confirmPasswordReset(payload, overrides = {}) {
+            return request(USER_API_ROUTES.auth.passwordResetConfirm, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+                cache: 'no-store',
+            }, {
+                ...overrides,
+                auth: false,
+            });
+        },
+        requestEmailVerification(payload = {}, overrides = {}) {
+            return request(USER_API_ROUTES.auth.emailVerificationRequest, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+                cache: 'no-store',
+            }, overrides);
+        },
+        confirmEmailVerification(payload, overrides = {}) {
+            return request(USER_API_ROUTES.auth.emailVerificationConfirm, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+                cache: 'no-store',
+            }, {
+                ...overrides,
+                auth: false,
+            });
+        },
+        getWalletBalance(overrides = {}) {
+            return request(USER_API_ROUTES.wallet, {}, overrides);
+        },
+        runDraw(payload = {}, overrides = {}) {
             return request(USER_API_ROUTES.draw, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
-            });
+            }, overrides);
         },
     };
 }

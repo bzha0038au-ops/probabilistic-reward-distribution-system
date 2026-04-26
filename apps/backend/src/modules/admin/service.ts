@@ -1,4 +1,4 @@
-import { and, desc, eq, isNotNull, isNull, lte, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull, lte, ne, sql } from '@reward/database/orm';
 
 import { db } from '../../db';
 import { drawRecords, ledgerEntries, prizes } from '@reward/database';

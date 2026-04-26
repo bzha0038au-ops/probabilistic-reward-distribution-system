@@ -8,7 +8,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { apiRequestClient } from '@/lib/api/client';
 import { useTranslations } from '@/components/i18n-provider';
 
-export function DrawPanel() {
+type DrawPanelProps = {
+  disabled?: boolean;
+  disabledReason?: string | null;
+  onBalanceChange?: (balance: string) => void;
+  onDrawComplete?: () => void;
+};
+
+export function DrawPanel({
+  disabled = false,
+  disabledReason = null,
+  onBalanceChange,
+  onDrawComplete,
+}: DrawPanelProps) {
   const t = useTranslations();
   const [balance, setBalance] = useState<string>('0');
   const [loading, setLoading] = useState(false);
@@ -19,6 +31,7 @@ export function DrawPanel() {
     const response = await apiRequestClient<WalletBalanceResponse>('/wallet');
     if (response.ok) {
       setBalance(response.data.balance ?? '0');
+      onBalanceChange?.(response.data.balance ?? '0');
     }
   }
 
@@ -41,6 +54,7 @@ export function DrawPanel() {
     } else {
       setResult(response.data);
       await refreshBalance();
+      onDrawComplete?.();
     }
 
     setLoading(false);
@@ -55,9 +69,18 @@ export function DrawPanel() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Button onClick={handleDraw} disabled={loading} className="w-full sm:w-auto">
+        <Button
+          onClick={handleDraw}
+          disabled={loading || disabled}
+          className="w-full sm:w-auto"
+        >
           {loading ? t('draw.drawing') : t('draw.runDraw')}
         </Button>
+        {disabledReason ? (
+          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            {disabledReason}
+          </p>
+        ) : null}
         {error && <p className="text-sm text-red-500">{error}</p>}
         {result && (
           <div className="rounded-md border bg-slate-50 p-3 text-sm text-slate-700">

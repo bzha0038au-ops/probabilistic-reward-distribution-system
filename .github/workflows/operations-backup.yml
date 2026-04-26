@@ -1,0 +1,267 @@
+name: Operations Backups
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Operations environment
+        required: true
+        default: production
+        type: choice
+        options:
+          - staging
+          - production
+      include_volume_backup:
+        description: Include Docker volume backup
+        required: true
+        default: true
+        type: boolean
+      run_restore_drill:
+        description: Run restore drill after backup
+        required: true
+        default: false
+        type: boolean
+  schedule:
+    - cron: '15 16 * * *'
+    - cron: '30 16 * * 0'
+    - cron: '45 16 1 * *'
+
+concurrency:
+  group: ops-backups-${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }}
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }}
+    outputs:
+      run_restore_drill: ${{ steps.mode.outputs.run_restore_drill }}
+      artifact_name: ${{ steps.mode.outputs.artifact_name }}
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
+      OFFSITE_STORAGE_URI: ${{ secrets.OFFSITE_STORAGE_URI }}
+      LOCAL_BACKUP_RETENTION_DAYS: ${{ vars.LOCAL_BACKUP_RETENTION_DAYS }}
+      OFFSITE_BACKUP_RETENTION_DAYS: ${{ vars.OFFSITE_BACKUP_RETENTION_DAYS }}
+      PRIMARY_ONCALL: ${{ vars.PRIMARY_ONCALL }}
+      SECONDARY_ONCALL: ${{ vars.SECONDARY_ONCALL }}
+      BACKUP_OWNER: ${{ vars.BACKUP_OWNER }}
+      RELEASE_APPROVER: ${{ vars.RELEASE_APPROVER }}
+      RESTORE_APPROVER: ${{ vars.RESTORE_APPROVER }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Backup Mode
+        id: mode
+        run: |
+          include_volume_backup=false
+          run_restore_drill=false
+          artifact_name="ops-backup-production-logical"
+
+          case "${{ github.event.schedule || '' }}" in
+            '30 16 * * 0')
+              include_volume_backup=true
+              ;;
+            '45 16 1 * *')
+              include_volume_backup=true
+              run_restore_drill=true
+              ;;
+          esac
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            include_volume_backup='${{ inputs.include_volume_backup }}'
+            run_restore_drill='${{ inputs.run_restore_drill }}'
+            artifact_name="ops-backup-${{ inputs.environment }}-logical"
+          fi
+
+          echo "include_volume_backup=${include_volume_backup}" >> "$GITHUB_OUTPUT"
+          echo "run_restore_drill=${run_restore_drill}" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=${artifact_name}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate Operations Secrets
+        run: |
+          test -n "$DEPLOY_HOST"
+          test -n "$DEPLOY_USER"
+          test -n "$DEPLOY_PATH"
+          test -n "$BACKUP_ENCRYPTION_PASSPHRASE"
+          test -n "$OFFSITE_STORAGE_URI"
+          test -n "$PRIMARY_ONCALL"
+          test -n "$SECONDARY_ONCALL"
+          test -n "$BACKUP_OWNER"
+          test -n "$RELEASE_APPROVER"
+          test -n "$RESTORE_APPROVER"
+
+      - name: Start SSH Agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Trust Remote Host
+        run: ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Run Scheduled Backup On Remote Host
+        id: remote-backup
+        run: |
+          local_retention_days="${LOCAL_BACKUP_RETENTION_DAYS:-35}"
+          offsite_retention_days="${OFFSITE_BACKUP_RETENTION_DAYS:-90}"
+
+          backup_output="$(ssh "$DEPLOY_USER@$DEPLOY_HOST" 'bash -s' <<EOF
+          set -euo pipefail
+          cd "${DEPLOY_PATH}/current"
+
+          ENV_FILE="${DEPLOY_PATH}/shared/${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }}/env/backend.env" \
+          COMPOSE_ENV_FILE="${DEPLOY_PATH}/shared/${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }}/env/compose.env" \
+          BACKUP_ROOT="${DEPLOY_PATH}/shared/${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }}/ops/backups" \
+          BACKUP_RUN_ID="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+          BACKUP_ENCRYPTION_PASSPHRASE="${BACKUP_ENCRYPTION_PASSPHRASE}" \
+          OFFSITE_STORAGE_URI="${OFFSITE_STORAGE_URI}" \
+          LOCAL_RETENTION_DAYS="${local_retention_days}" \
+          OFFSITE_RETENTION_DAYS="${offsite_retention_days}" \
+          INCLUDE_VOLUME_BACKUP="${{ steps.mode.outputs.include_volume_backup }}" \
+          ./deploy/scripts/backup-runner.sh
+          EOF
+          )"
+
+          printf '%s\n' "$backup_output"
+
+          run_dir="$(printf '%s\n' "$backup_output" | awk -F= '/^OPS_RUN_DIR=/{print substr($0, index($0, "=") + 1)}' | tail -n 1)"
+          manifest_file="$(printf '%s\n' "$backup_output" | awk -F= '/^OPS_MANIFEST_FILE=/{print substr($0, index($0, "=") + 1)}' | tail -n 1)"
+          logical_bundle="$(printf '%s\n' "$backup_output" | awk -F= '/^OPS_LOGICAL_BUNDLE_ENCRYPTED=/{print substr($0, index($0, "=") + 1)}' | tail -n 1)"
+          logical_checksum="$(printf '%s\n' "$backup_output" | awk -F= '/^OPS_LOGICAL_BUNDLE_ENCRYPTED_CHECKSUM=/{print substr($0, index($0, "=") + 1)}' | tail -n 1)"
+
+          test -n "$run_dir"
+          test -n "$manifest_file"
+          test -n "$logical_bundle"
+          test -n "$logical_checksum"
+
+          mkdir -p ops-backup-artifacts
+          scp "$DEPLOY_USER@$DEPLOY_HOST:$manifest_file" ops-backup-artifacts/
+          scp "$DEPLOY_USER@$DEPLOY_HOST:$logical_bundle" ops-backup-artifacts/
+          scp "$DEPLOY_USER@$DEPLOY_HOST:$logical_checksum" ops-backup-artifacts/
+
+      - name: Upload Logical Backup Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.mode.outputs.artifact_name }}
+          path: ops-backup-artifacts/
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Notify Backup Failure
+        if: failure()
+        env:
+          ALERT_WEBHOOK_URL: ${{ secrets.BACKUP_ALERT_WEBHOOK_URL }}
+          ALERT_SOURCE: reward-system-ops-backup
+        run: |
+          if [ -n "${ALERT_WEBHOOK_URL:-}" ]; then
+            ./deploy/scripts/ops-notify.sh critical \
+              "Backup workflow failed" \
+              "Run $GITHUB_RUN_ID failed in workflow $GITHUB_WORKFLOW for environment ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }}. Primary on-call: ${PRIMARY_ONCALL}. Secondary on-call: ${SECONDARY_ONCALL}. Backup owner: ${BACKUP_OWNER}."
+          fi
+
+  restore-drill:
+    if: ${{ needs.backup.outputs.run_restore_drill == 'true' }}
+    needs: backup
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }}
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/reward_restore
+      POSTGRES_URL: postgresql://postgres:postgres@127.0.0.1:5432/reward_restore
+      ADMIN_JWT_SECRET: drill-admin-secret-1234567890abcdefghij
+      USER_JWT_SECRET: drill-user-secret-1234567890abcdefghij
+      ADMIN_MFA_ENCRYPTION_SECRET: drill-admin-mfa-secret-1234567890abcdef
+      ADMIN_MFA_BREAK_GLASS_SECRET: drill-break-glass-secret-1234567890abcd
+      WEB_BASE_URL: http://127.0.0.1:3000
+      ADMIN_BASE_URL: http://127.0.0.1:4173
+      PAYMENT_OPERATING_MODE: manual_review
+      PORT: 4000
+      NODE_ENV: production
+      BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
+      RESTORE_APPROVER: ${{ vars.RESTORE_APPROVER }}
+      PRIMARY_ONCALL: ${{ vars.PRIMARY_ONCALL }}
+      SECONDARY_ONCALL: ${{ vars.SECONDARY_ONCALL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install Workspace Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Backend
+        run: pnpm --dir apps/backend build
+
+      - name: Install PostgreSQL Client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Download Backup Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.backup.outputs.artifact_name }}
+          path: ops-backup-artifacts
+
+      - name: Create Isolated Restore Target
+        run: psql postgresql://postgres:postgres@127.0.0.1:5432/postgres -c 'CREATE DATABASE reward_restore'
+
+      - name: Run Restore Drill
+        run: |
+          bundle_path="$(find ops-backup-artifacts -maxdepth 1 -type f -name '*.enc' | head -n 1)"
+          test -n "$bundle_path"
+          drill_approver="${RESTORE_APPROVER:-production-environment-reviewer}"
+
+          DRILL_ID="gha-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+          DRILL_OUTPUT_DIR="${GITHUB_WORKSPACE}/ops-restore-drills" \
+          DRILL_OPERATOR="github-actions" \
+          DRILL_APPROVER="${drill_approver}" \
+          DRILL_TICKET="gha-run-${GITHUB_RUN_ID}" \
+          TARGET_DATABASE_URL="$DATABASE_URL" \
+          RUN_BACKEND_SMOKE=true \
+          BACKEND_START_COMMAND="pnpm --dir apps/backend start" \
+          ./deploy/scripts/restore-drill.sh "$bundle_path"
+
+      - name: Upload Restore Drill Evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ops-restore-drill-${{ github.run_id }}
+          path: ops-restore-drills/
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Notify Restore Drill Failure
+        if: failure()
+        env:
+          ALERT_WEBHOOK_URL: ${{ secrets.BACKUP_ALERT_WEBHOOK_URL }}
+          ALERT_SOURCE: reward-system-ops-restore-drill
+        run: |
+          if [ -n "${ALERT_WEBHOOK_URL:-}" ]; then
+            ./deploy/scripts/ops-notify.sh critical \
+              "Restore drill failed" \
+              "Run $GITHUB_RUN_ID failed during restore validation in workflow $GITHUB_WORKFLOW. Primary on-call: ${PRIMARY_ONCALL}. Secondary on-call: ${SECONDARY_ONCALL}. Restore approver: ${RESTORE_APPROVER:-unassigned}."
+          fi

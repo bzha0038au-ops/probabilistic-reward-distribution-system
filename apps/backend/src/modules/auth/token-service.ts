@@ -1,13 +1,15 @@
-import { and, eq, gt, isNull } from 'drizzle-orm';
+import { and, eq, gt, isNull } from '@reward/database/orm';
 import { createHash, randomBytes, randomInt } from 'node:crypto';
 
-import { db } from '../../db';
+import { db, type DbClient, type DbTransaction } from '../../db';
 import { authTokens } from '@reward/database';
 
 export type AuthTokenType =
   | 'password_reset'
   | 'email_verification'
   | 'phone_verification';
+
+type NotificationDb = DbClient | DbTransaction;
 
 const hashToken = (token: string) =>
   createHash('sha256').update(token).digest('hex');
@@ -49,13 +51,13 @@ export async function issueAuthToken(payload: {
   metadata?: Record<string, unknown> | null;
   ttlMinutes: number;
   format?: 'token' | 'code';
-}) {
+}, database: NotificationDb = db) {
   const rawToken = payload.format === 'code' ? createPhoneCode() : createLongToken();
   const now = new Date();
   const expiresAt = new Date(now.getTime() + payload.ttlMinutes * 60 * 1000);
 
-  const [created] = await db.transaction(async (tx) => {
-    await tx
+  const run = async (executor: NotificationDb) => {
+    await executor
       .update(authTokens)
       .set({ consumedAt: now })
       .where(
@@ -67,7 +69,7 @@ export async function issueAuthToken(payload: {
         })
       );
 
-    return tx
+    return executor
       .insert(authTokens)
       .values({
         userId: payload.userId ?? null,
@@ -79,7 +81,12 @@ export async function issueAuthToken(payload: {
         expiresAt,
       })
       .returning();
-  });
+  };
+
+  const [created] =
+    database === db
+      ? await db.transaction(async (tx) => run(tx))
+      : await run(database);
 
   return {
     rawToken,

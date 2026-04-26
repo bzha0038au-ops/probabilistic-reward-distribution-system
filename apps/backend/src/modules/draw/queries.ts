@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm';
+import { sql } from '@reward/database/orm';
 import { z } from 'zod';
 
 import { prizes, userWallets, users } from '@reward/database';

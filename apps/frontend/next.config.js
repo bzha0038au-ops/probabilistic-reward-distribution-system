@@ -4,6 +4,11 @@ const nextConfig = {
   // cannot poison the build output later consumed by `next start`.
   distDir: process.env.NODE_ENV === 'production' ? '.next' : '.next-dev',
   allowedDevOrigins: ['10.0.2.2', '127.0.0.1', 'localhost'],
+  experimental: {
+    // Keep the Node SDK out of the route bundle to avoid webpack critical-dependency
+    // warnings from its optional OpenTelemetry integrations.
+    serverComponentsExternalPackages: ['@sentry/node'],
+  },
 };
 
 module.exports = nextConfig;

@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { eq, and } from 'drizzle-orm';
+import { eq, and } from '@reward/database/orm';
 
 import type { DbClient, DbTransaction } from '../../db';
 import { fairnessSeeds } from '@reward/database';

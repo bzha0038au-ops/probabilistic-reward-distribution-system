@@ -4,6 +4,7 @@ import type { Server } from 'http';
 import { logger } from './logger';
 import { context } from './context';
 import { translate } from './i18n';
+import { captureException, shutdownObservability } from './telemetry';
 
 export class AppError extends Error {
   constructor(
@@ -64,6 +65,7 @@ const formatErrorResponse = (error: AppError) => {
       message: localizedMessage,
     },
     requestId,
+    traceId: context().getStore()?.traceId,
   };
 };
 
@@ -79,6 +81,17 @@ export const fastifyErrorHandler = (
     name: appError.name,
     statusCode: appError.statusCode,
     requestId: context().getStore()?.requestId,
+    traceId: context().getStore()?.traceId,
+  });
+  captureException(appError, {
+    tags: {
+      handled: true,
+      status_code: appError.statusCode,
+    },
+    extra: {
+      requestId: context().getStore()?.requestId,
+      traceId: context().getStore()?.traceId,
+    },
   });
 
   reply.status(appError.statusCode ?? 500).send(formatErrorResponse(appError));
@@ -88,6 +101,7 @@ const terminateServer = async (server?: Server) => {
   if (server) {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
+  await shutdownObservability();
   process.exit(1);
 };
 
@@ -98,6 +112,9 @@ export const installProcessHandlers = (server?: Server) => {
       name: appError.name,
       message: appError.message,
     });
+    captureException(appError, {
+      tags: { lifecycle: 'uncaught_exception' },
+    });
     await terminateServer(server);
   });
 
@@ -106,6 +123,9 @@ export const installProcessHandlers = (server?: Server) => {
     logger.error('Unhandled rejection', {
       name: appError.name,
       message: appError.message,
+    });
+    captureException(appError, {
+      tags: { lifecycle: 'unhandled_rejection' },
     });
     await terminateServer(server);
   });

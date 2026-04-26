@@ -11,7 +11,7 @@ import {
   lte,
   or,
   type SQL,
-} from 'drizzle-orm';
+} from '@reward/database/orm';
 
 export async function recordAdminAction(payload: {
   adminId?: number | null;

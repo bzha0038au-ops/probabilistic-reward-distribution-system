@@ -2,21 +2,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   canAdminAccess,
+  getUserById,
   getAdminAccessProfileByUserId,
   getSystemFlags,
   isUserFrozen,
   sendError,
   store,
-  verifyAdminTotpCode,
+  verifyAdminMfaChallenge,
   verifyAdminSessionToken,
   verifyUserSessionToken,
 } = vi.hoisted(() => ({
   store: {} as { userId?: number; role?: 'user' | 'admin' },
   verifyUserSessionToken: vi.fn(),
   verifyAdminSessionToken: vi.fn(),
+  getUserById: vi.fn(),
   getAdminAccessProfileByUserId: vi.fn(),
   canAdminAccess: vi.fn(),
-  verifyAdminTotpCode: vi.fn(),
+  verifyAdminMfaChallenge: vi.fn(),
   isUserFrozen: vi.fn(),
   getSystemFlags: vi.fn(),
   sendError: vi.fn(
@@ -58,13 +60,17 @@ vi.mock('../modules/system/service', () => ({
   getSystemFlags,
 }));
 
+vi.mock('../modules/user/service', () => ({
+  getUserById,
+}));
+
 vi.mock('../modules/admin-permission/service', () => ({
   canAdminAccess,
   getAdminAccessProfileByUserId,
 }));
 
 vi.mock('../modules/admin-mfa/service', () => ({
-  verifyAdminTotpCode,
+  verifyAdminMfaChallenge,
 }));
 
 vi.mock('./respond', () => ({
@@ -79,6 +85,7 @@ import {
   requireAdmin,
   requireAdminGuard,
   requireAdminPermission,
+  requireVerifiedUser,
   requireUser,
   requireUserGuard,
 } from './guards';
@@ -91,6 +98,13 @@ describe('auth guards', () => {
     delete store.role;
     getSystemFlags.mockResolvedValue({ maintenanceMode: false });
     isUserFrozen.mockResolvedValue(false);
+    getUserById.mockResolvedValue({
+      id: 11,
+      email: 'user@example.com',
+      role: 'user',
+      emailVerifiedAt: new Date('2024-01-01T00:00:00.000Z'),
+      phoneVerifiedAt: new Date('2024-01-02T00:00:00.000Z'),
+    });
     getAdminAccessProfileByUserId.mockResolvedValue({
       adminId: 101,
       userId: 11,
@@ -103,7 +117,11 @@ describe('auth guards', () => {
       requiresMfa: false,
     });
     canAdminAccess.mockReturnValue(false);
-    verifyAdminTotpCode.mockResolvedValue(false);
+    verifyAdminMfaChallenge.mockResolvedValue({
+      valid: false,
+      method: null,
+      recoveryCodesRemaining: 0,
+    });
   });
 
   it('resolves a user from the bearer token and stores actor context', async () => {
@@ -178,6 +196,76 @@ describe('auth guards', () => {
     expect((request as { user?: unknown }).user).toEqual(user);
   });
 
+  it('blocks high-risk user actions when email verification is missing', async () => {
+    const reply = {};
+    const request = {
+      user: {
+        userId: 9,
+        email: 'user@example.com',
+        role: 'user' as const,
+        sessionId: 'user-session-9',
+      },
+    };
+    getUserById.mockResolvedValue({
+      id: 9,
+      email: 'user@example.com',
+      role: 'user',
+      emailVerifiedAt: null,
+      phoneVerifiedAt: new Date('2024-01-02T00:00:00.000Z'),
+    });
+
+    const guard = requireVerifiedUser({ email: true });
+    const result = await guard(request as never, reply as never);
+
+    expect(sendError).toHaveBeenCalledWith(
+      reply,
+      403,
+      'Email verification required.',
+      undefined,
+      'EMAIL_VERIFICATION_REQUIRED'
+    );
+    expect(result).toEqual({
+      status: 403,
+      message: 'Email verification required.',
+      code: 'EMAIL_VERIFICATION_REQUIRED',
+    });
+  });
+
+  it('blocks high-risk finance actions when phone verification is missing', async () => {
+    const reply = {};
+    const request = {
+      user: {
+        userId: 9,
+        email: 'user@example.com',
+        role: 'user' as const,
+        sessionId: 'user-session-9',
+      },
+    };
+    getUserById.mockResolvedValue({
+      id: 9,
+      email: 'user@example.com',
+      role: 'user',
+      emailVerifiedAt: new Date('2024-01-01T00:00:00.000Z'),
+      phoneVerifiedAt: null,
+    });
+
+    const guard = requireVerifiedUser({ email: true, phone: true });
+    const result = await guard(request as never, reply as never);
+
+    expect(sendError).toHaveBeenCalledWith(
+      reply,
+      403,
+      'Phone verification required.',
+      undefined,
+      'PHONE_VERIFICATION_REQUIRED'
+    );
+    expect(result).toEqual({
+      status: 403,
+      message: 'Phone verification required.',
+      code: 'PHONE_VERIFICATION_REQUIRED',
+    });
+  });
+
   it('blocks frozen admins and still resolves the session from cookies', async () => {
     const request = { headers: {}, cookies: { reward_admin_session: 'admin-token' } };
     const reply = {};
@@ -187,6 +275,7 @@ describe('auth guards', () => {
       email: 'admin@example.com',
       role: 'admin',
       mfaEnabled: false,
+      mfaRecoveryMode: 'none',
       sessionId: 'admin-session-11',
     });
     isUserFrozen.mockResolvedValue(true);
@@ -200,6 +289,7 @@ describe('auth guards', () => {
       email: 'admin@example.com',
       role: 'admin',
       mfaEnabled: false,
+      mfaRecoveryMode: 'none',
       sessionId: 'admin-session-11',
       permissions: [],
       requiresMfa: false,
@@ -220,6 +310,7 @@ describe('auth guards', () => {
         email: 'admin@example.com',
         role: 'admin' as const,
         mfaEnabled: true,
+        mfaRecoveryMode: 'none' as const,
         sessionId: 'admin-session-11',
         permissions: [],
         requiresMfa: false,
@@ -255,6 +346,7 @@ describe('auth guards', () => {
         email: 'admin@example.com',
         role: 'admin' as const,
         mfaEnabled: true,
+        mfaRecoveryMode: 'none' as const,
         sessionId: 'admin-session-11',
         permissions: [ADMIN_PERMISSION_KEYS.FINANCE_PAY_WITHDRAWAL],
         requiresMfa: true,
@@ -292,6 +384,7 @@ describe('auth guards', () => {
         email: 'admin@example.com',
         role: 'admin' as const,
         mfaEnabled: true,
+        mfaRecoveryMode: 'none' as const,
         sessionId: 'admin-session-11',
         permissions: [ADMIN_PERMISSION_KEYS.FINANCE_PAY_WITHDRAWAL],
         requiresMfa: true,
@@ -300,16 +393,20 @@ describe('auth guards', () => {
       body: { totpCode: '123456' },
     };
     canAdminAccess.mockReturnValue(true);
-    verifyAdminTotpCode.mockResolvedValue(true);
+    verifyAdminMfaChallenge.mockResolvedValue({
+      valid: true,
+      method: 'totp',
+      recoveryCodesRemaining: 0,
+    });
 
     const guard = requireAdminPermission(
       ADMIN_PERMISSION_KEYS.FINANCE_PAY_WITHDRAWAL
     );
     const result = await guard(request as never, reply as never);
 
-    expect(verifyAdminTotpCode).toHaveBeenCalledWith({
+    expect(verifyAdminMfaChallenge).toHaveBeenCalledWith({
       adminId: 101,
-      totpCode: '123456',
+      code: '123456',
     });
     expect(sendError).not.toHaveBeenCalled();
     expect(result).toBeUndefined();

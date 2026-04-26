@@ -1,4 +1,4 @@
-import { and, eq, gt, isNull } from 'drizzle-orm';
+import { and, eq, gt, isNull } from '@reward/database/orm';
 
 import { prizes } from '@reward/database';
 import { db } from '../../db';

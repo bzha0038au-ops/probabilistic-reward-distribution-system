@@ -10,12 +10,15 @@ export const ADMIN_SESSION_COOKIE = 'reward_admin_session';
 export const ADMIN_SESSION_TTL_SECONDS =
   Number(process.env.ADMIN_SESSION_TTL ?? '') || 60 * 60 * 2;
 
+export type AdminMfaRecoveryMode = 'none' | 'recovery_code' | 'break_glass';
+
 export type AdminSessionPayload = {
   adminId: number;
   userId: number;
   email: string;
   role: 'admin';
   mfaEnabled: boolean;
+  mfaRecoveryMode: AdminMfaRecoveryMode;
   sessionId: string;
 };
 
@@ -48,6 +51,7 @@ export async function createAdminSessionToken(
     email: payload.email,
     role: payload.role,
     mfaEnabled: payload.mfaEnabled,
+    mfaRecoveryMode: payload.mfaRecoveryMode,
   })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(String(payload.userId))
@@ -84,6 +88,11 @@ export async function verifyAdminSessionToken(token?: string | null) {
       email: String(payload.email ?? ''),
       role: 'admin' as const,
       mfaEnabled: Boolean(payload.mfaEnabled),
+      mfaRecoveryMode:
+        payload.mfaRecoveryMode === 'recovery_code' ||
+        payload.mfaRecoveryMode === 'break_glass'
+          ? payload.mfaRecoveryMode
+          : 'none',
       sessionId: session.jti,
     } satisfies AdminSessionPayload;
   } catch {

@@ -1,4 +1,4 @@
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq } from '@reward/database/orm';
 
 import { db } from '../../db';
 import { ledgerEntries, userWallets } from '@reward/database';

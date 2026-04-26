@@ -1,8 +1,9 @@
-import { sql } from 'drizzle-orm';
+import { sql } from '@reward/database/orm';
 import Decimal from 'decimal.js';
 
 import { systemConfig } from '@reward/database';
 import type { DbClient, DbTransaction } from '../../db';
+import { getConfig } from '../../shared/config';
 import { toDecimal, toMoneyString } from '../../shared/money';
 import { readSqlRows } from '../../shared/sql-result';
 import { getPrizePoolBalance, setPrizePoolBalance } from '../house/service';
@@ -13,6 +14,37 @@ export type DbExecutor = DbClient | DbTransaction;
 type ConfigRow = {
   config_number: string | number | null;
   config_value: Record<string, unknown> | null;
+};
+
+const isStrictSystemConfigMode = () => getConfig().nodeEnv === 'production';
+
+const buildMissingConfigError = (key: string) =>
+  new Error(
+    `Missing required system_config entry "${key}" in production. Run the latest migrations and seed the key before startup.`
+  );
+
+const buildInvalidConfigError = (key: string, expected: string) =>
+  new Error(
+    `Invalid system_config entry "${key}" in production. Expected ${expected}.`
+  );
+
+const fallbackOrThrow = <T>(key: string, fallback: T, expected: string): T => {
+  if (isStrictSystemConfigMode()) {
+    throw buildInvalidConfigError(key, expected);
+  }
+
+  return fallback;
+};
+
+const autoCreateOrThrow = async (
+  key: string,
+  createEntry: () => Promise<unknown>
+) => {
+  if (isStrictSystemConfigMode()) {
+    throw buildMissingConfigError(key);
+  }
+
+  await createEntry();
 };
 
 const readConfigRow = async (
@@ -31,7 +63,11 @@ const readConfigRow = async (
   return readSqlRows<ConfigRow>(result)[0] ?? null;
 };
 
-const parseConfigNumber = (row: ConfigRow | null, fallback: Decimal.Value) => {
+const parseConfigNumber = (
+  key: string,
+  row: ConfigRow | null,
+  fallback: Decimal.Value
+) => {
   if (row?.config_number !== null && row?.config_number !== undefined) {
     return toDecimal(row.config_number);
   }
@@ -41,10 +77,10 @@ const parseConfigNumber = (row: ConfigRow | null, fallback: Decimal.Value) => {
     return toDecimal(legacy.value);
   }
 
-  return toDecimal(fallback);
+  return fallbackOrThrow(key, toDecimal(fallback), 'a numeric value');
 };
 
-const parseConfigBool = (row: ConfigRow | null, fallback = false) => {
+const parseConfigBool = (key: string, row: ConfigRow | null, fallback = false) => {
   if (row?.config_number !== null && row?.config_number !== undefined) {
     return toDecimal(row.config_number).gt(0);
   }
@@ -62,23 +98,25 @@ const parseConfigBool = (row: ConfigRow | null, fallback = false) => {
     if (normalized === 'false' || normalized === '0') return false;
   }
 
-  return fallback;
+  return fallbackOrThrow(key, fallback, 'a boolean value');
 };
 
-const parseConfigString = (row: ConfigRow | null, fallback = '') => {
+const parseConfigString = (key: string, row: ConfigRow | null, fallback = '') => {
   const legacy = row?.config_value;
   if (legacy && typeof legacy.value === 'string') {
     return legacy.value;
   }
-  return fallback;
+
+  return fallbackOrThrow(key, fallback, 'a string value');
 };
 
-const parseConfigJson = <T>(row: ConfigRow | null, fallback: T): T => {
+const parseConfigJson = <T>(key: string, row: ConfigRow | null, fallback: T): T => {
   const legacy = row?.config_value;
   if (legacy && typeof legacy === 'object') {
     return legacy as unknown as T;
   }
-  return fallback;
+
+  return fallbackOrThrow(key, fallback, 'a JSON object value');
 };
 
 export async function getConfigBool(
@@ -89,10 +127,12 @@ export async function getConfigBool(
 ) {
   const row = await readConfigRow(db, key, lock);
   if (!row) {
-    await setConfigDecimal(db, key, fallback ? 1 : 0, 'Auto-created config entry');
+    await autoCreateOrThrow(key, () =>
+      setConfigDecimal(db, key, fallback ? 1 : 0, 'Auto-created config entry')
+    );
     return fallback;
   }
-  return parseConfigBool(row, fallback);
+  return parseConfigBool(key, row, fallback);
 }
 
 export async function getConfigString(
@@ -103,18 +143,20 @@ export async function getConfigString(
 ) {
   const row = await readConfigRow(db, key, lock);
   if (!row) {
-    await db
-      .insert(systemConfig)
-      .values({
-        configKey: key,
-        configNumber: null,
-        configValue: { value: fallback },
-        description: 'Auto-created config entry',
-      })
-      .onConflictDoNothing();
+    await autoCreateOrThrow(key, () =>
+      db
+        .insert(systemConfig)
+        .values({
+          configKey: key,
+          configNumber: null,
+          configValue: { value: fallback },
+          description: 'Auto-created config entry',
+        })
+        .onConflictDoNothing()
+    );
     return fallback;
   }
-  return parseConfigString(row, fallback);
+  return parseConfigString(key, row, fallback);
 }
 
 export async function getConfigJson<T>(
@@ -125,18 +167,20 @@ export async function getConfigJson<T>(
 ) {
   const row = await readConfigRow(db, key, lock);
   if (!row) {
-    await db
-      .insert(systemConfig)
-      .values({
-        configKey: key,
-        configNumber: null,
-        configValue: fallback as unknown as Record<string, unknown>,
-        description: 'Auto-created config entry',
-      })
-      .onConflictDoNothing();
+    await autoCreateOrThrow(key, () =>
+      db
+        .insert(systemConfig)
+        .values({
+          configKey: key,
+          configNumber: null,
+          configValue: fallback as unknown as Record<string, unknown>,
+          description: 'Auto-created config entry',
+        })
+        .onConflictDoNothing()
+    );
     return fallback;
   }
-  return parseConfigJson(row, fallback);
+  return parseConfigJson(key, row, fallback);
 }
 
 export async function setConfigDecimal(
@@ -176,11 +220,13 @@ export async function getConfigDecimal(
   const row = await readConfigRow(db, key, lock);
 
   if (!row) {
-    await setConfigDecimal(db, key, fallback, 'Auto-created config entry');
+    await autoCreateOrThrow(key, () =>
+      setConfigDecimal(db, key, fallback, 'Auto-created config entry')
+    );
     return toDecimal(fallback);
   }
 
-  return parseConfigNumber(row, fallback);
+  return parseConfigNumber(key, row, fallback);
 }
 
 export async function getPoolBalance(

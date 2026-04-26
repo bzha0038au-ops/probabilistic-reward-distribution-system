@@ -4,9 +4,22 @@ import {
   AUTH_SESSION_COOKIE_NAME,
   SECURE_AUTH_SESSION_COOKIE_NAME,
 } from '@/lib/auth/session-cookie';
+import { getBackendAccessTokenFromRequest } from '@/lib/auth/backend-token';
 
 const API_BASE_URL = process.env.API_BASE_URL ?? 'http://localhost:4000';
 const secureCookies = process.env.NODE_ENV === 'production';
+
+type AuthTokenState = {
+  backendToken?: string;
+  role?: string;
+  userId?: number;
+};
+
+type AuthorizedUserState = {
+  backendToken?: string;
+  id?: string | number;
+  role?: string;
+};
 
 const hasActiveBackendSession = async (backendToken?: string | null) => {
   if (!backendToken) {
@@ -51,15 +64,13 @@ export const authConfig = {
   },
   providers: [],
   callbacks: {
-    async authorized({ auth, request: { nextUrl } }) {
+    async authorized({ request }) {
+      const { nextUrl } = request;
       const isAppRoute = nextUrl.pathname.startsWith('/app');
       const isAuthPage =
         nextUrl.pathname.startsWith('/login') ||
         nextUrl.pathname.startsWith('/register');
-      const backendToken =
-        auth && typeof auth === 'object' && 'backendToken' in auth
-          ? ((auth as { backendToken?: string }).backendToken ?? null)
-          : null;
+      const backendToken = await getBackendAccessTokenFromRequest(request);
       const isLoggedIn = await hasActiveBackendSession(backendToken);
 
       if (isAppRoute) {
@@ -73,21 +84,24 @@ export const authConfig = {
       return true;
     },
     jwt({ token, user }) {
+      const authToken = token as typeof token & AuthTokenState;
+
       if (user) {
-        token.role = (user as { role?: string }).role ?? 'user';
-        token.userId = Number((user as { id?: string | number }).id ?? 0);
-        token.backendToken = (user as { backendToken?: string }).backendToken;
+        const authorizedUser = user as AuthorizedUserState;
+        authToken.role = authorizedUser.role ?? 'user';
+        authToken.userId = Number(authorizedUser.id ?? 0);
+        authToken.backendToken = authorizedUser.backendToken;
       }
 
-      return token;
+      return authToken;
     },
     session({ session, token }) {
-      if (session.user) {
-        session.user.role = (token.role as string) ?? 'user';
-        session.user.id = (token.userId as number) ?? 0;
-      }
+      const authToken = token as typeof token & AuthTokenState;
 
-      session.backendToken = token.backendToken as string | undefined;
+      if (session.user) {
+        session.user.role = authToken.role ?? 'user';
+        session.user.id = authToken.userId ?? 0;
+      }
 
       return session;
     },

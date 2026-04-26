@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq } from '@reward/database/orm';
 
 import type { DbClient, DbTransaction } from '../../db';
 import { db } from '../../db';

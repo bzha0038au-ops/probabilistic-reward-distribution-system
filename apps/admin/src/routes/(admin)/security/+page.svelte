@@ -54,7 +54,7 @@
   const freezePage = $derived(data.freezeRecords?.page ?? 1)
   const events = $derived(data.authEvents?.items ?? [])
   const anomalyEvents = $derived(
-    events.filter((event) => event.eventType.endsWith("_login_anomaly"))
+    events.filter((event) => event.eventType.endsWith("_login_anomaly")),
   )
   const freezeRecords = $derived(data.freezeRecords?.items ?? [])
   const adminActions = $derived(data.adminActions?.items ?? [])
@@ -62,7 +62,7 @@
   const authPrevCursor = $derived(data.authEvents?.prevCursor ?? null)
   const adminNextCursor = $derived(data.adminActions?.nextCursor ?? null)
   const adminPrevCursor = $derived(data.adminActions?.prevCursor ?? null)
-  const authExportQuery = $derived(() => {
+  const authExportQuery = $derived.by(() => {
     const params = new URLSearchParams()
     const searchParams = $page.url.searchParams
     const email = searchParams.get("email")
@@ -82,7 +82,7 @@
     const queryString = params.toString()
     return queryString ? `?${queryString}` : ""
   })
-  const adminExportQuery = $derived(() => {
+  const adminExportQuery = $derived.by(() => {
     const params = new URLSearchParams()
     const searchParams = $page.url.searchParams
     const adminId = searchParams.get("adminId")
@@ -152,7 +152,7 @@
       <input
         name="totpCode"
         type="text"
-        inputmode="numeric"
+        inputmode="text"
         autocomplete="one-time-code"
         class="input input-bordered"
         bind:value={stepUpCode}
@@ -174,7 +174,9 @@
     {:else}
       <div class="grid gap-3 md:grid-cols-2">
         {#each anomalyEvents as event}
-          <article class="rounded-xl border border-amber-200 bg-white p-4 text-sm shadow-sm">
+          <article
+            class="rounded-xl border border-amber-200 bg-white p-4 text-sm shadow-sm"
+          >
             <div class="flex items-start justify-between gap-3">
               <div>
                 <p class="font-semibold text-slate-900">{event.email ?? "-"}</p>
@@ -182,7 +184,9 @@
                   {event.eventType}
                 </p>
               </div>
-              <p class="text-xs text-slate-500">{formatDate(event.createdAt)}</p>
+              <p class="text-xs text-slate-500">
+                {formatDate(event.createdAt)}
+              </p>
             </div>
             <dl class="mt-3 space-y-2 text-slate-600">
               <div class="flex justify-between gap-4">
@@ -213,10 +217,14 @@
 
 <section class="mt-6 card bg-base-100 shadow">
   <div class="card-body">
-    <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+    <div
+      class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
+    >
       <div>
         <h2 class="card-title">{t("security.filters.title")}</h2>
-        <p class="text-sm text-slate-500">{t("security.filters.description")}</p>
+        <p class="text-sm text-slate-500">
+          {t("security.filters.description")}
+        </p>
       </div>
     </div>
 
@@ -229,6 +237,7 @@
           id="filter-email"
           name="email"
           class="input input-bordered"
+          autocomplete="email"
           value={$page.url.searchParams.get("email") ?? ""}
         />
       </div>
@@ -240,6 +249,7 @@
           id="filter-event"
           name="eventType"
           class="input input-bordered"
+          autocomplete="off"
           value={$page.url.searchParams.get("eventType") ?? ""}
         />
       </div>
@@ -252,6 +262,7 @@
           name="from"
           type="datetime-local"
           class="input input-bordered"
+          autocomplete="off"
           value={$page.url.searchParams.get("from") ?? ""}
         />
       </div>
@@ -264,6 +275,7 @@
           name="to"
           type="datetime-local"
           class="input input-bordered"
+          autocomplete="off"
           value={$page.url.searchParams.get("to") ?? ""}
         />
       </div>
@@ -278,6 +290,7 @@
           min="1"
           max="200"
           class="input input-bordered"
+          autocomplete="off"
           value={$page.url.searchParams.get("authLimit") ?? "50"}
         />
       </div>
@@ -364,14 +377,22 @@
 
 <section class="mt-6 card bg-base-100 shadow">
   <div class="card-body">
-    <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+    <div
+      class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
+    >
       <div>
         <h2 class="card-title">{t("security.freeze.createTitle")}</h2>
-        <p class="text-sm text-slate-500">{t("security.freeze.createDescription")}</p>
+        <p class="text-sm text-slate-500">
+          {t("security.freeze.createDescription")}
+        </p>
       </div>
     </div>
 
-    <form method="post" action="?/createFreeze" class="mt-4 grid gap-4 md:grid-cols-3">
+    <form
+      method="post"
+      action="?/createFreeze"
+      class="mt-4 grid gap-4 md:grid-cols-3"
+    >
       <div class="form-control">
         <label class="label" for="freeze-user">
           <span class="label-text">{t("security.freeze.userId")}</span>
@@ -381,6 +402,7 @@
           name="userId"
           type="number"
           class="input input-bordered"
+          autocomplete="off"
           required
         />
       </div>
@@ -392,6 +414,7 @@
           id="freeze-reason"
           name="reason"
           class="input input-bordered"
+          autocomplete="off"
           placeholder={t("security.freeze.reasonPlaceholder")}
         />
       </div>
@@ -407,10 +430,14 @@
 
 <section class="mt-8 card bg-base-100 shadow">
   <div class="card-body">
-    <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+    <div
+      class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
+    >
       <div>
         <h2 class="card-title">{t("security.authEvents.title")}</h2>
-        <p class="text-sm text-slate-500">{t("security.authEvents.description")}</p>
+        <p class="text-sm text-slate-500">
+          {t("security.authEvents.description")}
+        </p>
       </div>
     </div>
 
@@ -470,18 +497,24 @@
         </a>
       {/if}
     </div>
-
   </div>
 </section>
 
 <section class="mt-8 card bg-base-100 shadow">
   <div class="card-body">
-    <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+    <div
+      class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
+    >
       <div>
         <h2 class="card-title">{t("security.adminActions.title")}</h2>
-        <p class="text-sm text-slate-500">{t("security.adminActions.description")}</p>
+        <p class="text-sm text-slate-500">
+          {t("security.adminActions.description")}
+        </p>
       </div>
-      <a class="btn btn-outline btn-sm" href={`/security/admin-actions/export${adminExportQuery}`}>
+      <a
+        class="btn btn-outline btn-sm"
+        href={`/security/admin-actions/export${adminExportQuery}`}
+      >
         {t("security.adminActions.export")}
       </a>
     </div>
@@ -489,54 +522,67 @@
     <form method="get" class="mt-4 grid gap-4 md:grid-cols-6">
       <div class="form-control">
         <label class="label" for="admin-action-id">
-          <span class="label-text">{t("security.adminActions.filters.adminId")}</span>
+          <span class="label-text"
+            >{t("security.adminActions.filters.adminId")}</span
+          >
         </label>
         <input
           id="admin-action-id"
           name="adminId"
           type="number"
           class="input input-bordered"
+          autocomplete="off"
           value={$page.url.searchParams.get("adminId") ?? ""}
         />
       </div>
       <div class="form-control">
         <label class="label" for="admin-action-action">
-          <span class="label-text">{t("security.adminActions.filters.action")}</span>
+          <span class="label-text"
+            >{t("security.adminActions.filters.action")}</span
+          >
         </label>
         <input
           id="admin-action-action"
           name="adminAction"
           class="input input-bordered"
+          autocomplete="off"
           value={$page.url.searchParams.get("adminAction") ?? ""}
         />
       </div>
       <div class="form-control">
         <label class="label" for="admin-action-from">
-          <span class="label-text">{t("security.adminActions.filters.from")}</span>
+          <span class="label-text"
+            >{t("security.adminActions.filters.from")}</span
+          >
         </label>
         <input
           id="admin-action-from"
           name="adminFrom"
           type="datetime-local"
           class="input input-bordered"
+          autocomplete="off"
           value={$page.url.searchParams.get("adminFrom") ?? ""}
         />
       </div>
       <div class="form-control">
         <label class="label" for="admin-action-to">
-          <span class="label-text">{t("security.adminActions.filters.to")}</span>
+          <span class="label-text">{t("security.adminActions.filters.to")}</span
+          >
         </label>
         <input
           id="admin-action-to"
           name="adminTo"
           type="datetime-local"
           class="input input-bordered"
+          autocomplete="off"
           value={$page.url.searchParams.get("adminTo") ?? ""}
         />
       </div>
       <div class="form-control">
         <label class="label" for="admin-action-limit">
-          <span class="label-text">{t("security.adminActions.filters.limit")}</span>
+          <span class="label-text"
+            >{t("security.adminActions.filters.limit")}</span
+          >
         </label>
         <input
           id="admin-action-limit"
@@ -545,12 +591,15 @@
           min="1"
           max="200"
           class="input input-bordered"
+          autocomplete="off"
           value={$page.url.searchParams.get("adminLimit") ?? "50"}
         />
       </div>
       <div class="form-control">
         <label class="label" for="admin-action-sort">
-          <span class="label-text">{t("security.adminActions.filters.sort")}</span>
+          <span class="label-text"
+            >{t("security.adminActions.filters.sort")}</span
+          >
         </label>
         <select
           id="admin-action-sort"
@@ -558,8 +607,12 @@
           class="select select-bordered"
           value={$page.url.searchParams.get("adminSort") ?? "desc"}
         >
-          <option value="desc">{t("security.adminActions.filters.sortNewest")}</option>
-          <option value="asc">{t("security.adminActions.filters.sortOldest")}</option>
+          <option value="desc"
+            >{t("security.adminActions.filters.sortNewest")}</option
+          >
+          <option value="asc"
+            >{t("security.adminActions.filters.sortOldest")}</option
+          >
         </select>
       </div>
       <input
@@ -689,7 +742,9 @@
 
 <section class="mt-8 card bg-base-100 shadow">
   <div class="card-body">
-    <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+    <div
+      class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
+    >
       <div>
         <h2 class="card-title">{t("security.freeze.title")}</h2>
         <p class="text-sm text-slate-500">{t("security.freeze.description")}</p>
@@ -708,6 +763,7 @@
           min="1"
           max="200"
           class="input input-bordered"
+          autocomplete="off"
           value={$page.url.searchParams.get("freezeLimit") ?? "50"}
         />
       </div>

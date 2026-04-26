@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq } from '@reward/database/orm';
 import Decimal from 'decimal.js';
 import { drawRecords, users } from '@reward/database';
 import { type DbTransaction } from '../../db';

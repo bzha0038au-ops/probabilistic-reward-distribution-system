@@ -1,4 +1,4 @@
-import type { Handle } from '@sveltejs/kit';
+import type { Handle, HandleServerError } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
 
 import {
@@ -9,6 +9,12 @@ import {
 } from '$lib/server/admin-session';
 import { apiRequest } from '$lib/server/api';
 import { resolveLocaleFromRequest } from '$lib/i18n';
+import {
+  captureAdminServerException,
+  initAdminServerObservability,
+} from '$lib/observability/server';
+
+initAdminServerObservability();
 
 export const handle: Handle = async ({ event, resolve }) => {
   const token = event.cookies.get(ADMIN_SESSION_COOKIE);
@@ -55,4 +61,21 @@ export const handle: Handle = async ({ event, resolve }) => {
   return resolve(event, {
     transformPageChunk: ({ html }) => html.replace('%lang%', event.locals.locale),
   });
+};
+
+export const handleError: HandleServerError = ({ error, event, status, message }) => {
+  captureAdminServerException(error, {
+    tags: {
+      kind: 'server_request_error',
+      status_code: status,
+    },
+    extra: {
+      path: event.url.pathname,
+      message,
+    },
+  });
+
+  return {
+    message,
+  };
 };

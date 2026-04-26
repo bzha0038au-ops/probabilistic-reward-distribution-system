@@ -1,9 +1,19 @@
 import type { AppInstance } from '../types';
-import { FreezeCreateSchema, FreezeRecordQuerySchema, FreezeReleaseBodySchema } from '@reward/shared-types';
+import {
+  FreezeCreateSchema,
+  FreezeRecordQuerySchema,
+  FreezeReleaseBodySchema,
+  NotificationDeliveryQuerySchema,
+} from '@reward/shared-types';
 
 import { ADMIN_PERMISSION_KEYS } from '../../../modules/admin-permission/definitions';
 import { ensureUserFreeze, listFrozenUsers, releaseUserFreeze } from '../../../modules/risk/service';
 import { recordAdminAction } from '../../../modules/admin/audit';
+import {
+  getNotificationDeliverySummary,
+  listNotificationDeliveries,
+  retryFailedNotificationDelivery,
+} from '../../../modules/auth/notification-service';
 import { parseSchema } from '../../../shared/validation';
 import { requireAdminPermission } from '../../guards';
 import { sendError, sendSuccess } from '../../respond';
@@ -15,6 +25,76 @@ import {
 } from './common';
 
 export async function registerAdminSecurityRoutes(protectedRoutes: AppInstance) {
+  protectedRoutes.get(
+    '/admin/notification-deliveries',
+    { preHandler: [requireAdminPermission(ADMIN_PERMISSION_KEYS.AUDIT_READ)] },
+    async (request, reply) => {
+      const parsed = parseSchema(
+        NotificationDeliveryQuerySchema,
+        toObject(request.query)
+      );
+      if (!parsed.isValid) {
+        return sendError(reply, 400, 'Invalid request.', parsed.errors);
+      }
+
+      const [summary, items] = await Promise.all([
+        getNotificationDeliverySummary(),
+        listNotificationDeliveries(parsed.data),
+      ]);
+
+      return sendSuccess(reply, {
+        summary,
+        items,
+      });
+    }
+  );
+
+  protectedRoutes.post(
+    '/admin/notification-deliveries/:deliveryId/retry',
+    {
+      config: { rateLimit: adminRateLimit },
+      preHandler: [
+        requireAdminPermission(ADMIN_PERMISSION_KEYS.AUDIT_RETRY_NOTIFICATION),
+        enforceAdminLimit,
+      ],
+    },
+    async (request, reply) => {
+      const deliveryId = parseIdParam(request.params, 'deliveryId');
+      if (!deliveryId) {
+        return sendError(reply, 400, 'Invalid notification delivery id.');
+      }
+
+      const result = await retryFailedNotificationDelivery(deliveryId);
+      if (!result.ok) {
+        if (result.reason === 'not_found') {
+          return sendError(reply, 404, 'Notification delivery not found.');
+        }
+
+        return sendError(
+          reply,
+          409,
+          `Only failed notification deliveries can be retried. Current status: ${result.status}.`
+        );
+      }
+
+      await recordAdminAction({
+        adminId: request.admin?.adminId ?? null,
+        action: 'notification_delivery_retry',
+        targetType: 'notification_delivery',
+        targetId: deliveryId,
+        metadata: {
+          status: 'pending',
+        },
+        ip: request.ip,
+      });
+
+      return sendSuccess(reply, {
+        id: result.deliveryId,
+        status: 'pending',
+      });
+    }
+  );
+
   protectedRoutes.get(
     '/admin/freeze-records',
     { preHandler: [requireAdminPermission(ADMIN_PERMISSION_KEYS.RISK_READ)] },

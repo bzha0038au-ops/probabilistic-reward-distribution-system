@@ -1,5 +1,7 @@
 import Decimal from 'decimal.js';
 import { z } from 'zod';
+import type { DrawStatus } from '@reward/shared-types';
+export type { DrawStatus };
 import type {
   getDrawSystemConfig,
   getEconomyConfig,
@@ -74,13 +76,6 @@ export type MissCandidate = {
   __isMiss: true;
 };
 
-export type DrawStatus =
-  | 'miss'
-  | 'won'
-  | 'out_of_stock'
-  | 'budget_exhausted'
-  | 'payout_limited';
-
 export type JitterMeta = {
   id: number;
   baseWeight: number;
@@ -118,7 +113,6 @@ export type ResolvedDrawOutcome = {
   bonusAfterReward: Decimal;
   payoutLimitReason: string | null;
 };
-
 export const DrawUserRowSchema = z.object({
   id: z.number().int().positive(),
   user_pool_balance: z.union([z.string(), z.number()]),

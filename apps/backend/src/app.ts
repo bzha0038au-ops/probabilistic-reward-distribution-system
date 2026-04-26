@@ -12,13 +12,16 @@ import {
   validateSessionSecrets,
   getRedis,
 } from './shared';
+import { registerHttpMetricsHooks } from './shared/observability';
 import { CsrfPlugin } from './http/csrf';
 import { registerRoutes } from './http/routes';
 import type { AppInstance } from './http/routes/types';
+import { assertAutomatedPaymentModeSupported } from './modules/payment/service';
 
 export async function buildApp(options: { installProcessHandlers?: boolean } = {}) {
   validateSessionSecrets();
   const config = getConfig();
+  assertAutomatedPaymentModeSupported(config);
   const app = fastify({ logger: getPinoLogger() }) as unknown as AppInstance;
 
   if (options.installProcessHandlers !== false) {
@@ -26,6 +29,7 @@ export async function buildApp(options: { installProcessHandlers?: boolean } = {
   }
 
   app.setErrorHandler(fastifyErrorHandler);
+  registerHttpMetricsHooks(app);
 
   await app.register(cookie);
   await app.register(RequestContextPlugin);

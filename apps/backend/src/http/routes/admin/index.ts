@@ -3,6 +3,7 @@ import type { AppInstance } from '../types';
 import { requireAdminGuard } from '../../guards';
 import { registerAdminAuditRoutes } from './audit';
 import { registerAdminConfigRoutes } from './config';
+import { registerAdminControlRoutes } from './control';
 import { registerAdminFinanceRoutes } from './finance';
 import { registerAdminMfaRoutes } from './mfa';
 import { registerAdminPrizeRoutes } from './prizes';
@@ -18,6 +19,7 @@ export async function registerAdminRoutes(app: AppInstance) {
     await registerAdminAuditRoutes(adminRoutes);
     await registerAdminSecurityRoutes(adminRoutes);
     await registerAdminConfigRoutes(adminRoutes);
+    await registerAdminControlRoutes(adminRoutes);
     await registerAdminFinanceRoutes(adminRoutes);
   });
 }

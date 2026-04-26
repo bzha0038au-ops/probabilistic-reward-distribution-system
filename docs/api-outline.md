@@ -15,6 +15,9 @@ Error:
 ## Auth
 
 - `GET /health`
+- `GET /health/live`
+- `GET /health/ready`
+- `GET /metrics`
 - `POST /auth/register`
 - `POST /auth/password-reset/request`
 - `POST /auth/password-reset/confirm`
@@ -41,11 +44,16 @@ Error:
   the server-side BFF, not from browser JavaScript.
 - Admin routes require the `reward_admin_session` cookie
 - Use `x-trace-id` to correlate requests across systems
-- Password reset, verification, and anomalous-login notifications are dispatched
-  through the auth notification webhook when configured.
+- Password reset, verification, and anomalous-login notifications are persisted in
+  the auth notification outbox and delivered asynchronously with retries.
+- Interactive notification endpoints can return `429` when per-email/phone
+  throttles are hit or `503` when delivery providers are unavailable.
 
 ## User
 
+- `POST /top-ups` and `POST /withdrawals` currently create internal finance
+  orders only. They do not execute a payment gateway or auto-settle real-money
+  movement.
 - `GET /stats`
 - `GET /fairness/commit`
 - `GET /fairness/reveal?epoch=...`
@@ -62,6 +70,9 @@ Error:
 
 ## Admin
 
+- `GET /admin/payment-capabilities` (manual-review capability overview; lists
+  missing automation gaps before real-money auto-settlement is possible; also
+  returns payment provider config governance and plaintext secret findings)
 - `GET /admin/prizes`
 - `POST /admin/prizes`
 - `PATCH /admin/prizes/{prizeId}`
@@ -73,6 +84,8 @@ Error:
 - `GET /admin/admin-actions?cursor=...&direction=next`
 - `GET /admin/admin-actions/export`
 - `GET /admin/freeze-records?page=1`
+- `GET /admin/notification-deliveries`
+- `POST /admin/notification-deliveries/{deliveryId}/retry`
 - `POST /admin/freeze-records`
 - `POST /admin/freeze-records/{userId}/release`
 - `GET /admin/system-config`

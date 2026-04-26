@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, ne } from 'drizzle-orm';
+import { and, desc, eq, gt, ne } from '@reward/database/orm';
 import { randomUUID } from 'node:crypto';
 
 import { db } from '../../db';

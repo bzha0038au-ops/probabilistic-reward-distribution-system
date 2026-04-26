@@ -4,6 +4,14 @@ A full-stack reward and draw system with wallet accounting, prize-pool controls,
 
 This repo is designed as a practical system skeleton for products such as spin-the-wheel, prize-pool, or reward-center apps, where financial correctness matters more than demo-only UI.
 
+> Payment scope: deposits and withdrawals are still manual-review finance flows.
+> This stack does not yet implement outbound gateway execution, signed payment
+> webhooks, idempotent retry handling, or recovery
+> compensation. Scheduled reconciliation jobs and manual-difference queues now
+> exist, but they do not make this backend safe for real-money automatic
+> settlement on their own. Keep `PAYMENT_OPERATING_MODE=manual_review` and do
+> not route real-money automatic in/out through this backend yet.
+
 ## Why This Repo
 
 - Transaction-safe wallet flows for top-up, draw, and withdrawal paths
@@ -105,6 +113,13 @@ pnpm db:migrate
 pnpm dev
 ```
 
+To drain queued auth notifications locally, start the notification worker in a
+second terminal:
+
+```bash
+pnpm dev:notifications
+```
+
 To run the three user surfaces together:
 
 ```bash
@@ -126,6 +141,8 @@ pnpm dev:user
 pnpm db:seed:manual
 pnpm test
 pnpm test:integration
+pnpm test:e2e
+pnpm test:load
 pnpm build
 pnpm db:reset
 ```
@@ -164,6 +181,11 @@ Default local accounts:
 - Shared user client layer: [`packages/user-core`](./packages/user-core)
 
 If you want the architecture view after bootstrapping, start with [`docs/architecture.md`](./docs/architecture.md).
+
+If you are evaluating production readiness, also start with
+[`docs/operations/README.md`](./docs/operations/README.md). It links the backup,
+restore, disaster-recovery, host-hardening, and secret-rotation runbooks plus
+the executable Postgres backup/restore assets under [`deploy/`](./deploy).
 
 ## System Map
 
@@ -264,6 +286,8 @@ pnpm check
 pnpm lint
 pnpm test
 pnpm test:integration
+pnpm test:e2e
+pnpm test:load
 
 pnpm db:generate
 pnpm db:migrate
@@ -288,7 +312,12 @@ Full details live in [`docs/environment.md`](./docs/environment.md).
 ## Testing
 
 - `pnpm test`: workspace-level tests
-- `pnpm test:integration`: backend integration tests against local Postgres
+- `pnpm test:integration`: full backend integration suite against a self-bootstrapped real Postgres instance
+- `pnpm test:integration:critical`: CI gate for draw / finance / admin-risk regressions
+- `pnpm test:e2e`: full Playwright browser regression suite
+- `pnpm test:e2e:critical`: CI gate for auth + core user/admin flows
+- `pnpm test:load`: authenticated `/wallet` + `/draw` smoke load via `autocannon`
+- Run `pnpm test:e2e:install` once before the first browser run on a machine.
 
 Test coverage is intentionally backend-heavy because the biggest risk in this system is financial correctness, not visual polish. See [`docs/test-strategy.md`](./docs/test-strategy.md).
 
@@ -302,7 +331,8 @@ Test coverage is intentionally backend-heavy because the biggest risk in this sy
 
 - If admin login works in the backend but fails in the admin UI, check that `ADMIN_JWT_SECRET` matches in `apps/backend/.env` and `apps/admin/.env`.
 - If the frontend shows session or auth decryption errors, clear browser cookies for `localhost:3000` and make sure `AUTH_SECRET` has not changed.
-- If `pnpm test:integration` fails immediately, make sure Docker is running and `pnpm db:up` has already started Postgres on `5433`.
+- If `pnpm test:e2e` fails before launching a browser, run `pnpm test:e2e:install`.
+- If `pnpm test:integration` fails now, it is usually a real test/setup failure rather than a missing Docker daemon. `pnpm db:up` is only needed for manual local app development against `docker-compose.yml`.
 
 ## Reference Docs
 

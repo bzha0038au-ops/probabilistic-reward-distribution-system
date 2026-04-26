@@ -120,6 +120,76 @@
       "when": 1777183200000,
       "tag": "0016_auth_sessions_repair",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1777219800000,
+      "tag": "0017_notification_deliveries",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1777220400000,
+      "tag": "0018_admin_mfa_recovery",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1777221000000,
+      "tag": "0019_system_config_runtime_seed_backfill",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1777248000000,
+      "tag": "0020_admin_control_plane",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1777251600000,
+      "tag": "0021_payment_webhook_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1777255200000,
+      "tag": "0022_payment_reconciliation",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1777258800000,
+      "tag": "0023_finance_state_machine",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1777262400000,
+      "tag": "0024_payment_idempotency_layers",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1777266000000,
+      "tag": "0025_fiat_channel_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1777273200000,
+      "tag": "0027_finance_schema_alignment",
+      "breakpoints": true
     }
   ]
 }

@@ -3,6 +3,9 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { buildBackendUrl } from '@/lib/api/server';
 import { resolveBackendProxyRoute } from '@/lib/api/proxy';
 import { getBackendAccessToken } from '@/lib/auth/server-token';
+import { captureFrontendServerException } from '@/lib/observability/server';
+
+export const runtime = 'nodejs';
 
 type RouteContext = {
   params: {
@@ -75,8 +78,16 @@ async function proxyRequest(request: NextRequest, { params }: RouteContext) {
 
     const responseHeaders = new Headers();
     const contentType = response.headers.get('content-type');
+    const traceId = response.headers.get('x-trace-id');
+    const requestId = response.headers.get('x-request');
     if (contentType) {
       responseHeaders.set('content-type', contentType);
+    }
+    if (traceId) {
+      responseHeaders.set('x-trace-id', traceId);
+    }
+    if (requestId) {
+      responseHeaders.set('x-request', requestId);
     }
     responseHeaders.set('cache-control', 'no-store');
 
@@ -84,7 +95,16 @@ async function proxyRequest(request: NextRequest, { params }: RouteContext) {
       status: response.status,
       headers: responseHeaders,
     });
-  } catch {
+  } catch (error) {
+    captureFrontendServerException(error, {
+      tags: {
+        kind: 'backend_proxy_failure',
+      },
+      extra: {
+        backendPath: route.normalizedPath,
+        method: request.method,
+      },
+    });
     return jsonError(502, 'Backend request failed.');
   }
 }

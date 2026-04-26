@@ -64,14 +64,14 @@ jobs:
       - name: Test
         run: pnpm test
 
-      - name: Package Release
-        run: git archive --format=tar.gz --output release.tar.gz HEAD
+      - name: Test Integration
+        run: pnpm test:integration
 
-      - name: Upload Release Bundle
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-bundle
-          path: release.tar.gz
+      - name: Install Playwright
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Test E2E
+        run: pnpm test:e2e
 
   deploy:
     runs-on: ubuntu-latest
@@ -79,21 +79,41 @@ jobs:
     environment: ${{ inputs.environment }}
     env:
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
       DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-      DEPLOY_RESTART_COMMAND: ${{ secrets.DEPLOY_RESTART_COMMAND }}
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
     steps:
-      - name: Download Release Bundle
-        uses: actions/download-artifact@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
-          name: release-bundle
+          ref: ${{ inputs.ref }}
+
+      - name: Resolve Release SHA
+        run: echo "RELEASE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - name: Validate Deployment Secrets
         run: |
           test -n "$DEPLOY_HOST"
           test -n "$DEPLOY_USER"
           test -n "$DEPLOY_PATH"
-          test -n "$DEPLOY_RESTART_COMMAND"
+
+      - name: Build Backend Image
+        run: docker build --file Dockerfile --target backend --tag reward-system/backend:${RELEASE_SHA} .
+
+      - name: Build Frontend Image
+        run: docker build --file Dockerfile --target frontend --tag reward-system/frontend:${RELEASE_SHA} .
+
+      - name: Build Admin Image
+        run: docker build --file Dockerfile --target admin --tag reward-system/admin:${RELEASE_SHA} .
+
+      - name: Export Deployment Images
+        run: |
+          docker save reward-system/backend:${RELEASE_SHA} | gzip > reward-system-backend-${RELEASE_SHA}.tar.gz
+          docker save reward-system/frontend:${RELEASE_SHA} | gzip > reward-system-frontend-${RELEASE_SHA}.tar.gz
+          docker save reward-system/admin:${RELEASE_SHA} | gzip > reward-system-admin-${RELEASE_SHA}.tar.gz
+
+      - name: Bundle Operations Assets
+        run: tar -czf reward-system-ops-${RELEASE_SHA}.tar.gz deploy docs/operations
 
       - name: Start SSH Agent
         uses: webfactory/ssh-agent@v0.9.0
@@ -103,25 +123,87 @@ jobs:
       - name: Trust Remote Host
         run: ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
 
-      - name: Upload Release Bundle
+      - name: Upload Deployment Assets
         run: |
-          scp release.tar.gz "$DEPLOY_USER@$DEPLOY_HOST:/tmp/reward-system-${GITHUB_SHA}.tar.gz"
+          scp docker-compose.prod.yml "$DEPLOY_USER@$DEPLOY_HOST:/tmp/reward-system-compose-${RELEASE_SHA}.yml"
+          scp reward-system-backend-${RELEASE_SHA}.tar.gz "$DEPLOY_USER@$DEPLOY_HOST:/tmp/reward-system-backend-${RELEASE_SHA}.tar.gz"
+          scp reward-system-frontend-${RELEASE_SHA}.tar.gz "$DEPLOY_USER@$DEPLOY_HOST:/tmp/reward-system-frontend-${RELEASE_SHA}.tar.gz"
+          scp reward-system-admin-${RELEASE_SHA}.tar.gz "$DEPLOY_USER@$DEPLOY_HOST:/tmp/reward-system-admin-${RELEASE_SHA}.tar.gz"
+          scp reward-system-ops-${RELEASE_SHA}.tar.gz "$DEPLOY_USER@$DEPLOY_HOST:/tmp/reward-system-ops-${RELEASE_SHA}.tar.gz"
 
       - name: Deploy Release
         run: |
-          ssh "$DEPLOY_USER@$DEPLOY_HOST" "
-            set -euo pipefail
-            RELEASE_DIR='$DEPLOY_PATH/releases/$GITHUB_SHA'
-            mkdir -p '$DEPLOY_PATH/releases'
-            mkdir -p '$DEPLOY_PATH/shared'
-            rm -rf \"\$RELEASE_DIR\"
-            mkdir -p \"\$RELEASE_DIR\"
-            tar -xzf '/tmp/reward-system-${GITHUB_SHA}.tar.gz' -C \"\$RELEASE_DIR\"
-            cd \"\$RELEASE_DIR\"
-            pnpm install --frozen-lockfile
-            pnpm build
-            pnpm --dir apps/database db:migrate
-            ln -sfn \"\$RELEASE_DIR\" '$DEPLOY_PATH/current'
-            cd '$DEPLOY_PATH/current'
-            $DEPLOY_RESTART_COMMAND
-          "
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" 'bash -s' <<EOF
+          set -euo pipefail
+
+          RELEASE_DIR="${DEPLOY_PATH}/releases/${RELEASE_SHA}"
+          SHARED_DIR="${DEPLOY_PATH}/shared/${DEPLOY_ENVIRONMENT}"
+          SHARED_ENV_DIR="${SHARED_DIR}/env"
+          SHARED_OPS_DIR="${SHARED_DIR}/ops"
+          SHARED_SECRETS_DIR="${SHARED_DIR}/secrets"
+          SHARED_PROXY_DIR="${SHARED_DIR}/proxy"
+
+          mkdir -p "${DEPLOY_PATH}/releases"
+          mkdir -p "${SHARED_ENV_DIR}"
+          mkdir -p "${SHARED_OPS_DIR}/backups"
+          mkdir -p "${SHARED_OPS_DIR}/restore-drills"
+          mkdir -p "${SHARED_SECRETS_DIR}"
+          mkdir -p "${SHARED_PROXY_DIR}/data" "${SHARED_PROXY_DIR}/config" "${SHARED_PROXY_DIR}/logs"
+          chmod 700 "${SHARED_SECRETS_DIR}"
+          rm -rf "${RELEASE_DIR}"
+          mkdir -p "${RELEASE_DIR}/deploy/proxy"
+
+          cp "/tmp/reward-system-compose-${RELEASE_SHA}.yml" "${RELEASE_DIR}/docker-compose.prod.yml"
+          tar -xzf "/tmp/reward-system-ops-${RELEASE_SHA}.tar.gz" -C "${RELEASE_DIR}"
+          ln -sfn "${SHARED_ENV_DIR}" "${RELEASE_DIR}/.env.d"
+          ln -sfn "${SHARED_SECRETS_DIR}" "${RELEASE_DIR}/.secrets"
+          ln -sfn "${SHARED_PROXY_DIR}" "${RELEASE_DIR}/.proxy"
+
+          if [ -f "${SHARED_ENV_DIR}/compose.env" ]; then
+            set -a
+            . "${SHARED_ENV_DIR}/compose.env"
+            set +a
+          fi
+
+          for env_file in backend.env postgres.env frontend.env admin.env compose.env; do
+            test -f "${SHARED_ENV_DIR}/${env_file}"
+          done
+
+          for secret_file in \
+            postgres_password \
+            redis_password \
+            backend_database_url \
+            backend_redis_url \
+            admin_jwt_secret \
+            user_jwt_secret \
+            admin_mfa_encryption_secret \
+            admin_mfa_break_glass_secret \
+            frontend_auth_secret; do
+            test -f "${SHARED_SECRETS_DIR}/${secret_file}"
+          done
+
+          test -n "${APP_DOMAIN:-}"
+          test -n "${ADMIN_DOMAIN:-}"
+          test -n "${API_DOMAIN:-}"
+          test -n "${TLS_ACME_EMAIL:-}"
+
+          export IMAGE_TAG="${RELEASE_SHA}"
+          export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-reward-system}"
+
+          gunzip -c "/tmp/reward-system-backend-${RELEASE_SHA}.tar.gz" | docker load
+          gunzip -c "/tmp/reward-system-frontend-${RELEASE_SHA}.tar.gz" | docker load
+          gunzip -c "/tmp/reward-system-admin-${RELEASE_SHA}.tar.gz" | docker load
+
+          cd "${RELEASE_DIR}"
+          docker compose -f docker-compose.prod.yml up -d postgres redis
+          docker compose -f docker-compose.prod.yml run --rm migrate
+          docker compose -f docker-compose.prod.yml up -d --remove-orphans postgres redis backend notification-worker frontend admin reverse-proxy
+
+          ln -sfn "${RELEASE_DIR}" "${DEPLOY_PATH}/current"
+
+          rm -f "/tmp/reward-system-compose-${RELEASE_SHA}.yml"
+          rm -f "/tmp/reward-system-backend-${RELEASE_SHA}.tar.gz"
+          rm -f "/tmp/reward-system-frontend-${RELEASE_SHA}.tar.gz"
+          rm -f "/tmp/reward-system-admin-${RELEASE_SHA}.tar.gz"
+          rm -f "/tmp/reward-system-ops-${RELEASE_SHA}.tar.gz"
+          EOF

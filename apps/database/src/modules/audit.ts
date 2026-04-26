@@ -8,7 +8,7 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 
-import { admins, users } from './user';
+import { admins, users } from './user.js';
 
 export const adminActions = pgTable(
   'admin_actions',

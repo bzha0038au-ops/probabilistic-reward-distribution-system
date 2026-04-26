@@ -1,6 +1,3 @@
-CREATE UNIQUE INDEX IF NOT EXISTS fairness_seeds_epoch_unique
-  ON fairness_seeds (epoch, epoch_seconds);
-
 CREATE INDEX IF NOT EXISTS draw_records_status_created_idx
   ON draw_records (status, created_at);
 

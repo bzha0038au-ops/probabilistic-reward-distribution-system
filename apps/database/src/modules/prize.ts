@@ -10,8 +10,9 @@ import {
   timestamp,
   varchar,
 } from 'drizzle-orm/pg-core';
+import { drawStatusValues } from '@reward/shared-types';
 
-import { users } from './user';
+import { users } from './user.js';
 
 export const prizes = pgTable(
   'prizes',
@@ -77,7 +78,7 @@ export const drawRecords = pgTable(
     rewardAmount: numeric('reward_amount', { precision: 14, scale: 2 })
       .notNull()
       .default('0'),
-    status: varchar('status', { length: 32 }).notNull(),
+    status: varchar('status', { length: 32, enum: drawStatusValues }).notNull(),
     metadata: jsonb('metadata'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()

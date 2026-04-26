@@ -47,6 +47,11 @@
   "app": {
     "title": "User Dashboard",
     "signedInAs": "Signed in as {email}",
+    "verificationGateTitle": "Verify your email to unlock the account",
+    "verificationGateDescription": "This account can sign in, but high-risk actions stay blocked until email verification is complete.",
+    "verificationGateBody": "Verify the inbox address on file to continue with draws and other protected actions. We can send a fresh verification link if needed.",
+    "resendVerificationEmail": "Resend verification email",
+    "verificationEmailSent": "A new verification email has been sent if the account still needs one.",
     "balanceNotesTitle": "Balance & Ledger Notes",
     "notes": [
       "All debits and credits are written to the ledger.",

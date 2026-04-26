@@ -2,6 +2,7 @@ import pino, { type Logger as PinoLogger } from 'pino';
 
 import { getConfig } from './config';
 import { context } from './context';
+import { getRuntimeMetadata } from './runtime-metadata';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -17,7 +18,7 @@ let baseLogger: PinoLogger | null = null;
 const buildLogger = () =>
   pino({
     level: getConfig().logLevel,
-    base: undefined,
+    base: getRuntimeMetadata(),
     mixin() {
       const store = context().getStore();
       return store ? { ...store } : {};

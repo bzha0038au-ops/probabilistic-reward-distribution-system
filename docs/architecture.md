@@ -6,6 +6,7 @@
 - Expo + React Native (user-facing iOS + Android)
 - SvelteKit (admin console)
 - Fastify API service (backend)
+- Dedicated auth-notification worker process (backend)
 - Drizzle ORM with PostgreSQL
 - Auth.js / NextAuth (web) + shared user-core API layer + backend-issued admin sessions
 
@@ -17,6 +18,18 @@
 - Shared contracts: `apps/shared-types` (Zod + TS types)
 - Shared user client: `packages/user-core` (routes, API request helpers, platform base URLs)
 
+## Source Of Truth
+
+- Draw contract/statuses: `apps/shared-types/src/draw.ts`
+- Finance contract/statuses: `apps/shared-types/src/finance.ts`
+- Notification contract/statuses: `apps/shared-types/src/notification.ts`
+- Finance persistence schema: `apps/database/src/modules/finance.ts`
+- Draw persistence schema: `apps/database/src/modules/prize.ts`
+- Notification persistence schema: `apps/database/src/modules/notification.ts`
+- Module notes: `apps/backend/src/modules/draw/README.md`,
+  `apps/backend/src/modules/payment/README.md`,
+  `apps/backend/src/modules/auth/NOTIFICATIONS.md`
+
 ## Wallet Model
 
 - `users` stores identity plus long-lived draw state such as `user_pool_balance`,
@@ -26,6 +39,31 @@
 - `ledger_entries` is the user-facing source of truth for balance history.
 - `house_account` holds prize pool, bankroll, reserve, and marketing balances.
 - `house_transactions` mirrors all house-side balance movements.
+
+## Payment Boundary
+
+- Deposits and withdrawals currently stop at internal order creation, balance
+  locking, admin review metadata, and ledger updates.
+- `payment_providers.config.adapter` is only a routing key that selects a
+  backend adapter implementation. Admin configuration must not own raw gateway
+  HTTP request construction or direct third-party execution behavior.
+- Payment execution belongs behind a code-level adapter contract
+  (`createDepositOrder`, `createWithdrawal`, `queryOrder`, `handleWebhook`,
+  `verifySignature`, `buildIdempotencyKey`,
+  `mapProviderStatusToInternalStatus`).
+- The backend does not yet own a real payment gateway loop: no outbound gateway
+  calls, no webhook callback entrypoint, no callback signature verification, no
+  idempotency keys, and no automatic recovery/compensation.
+- Scheduled payment reconciliation now runs independently from webhooks and
+  writes persistent run history plus a manual-review diff queue.
+- Treat the finance module as manual-review money movement only until those
+  pieces exist end to end.
+- `payment_providers.config` is reserved for non-secret routing and risk fields
+  such as channel enablement, priority, supported flows, limits, currency,
+  callback allowlists, route tags, and risk thresholds.
+- Provider secrets such as API keys, private keys, certificates, and signing
+  keys must live in a secret manager or KMS. Only secret reference ids belong
+  in provider config, under `config.secretRefs.*`.
 
 ## Runtime Config
 
@@ -66,6 +104,9 @@ A prize is eligible when (validated after the candidate is picked and locked):
 - `house_transactions` keeps every house-side movement
 - `draw_records` stores outcome and metadata
 - Admin summary aggregates wins, distributions, spend
+- `notification_deliveries` acts as a durable outbox / dead-letter store
+- A separate auth-notification worker claims rows with `FOR UPDATE SKIP LOCKED`
+  so API replicas and worker replicas can scale independently
 
 ## Auth Notes
 

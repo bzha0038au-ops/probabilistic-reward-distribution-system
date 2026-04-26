@@ -49,6 +49,16 @@ export const PAYMENT_MIN_DEPOSIT_KEY = 'payment.min_deposit_amount';
 export const PAYMENT_MAX_DEPOSIT_KEY = 'payment.max_deposit_amount';
 export const PAYMENT_MIN_WITHDRAW_KEY = 'payment.min_withdraw_amount';
 export const PAYMENT_MAX_WITHDRAW_KEY = 'payment.max_withdraw_amount';
+export const WITHDRAW_RISK_NEW_CARD_REVIEW_ENABLED_KEY =
+  'withdraw_risk.new_card_first_withdrawal_review_enabled';
+export const WITHDRAW_RISK_LARGE_AMOUNT_SECOND_APPROVAL_THRESHOLD_KEY =
+  'withdraw_risk.large_amount_second_approval_threshold';
+export const WITHDRAW_RISK_SHARED_IP_USER_THRESHOLD_KEY =
+  'withdraw_risk.shared_ip_user_threshold';
+export const WITHDRAW_RISK_SHARED_DEVICE_USER_THRESHOLD_KEY =
+  'withdraw_risk.shared_device_user_threshold';
+export const WITHDRAW_RISK_SHARED_PAYOUT_USER_THRESHOLD_KEY =
+  'withdraw_risk.shared_payout_user_threshold';
 export const REWARD_SIGNUP_ENABLED_KEY = 'reward_events.signup_bonus_enabled';
 export const REWARD_SIGNUP_AMOUNT_KEY = 'reward_events.signup_bonus_amount';
 export const REWARD_REFERRAL_ENABLED_KEY = 'reward_events.referral_bonus_enabled';

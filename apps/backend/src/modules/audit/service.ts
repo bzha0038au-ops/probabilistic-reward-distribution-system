@@ -12,7 +12,7 @@ import {
   or,
   sql,
   type SQL,
-} from 'drizzle-orm';
+} from '@reward/database/orm';
 
 export async function recordAuthEvent(payload: {
   eventType: string;
