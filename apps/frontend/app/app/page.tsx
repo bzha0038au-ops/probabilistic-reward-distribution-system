@@ -1,6 +1,8 @@
 import { DrawPanel } from '@/modules/draw/components/draw-panel';
 import { Button } from '@/components/ui/button';
 import { auth, signOut } from '@/lib/auth';
+import { USER_API_ROUTES } from '@/lib/api/user';
+import { apiRequestServer } from '@/lib/api/server';
 import { getServerTranslations } from '@/lib/i18n/server';
 import { LocaleSwitcher } from '@/components/locale-switcher';
 
@@ -9,24 +11,39 @@ export default async function AppPage() {
   const t = getServerTranslations();
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-6 py-10">
-        <header className="flex flex-wrap items-center justify-between gap-4">
-          <div>
+    <main className="min-h-app-screen bg-slate-950 text-slate-100">
+      <div className="page-safe-x page-safe-y mx-auto flex w-full max-w-5xl flex-col gap-6">
+        <header className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <div className="min-w-0">
             <h1 className="text-2xl font-semibold">{t('app.title')}</h1>
-            <p className="text-sm text-slate-400">
+            <p className="break-all text-sm text-slate-400 sm:break-normal">
               {t('app.signedInAs', { email: session?.user?.email ?? '' })}
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <LocaleSwitcher />
             <form
               action={async () => {
                 'use server';
+                const currentSession = await auth();
+                if (currentSession?.backendToken) {
+                  await apiRequestServer(
+                    USER_API_ROUTES.auth.session,
+                    {
+                      method: 'DELETE',
+                      headers: {
+                        Authorization: `Bearer ${currentSession.backendToken}`,
+                      },
+                    },
+                    { auth: false }
+                  );
+                }
                 await signOut();
               }}
             >
-              <Button variant="outline">{t('common.signOut')}</Button>
+              <Button variant="outline" className="w-full sm:w-auto">
+                {t('common.signOut')}
+              </Button>
             </form>
           </div>
         </header>

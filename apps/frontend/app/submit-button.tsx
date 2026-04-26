@@ -9,7 +9,7 @@ export function SubmitButton({
   loadingLabel,
   idleLabel,
 }: {
-  children: React.ReactNode;
+  children: string;
   loadingLabel: string;
   idleLabel: string;
 }) {

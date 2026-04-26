@@ -29,6 +29,11 @@ export type AppConfig = {
   authFailureWindowMinutes: number;
   authFailureFreezeThreshold: number;
   adminFailureFreezeThreshold: number;
+  passwordResetTtlMinutes: number;
+  emailVerificationTtlMinutes: number;
+  phoneVerificationTtlMinutes: number;
+  anomalousLoginLookbackDays: number;
+  authNotificationWebhookUrl: string;
   sysAuthFailureWindowMinutes: number;
   sysAuthFailureFreezeThreshold: number;
   sysAdminFailureFreezeThreshold: number;
@@ -193,6 +198,36 @@ const schema = {
     format: 'int',
     default: 5,
     env: 'ADMIN_FAILURE_FREEZE_THRESHOLD',
+  },
+  passwordResetTtlMinutes: {
+    doc: 'Password reset token TTL in minutes',
+    format: 'int',
+    default: 30,
+    env: 'PASSWORD_RESET_TTL_MINUTES',
+  },
+  emailVerificationTtlMinutes: {
+    doc: 'Email verification token TTL in minutes',
+    format: 'int',
+    default: 24 * 60,
+    env: 'EMAIL_VERIFICATION_TTL_MINUTES',
+  },
+  phoneVerificationTtlMinutes: {
+    doc: 'Phone verification code TTL in minutes',
+    format: 'int',
+    default: 10,
+    env: 'PHONE_VERIFICATION_TTL_MINUTES',
+  },
+  anomalousLoginLookbackDays: {
+    doc: 'Lookback window in days for anomalous login comparisons',
+    format: 'int',
+    default: 30,
+    env: 'ANOMALOUS_LOGIN_LOOKBACK_DAYS',
+  },
+  authNotificationWebhookUrl: {
+    doc: 'Optional webhook URL for auth notifications and security alerts',
+    format: String,
+    default: '',
+    env: 'AUTH_NOTIFICATION_WEBHOOK_URL',
   },
   sysAuthFailureWindowMinutes: {
     doc: 'System-config override for auth failure window',

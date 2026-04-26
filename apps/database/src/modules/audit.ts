@@ -55,3 +55,31 @@ export const authEvents = pgTable(
     createdIdx: index('auth_events_created_idx').on(table.createdAt),
   })
 );
+
+export const authTokens = pgTable(
+  'auth_tokens',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id').references(() => users.id, {
+      onDelete: 'cascade',
+    }),
+    email: varchar('email', { length: 255 }),
+    phone: varchar('phone', { length: 32 }),
+    tokenType: varchar('token_type', { length: 32 }).notNull(),
+    tokenHash: varchar('token_hash', { length: 128 }).notNull(),
+    metadata: jsonb('metadata'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    userIdx: index('auth_tokens_user_idx').on(table.userId),
+    emailIdx: index('auth_tokens_email_idx').on(table.email),
+    phoneIdx: index('auth_tokens_phone_idx').on(table.phone),
+    typeIdx: index('auth_tokens_type_idx').on(table.tokenType),
+    expiresIdx: index('auth_tokens_expires_idx').on(table.expiresAt),
+    tokenHashIdx: index('auth_tokens_hash_idx').on(table.tokenHash),
+  })
+);

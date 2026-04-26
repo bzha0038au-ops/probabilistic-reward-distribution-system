@@ -10,7 +10,7 @@ export function MarketingPage() {
   const messages = getServerMessages();
 
   return (
-    <main className="min-h-screen bg-white text-slate-900">
+    <main className="min-h-app-screen bg-white text-slate-900">
       <Hero messages={messages} />
       <StackStrip messages={messages} />
       <Metrics messages={messages} />

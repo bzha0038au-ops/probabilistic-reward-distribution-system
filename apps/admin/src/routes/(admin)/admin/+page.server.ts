@@ -1,14 +1,32 @@
 import { fail } from '@sveltejs/kit';
+import type { Cookies } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
 import { apiRequest } from '$lib/server/api';
+import {
+  ADMIN_SESSION_COOKIE,
+  ADMIN_SESSION_TTL_SECONDS,
+} from '$lib/server/admin-session';
 
 const toNumberString = (value: FormDataEntryValue | null, fallback = '0') => {
   if (typeof value !== 'string') return fallback;
   return value.trim() === '' ? fallback : value;
 };
 
-export const load: PageServerLoad = async ({ fetch, cookies }) => {
+const parseTotpCode = (value: FormDataEntryValue | null) =>
+  typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
+
+const setAdminSessionCookie = (cookies: Cookies, token: string) => {
+  cookies.set(ADMIN_SESSION_COOKIE, token, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: ADMIN_SESSION_TTL_SECONDS,
+    path: '/',
+  });
+};
+
+export const load: PageServerLoad = async ({ fetch, cookies, locals }) => {
   try {
     const [prizeRes, analyticsRes, configRes] = await Promise.all([
       apiRequest(fetch, cookies, '/admin/prizes'),
@@ -18,6 +36,7 @@ export const load: PageServerLoad = async ({ fetch, cookies }) => {
 
     if (!prizeRes.ok || !analyticsRes.ok || !configRes.ok) {
       return {
+        admin: locals.admin ?? null,
         prizes: [],
         analytics: null,
         config: null,
@@ -26,6 +45,7 @@ export const load: PageServerLoad = async ({ fetch, cookies }) => {
     }
 
     return {
+      admin: locals.admin ?? null,
       prizes: prizeRes.data ?? [],
       analytics: analyticsRes.data ?? null,
       config: configRes.data ?? null,
@@ -33,6 +53,7 @@ export const load: PageServerLoad = async ({ fetch, cookies }) => {
     };
   } catch (error) {
     return {
+      admin: locals.admin ?? null,
       prizes: [],
       analytics: null,
       config: null,
@@ -161,6 +182,11 @@ export const actions: Actions = {
   },
   config: async ({ request, fetch, cookies }) => {
     const formData = await request.formData();
+    const totpCode = parseTotpCode(formData.get('totpCode'));
+
+    if (!totpCode) {
+      return fail(400, { error: 'Admin TOTP code is required.' });
+    }
 
     const payload = {
       poolBalance: toNumberString(formData.get('poolBalance')),
@@ -172,6 +198,7 @@ export const actions: Actions = {
       authFailureWindowMinutes: toNumberString(formData.get('authFailureWindowMinutes')),
       authFailureFreezeThreshold: toNumberString(formData.get('authFailureFreezeThreshold')),
       adminFailureFreezeThreshold: toNumberString(formData.get('adminFailureFreezeThreshold')),
+      totpCode,
     };
 
     const response = await apiRequest(fetch, cookies, '/admin/config', {
@@ -192,14 +219,19 @@ export const actions: Actions = {
     const formData = await request.formData();
     const userId = formData.get('userId')?.toString().trim();
     const amount = formData.get('amount')?.toString().trim();
+    const totpCode = parseTotpCode(formData.get('totpCode'));
 
     if (!userId) {
       return fail(400, { error: 'User id is required.' });
+    }
+    if (!totpCode) {
+      return fail(400, { error: 'Admin TOTP code is required.' });
     }
 
     const payload = {
       userId: Number(userId),
       amount: amount ? amount : undefined,
+      totpCode,
     };
 
     const response = await apiRequest(fetch, cookies, '/admin/bonus-release', {
@@ -215,5 +247,63 @@ export const actions: Actions = {
     }
 
     return { success: true };
+  },
+  startMfaEnrollment: async ({ fetch, cookies }) => {
+    const response = await apiRequest(fetch, cookies, '/admin/mfa/enrollment', {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      return fail(response.status, {
+        error: response.error?.message ?? 'Failed to start MFA enrollment.',
+      });
+    }
+
+    return {
+      mfaEnrollment: response.data,
+    };
+  },
+  confirmMfaEnrollment: async ({ request, fetch, cookies }) => {
+    const formData = await request.formData();
+    const enrollmentToken = formData.get('enrollmentToken')?.toString().trim() ?? '';
+    const totpCode = parseTotpCode(formData.get('totpCode'));
+
+    if (!enrollmentToken) {
+      return fail(400, { error: 'Missing MFA enrollment token.' });
+    }
+    if (!totpCode) {
+      return fail(400, { error: 'Admin TOTP code is required.' });
+    }
+
+    const response = await apiRequest<{
+      token?: string;
+      expiresAt?: number;
+      mfaEnabled?: boolean;
+    }>(fetch, cookies, '/admin/mfa/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        enrollmentToken,
+        totpCode,
+      }),
+    });
+
+    if (!response.ok) {
+      return fail(response.status, {
+        error: response.error?.message ?? 'Failed to enable MFA.',
+      });
+    }
+
+    const token = response.data?.token;
+    if (!token) {
+      return fail(500, { error: 'Missing updated session token.' });
+    }
+
+    setAdminSessionCookie(cookies, token);
+
+    return {
+      success: true,
+      mfaEnabled: true,
+    };
   },
 };

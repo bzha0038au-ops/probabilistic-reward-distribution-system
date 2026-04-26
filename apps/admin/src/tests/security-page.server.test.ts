@@ -131,7 +131,7 @@ describe('security admin page server', () => {
     });
 
     const result = await actions.releaseFreeze({
-      request: makeRequest({ userId: '88' }),
+      request: makeRequest({ userId: '88', totpCode: '123456' }),
       fetch: vi.fn(),
       cookies: {},
     } as never);
@@ -140,7 +140,11 @@ describe('security admin page server', () => {
       expect.any(Function),
       {},
       '/admin/freeze-records/88/release',
-      { method: 'POST' }
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ totpCode: '123456' }),
+      }
     );
     expect(result).toEqual({ success: true });
   });

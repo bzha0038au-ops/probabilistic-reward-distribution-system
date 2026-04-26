@@ -1,30 +1,18 @@
 import { getClientLocale } from '@/lib/i18n/client';
-import { getSession } from 'next-auth/react';
-
-import { parseApiResponse, type ApiResult } from './shared';
-
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4000';
+import { BFF_BASE_PATH, normalizeBackendPath } from '@/lib/api/proxy';
+import { requestUserApi, type ApiResult } from '@/lib/api/user';
 
 export async function apiRequestClient<T>(
   path: string,
   init: RequestInit = {},
-  options: { baseUrl?: string; locale?: string; auth?: boolean } = {}
+  options: { locale?: string } = {}
 ): Promise<ApiResult<T>> {
-  const headers = new Headers(init.headers ?? {});
   const locale = options.locale ?? getClientLocale();
-  if (locale) headers.set('x-locale', locale);
-  if (options.auth !== false) {
-    const session = await getSession();
-    if (session?.backendToken) {
-      headers.set('Authorization', `Bearer ${session.backendToken}`);
-    }
-  }
 
-  const response = await fetch(`${options.baseUrl ?? API_BASE_URL}${path}`, {
-    ...init,
-    headers,
+  return requestUserApi<T>({
+    path: normalizeBackendPath(path),
+    init,
+    baseUrl: BFF_BASE_PATH,
+    locale,
   });
-
-  return parseApiResponse<T>(response);
 }

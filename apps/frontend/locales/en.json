@@ -12,6 +12,7 @@
     "submit": "Submit form",
     "email": "Email Address",
     "password": "Password",
+    "newPassword": "New Password",
     "emailPlaceholder": "user@acme.com",
     "admin": "Admin"
   },
@@ -25,7 +26,23 @@
     "noAccount": "Don't have an account?",
     "haveAccount": "Already have an account?",
     "registerTitle": "Create Account",
-    "registerDescription": "Start your virtual wallet and try the draw engine."
+    "registerDescription": "Start your virtual wallet and try the draw engine.",
+    "forgotPassword": "Forgot password?",
+    "forgotPasswordTitle": "Reset Password",
+    "forgotPasswordDescription": "Enter your email and we will send a reset link.",
+    "forgotPasswordSubmitted": "If the account exists, a reset message has been sent.",
+    "passwordResetTitle": "Choose a New Password",
+    "passwordResetDescription": "Set a new password for your account.",
+    "passwordResetSuccess": "Password updated. You can sign in with the new password.",
+    "passwordResetFailed": "Unable to reset the password. Please try again.",
+    "resetTokenMissing": "Missing or invalid reset token.",
+    "verifyEmailTitle": "Verify Email",
+    "verifyEmailDescription": "Confirm your email so security and recovery messages reach you.",
+    "verifyEmailAction": "Verify Email",
+    "verificationSuccess": "Email verified. You can continue signing in.",
+    "verificationFailed": "Unable to verify the email. Please try again.",
+    "verificationTokenMissing": "Missing or invalid verification token.",
+    "registrationSuccess": "Account created. Check your email to verify it."
   },
   "app": {
     "title": "User Dashboard",

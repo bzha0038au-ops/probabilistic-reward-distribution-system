@@ -20,7 +20,7 @@ export function Section({
   align = 'left',
 }: SectionProps) {
   return (
-    <section className={cn('mx-auto w-full max-w-6xl px-6', className)}>
+    <section className={cn('page-safe-x mx-auto w-full max-w-6xl', className)}>
       {(eyebrow || title || description) && (
         <div
           className={cn(

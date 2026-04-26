@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
@@ -6,8 +8,8 @@ export function Form({
   children,
   labels,
 }: {
-  action: React.ComponentProps<'form'>['action'];
-  children: React.ReactNode;
+  action: string | ((formData: FormData) => void | Promise<void>);
+  children: ReactNode;
   labels: {
     emailLabel: string;
     passwordLabel: string;

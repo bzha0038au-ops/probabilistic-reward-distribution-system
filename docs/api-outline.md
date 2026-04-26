@@ -16,14 +16,33 @@ Error:
 
 - `GET /health`
 - `POST /auth/register`
+- `POST /auth/password-reset/request`
+- `POST /auth/password-reset/confirm`
 - `POST /auth/user/session` (returns backend token for web sessions)
+- `GET /auth/user/session`
+- `GET /auth/user/sessions`
+- `DELETE /auth/user/session`
+- `DELETE /auth/user/sessions/{sessionId}`
+- `POST /auth/user/sessions/revoke-all`
 - `POST /auth/admin/login` (returns admin token; stored as `reward_admin_session`)
+- `GET /auth/admin/session`
+- `GET /auth/admin/sessions`
+- `DELETE /auth/admin/session`
+- `DELETE /auth/admin/sessions/{sessionId}`
+- `POST /auth/admin/sessions/revoke-all`
+- `POST /auth/email-verification/request`
+- `POST /auth/email-verification/confirm`
+- `POST /auth/phone-verification/request`
+- `POST /auth/phone-verification/confirm`
 
 ## Auth Headers
 
-- User routes require `Authorization: Bearer <token>`
+- User routes require a backend session token. The web frontend supplies it from
+  the server-side BFF, not from browser JavaScript.
 - Admin routes require the `reward_admin_session` cookie
 - Use `x-trace-id` to correlate requests across systems
+- Password reset, verification, and anomalous-login notifications are dispatched
+  through the auth notification webhook when configured.
 
 ## User
 

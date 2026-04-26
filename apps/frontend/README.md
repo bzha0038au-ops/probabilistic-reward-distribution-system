@@ -1,11 +1,12 @@
 # Web App (Next.js)
 
-This is the primary app for the Prize Pool & Probability Engine System.
+This is the web member of the user-facing three-surface stack.
 
 ## Stack
 
 - Next.js App Router
 - Auth.js / NextAuth credentials auth
+- Frontend BFF under `/api/backend/*` for browser-originated requests
 - shadcn/ui components
 - Backend services from `apps/backend`
 
@@ -21,5 +22,6 @@ pnpm dev
 
 ## API Routes
 
-All API traffic goes to the backend service (`apps/backend`).
-Set `API_BASE_URL` (server) and `NEXT_PUBLIC_API_BASE_URL` (client) in `.env`.
+Browser-side business requests go through the frontend BFF under `/api/backend/*`.
+Set both `API_BASE_URL` and `NEXT_PUBLIC_API_BASE_URL` in `.env` so server and browser
+surfaces resolve the same backend base URL during local development.

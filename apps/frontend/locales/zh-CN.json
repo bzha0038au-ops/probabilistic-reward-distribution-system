@@ -12,6 +12,7 @@
     "submit": "提交表单",
     "email": "邮箱",
     "password": "密码",
+    "newPassword": "新密码",
     "emailPlaceholder": "user@acme.com",
     "admin": "管理员"
   },
@@ -25,7 +26,23 @@
     "noAccount": "还没有账号？",
     "haveAccount": "已有账号？",
     "registerTitle": "创建账号",
-    "registerDescription": "开启虚拟钱包，体验抽奖引擎。"
+    "registerDescription": "开启虚拟钱包，体验抽奖引擎。",
+    "forgotPassword": "忘记密码？",
+    "forgotPasswordTitle": "找回密码",
+    "forgotPasswordDescription": "输入注册邮箱，我们会发送密码重置链接。",
+    "forgotPasswordSubmitted": "如果该邮箱存在，我们已经发送了重置说明。",
+    "passwordResetTitle": "重置密码",
+    "passwordResetDescription": "设置一个新的登录密码。",
+    "passwordResetSuccess": "密码已重置，请使用新密码登录。",
+    "passwordResetFailed": "密码重置失败，请重试。",
+    "resetTokenMissing": "缺少或无效的重置令牌。",
+    "verifyEmailTitle": "验证邮箱",
+    "verifyEmailDescription": "确认当前邮箱地址，用于账户安全通知与恢复。",
+    "verifyEmailAction": "完成邮箱验证",
+    "verificationSuccess": "邮箱验证已完成，可以继续登录。",
+    "verificationFailed": "邮箱验证失败，请重试。",
+    "verificationTokenMissing": "缺少或无效的验证令牌。",
+    "registrationSuccess": "注册成功。请查收邮箱完成验证。"
   },
   "app": {
     "title": "用户仪表盘",

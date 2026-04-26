@@ -145,3 +145,27 @@ export async function countAuthEventsByIp(payload: {
 
   return Number(total ?? 0);
 }
+
+export async function findLatestAuthEvent(payload: {
+  userId?: number | null;
+  email?: string | null;
+  eventType: string;
+}) {
+  const conditions = [eq(authEvents.eventType, payload.eventType)];
+
+  if (payload.userId) {
+    conditions.push(eq(authEvents.userId, payload.userId));
+  }
+  if (payload.email) {
+    conditions.push(eq(authEvents.email, payload.email));
+  }
+
+  const [event] = await db
+    .select()
+    .from(authEvents)
+    .where(and(...conditions))
+    .orderBy(desc(authEvents.createdAt), desc(authEvents.id))
+    .limit(1);
+
+  return event ?? null;
+}

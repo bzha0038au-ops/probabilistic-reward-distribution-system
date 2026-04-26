@@ -1,12 +1,14 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import type { RegisterResponse } from '@reward/shared-types';
 
 import { Form } from '@/app/form';
 import { SubmitButton } from '@/app/submit-button';
+import { AuthPageShell } from '@/components/auth-page-shell';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { USER_API_ROUTES } from '@/lib/api/user';
 import { apiRequestServer } from '@/lib/api/server';
 import { getServerTranslations } from '@/lib/i18n/server';
-import { LocaleSwitcher } from '@/components/locale-switcher';
 
 async function registerAction(formData: FormData) {
   'use server';
@@ -19,8 +21,8 @@ async function registerAction(formData: FormData) {
     redirect(`/register?error=${encodeURIComponent(t('auth.missingFields'))}`);
   }
 
-  const result = await apiRequestServer<{ id: number; email: string }>(
-    '/auth/register',
+  const result = await apiRequestServer<RegisterResponse>(
+    USER_API_ROUTES.auth.register,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -33,7 +35,7 @@ async function registerAction(formData: FormData) {
     redirect(`/register?error=${encodeURIComponent(message)}`);
   }
 
-  redirect('/login');
+  redirect('/login?registered=1');
 }
 
 export default function Register({
@@ -47,10 +49,7 @@ export default function Register({
     : null;
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 via-white to-sky-50 px-4">
-      <div className="absolute right-6 top-6">
-        <LocaleSwitcher />
-      </div>
+    <AuthPageShell>
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-2 text-center">
           <CardTitle>{pageT('auth.registerTitle')}</CardTitle>
@@ -85,6 +84,6 @@ export default function Register({
           </Form>
         </CardContent>
       </Card>
-    </div>
+    </AuthPageShell>
   );
 }

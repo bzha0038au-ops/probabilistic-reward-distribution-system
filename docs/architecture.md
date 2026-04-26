@@ -3,10 +3,11 @@
 ## Stack
 
 - Next.js App Router (user-facing web)
+- Expo + React Native (user-facing iOS + Android)
 - SvelteKit (admin console)
 - Fastify API service (backend)
 - Drizzle ORM with PostgreSQL
-- Auth.js / NextAuth (web) + backend-issued admin sessions
+- Auth.js / NextAuth (web) + shared user-core API layer + backend-issued admin sessions
 
 ## Layering
 
@@ -14,6 +15,7 @@
 - Service layer: draw orchestration, balance mutations, analytics
 - Data access: Drizzle schema + SQL transactions
 - Shared contracts: `apps/shared-types` (Zod + TS types)
+- Shared user client: `packages/user-core` (routes, API request helpers, platform base URLs)
 
 ## Wallet Model
 
@@ -68,7 +70,12 @@ A prize is eligible when (validated after the candidate is picked and locked):
 ## Auth Notes
 
 - Web credentials flow obtains a backend session token via `POST /auth/user/session`.
-- The web app includes `Authorization: Bearer <token>` on API calls.
+- The web app stores that backend token only inside the Auth.js encrypted
+  httpOnly session cookie.
+- Browser business requests go to the Next.js BFF under `/api/backend/*`, and
+  the server layer forwards them to the backend with the backend token.
+- The Expo mobile app calls the same user endpoints through `@reward/user-core`
+  and sends the backend token as a bearer token on native requests.
 - Admin login uses `POST /auth/admin/login` and stores the token in
   `reward_admin_session`.
 - Secrets are split: `USER_JWT_SECRET` (backend only), `ADMIN_JWT_SECRET`

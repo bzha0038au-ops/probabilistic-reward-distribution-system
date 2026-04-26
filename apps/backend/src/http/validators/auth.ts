@@ -4,6 +4,7 @@ export type AuthPayload = {
   email: string;
   password: string;
   referrerId?: number;
+  totpCode?: string;
 };
 
 const schema = {
@@ -14,6 +15,7 @@ const schema = {
     email: { type: 'string', minLength: 3, maxLength: 255 },
     password: { type: 'string', minLength: 6, maxLength: 255 },
     referrerId: { type: 'integer', minimum: 1 },
+    totpCode: { type: 'string', minLength: 1, maxLength: 32 },
   },
 } as const;
 

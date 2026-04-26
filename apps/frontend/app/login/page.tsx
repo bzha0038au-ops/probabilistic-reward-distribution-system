@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 
 import { Form } from '@/app/form';
 import { SubmitButton } from '@/app/submit-button';
+import { AuthPageShell } from '@/components/auth-page-shell';
 import {
   Card,
   CardContent,
@@ -12,12 +13,11 @@ import {
 } from '@/components/ui/card';
 import { signIn } from '@/lib/auth';
 import { getServerTranslations } from '@/lib/i18n/server';
-import { LocaleSwitcher } from '@/components/locale-switcher';
 
 export default function Login({
   searchParams,
 }: {
-  searchParams?: { error?: string };
+  searchParams?: { error?: string; registered?: string; verified?: string; reset?: string };
 }) {
   const t = getServerTranslations();
   const error = searchParams?.error;
@@ -25,14 +25,19 @@ export default function Login({
     error === 'CredentialsSignin'
       ? t('auth.invalidCredentials')
       : error
-        ? t('auth.loginFailed')
+        ? decodeURIComponent(error)
         : null;
+  const noticeMessage =
+    searchParams?.registered === '1'
+      ? t('auth.registrationSuccess')
+      : searchParams?.verified === '1'
+        ? t('auth.verificationSuccess')
+        : searchParams?.reset === '1'
+          ? t('auth.passwordResetSuccess')
+          : null;
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 via-white to-sky-50 px-4">
-      <div className="absolute right-6 top-6">
-        <LocaleSwitcher />
-      </div>
+    <AuthPageShell>
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-2 text-center">
           <CardTitle>{t('auth.loginTitle')}</CardTitle>
@@ -62,6 +67,11 @@ export default function Login({
               emailPlaceholder: t('common.emailPlaceholder'),
             }}
           >
+            {noticeMessage && (
+              <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                {noticeMessage}
+              </p>
+            )}
             {errorMessage && (
               <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
                 {errorMessage}
@@ -79,9 +89,14 @@ export default function Login({
                 {t('common.signUp')}
               </Link>
             </p>
+            <p className="text-center text-sm text-muted-foreground">
+              <Link href="/forgot-password" className="font-semibold text-foreground">
+                {t('auth.forgotPassword')}
+              </Link>
+            </p>
           </Form>
         </CardContent>
       </Card>
-    </div>
+    </AuthPageShell>
   );
 }

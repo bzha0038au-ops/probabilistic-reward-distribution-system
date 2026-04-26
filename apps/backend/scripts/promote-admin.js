@@ -4,6 +4,12 @@ require('dotenv').config();
 const postgres = require('postgres');
 
 const email = process.argv[2];
+const DEFAULT_ADMIN_PERMISSIONS = [
+  'prizes.manage',
+  'finance.manage',
+  'security.manage',
+  'config.manage',
+];
 
 if (!email) {
   console.error('Usage: node scripts/promote-admin.js <user_email>');
@@ -57,6 +63,21 @@ const sql = postgres(connectionString, {
     await sql`
       INSERT INTO admins (user_id, display_name, is_active, created_at, updated_at)
       VALUES (${user.id}, ${user.email}, true, NOW(), NOW())
+    `;
+  }
+
+  const [admin] = await sql`
+    SELECT id
+    FROM admins
+    WHERE user_id = ${user.id}
+    LIMIT 1
+  `;
+
+  for (const permissionKey of DEFAULT_ADMIN_PERMISSIONS) {
+    await sql`
+      INSERT INTO admin_permissions (admin_id, permission_key, created_at)
+      VALUES (${admin.id}, ${permissionKey}, NOW())
+      ON CONFLICT (admin_id, permission_key) DO NOTHING
     `;
   }
 

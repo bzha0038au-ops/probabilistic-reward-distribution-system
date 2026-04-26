@@ -78,7 +78,7 @@ describe('finance admin page server', () => {
     });
 
     const result = await actions.approveDeposit({
-      request: makeRequest({ id: '5' }),
+      request: makeRequest({ id: '5', totpCode: '123456' }),
       fetch: vi.fn(),
       cookies: {},
     } as never);
@@ -87,7 +87,11 @@ describe('finance admin page server', () => {
       expect.any(Function),
       {},
       '/admin/deposits/5/approve',
-      { method: 'PATCH' }
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ totpCode: '123456' }),
+      }
     );
     expect(result).toEqual({ success: true });
   });

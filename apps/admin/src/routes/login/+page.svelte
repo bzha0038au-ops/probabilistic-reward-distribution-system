@@ -4,6 +4,7 @@
 
   let email = $state("")
   let password = $state("")
+  let totpCode = $state("")
 
   const errorMessage = $derived($page.form?.error as string | undefined)
   const { t } = getContext("i18n") as { t: (key: string) => string }
@@ -56,6 +57,22 @@
           class="input input-bordered"
           bind:value={password}
           required
+        />
+      </div>
+
+      <div class="form-control">
+        <label class="label" for="totpCode">
+          <span class="label-text">{t("common.totpCode")}</span>
+        </label>
+        <input
+          id="totpCode"
+          name="totpCode"
+          type="text"
+          inputmode="numeric"
+          autocomplete="one-time-code"
+          class="input input-bordered"
+          bind:value={totpCode}
+          placeholder={t("login.totpPlaceholder")}
         />
       </div>
 

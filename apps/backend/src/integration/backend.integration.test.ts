@@ -4,16 +4,19 @@ import { asc, eq } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
+  authSessions,
   bankCards,
   deposits,
   drawRecords,
   fairnessSeeds,
+  freezeRecords,
   houseAccount,
   ledgerEntries,
   prizes,
   systemConfig,
   userWallets,
   users,
+  withdrawals,
 } from '@reward/database';
 
 process.env.NODE_ENV ||= 'test';
@@ -28,12 +31,18 @@ const describeIntegration = runIntegrationTests ? describe : describe.skip;
 type DbModule = typeof import('../db');
 type AppModule = typeof import('../app');
 type DrawModule = typeof import('../modules/draw/service');
+type TopUpModule = typeof import('../modules/top-up/service');
+type WithdrawModule = typeof import('../modules/withdraw/service');
+type RiskModule = typeof import('../modules/risk/service');
 type UserSessionModule = typeof import('../shared/user-session');
 
 let db: DbModule['db'] | null = null;
 let client: DbModule['client'] | null = null;
 let app: Awaited<ReturnType<AppModule['buildApp']>> | null = null;
 let executeDraw: DrawModule['executeDraw'] | null = null;
+let topUpModule: TopUpModule | null = null;
+let withdrawModule: WithdrawModule | null = null;
+let riskModule: RiskModule | null = null;
 let createUserSessionToken: UserSessionModule['createUserSessionToken'] | null = null;
 
 const getDb = () => {
@@ -64,6 +73,27 @@ const getExecuteDraw = () => {
   return executeDraw;
 };
 
+const getTopUpModule = () => {
+  if (!topUpModule) {
+    throw new Error('topUpModule not initialized.');
+  }
+  return topUpModule;
+};
+
+const getWithdrawModule = () => {
+  if (!withdrawModule) {
+    throw new Error('withdrawModule not initialized.');
+  }
+  return withdrawModule;
+};
+
+const getRiskModule = () => {
+  if (!riskModule) {
+    throw new Error('riskModule not initialized.');
+  }
+  return riskModule;
+};
+
 const getCreateUserSessionToken = () => {
   if (!createUserSessionToken) {
     throw new Error('createUserSessionToken not initialized.');
@@ -77,6 +107,7 @@ const resetDatabase = async () => {
       admin_permissions,
       admin_actions,
       auth_events,
+      auth_sessions,
       fairness_seeds,
       freeze_records,
       suspicious_accounts,
@@ -199,11 +230,17 @@ describeIntegration('backend integration', () => {
     const dbModule = await import('../db');
     const appModule = await import('../app');
     const drawModule = await import('../modules/draw/service');
+    const topUpServiceModule = await import('../modules/top-up/service');
+    const withdrawServiceModule = await import('../modules/withdraw/service');
+    const riskServiceModule = await import('../modules/risk/service');
     const userSessionModule = await import('../shared/user-session');
 
     db = dbModule.db;
     client = dbModule.client;
     executeDraw = drawModule.executeDraw;
+    topUpModule = topUpServiceModule;
+    withdrawModule = withdrawServiceModule;
+    riskModule = riskServiceModule;
     createUserSessionToken = userSessionModule.createUserSessionToken;
     app = await appModule.buildApp({ installProcessHandlers: false });
   });
@@ -362,6 +399,114 @@ describeIntegration('backend integration', () => {
       .limit(1);
 
     expect(wallet?.userId).toBe(user.id);
+  });
+
+  it('revokes the current user session on logout', async () => {
+    await getApp().inject({
+      method: 'POST',
+      url: '/auth/register',
+      headers: {
+        'content-type': 'application/json',
+      },
+      payload: {
+        email: 'session-user@example.com',
+        password: 'secret-123',
+      },
+    });
+
+    const loginResponse = await getApp().inject({
+      method: 'POST',
+      url: '/auth/user/session',
+      headers: {
+        'content-type': 'application/json',
+      },
+      payload: {
+        email: 'session-user@example.com',
+        password: 'secret-123',
+      },
+    });
+
+    expect(loginResponse.statusCode).toBe(200);
+    const loginPayload = loginResponse.json();
+    const token = loginPayload.data?.token as string;
+    const sessionId = loginPayload.data?.sessionId as string;
+
+    const [session] = await getDb()
+      .select({ jti: authSessions.jti, status: authSessions.status })
+      .from(authSessions)
+      .where(eq(authSessions.jti, sessionId))
+      .limit(1);
+    expect(session).toMatchObject({
+      jti: sessionId,
+      status: 'active',
+    });
+
+    const currentResponse = await getApp().inject({
+      method: 'GET',
+      url: '/auth/user/session',
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
+    });
+    expect(currentResponse.statusCode).toBe(200);
+
+    const logoutResponse = await getApp().inject({
+      method: 'DELETE',
+      url: '/auth/user/session',
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
+    });
+    expect(logoutResponse.statusCode).toBe(200);
+
+    const revokedResponse = await getApp().inject({
+      method: 'GET',
+      url: '/auth/user/session',
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
+    });
+    expect(revokedResponse.statusCode).toBe(401);
+  });
+
+  it('revokes active sessions after a password change', async () => {
+    const registerResponse = await getApp().inject({
+      method: 'POST',
+      url: '/auth/register',
+      headers: {
+        'content-type': 'application/json',
+      },
+      payload: {
+        email: 'password-change@example.com',
+        password: 'secret-123',
+      },
+    });
+    expect(registerResponse.statusCode).toBe(201);
+
+    const [user] = await getDb()
+      .select({ id: users.id, email: users.email })
+      .from(users)
+      .where(eq(users.email, 'password-change@example.com'))
+      .limit(1);
+
+    const { token } = await getCreateUserSessionToken()({
+      userId: user.id,
+      email: user.email,
+      role: 'user',
+    });
+
+    const { updateUserPassword } = await import('../modules/user/service');
+    await updateUserPassword(user.id, 'new-secret-456');
+
+    const response = await getApp().inject({
+      method: 'GET',
+      url: '/auth/user/session',
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
+    });
+
+    expect(response.statusCode).toBe(401);
   });
 
   it('executeDraw returns out_of_stock when the selected prize has no stock', async () => {
@@ -630,6 +775,297 @@ describeIntegration('backend integration', () => {
       entryType: 'withdraw_request',
       amount: '-40.00',
     });
+  });
+
+  it('deposit FSM only allows pending deposits to transition once', async () => {
+    const approvedUser = await seedUserWithWallet({
+      email: 'deposit-fsm-approved@example.com',
+    });
+
+    const pendingApproved = await getTopUpModule().createTopUp({
+      userId: approvedUser.id,
+      amount: '25.50',
+    });
+
+    expect(pendingApproved?.status).toBe('pending');
+
+    const approved = await getTopUpModule().approveDeposit(pendingApproved.id);
+    expect(approved?.status).toBe('success');
+
+    const approvedAgain = await getTopUpModule().approveDeposit(pendingApproved.id);
+    expect(approvedAgain?.status).toBe('success');
+
+    const failedAfterApprove = await getTopUpModule().failDeposit(pendingApproved.id);
+    expect(failedAfterApprove?.status).toBe('success');
+
+    const [approvedWallet] = await getDb()
+      .select({
+        withdrawableBalance: userWallets.withdrawableBalance,
+        lockedBalance: userWallets.lockedBalance,
+      })
+      .from(userWallets)
+      .where(eq(userWallets.userId, approvedUser.id))
+      .limit(1);
+
+    expect(approvedWallet).toEqual({
+      withdrawableBalance: '25.50',
+      lockedBalance: '0.00',
+    });
+
+    const approvedEntries = await getDb()
+      .select({
+        entryType: ledgerEntries.entryType,
+        amount: ledgerEntries.amount,
+      })
+      .from(ledgerEntries)
+      .where(eq(ledgerEntries.userId, approvedUser.id))
+      .orderBy(asc(ledgerEntries.id));
+
+    expect(approvedEntries).toEqual([{ entryType: 'deposit', amount: '25.50' }]);
+
+    const failedUser = await seedUserWithWallet({
+      email: 'deposit-fsm-failed@example.com',
+    });
+
+    const pendingFailed = await getTopUpModule().createTopUp({
+      userId: failedUser.id,
+      amount: '12.00',
+    });
+
+    expect(pendingFailed?.status).toBe('pending');
+
+    const failed = await getTopUpModule().failDeposit(pendingFailed.id);
+    expect(failed?.status).toBe('failed');
+
+    const approvedAfterFail = await getTopUpModule().approveDeposit(pendingFailed.id);
+    expect(approvedAfterFail?.status).toBe('failed');
+
+    const failedAgain = await getTopUpModule().failDeposit(pendingFailed.id);
+    expect(failedAgain?.status).toBe('failed');
+
+    const [failedWallet] = await getDb()
+      .select({
+        withdrawableBalance: userWallets.withdrawableBalance,
+        lockedBalance: userWallets.lockedBalance,
+      })
+      .from(userWallets)
+      .where(eq(userWallets.userId, failedUser.id))
+      .limit(1);
+
+    expect(failedWallet).toEqual({
+      withdrawableBalance: '0.00',
+      lockedBalance: '0.00',
+    });
+
+    const failedEntries = await getDb()
+      .select({ id: ledgerEntries.id })
+      .from(ledgerEntries)
+      .where(eq(ledgerEntries.userId, failedUser.id));
+
+    expect(failedEntries).toHaveLength(0);
+  });
+
+  it('withdrawal FSM supports pending -> approved -> paid terminal flow', async () => {
+    const user = await seedUserWithWallet({
+      email: 'withdrawal-fsm-approved@example.com',
+      withdrawableBalance: '100.00',
+    });
+
+    const pending = await getWithdrawModule().createWithdrawal({
+      userId: user.id,
+      amount: '40.00',
+    });
+
+    expect(pending?.status).toBe('pending');
+
+    const approved = await getWithdrawModule().approveWithdrawal(pending.id);
+    expect(approved?.status).toBe('approved');
+
+    const approvedAgain = await getWithdrawModule().approveWithdrawal(pending.id);
+    expect(approvedAgain?.status).toBe('approved');
+
+    const paid = await getWithdrawModule().payWithdrawal(pending.id);
+    expect(paid?.status).toBe('paid');
+
+    const paidAgain = await getWithdrawModule().payWithdrawal(pending.id);
+    expect(paidAgain?.status).toBe('paid');
+
+    const rejectedAfterPay = await getWithdrawModule().rejectWithdrawal(pending.id);
+    expect(rejectedAfterPay?.status).toBe('paid');
+
+    const [wallet] = await getDb()
+      .select({
+        withdrawableBalance: userWallets.withdrawableBalance,
+        lockedBalance: userWallets.lockedBalance,
+      })
+      .from(userWallets)
+      .where(eq(userWallets.userId, user.id))
+      .limit(1);
+
+    expect(wallet).toEqual({
+      withdrawableBalance: '60.00',
+      lockedBalance: '0.00',
+    });
+
+    const [stored] = await getDb()
+      .select({ status: withdrawals.status })
+      .from(withdrawals)
+      .where(eq(withdrawals.id, pending.id))
+      .limit(1);
+
+    expect(stored?.status).toBe('paid');
+
+    const entries = await getDb()
+      .select({
+        entryType: ledgerEntries.entryType,
+        amount: ledgerEntries.amount,
+      })
+      .from(ledgerEntries)
+      .where(eq(ledgerEntries.userId, user.id))
+      .orderBy(asc(ledgerEntries.id));
+
+    expect(entries).toEqual([
+      { entryType: 'withdraw_request', amount: '-40.00' },
+      { entryType: 'withdraw_paid', amount: '-40.00' },
+    ]);
+  });
+
+  it('withdrawal FSM supports pending -> rejected and pending -> paid terminal flows', async () => {
+    const rejectedUser = await seedUserWithWallet({
+      email: 'withdrawal-fsm-rejected@example.com',
+      withdrawableBalance: '100.00',
+    });
+
+    const pendingRejected = await getWithdrawModule().createWithdrawal({
+      userId: rejectedUser.id,
+      amount: '30.00',
+    });
+
+    expect(pendingRejected?.status).toBe('pending');
+
+    const rejected = await getWithdrawModule().rejectWithdrawal(pendingRejected.id);
+    expect(rejected?.status).toBe('rejected');
+
+    const approvedAfterReject = await getWithdrawModule().approveWithdrawal(pendingRejected.id);
+    expect(approvedAfterReject?.status).toBe('rejected');
+
+    const paidAfterReject = await getWithdrawModule().payWithdrawal(pendingRejected.id);
+    expect(paidAfterReject?.status).toBe('rejected');
+
+    const [rejectedWallet] = await getDb()
+      .select({
+        withdrawableBalance: userWallets.withdrawableBalance,
+        lockedBalance: userWallets.lockedBalance,
+      })
+      .from(userWallets)
+      .where(eq(userWallets.userId, rejectedUser.id))
+      .limit(1);
+
+    expect(rejectedWallet).toEqual({
+      withdrawableBalance: '100.00',
+      lockedBalance: '0.00',
+    });
+
+    const rejectedEntries = await getDb()
+      .select({
+        entryType: ledgerEntries.entryType,
+        amount: ledgerEntries.amount,
+      })
+      .from(ledgerEntries)
+      .where(eq(ledgerEntries.userId, rejectedUser.id))
+      .orderBy(asc(ledgerEntries.id));
+
+    expect(rejectedEntries).toEqual([
+      { entryType: 'withdraw_request', amount: '-30.00' },
+      { entryType: 'withdraw_rejected_refund', amount: '30.00' },
+    ]);
+
+    const paidUser = await seedUserWithWallet({
+      email: 'withdrawal-fsm-paid@example.com',
+      withdrawableBalance: '80.00',
+    });
+
+    const pendingPaid = await getWithdrawModule().createWithdrawal({
+      userId: paidUser.id,
+      amount: '20.00',
+    });
+
+    expect(pendingPaid?.status).toBe('pending');
+
+    const paidDirectly = await getWithdrawModule().payWithdrawal(pendingPaid.id);
+    expect(paidDirectly?.status).toBe('paid');
+
+    const approvedAfterDirectPay = await getWithdrawModule().approveWithdrawal(pendingPaid.id);
+    expect(approvedAfterDirectPay?.status).toBe('paid');
+
+    const [paidWallet] = await getDb()
+      .select({
+        withdrawableBalance: userWallets.withdrawableBalance,
+        lockedBalance: userWallets.lockedBalance,
+      })
+      .from(userWallets)
+      .where(eq(userWallets.userId, paidUser.id))
+      .limit(1);
+
+    expect(paidWallet).toEqual({
+      withdrawableBalance: '60.00',
+      lockedBalance: '0.00',
+    });
+  });
+
+  it('freeze FSM keeps a single active record and allows re-freeze after release', async () => {
+    const user = await seedUserWithWallet({
+      email: 'freeze-fsm@example.com',
+    });
+
+    const first = await getRiskModule().ensureUserFreeze({
+      userId: user.id,
+      reason: 'manual_review',
+    });
+    expect(first?.id).toBeTruthy();
+
+    const duplicate = await getRiskModule().ensureUserFreeze({
+      userId: user.id,
+      reason: 'ignored',
+    });
+    expect(duplicate?.id).toBe(first?.id);
+
+    const released = await getRiskModule().releaseUserFreeze({ userId: user.id });
+    expect(released?.status).toBe('released');
+    expect(released?.releasedAt).toBeTruthy();
+
+    const releasedAgain = await getRiskModule().releaseUserFreeze({ userId: user.id });
+    expect(releasedAgain).toBeNull();
+
+    const recreated = await getRiskModule().ensureUserFreeze({
+      userId: user.id,
+      reason: 'manual_review_again',
+    });
+    expect(recreated?.id).toBeTruthy();
+    expect(recreated?.id).not.toBe(first?.id);
+
+    const records = await getDb()
+      .select({
+        id: freezeRecords.id,
+        status: freezeRecords.status,
+        reason: freezeRecords.reason,
+      })
+      .from(freezeRecords)
+      .where(eq(freezeRecords.userId, user.id))
+      .orderBy(asc(freezeRecords.id));
+
+    expect(records).toEqual([
+      {
+        id: first?.id ?? 0,
+        status: 'released',
+        reason: 'manual_review',
+      },
+      {
+        id: recreated?.id ?? 0,
+        status: 'active',
+        reason: 'manual_review_again',
+      },
+    ]);
   });
 
   it('GET /fairness/commit and /fairness/reveal expose commitment data', async () => {

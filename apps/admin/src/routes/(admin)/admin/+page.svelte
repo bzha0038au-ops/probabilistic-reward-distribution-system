@@ -36,7 +36,21 @@
     adminFailureFreezeThreshold: string
   }
 
+  interface CurrentAdmin {
+    adminId: number
+    userId: number
+    email: string
+    mfaEnabled: boolean
+  }
+
+  interface MfaEnrollment {
+    secret: string
+    otpauthUrl: string
+    enrollmentToken: string
+  }
+
   interface PageData {
+    admin?: CurrentAdmin | null
     prizes: Prize[]
     analytics: AnalyticsSummary | null
     config: SystemConfig | null
@@ -74,12 +88,19 @@
     userId: "",
     amount: "",
   })
+  let stepUpCode = $state("")
+  let mfaEnrollmentCode = $state("")
 
   const { t } = getContext("i18n") as { t: (key: string) => string }
 
+  const currentAdmin = $derived(data.admin ?? null)
   const analytics = $derived(data.analytics)
   const config = $derived(data.config)
   const prizes = $derived(data.prizes)
+  const mfaEnrollment = $derived($page.form?.mfaEnrollment as MfaEnrollment | undefined)
+  const mfaEnabled = $derived(
+    Boolean(($page.form?.mfaEnabled as boolean | undefined) ?? currentAdmin?.mfaEnabled)
+  )
   const winRateLabel = $derived(
     analytics ? `${(analytics.winRate * 100).toFixed(2)}%` : "0%"
   )
@@ -173,6 +194,99 @@
 </section>
 
 <section class="mt-8 grid gap-6 lg:grid-cols-2">
+  <div class="card bg-base-100 shadow">
+    <div class="card-body space-y-4">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <h2 class="card-title">{t("admin.mfa.title")}</h2>
+          <p class="text-sm text-slate-500">{t("admin.mfa.description")}</p>
+        </div>
+        <span class={`badge ${mfaEnabled ? "badge-success" : "badge-warning"}`}>
+          {mfaEnabled ? t("admin.mfa.enabled") : t("admin.mfa.disabled")}
+        </span>
+      </div>
+
+      {#if !mfaEnabled}
+        <form method="post" action="?/startMfaEnrollment">
+          <button class="btn btn-outline" type="submit">
+            {t("admin.mfa.start")}
+          </button>
+        </form>
+
+        {#if mfaEnrollment}
+          <div class="grid gap-4">
+            <label class="form-control">
+              <span class="label-text mb-2">{t("admin.mfa.secret")}</span>
+              <input
+                class="input input-bordered font-mono"
+                readonly
+                value={mfaEnrollment.secret}
+              />
+            </label>
+            <label class="form-control">
+              <span class="label-text mb-2">{t("admin.mfa.otpauthUrl")}</span>
+	              <textarea
+	                class="textarea textarea-bordered min-h-24 font-mono text-xs"
+	                readonly
+	              >{mfaEnrollment.otpauthUrl}</textarea>
+            </label>
+            <form method="post" action="?/confirmMfaEnrollment" class="grid gap-4">
+              <input
+                type="hidden"
+                name="enrollmentToken"
+                value={mfaEnrollment.enrollmentToken}
+              />
+              <label class="form-control max-w-sm">
+                <span class="label-text mb-2">{t("common.totpCode")}</span>
+                <input
+                  name="totpCode"
+                  type="text"
+                  inputmode="numeric"
+                  autocomplete="one-time-code"
+                  class="input input-bordered"
+                  bind:value={mfaEnrollmentCode}
+                  placeholder={t("admin.mfa.codePlaceholder")}
+                />
+              </label>
+              <button class="btn btn-primary max-w-sm" type="submit">
+                {t("admin.mfa.confirm")}
+              </button>
+            </form>
+          </div>
+        {/if}
+      {:else}
+        <p class="text-sm text-slate-500">{t("admin.mfa.enabledHint")}</p>
+      {/if}
+    </div>
+  </div>
+
+  <div class="card bg-base-100 shadow">
+    <div class="card-body space-y-4">
+      <div>
+        <h2 class="card-title">{t("admin.stepUp.title")}</h2>
+        <p class="text-sm text-slate-500">{t("admin.stepUp.description")}</p>
+      </div>
+      <label class="form-control max-w-sm">
+        <span class="label-text mb-2">{t("common.totpCode")}</span>
+        <input
+          name="totpCode"
+          type="text"
+          inputmode="numeric"
+          autocomplete="one-time-code"
+          class="input input-bordered"
+          bind:value={stepUpCode}
+          placeholder={t("admin.stepUp.placeholder")}
+          disabled={!mfaEnabled}
+        />
+      </label>
+      {#if !mfaEnabled}
+        <p class="text-sm text-warning">{t("admin.stepUp.mfaRequired")}</p>
+      {/if}
+    </div>
+  </div>
+</section>
+
+<section class="mt-6 grid gap-6 lg:grid-cols-2">
   <div class="card bg-base-100 shadow">
     <div class="card-body space-y-4">
       <div>
@@ -287,6 +401,7 @@
             />
           </div>
         </div>
+        <input type="hidden" name="totpCode" value={stepUpCode} />
         <button class="btn btn-primary" type="submit">
           {t("admin.config.submit")}
         </button>
@@ -331,6 +446,7 @@
             />
           </div>
         </div>
+        <input type="hidden" name="totpCode" value={stepUpCode} />
         <button
           class="btn btn-primary"
           type="submit"

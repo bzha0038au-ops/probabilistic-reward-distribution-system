@@ -42,7 +42,7 @@ function FeatureRow({
           ))}
         </div>
       </div>
-      <div className="flex justify-center rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="flex justify-center rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
         <Image
           src={image}
           alt={title}
@@ -59,7 +59,7 @@ export function FeatureSection({ messages }: { messages: Messages }) {
   const features = messages.marketing.features;
   return (
     <Section
-      className="py-16"
+      className="py-14 sm:py-16"
       eyebrow={features.eyebrow}
       title={features.title}
       description={features.description}

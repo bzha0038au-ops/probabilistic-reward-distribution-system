@@ -7,7 +7,7 @@ This repo is designed as a practical system skeleton for products such as spin-t
 ## Why This Repo
 
 - Transaction-safe wallet flows for top-up, draw, and withdrawal paths
-- Separate user and admin frontends, so product logic and operations logic stay isolated
+- Separate public user surfaces and admin tooling, so customer flows and operations logic stay isolated
 - Backend-owned financial mutations with ledger-style records and DB transaction boundaries
 - Shared contracts, schema, and migrations inside one workspace, so changes move together
 
@@ -35,6 +35,7 @@ cp apps/database/.env.example apps/database/.env
 cp apps/backend/.env.example apps/backend/.env
 cp apps/frontend/.env.example apps/frontend/.env
 cp apps/admin/.env.example apps/admin/.env
+cp apps/mobile/.env.example apps/mobile/.env
 ```
 
 ### 3. Fill the minimum local values
@@ -75,6 +76,12 @@ API_BASE_URL=http://localhost:4000
 ADMIN_JWT_SECRET=local_admin_secret_change_me_123456
 ```
 
+`apps/mobile/.env`
+
+```dotenv
+EXPO_PUBLIC_API_BASE_URL=http://127.0.0.1:4000
+```
+
 Important:
 
 - `ADMIN_JWT_SECRET` must match between `apps/backend/.env` and `apps/admin/.env`
@@ -98,11 +105,20 @@ pnpm db:migrate
 pnpm dev
 ```
 
+To run the three user surfaces together:
+
+```bash
+pnpm dev:user
+```
+
 ### 7. Open the local apps
 
 - User app: [http://localhost:3000](http://localhost:3000)
 - Admin app: [http://localhost:5173](http://localhost:5173)
 - Backend health check: [http://localhost:4000/health](http://localhost:4000/health)
+- Native app dev server: `pnpm dev:mobile`
+- iOS simulator: `pnpm mobile:ios`
+- Android emulator: `pnpm mobile:android`
 
 ### Useful next commands
 
@@ -140,10 +156,12 @@ Default local accounts:
 ## Project At A Glance
 
 - User app: [`apps/frontend`](./apps/frontend)
+- Native app: [`apps/mobile`](./apps/mobile)
 - Admin app: [`apps/admin`](./apps/admin)
 - Backend and financial logic: [`apps/backend`](./apps/backend)
 - Database schema and migrations: [`apps/database`](./apps/database)
 - Shared API contracts: [`apps/shared-types`](./apps/shared-types)
+- Shared user client layer: [`packages/user-core`](./packages/user-core)
 
 If you want the architecture view after bootstrapping, start with [`docs/architecture.md`](./docs/architecture.md).
 
@@ -151,11 +169,12 @@ If you want the architecture view after bootstrapping, start with [`docs/archite
 
 ```mermaid
 flowchart LR
-    A["User Frontend<br/>Next.js"] --> C["Backend API<br/>Fastify"]
-    B["Admin Frontend<br/>SvelteKit"] --> C
+    A["User Web<br/>Next.js"] --> C["Backend API<br/>Fastify"]
+    B["User Native<br/>Expo iOS + Android"] --> C
+    G["Admin Frontend<br/>SvelteKit"] --> C
     C --> D["PostgreSQL"]
     C --> E["Redis"]
-    C --> F["Shared Contracts<br/>Zod + TypeScript"]
+    C --> F["Shared Contracts + User Core<br/>Zod + TypeScript"]
 ```
 
 ## What This Project Does
@@ -179,11 +198,13 @@ The highest-risk path is `executeDraw(userId)`: debit the draw cost, evaluate pr
 
 | Path | Role |
 | --- | --- |
-| [`apps/frontend`](./apps/frontend) | User-facing product UI |
+| [`apps/frontend`](./apps/frontend) | User-facing web app |
+| [`apps/mobile`](./apps/mobile) | User-facing native app for iOS and Android |
 | [`apps/admin`](./apps/admin) | Internal operations and finance console |
 | [`apps/backend`](./apps/backend) | HTTP API, auth, wallet flows, draw engine |
 | [`apps/database`](./apps/database) | Drizzle schema and migrations |
 | [`apps/shared-types`](./apps/shared-types) | Shared request/response contracts |
+| [`packages/user-core`](./packages/user-core) | Shared user API client, routes, and platform helpers |
 | [`docs`](./docs) | Architecture, environment, deployment, and test docs |
 
 ## Tech Stack
@@ -191,19 +212,22 @@ The highest-risk path is `executeDraw(userId)`: debit the draw cost, evaluate pr
 | Layer | Choice |
 | --- | --- |
 | User web | Next.js App Router |
+| User native | Expo + React Native |
 | Admin console | SvelteKit |
 | Backend API | Fastify |
 | Database | PostgreSQL |
 | ORM / schema | Drizzle ORM |
 | Shared contracts | TypeScript + Zod |
+| Shared user client | Workspace package (`@reward/user-core`) |
 | Tooling | pnpm workspace, Vitest, GitHub Actions |
 
-### Why Are There Two Frontends?
+### Why Web + Native + Admin?
 
 The main reason is logical isolation.
 
-- The user app and the admin app serve different audiences and different risk levels
-- The user app is public-facing and optimized for customer flows
+- The public user product now has two delivery shells: `apps/frontend` for web and `apps/mobile` for iOS + Android
+- Those two user surfaces share contracts and request logic through `packages/user-core`
+- The admin app still serves a different audience and a different risk level
 - The admin app is an internal tool for higher-risk actions like finance review, config changes, and operations work
 - Keeping them separate prevents admin auth, admin dependencies, and admin UI complexity from leaking into the public product
 - It also makes deployment, performance tuning, and incident blast radius easier to control
@@ -231,6 +255,10 @@ Run from the repo root:
 
 ```bash
 pnpm dev
+pnpm dev:user
+pnpm dev:mobile
+pnpm mobile:ios
+pnpm mobile:android
 pnpm build
 pnpm check
 pnpm lint
@@ -251,7 +279,8 @@ pnpm db:reset
 Minimum required values:
 
 - Backend: `DATABASE_URL` or `POSTGRES_URL`, `ADMIN_JWT_SECRET`, `USER_JWT_SECRET`
-- Frontend: `AUTH_SECRET`, `API_BASE_URL`, `NEXT_PUBLIC_API_BASE_URL`
+- Frontend: `AUTH_SECRET`, `API_BASE_URL`
+- Mobile: `EXPO_PUBLIC_API_BASE_URL`
 - Admin: `ADMIN_JWT_SECRET`, `API_BASE_URL`
 
 Full details live in [`docs/environment.md`](./docs/environment.md).

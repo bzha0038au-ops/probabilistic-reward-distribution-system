@@ -17,8 +17,11 @@ export const users = pgTable(
   {
     id: serial('id').primaryKey(),
     email: varchar('email', { length: 255 }).notNull(),
+    phone: varchar('phone', { length: 32 }),
     passwordHash: varchar('password_hash', { length: 255 }).notNull(),
     role: varchar('role', { length: 20 }).notNull().default('user'),
+    emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
+    phoneVerifiedAt: timestamp('phone_verified_at', { withTimezone: true }),
     userPoolBalance: numeric('user_pool_balance', { precision: 14, scale: 2 })
       .notNull()
       .default('0'),
@@ -34,6 +37,7 @@ export const users = pgTable(
   },
   (table) => ({
     emailUnique: uniqueIndex('users_email_unique').on(table.email),
+    phoneUnique: uniqueIndex('users_phone_unique').on(table.phone),
     userPoolBalanceIdx: index('users_user_pool_balance_idx').on(
       table.userPoolBalance
     ),
@@ -49,6 +53,9 @@ export const admins = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     displayName: varchar('display_name', { length: 160 }),
     isActive: boolean('is_active').notNull().default(true),
+    mfaEnabled: boolean('mfa_enabled').notNull().default(false),
+    mfaSecretCiphertext: text('mfa_secret_ciphertext'),
+    mfaEnabledAt: timestamp('mfa_enabled_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

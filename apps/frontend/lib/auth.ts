@@ -1,5 +1,7 @@
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
+import type { UserSessionResponse } from '@reward/shared-types';
+import { USER_API_ROUTES } from '@/lib/api/user';
 import { authConfig } from '@/lib/auth.config';
 import { apiRequestServer } from '@/lib/api/server';
 
@@ -24,15 +26,16 @@ export const {
           return null;
         }
 
-        const result = await apiRequestServer<{
-          token?: string;
-          user?: { id: number; email: string; role: 'admin' | 'user' };
-        }>('/auth/user/session', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password }),
-          cache: 'no-store',
-        }, { auth: false });
+        const result = await apiRequestServer<UserSessionResponse>(
+          USER_API_ROUTES.auth.session,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password }),
+            cache: 'no-store',
+          },
+          { auth: false }
+        );
 
         if (!result.ok || !result.data?.token || !result.data.user) {
           return null;

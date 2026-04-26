@@ -14,6 +14,11 @@ These values must be identical for auth/session verification to work:
 - `DRAW_COST` (optional seed value for `system_config.draw_cost`)
 - `DRAW_POOL_CACHE_TTL_SECONDS` (optional, probability pool cache TTL; `0` disables)
 - `REDIS_URL` (optional, enables shared rate limiting + probability pool cache)
+- `AUTH_NOTIFICATION_WEBHOOK_URL` (optional but required for production delivery of
+  password reset, verification, and login alert messages)
+- `PASSWORD_RESET_TTL_MINUTES`, `EMAIL_VERIFICATION_TTL_MINUTES`,
+  `PHONE_VERIFICATION_TTL_MINUTES` (optional token/code TTL overrides)
+- `ANOMALOUS_LOGIN_LOOKBACK_DAYS` (optional; login anomaly comparison window)
 - `WEB_BASE_URL`, `ADMIN_BASE_URL`, `PORT`
 - `ADMIN_JWT_SECRET` (optional override)
 - `ADMIN_SESSION_TTL`, `USER_SESSION_TTL` (optional)
@@ -22,7 +27,6 @@ These values must be identical for auth/session verification to work:
 
 - `AUTH_SECRET` (required, frontend-only)
 - `API_BASE_URL` (server-side API base URL)
-- `NEXT_PUBLIC_API_BASE_URL` (client-side API base URL)
 
 ## Admin (`apps/admin/.env`)
 
@@ -35,4 +39,5 @@ These values must be identical for auth/session verification to work:
 - `USER_JWT_SECRET` must not be shared with the admin or web secrets.
 - `AUTH_SECRET` is only for NextAuth in the web app.
 - In production, JWT secrets must be at least 32 characters.
-- `API_BASE_URL` and `NEXT_PUBLIC_API_BASE_URL` should point to the same backend.
+- In production, configure `AUTH_NOTIFICATION_WEBHOOK_URL`; otherwise reset and
+  verification tokens are created but not delivered to end users.

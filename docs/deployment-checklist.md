@@ -7,6 +7,9 @@ This is a pragmatic checklist for staging/production deployments.
 - `ADMIN_JWT_SECRET` and `USER_JWT_SECRET` are long, random, and distinct.
 - `AUTH_SECRET` (web) is long and random.
 - `WEB_BASE_URL` / `ADMIN_BASE_URL` / `API_BASE_URL` are correct.
+- `AUTH_NOTIFICATION_WEBHOOK_URL` points at the email/SMS delivery worker.
+- `PASSWORD_RESET_TTL_MINUTES`, `EMAIL_VERIFICATION_TTL_MINUTES`, and
+  `PHONE_VERIFICATION_TTL_MINUTES` match your security policy.
 - `DRAW_POOL_CACHE_TTL_SECONDS` is set if you want probability pool caching.
 - `REDIS_URL` is set if you want shared rate limits and shared pool cache.
 - GitHub Actions deployment secrets are configured per environment:
@@ -30,6 +33,8 @@ This is a pragmatic checklist for staging/production deployments.
 ## 4. Observability
 - Logs include trace IDs and are shipped to your log system.
 - Draw errors and payout limits are monitored.
+- Delivery failures from the auth notification webhook are monitored.
+- `*_login_anomaly` auth events are visible in the admin security monitor.
 
 ## 5. Smoke tests
 - Run unit tests: `pnpm test`

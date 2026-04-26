@@ -1,5 +1,6 @@
 import type { AppInstance } from '../types';
 
+import { ADMIN_PERMISSION_KEYS } from '../../../modules/admin-permission/definitions';
 import { recordAdminAction } from '../../../modules/admin/audit';
 import { approveDeposit, failDeposit, listDeposits } from '../../../modules/top-up/service';
 import {
@@ -8,6 +9,7 @@ import {
   payWithdrawal,
   rejectWithdrawal,
 } from '../../../modules/withdraw/service';
+import { requireAdminPermission } from '../../guards';
 import { sendError, sendSuccess } from '../../respond';
 import {
   adminRateLimit,
@@ -17,15 +19,25 @@ import {
 } from './common';
 
 export async function registerAdminFinanceRoutes(protectedRoutes: AppInstance) {
-  protectedRoutes.get('/admin/deposits', async (request, reply) => {
-    const limit = parseLimitFromQuery(request.query);
-    const deposits = await listDeposits(limit);
-    return sendSuccess(reply, deposits);
-  });
+  protectedRoutes.get(
+    '/admin/deposits',
+    { preHandler: [requireAdminPermission(ADMIN_PERMISSION_KEYS.FINANCE_READ)] },
+    async (request, reply) => {
+      const limit = parseLimitFromQuery(request.query);
+      const deposits = await listDeposits(limit);
+      return sendSuccess(reply, deposits);
+    }
+  );
 
   protectedRoutes.patch(
     '/admin/deposits/:depositId/approve',
-    { config: { rateLimit: adminRateLimit }, preHandler: [enforceAdminLimit] },
+    {
+      config: { rateLimit: adminRateLimit },
+      preHandler: [
+        requireAdminPermission(ADMIN_PERMISSION_KEYS.FINANCE_APPROVE_DEPOSIT),
+        enforceAdminLimit,
+      ],
+    },
     async (request, reply) => {
       const depositId = parseIdParam(request.params, 'depositId');
       if (!depositId) {
@@ -39,7 +51,7 @@ export async function registerAdminFinanceRoutes(protectedRoutes: AppInstance) {
         }
 
         await recordAdminAction({
-          adminId: request.admin?.userId ?? null,
+          adminId: request.admin?.adminId ?? null,
           action: 'deposit_approve',
           targetType: 'deposit',
           targetId: depositId,
@@ -56,7 +68,13 @@ export async function registerAdminFinanceRoutes(protectedRoutes: AppInstance) {
 
   protectedRoutes.patch(
     '/admin/deposits/:depositId/fail',
-    { config: { rateLimit: adminRateLimit }, preHandler: [enforceAdminLimit] },
+    {
+      config: { rateLimit: adminRateLimit },
+      preHandler: [
+        requireAdminPermission(ADMIN_PERMISSION_KEYS.FINANCE_FAIL_DEPOSIT),
+        enforceAdminLimit,
+      ],
+    },
     async (request, reply) => {
       const depositId = parseIdParam(request.params, 'depositId');
       if (!depositId) {
@@ -69,7 +87,7 @@ export async function registerAdminFinanceRoutes(protectedRoutes: AppInstance) {
       }
 
       await recordAdminAction({
-        adminId: request.admin?.userId ?? null,
+        adminId: request.admin?.adminId ?? null,
         action: 'deposit_fail',
         targetType: 'deposit',
         targetId: depositId,
@@ -80,15 +98,27 @@ export async function registerAdminFinanceRoutes(protectedRoutes: AppInstance) {
     }
   );
 
-  protectedRoutes.get('/admin/withdrawals', async (request, reply) => {
-    const limit = parseLimitFromQuery(request.query);
-    const withdrawals = await listWithdrawalsAdmin(limit);
-    return sendSuccess(reply, withdrawals);
-  });
+  protectedRoutes.get(
+    '/admin/withdrawals',
+    { preHandler: [requireAdminPermission(ADMIN_PERMISSION_KEYS.FINANCE_READ)] },
+    async (request, reply) => {
+      const limit = parseLimitFromQuery(request.query);
+      const withdrawals = await listWithdrawalsAdmin(limit);
+      return sendSuccess(reply, withdrawals);
+    }
+  );
 
   protectedRoutes.patch(
     '/admin/withdrawals/:withdrawalId/approve',
-    { config: { rateLimit: adminRateLimit }, preHandler: [enforceAdminLimit] },
+    {
+      config: { rateLimit: adminRateLimit },
+      preHandler: [
+        requireAdminPermission(
+          ADMIN_PERMISSION_KEYS.FINANCE_APPROVE_WITHDRAWAL
+        ),
+        enforceAdminLimit,
+      ],
+    },
     async (request, reply) => {
       const withdrawalId = parseIdParam(request.params, 'withdrawalId');
       if (!withdrawalId) {
@@ -101,7 +131,7 @@ export async function registerAdminFinanceRoutes(protectedRoutes: AppInstance) {
       }
 
       await recordAdminAction({
-        adminId: request.admin?.userId ?? null,
+        adminId: request.admin?.adminId ?? null,
         action: 'withdrawal_approve',
         targetType: 'withdrawal',
         targetId: withdrawalId,
@@ -114,7 +144,15 @@ export async function registerAdminFinanceRoutes(protectedRoutes: AppInstance) {
 
   protectedRoutes.patch(
     '/admin/withdrawals/:withdrawalId/reject',
-    { config: { rateLimit: adminRateLimit }, preHandler: [enforceAdminLimit] },
+    {
+      config: { rateLimit: adminRateLimit },
+      preHandler: [
+        requireAdminPermission(
+          ADMIN_PERMISSION_KEYS.FINANCE_REJECT_WITHDRAWAL
+        ),
+        enforceAdminLimit,
+      ],
+    },
     async (request, reply) => {
       const withdrawalId = parseIdParam(request.params, 'withdrawalId');
       if (!withdrawalId) {
@@ -128,7 +166,7 @@ export async function registerAdminFinanceRoutes(protectedRoutes: AppInstance) {
         }
 
         await recordAdminAction({
-          adminId: request.admin?.userId ?? null,
+          adminId: request.admin?.adminId ?? null,
           action: 'withdrawal_reject',
           targetType: 'withdrawal',
           targetId: withdrawalId,
@@ -146,7 +184,13 @@ export async function registerAdminFinanceRoutes(protectedRoutes: AppInstance) {
 
   protectedRoutes.patch(
     '/admin/withdrawals/:withdrawalId/pay',
-    { config: { rateLimit: adminRateLimit }, preHandler: [enforceAdminLimit] },
+    {
+      config: { rateLimit: adminRateLimit },
+      preHandler: [
+        requireAdminPermission(ADMIN_PERMISSION_KEYS.FINANCE_PAY_WITHDRAWAL),
+        enforceAdminLimit,
+      ],
+    },
     async (request, reply) => {
       const withdrawalId = parseIdParam(request.params, 'withdrawalId');
       if (!withdrawalId) {
@@ -160,7 +204,7 @@ export async function registerAdminFinanceRoutes(protectedRoutes: AppInstance) {
         }
 
         await recordAdminAction({
-          adminId: request.admin?.userId ?? null,
+          adminId: request.admin?.adminId ?? null,
           action: 'withdrawal_pay',
           targetType: 'withdrawal',
           targetId: withdrawalId,

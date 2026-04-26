@@ -1,6 +1,7 @@
 import type { AppInstance } from '../types';
 import { PrizeCreateSchema, PrizeUpdateSchema } from '@reward/shared-types';
 
+import { ADMIN_PERMISSION_KEYS } from '../../../modules/admin-permission/definitions';
 import {
   createPrize,
   listPrizes,
@@ -10,18 +11,29 @@ import {
 } from '../../../modules/admin/service';
 import { recordAdminAction } from '../../../modules/admin/audit';
 import { parseSchema } from '../../../shared/validation';
+import { requireAdminPermission } from '../../guards';
 import { sendError, sendSuccess } from '../../respond';
 import { adminRateLimit, enforceAdminLimit, parseIdParam, toObject } from './common';
 
 export async function registerAdminPrizeRoutes(protectedRoutes: AppInstance) {
-  protectedRoutes.get('/admin/prizes', async (_request, reply) => {
-    const prizes = await listPrizes();
-    return sendSuccess(reply, prizes);
-  });
+  protectedRoutes.get(
+    '/admin/prizes',
+    { preHandler: [requireAdminPermission(ADMIN_PERMISSION_KEYS.PRIZES_READ)] },
+    async (_request, reply) => {
+      const prizes = await listPrizes();
+      return sendSuccess(reply, prizes);
+    }
+  );
 
   protectedRoutes.post(
     '/admin/prizes',
-    { config: { rateLimit: adminRateLimit }, preHandler: [enforceAdminLimit] },
+    {
+      config: { rateLimit: adminRateLimit },
+      preHandler: [
+        requireAdminPermission(ADMIN_PERMISSION_KEYS.PRIZES_CREATE),
+        enforceAdminLimit,
+      ],
+    },
     async (request, reply) => {
       const parsed = parseSchema(PrizeCreateSchema, toObject(request.body));
       if (!parsed.isValid) {
@@ -42,7 +54,7 @@ export async function registerAdminPrizeRoutes(protectedRoutes: AppInstance) {
       });
 
       await recordAdminAction({
-        adminId: request.admin?.userId ?? null,
+        adminId: request.admin?.adminId ?? null,
         action: 'prize_create',
         targetType: 'prize',
         targetId: created?.id ?? null,
@@ -56,7 +68,13 @@ export async function registerAdminPrizeRoutes(protectedRoutes: AppInstance) {
 
   protectedRoutes.patch(
     '/admin/prizes/:prizeId',
-    { config: { rateLimit: adminRateLimit }, preHandler: [enforceAdminLimit] },
+    {
+      config: { rateLimit: adminRateLimit },
+      preHandler: [
+        requireAdminPermission(ADMIN_PERMISSION_KEYS.PRIZES_UPDATE),
+        enforceAdminLimit,
+      ],
+    },
     async (request, reply) => {
       const prizeId = parseIdParam(request.params, 'prizeId');
       if (!prizeId) {
@@ -103,7 +121,7 @@ export async function registerAdminPrizeRoutes(protectedRoutes: AppInstance) {
       }
 
       await recordAdminAction({
-        adminId: request.admin?.userId ?? null,
+        adminId: request.admin?.adminId ?? null,
         action: 'prize_update',
         targetType: 'prize',
         targetId: prizeId,
@@ -117,7 +135,13 @@ export async function registerAdminPrizeRoutes(protectedRoutes: AppInstance) {
 
   protectedRoutes.patch(
     '/admin/prizes/:prizeId/toggle',
-    { config: { rateLimit: adminRateLimit }, preHandler: [enforceAdminLimit] },
+    {
+      config: { rateLimit: adminRateLimit },
+      preHandler: [
+        requireAdminPermission(ADMIN_PERMISSION_KEYS.PRIZES_TOGGLE),
+        enforceAdminLimit,
+      ],
+    },
     async (request, reply) => {
       const prizeId = parseIdParam(request.params, 'prizeId');
       if (!prizeId) {
@@ -130,7 +154,7 @@ export async function registerAdminPrizeRoutes(protectedRoutes: AppInstance) {
       }
 
       await recordAdminAction({
-        adminId: request.admin?.userId ?? null,
+        adminId: request.admin?.adminId ?? null,
         action: 'prize_toggle',
         targetType: 'prize',
         targetId: prizeId,
@@ -144,7 +168,13 @@ export async function registerAdminPrizeRoutes(protectedRoutes: AppInstance) {
 
   protectedRoutes.delete(
     '/admin/prizes/:prizeId',
-    { config: { rateLimit: adminRateLimit }, preHandler: [enforceAdminLimit] },
+    {
+      config: { rateLimit: adminRateLimit },
+      preHandler: [
+        requireAdminPermission(ADMIN_PERMISSION_KEYS.PRIZES_DELETE),
+        enforceAdminLimit,
+      ],
+    },
     async (request, reply) => {
       const prizeId = parseIdParam(request.params, 'prizeId');
       if (!prizeId) {
@@ -157,7 +187,7 @@ export async function registerAdminPrizeRoutes(protectedRoutes: AppInstance) {
       }
 
       await recordAdminAction({
-        adminId: request.admin?.userId ?? null,
+        adminId: request.admin?.adminId ?? null,
         action: 'prize_delete',
         targetType: 'prize',
         targetId: prizeId,

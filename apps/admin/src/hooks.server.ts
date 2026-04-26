@@ -2,14 +2,39 @@ import type { Handle } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
 
 import {
+  ADMIN_CSRF_COOKIE,
   ADMIN_SESSION_COOKIE,
+  type AdminSessionPayload,
   verifyAdminSessionToken,
 } from '$lib/server/admin-session';
+import { apiRequest } from '$lib/server/api';
 import { resolveLocaleFromRequest } from '$lib/i18n';
 
 export const handle: Handle = async ({ event, resolve }) => {
   const token = event.cookies.get(ADMIN_SESSION_COOKIE);
-  const admin = await verifyAdminSessionToken(token);
+  const localSession = await verifyAdminSessionToken(token);
+  let admin: AdminSessionPayload | null = localSession;
+
+  if (localSession) {
+    const response = await apiRequest<{ admin?: AdminSessionPayload }>(
+      event.fetch,
+      event.cookies,
+      '/auth/admin/session',
+      {
+        method: 'GET',
+        cache: 'no-store',
+      }
+    );
+
+    if (response.ok && response.data?.admin) {
+      admin = response.data.admin;
+    } else {
+      admin = null;
+      event.cookies.delete(ADMIN_SESSION_COOKIE, { path: '/' });
+      event.cookies.delete(ADMIN_CSRF_COOKIE, { path: '/' });
+    }
+  }
+
   event.locals.admin = admin;
   event.locals.locale = resolveLocaleFromRequest(event);
 

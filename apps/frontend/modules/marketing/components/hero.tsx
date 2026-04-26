@@ -16,23 +16,23 @@ export function Hero({ messages }: { messages: Messages }) {
       <div className="pointer-events-none absolute bottom-0 left-0 h-96 w-96 rounded-full bg-brand-300/40 blur-3xl" />
 
       <MarketingNav messages={messages} />
-      <Section className="py-12">
+      <Section className="page-safe-bottom py-8 sm:py-12">
         <div className="grid items-center gap-12 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="space-y-6">
             <Badge className="w-fit bg-brand-100 text-brand-700">
               {hero.badge}
             </Badge>
-            <h1 className="text-4xl font-semibold leading-tight text-slate-900 md:text-5xl">
+            <h1 className="text-3xl font-semibold leading-tight text-slate-900 sm:text-4xl md:text-5xl">
               {hero.title}
             </h1>
-            <p className="text-lg text-slate-600">
+            <p className="text-base text-slate-600 sm:text-lg">
               {hero.description}
             </p>
-            <div className="flex flex-wrap items-center gap-3">
-              <Button asChild size="lg">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+              <Button asChild size="lg" className="w-full sm:w-auto">
                 <Link href="/register">{hero.primaryCta}</Link>
               </Button>
-              <Button variant="outline" size="lg" asChild>
+              <Button variant="outline" size="lg" asChild className="w-full sm:w-auto">
                 <Link href="/app">{hero.secondaryCta}</Link>
               </Button>
             </div>

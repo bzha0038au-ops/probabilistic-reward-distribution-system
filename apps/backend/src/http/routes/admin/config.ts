@@ -5,6 +5,7 @@ import {
 } from '@reward/shared-types';
 
 import { db } from '../../../db';
+import { ADMIN_PERMISSION_KEYS } from '../../../modules/admin-permission/definitions';
 import { releaseBonusManual } from '../../../modules/bonus/service';
 import {
   getAuthFailureConfig,
@@ -21,37 +22,48 @@ import {
 import { recordAdminAction } from '../../../modules/admin/audit';
 import { toDecimal, toMoneyString } from '../../../shared/money';
 import { parseSchema } from '../../../shared/validation';
+import { requireAdminPermission } from '../../guards';
 import { sendError, sendSuccess } from '../../respond';
 import { adminRateLimit, enforceAdminLimit, toObject } from './common';
 
 export async function registerAdminConfigRoutes(protectedRoutes: AppInstance) {
-  protectedRoutes.get('/admin/config', async (_request, reply) => {
-    const poolBalance = await getPoolBalance(db);
-    const drawCost = await getDrawCost(db);
-    const randomization = await getRandomizationConfig(db);
-    const bonusRelease = await getBonusReleaseConfig(db);
-    const authFailure = await getAuthFailureConfig(db);
+  protectedRoutes.get(
+    '/admin/config',
+    { preHandler: [requireAdminPermission(ADMIN_PERMISSION_KEYS.CONFIG_READ)] },
+    async (_request, reply) => {
+      const poolBalance = await getPoolBalance(db);
+      const drawCost = await getDrawCost(db);
+      const randomization = await getRandomizationConfig(db);
+      const bonusRelease = await getBonusReleaseConfig(db);
+      const authFailure = await getAuthFailureConfig(db);
 
-    return sendSuccess(reply, {
-      poolBalance: toMoneyString(poolBalance),
-      drawCost: toMoneyString(drawCost),
-      weightJitterEnabled: randomization.weightJitterEnabled,
-      weightJitterPct: toMoneyString(randomization.weightJitterPct),
-      bonusAutoReleaseEnabled: bonusRelease.bonusAutoReleaseEnabled,
-      bonusUnlockWagerRatio: toMoneyString(bonusRelease.bonusUnlockWagerRatio),
-      authFailureWindowMinutes: toMoneyString(authFailure.authFailureWindowMinutes),
-      authFailureFreezeThreshold: toMoneyString(
-        authFailure.authFailureFreezeThreshold
-      ),
-      adminFailureFreezeThreshold: toMoneyString(
-        authFailure.adminFailureFreezeThreshold
-      ),
-    });
-  });
+      return sendSuccess(reply, {
+        poolBalance: toMoneyString(poolBalance),
+        drawCost: toMoneyString(drawCost),
+        weightJitterEnabled: randomization.weightJitterEnabled,
+        weightJitterPct: toMoneyString(randomization.weightJitterPct),
+        bonusAutoReleaseEnabled: bonusRelease.bonusAutoReleaseEnabled,
+        bonusUnlockWagerRatio: toMoneyString(bonusRelease.bonusUnlockWagerRatio),
+        authFailureWindowMinutes: toMoneyString(authFailure.authFailureWindowMinutes),
+        authFailureFreezeThreshold: toMoneyString(
+          authFailure.authFailureFreezeThreshold
+        ),
+        adminFailureFreezeThreshold: toMoneyString(
+          authFailure.adminFailureFreezeThreshold
+        ),
+      });
+    }
+  );
 
   protectedRoutes.patch(
     '/admin/config',
-    { config: { rateLimit: adminRateLimit }, preHandler: [enforceAdminLimit] },
+    {
+      config: { rateLimit: adminRateLimit },
+      preHandler: [
+        requireAdminPermission(ADMIN_PERMISSION_KEYS.CONFIG_UPDATE),
+        enforceAdminLimit,
+      ],
+    },
     async (request, reply) => {
       const parsed = parseSchema(SystemConfigPatchSchema, toObject(request.body));
       if (!parsed.isValid) {
@@ -107,7 +119,7 @@ export async function registerAdminConfigRoutes(protectedRoutes: AppInstance) {
       });
 
       await recordAdminAction({
-        adminId: request.admin?.userId ?? null,
+        adminId: request.admin?.adminId ?? null,
         action: 'system_config_update',
         targetType: 'system_config',
         metadata: { ...payload },
@@ -120,7 +132,13 @@ export async function registerAdminConfigRoutes(protectedRoutes: AppInstance) {
 
   protectedRoutes.post(
     '/admin/bonus-release',
-    { config: { rateLimit: adminRateLimit }, preHandler: [enforceAdminLimit] },
+    {
+      config: { rateLimit: adminRateLimit },
+      preHandler: [
+        requireAdminPermission(ADMIN_PERMISSION_KEYS.CONFIG_RELEASE_BONUS),
+        enforceAdminLimit,
+      ],
+    },
     async (request, reply) => {
       const parsed = parseSchema(BonusReleaseRequestSchema, toObject(request.body));
       if (!parsed.isValid) {
@@ -139,7 +157,7 @@ export async function registerAdminConfigRoutes(protectedRoutes: AppInstance) {
           amount: payload.amount,
         });
         await recordAdminAction({
-          adminId: request.admin?.userId ?? null,
+          adminId: request.admin?.adminId ?? null,
           action: 'bonus_release_manual',
           targetType: 'user',
           targetId: payload.userId,

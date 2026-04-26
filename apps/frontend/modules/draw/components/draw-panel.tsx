@@ -1,18 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import type { DrawResult, WalletBalanceResponse } from '@reward/shared-types';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { apiRequestClient } from '@/lib/api/client';
 import { useTranslations } from '@/components/i18n-provider';
-
-type DrawResult = {
-  id: number;
-  status: string;
-  rewardAmount: string;
-  prizeId: number | null;
-};
 
 export function DrawPanel() {
   const t = useTranslations();
@@ -22,7 +16,7 @@ export function DrawPanel() {
   const [error, setError] = useState<string | null>(null);
 
   async function refreshBalance() {
-    const response = await apiRequestClient<{ balance: string }>('/wallet');
+    const response = await apiRequestClient<WalletBalanceResponse>('/wallet');
     if (response.ok) {
       setBalance(response.data.balance ?? '0');
     }
@@ -61,7 +55,7 @@ export function DrawPanel() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Button onClick={handleDraw} disabled={loading}>
+        <Button onClick={handleDraw} disabled={loading} className="w-full sm:w-auto">
           {loading ? t('draw.drawing') : t('draw.runDraw')}
         </Button>
         {error && <p className="text-sm text-red-500">{error}</p>}

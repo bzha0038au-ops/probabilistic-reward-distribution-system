@@ -4,6 +4,7 @@ import type { DbClient, DbTransaction } from '../../db';
 import { db } from '../../db';
 import { freezeRecords, suspiciousAccounts } from '@reward/database';
 import { getAntiAbuseConfig } from '../system/service';
+import { revokeAuthSessions } from '../session/service';
 import { logger } from '../../shared/logger';
 
 export async function isUserFrozen(userId: number) {
@@ -28,20 +29,40 @@ export async function ensureUserFreeze(payload: {
     .orderBy(desc(freezeRecords.createdAt))
     .limit(1);
 
-  if (existing.length > 0) {
-    return existing[0];
-  }
+  const record =
+    existing[0] ??
+    (await db
+      .insert(freezeRecords)
+      .values({
+        userId: payload.userId,
+        reason: payload.reason ?? 'auth_failure_threshold',
+        status: 'active',
+      })
+      .returning()
+      .then((rows) => rows[0] ?? null));
 
-  const [created] = await db
-    .insert(freezeRecords)
-    .values({
-      userId: payload.userId,
-      reason: payload.reason ?? 'auth_failure_threshold',
-      status: 'active',
-    })
-    .returning();
+  await revokeAuthSessions({
+    userId: payload.userId,
+    kind: 'user',
+    reason: payload.reason ?? 'account_frozen',
+    eventType: 'user_sessions_revoked_all',
+    metadata: {
+      freezeReason: payload.reason ?? 'auth_failure_threshold',
+      ...(payload.metadata ?? {}),
+    },
+  });
+  await revokeAuthSessions({
+    userId: payload.userId,
+    kind: 'admin',
+    reason: payload.reason ?? 'account_frozen',
+    eventType: 'admin_sessions_revoked_all',
+    metadata: {
+      freezeReason: payload.reason ?? 'auth_failure_threshold',
+      ...(payload.metadata ?? {}),
+    },
+  });
 
-  return created ?? null;
+  return record;
 }
 
 type DbExecutor = DbClient | DbTransaction;

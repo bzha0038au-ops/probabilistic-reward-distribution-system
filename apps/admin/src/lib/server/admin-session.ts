@@ -6,12 +6,15 @@ const encoder = new TextEncoder();
 export const ADMIN_SESSION_COOKIE = 'reward_admin_session';
 export const ADMIN_CSRF_COOKIE = 'reward_csrf';
 export const ADMIN_SESSION_TTL_SECONDS =
-  Number(env.ADMIN_SESSION_TTL ?? '') || 60 * 60 * 8;
+  Number(env.ADMIN_SESSION_TTL ?? '') || 60 * 60 * 2;
 
 export type AdminSessionPayload = {
+  adminId: number;
   userId: number;
   email: string;
   role: 'admin';
+  mfaEnabled: boolean;
+  sessionId: string;
 };
 
 const getSessionSecret = () => {
@@ -30,13 +33,18 @@ export async function verifyAdminSessionToken(token?: string | null) {
     const { payload } = await jwtVerify(token, getSessionSecret());
     if (payload.role !== 'admin') return null;
 
+    const adminId = Number(payload.adminId ?? 0);
     const userId = Number(payload.userId ?? payload.sub ?? 0);
-    if (!userId) return null;
+    const sessionId = typeof payload.jti === 'string' ? payload.jti : '';
+    if (!adminId || !userId || !sessionId) return null;
 
     return {
+      adminId,
       userId,
       email: String(payload.email ?? ''),
       role: 'admin' as const,
+      mfaEnabled: Boolean(payload.mfaEnabled),
+      sessionId,
     } satisfies AdminSessionPayload;
   } catch {
     return null;

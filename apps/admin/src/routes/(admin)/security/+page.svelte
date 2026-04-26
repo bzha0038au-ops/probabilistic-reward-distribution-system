@@ -9,6 +9,7 @@
     eventType: string
     ip?: string | null
     userAgent?: string | null
+    metadata?: Record<string, unknown> | null
     createdAt?: string
   }
 
@@ -48,9 +49,13 @@
 
   let { data }: { data: PageData } = $props()
   const { t } = getContext("i18n") as { t: (key: string) => string }
+  let stepUpCode = $state("")
 
   const freezePage = $derived(data.freezeRecords?.page ?? 1)
   const events = $derived(data.authEvents?.items ?? [])
+  const anomalyEvents = $derived(
+    events.filter((event) => event.eventType.endsWith("_login_anomaly"))
+  )
   const freezeRecords = $derived(data.freezeRecords?.items ?? [])
   const adminActions = $derived(data.adminActions?.items ?? [])
   const authNextCursor = $derived(data.authEvents?.nextCursor ?? null)
@@ -135,6 +140,76 @@
     <span>{actionError}</span>
   </div>
 {/if}
+
+<section class="mt-6 card bg-base-100 shadow">
+  <div class="card-body gap-3">
+    <div>
+      <h2 class="card-title">{t("security.stepUp.title")}</h2>
+      <p class="text-sm text-slate-500">{t("security.stepUp.description")}</p>
+    </div>
+    <label class="form-control max-w-sm">
+      <span class="label-text mb-2">{t("common.totpCode")}</span>
+      <input
+        name="totpCode"
+        type="text"
+        inputmode="numeric"
+        autocomplete="one-time-code"
+        class="input input-bordered"
+        bind:value={stepUpCode}
+        placeholder={t("security.stepUp.placeholder")}
+      />
+    </label>
+  </div>
+</section>
+
+<section class="mt-6 card border border-amber-200 bg-amber-50/70 shadow-sm">
+  <div class="card-body">
+    <div>
+      <h2 class="card-title text-amber-900">{t("security.alerts.title")}</h2>
+      <p class="text-sm text-amber-800">{t("security.alerts.description")}</p>
+    </div>
+
+    {#if anomalyEvents.length === 0}
+      <p class="text-sm text-amber-800">{t("security.alerts.empty")}</p>
+    {:else}
+      <div class="grid gap-3 md:grid-cols-2">
+        {#each anomalyEvents as event}
+          <article class="rounded-xl border border-amber-200 bg-white p-4 text-sm shadow-sm">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <p class="font-semibold text-slate-900">{event.email ?? "-"}</p>
+                <p class="text-xs uppercase tracking-[0.2em] text-amber-700">
+                  {event.eventType}
+                </p>
+              </div>
+              <p class="text-xs text-slate-500">{formatDate(event.createdAt)}</p>
+            </div>
+            <dl class="mt-3 space-y-2 text-slate-600">
+              <div class="flex justify-between gap-4">
+                <dt>IP</dt>
+                <dd class="text-right font-mono text-xs">{event.ip ?? "-"}</dd>
+              </div>
+              <div class="flex justify-between gap-4">
+                <dt>{t("security.alerts.previousIp")}</dt>
+                <dd class="text-right font-mono text-xs">
+                  {String(event.metadata?.previousIp ?? "-")}
+                </dd>
+              </div>
+              <div class="flex justify-between gap-4">
+                <dt>{t("security.alerts.signals")}</dt>
+                <dd class="text-right text-xs">
+                  {Array.isArray(event.metadata?.signals)
+                    ? event.metadata?.signals.join(", ")
+                    : "-"}
+                </dd>
+              </div>
+            </dl>
+          </article>
+        {/each}
+      </div>
+    {/if}
+  </div>
+</section>
 
 <section class="mt-6 card bg-base-100 shadow">
   <div class="card-body">
@@ -320,6 +395,7 @@
           placeholder={t("security.freeze.reasonPlaceholder")}
         />
       </div>
+      <input type="hidden" name="totpCode" value={stepUpCode} />
       <div class="flex items-end">
         <button class="btn btn-primary" type="submit">
           {t("security.freeze.freeze")}
@@ -760,6 +836,7 @@
               <td class="text-right">
                 <form method="post" action="?/releaseFreeze">
                   <input type="hidden" name="userId" value={record.userId} />
+                  <input type="hidden" name="totpCode" value={stepUpCode} />
                   <button class="btn btn-xs btn-outline" type="submit">
                     {t("security.freeze.release")}
                   </button>

@@ -7,7 +7,7 @@
 ## 为什么值得看
 
 - 充值、抽奖、提现这些高风险路径都按事务边界处理
-- 用户前台和管理后台明确拆开，逻辑隔离更清楚
+- 公共用户端和管理后台明确拆开，逻辑隔离更清楚
 - 财务变更都由 backend 统一执行并落到账本记录
 - schema、migration、共享类型放在同一个 workspace，变更不容易漂移
 
@@ -35,6 +35,7 @@ cp apps/database/.env.example apps/database/.env
 cp apps/backend/.env.example apps/backend/.env
 cp apps/frontend/.env.example apps/frontend/.env
 cp apps/admin/.env.example apps/admin/.env
+cp apps/mobile/.env.example apps/mobile/.env
 ```
 
 ### 3. 填最少可运行配置
@@ -54,6 +55,7 @@ DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5433/reward_local
 POSTGRES_URL=postgresql://postgres:postgres@127.0.0.1:5433/reward_local
 ADMIN_JWT_SECRET=local_admin_secret_change_me_123456
 USER_JWT_SECRET=local_user_secret_change_me_123456
+ADMIN_MFA_ENCRYPTION_SECRET=local_admin_mfa_secret_change_me_123456
 WEB_BASE_URL=http://localhost:3000
 ADMIN_BASE_URL=http://localhost:5173
 PORT=4000
@@ -75,9 +77,16 @@ API_BASE_URL=http://localhost:4000
 ADMIN_JWT_SECRET=local_admin_secret_change_me_123456
 ```
 
+`apps/mobile/.env`
+
+```dotenv
+EXPO_PUBLIC_API_BASE_URL=http://127.0.0.1:4000
+```
+
 注意：
 
 - `apps/backend/.env` 和 `apps/admin/.env` 里的 `ADMIN_JWT_SECRET` 必须一致
+- 生产环境建议单独设置 `ADMIN_MFA_ENCRYPTION_SECRET`，不要直接复用 JWT secret
 - 本地开发可以先用占位 secret，生产环境必须换成真实的 32 位以上密钥
 
 ### 4. 启动 Postgres 和 Redis
@@ -98,11 +107,20 @@ pnpm db:migrate
 pnpm dev
 ```
 
+如果你要把用户三端一起拉起来：
+
+```bash
+pnpm dev:user
+```
+
 ### 7. 打开本地地址
 
 - 用户前台：[http://localhost:3000](http://localhost:3000)
 - 管理后台：[http://localhost:5173](http://localhost:5173)
 - 后端健康检查：[http://localhost:4000/health](http://localhost:4000/health)
+- 原生端开发服务：`pnpm dev:mobile`
+- iOS 模拟器：`pnpm mobile:ios`
+- Android 模拟器：`pnpm mobile:android`
 
 ### 下一步常用命令
 
@@ -140,10 +158,12 @@ pnpm db:seed:manual
 ## 项目总览
 
 - 用户前台：[`apps/frontend`](./apps/frontend)
+- 原生端：[`apps/mobile`](./apps/mobile)
 - 管理后台：[`apps/admin`](./apps/admin)
 - 后端与财务逻辑：[`apps/backend`](./apps/backend)
 - 数据库 schema 与 migration：[`apps/database`](./apps/database)
 - 前后端共享契约：[`apps/shared-types`](./apps/shared-types)
+- 用户侧共享基础层：[`packages/user-core`](./packages/user-core)
 
 如果你在系统跑起来之后想继续看架构，先读 [`docs/architecture.md`](./docs/architecture.md)。
 
@@ -151,11 +171,12 @@ pnpm db:seed:manual
 
 ```mermaid
 flowchart LR
-    A["用户前台<br/>Next.js"] --> C["Backend API<br/>Fastify"]
-    B["管理后台<br/>SvelteKit"] --> C
+    A["用户 Web<br/>Next.js"] --> C["Backend API<br/>Fastify"]
+    B["用户原生端<br/>Expo iOS + Android"] --> C
+    G["管理后台<br/>SvelteKit"] --> C
     C --> D["PostgreSQL"]
     C --> E["Redis"]
-    C --> F["共享契约<br/>Zod + TypeScript"]
+    C --> F["共享契约 + 用户基础层<br/>Zod + TypeScript"]
 ```
 
 ## 这个项目做什么
@@ -179,31 +200,36 @@ flowchart LR
 
 | 路径 | 作用 |
 | --- | --- |
-| [`apps/frontend`](./apps/frontend) | 面向用户的产品前台 |
+| [`apps/frontend`](./apps/frontend) | 面向用户的 Web 前台 |
+| [`apps/mobile`](./apps/mobile) | 面向 iOS 和 Android 的原生用户端 |
 | [`apps/admin`](./apps/admin) | 面向运营和财务的后台控制台 |
 | [`apps/backend`](./apps/backend) | HTTP API、鉴权、钱包流程、抽奖引擎 |
 | [`apps/database`](./apps/database) | Drizzle schema 与 migration |
 | [`apps/shared-types`](./apps/shared-types) | 前后端共享请求 / 响应契约 |
+| [`packages/user-core`](./packages/user-core) | 用户侧共享 API client、路由常量和平台辅助能力 |
 | [`docs`](./docs) | 架构、环境、部署、测试文档 |
 
 ## 技术栈
 
 | 层 | 选型 |
 | --- | --- |
-| 用户前台 | Next.js App Router |
+| 用户 Web | Next.js App Router |
+| 用户原生端 | Expo + React Native |
 | 管理后台 | SvelteKit |
 | 后端 API | Fastify |
 | 数据库 | PostgreSQL |
 | ORM / schema | Drizzle ORM |
 | 共享契约 | TypeScript + Zod |
+| 用户共享基础层 | Workspace package (`@reward/user-core`) |
 | 工程工具 | pnpm workspace、Vitest、GitHub Actions |
 
-### 为什么是两个前端？
+### 为什么是 Web + Native + Admin？
 
 核心原因是逻辑隔离。
 
-- 用户前台和管理后台服务的是两类不同对象，风险级别也不同
-- 用户前台是公开产品，关注用户流程、会话体验和页面交互
+- 现在公开用户产品拆成两层壳：`apps/frontend` 负责 Web，`apps/mobile` 负责 iOS + Android
+- 这两个用户端通过 `packages/user-core` 共用接口契约和请求层
+- 管理后台服务的对象和风险级别仍然不同
 - 管理后台是内部工具，承载财务查看、参数调整、风控操作和审计查询
 - 分开以后，admin 的认证、权限、依赖和复杂界面不会污染用户侧产品
 - 这样也更利于部署、性能优化和故障隔离
@@ -231,6 +257,10 @@ flowchart LR
 
 ```bash
 pnpm dev
+pnpm dev:user
+pnpm dev:mobile
+pnpm mobile:ios
+pnpm mobile:android
 pnpm build
 pnpm check
 pnpm lint
@@ -251,7 +281,8 @@ pnpm db:reset
 最少需要：
 
 - backend：`DATABASE_URL` 或 `POSTGRES_URL`、`ADMIN_JWT_SECRET`、`USER_JWT_SECRET`
-- frontend：`AUTH_SECRET`、`API_BASE_URL`、`NEXT_PUBLIC_API_BASE_URL`
+- frontend：`AUTH_SECRET`、`API_BASE_URL`
+- mobile：`EXPO_PUBLIC_API_BASE_URL`
 - admin：`ADMIN_JWT_SECRET`、`API_BASE_URL`
 
 完整说明见 [`docs/environment.md`](./docs/environment.md)。

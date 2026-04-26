@@ -20,6 +20,7 @@ export const actions: Actions = {
     const formData = await request.formData();
     const email = formData.get('email')?.toString().trim() ?? '';
     const password = formData.get('password')?.toString() ?? '';
+    const totpCode = formData.get('totpCode')?.toString().trim() ?? '';
 
     if (!email || !password) {
       return fail(400, { error: 'Email and password are required.' });
@@ -32,7 +33,11 @@ export const actions: Actions = {
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({
+          email,
+          password,
+          ...(totpCode ? { totpCode } : {}),
+        }),
       }
     );
 

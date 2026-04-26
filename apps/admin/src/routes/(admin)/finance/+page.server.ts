@@ -36,20 +36,31 @@ export const load: PageServerLoad = async ({ fetch, cookies }) => {
 const parseId = (value: FormDataEntryValue | null) =>
   typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
 
+const parseTotpCode = (value: FormDataEntryValue | null) =>
+  typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
+
 export const actions: Actions = {
   approveDeposit: async ({ request, fetch, cookies }) => {
     const formData = await request.formData();
     const id = parseId(formData.get('id'));
+    const totpCode = parseTotpCode(formData.get('totpCode'));
 
     if (!id) {
       return fail(400, { error: 'Missing deposit id.' });
+    }
+    if (!totpCode) {
+      return fail(400, { error: 'Admin TOTP code is required.' });
     }
 
     const response = await apiRequest(
       fetch,
       cookies,
       `/admin/deposits/${id}/approve`,
-      { method: 'PATCH' }
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ totpCode }),
+      }
     );
 
     if (!response.ok) {
@@ -63,16 +74,24 @@ export const actions: Actions = {
   failDeposit: async ({ request, fetch, cookies }) => {
     const formData = await request.formData();
     const id = parseId(formData.get('id'));
+    const totpCode = parseTotpCode(formData.get('totpCode'));
 
     if (!id) {
       return fail(400, { error: 'Missing deposit id.' });
+    }
+    if (!totpCode) {
+      return fail(400, { error: 'Admin TOTP code is required.' });
     }
 
     const response = await apiRequest(
       fetch,
       cookies,
       `/admin/deposits/${id}/fail`,
-      { method: 'PATCH' }
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ totpCode }),
+      }
     );
 
     if (!response.ok) {
@@ -86,16 +105,24 @@ export const actions: Actions = {
   approveWithdrawal: async ({ request, fetch, cookies }) => {
     const formData = await request.formData();
     const id = parseId(formData.get('id'));
+    const totpCode = parseTotpCode(formData.get('totpCode'));
 
     if (!id) {
       return fail(400, { error: 'Missing withdrawal id.' });
+    }
+    if (!totpCode) {
+      return fail(400, { error: 'Admin TOTP code is required.' });
     }
 
     const response = await apiRequest(
       fetch,
       cookies,
       `/admin/withdrawals/${id}/approve`,
-      { method: 'PATCH' }
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ totpCode }),
+      }
     );
 
     if (!response.ok) {
@@ -109,16 +136,24 @@ export const actions: Actions = {
   rejectWithdrawal: async ({ request, fetch, cookies }) => {
     const formData = await request.formData();
     const id = parseId(formData.get('id'));
+    const totpCode = parseTotpCode(formData.get('totpCode'));
 
     if (!id) {
       return fail(400, { error: 'Missing withdrawal id.' });
+    }
+    if (!totpCode) {
+      return fail(400, { error: 'Admin TOTP code is required.' });
     }
 
     const response = await apiRequest(
       fetch,
       cookies,
       `/admin/withdrawals/${id}/reject`,
-      { method: 'PATCH' }
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ totpCode }),
+      }
     );
 
     if (!response.ok) {
@@ -132,16 +167,24 @@ export const actions: Actions = {
   payWithdrawal: async ({ request, fetch, cookies }) => {
     const formData = await request.formData();
     const id = parseId(formData.get('id'));
+    const totpCode = parseTotpCode(formData.get('totpCode'));
 
     if (!id) {
       return fail(400, { error: 'Missing withdrawal id.' });
+    }
+    if (!totpCode) {
+      return fail(400, { error: 'Admin TOTP code is required.' });
     }
 
     const response = await apiRequest(
       fetch,
       cookies,
       `/admin/withdrawals/${id}/pay`,
-      { method: 'PATCH' }
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ totpCode }),
+      }
     );
 
     if (!response.ok) {

@@ -37,6 +37,9 @@ const fallbackFreezeRecords = {
   hasNext: false,
 };
 
+const parseTotpCode = (value: FormDataEntryValue | null) =>
+  typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
+
 export const load: PageServerLoad = async ({ fetch, cookies, url }) => {
   const params = new URLSearchParams();
   const email = url.searchParams.get('email');
@@ -142,16 +145,24 @@ export const actions: Actions = {
   releaseFreeze: async ({ request, fetch, cookies }) => {
     const formData = await request.formData();
     const userId = formData.get('userId')?.toString().trim();
+    const totpCode = parseTotpCode(formData.get('totpCode'));
 
     if (!userId) {
       return fail(400, { error: 'Missing user id.' });
+    }
+    if (!totpCode) {
+      return fail(400, { error: 'Admin TOTP code is required.' });
     }
 
     const response = await apiRequest(
       fetch,
       cookies,
       `/admin/freeze-records/${userId}/release`,
-      { method: 'POST' }
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ totpCode }),
+      }
     );
 
     if (!response.ok) {
@@ -166,9 +177,13 @@ export const actions: Actions = {
     const formData = await request.formData();
     const userId = formData.get('userId')?.toString().trim();
     const reason = formData.get('reason')?.toString().trim();
+    const totpCode = parseTotpCode(formData.get('totpCode'));
 
     if (!userId) {
       return fail(400, { error: 'Missing user id.' });
+    }
+    if (!totpCode) {
+      return fail(400, { error: 'Admin TOTP code is required.' });
     }
 
     const response = await apiRequest(fetch, cookies, '/admin/freeze-records', {
@@ -177,6 +192,7 @@ export const actions: Actions = {
       body: JSON.stringify({
         userId: Number(userId),
         reason: reason || undefined,
+        totpCode,
       }),
     });
 

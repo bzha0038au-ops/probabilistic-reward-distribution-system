@@ -27,6 +27,7 @@
 
   let { data }: { data: PageData } = $props()
   const { t } = getContext("i18n") as { t: (key: string) => string }
+  let stepUpCode = $state("")
 
   const deposits = $derived(data.deposits ?? [])
   const withdrawals = $derived(data.withdrawals ?? [])
@@ -72,6 +73,27 @@
   </div>
 {/if}
 
+<section class="mt-6 card bg-base-100 shadow">
+  <div class="card-body gap-3">
+    <div>
+      <h2 class="card-title">{t("finance.stepUp.title")}</h2>
+      <p class="text-sm text-slate-500">{t("finance.stepUp.description")}</p>
+    </div>
+    <label class="form-control max-w-sm">
+      <span class="label-text mb-2">{t("common.totpCode")}</span>
+      <input
+        name="totpCode"
+        type="text"
+        inputmode="numeric"
+        autocomplete="one-time-code"
+        class="input input-bordered"
+        bind:value={stepUpCode}
+        placeholder={t("finance.stepUp.placeholder")}
+      />
+    </label>
+  </div>
+</section>
+
 <section class="mt-8 card bg-base-100 shadow">
   <div class="card-body">
     <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -106,12 +128,14 @@
                   <div class="flex justify-end gap-2">
                     <form method="post" action="?/approveDeposit">
                       <input type="hidden" name="id" value={deposit.id} />
+                      <input type="hidden" name="totpCode" value={stepUpCode} />
                       <button class="btn btn-xs btn-primary" type="submit">
                         {t("finance.deposits.actionApprove")}
                       </button>
                     </form>
                     <form method="post" action="?/failDeposit">
                       <input type="hidden" name="id" value={deposit.id} />
+                      <input type="hidden" name="totpCode" value={stepUpCode} />
                       <button class="btn btn-xs btn-outline" type="submit">
                         {t("finance.deposits.actionFail")}
                       </button>
@@ -173,12 +197,14 @@
                     {#if withdrawal.status === "pending"}
                       <form method="post" action="?/approveWithdrawal">
                         <input type="hidden" name="id" value={withdrawal.id} />
+                        <input type="hidden" name="totpCode" value={stepUpCode} />
                         <button class="btn btn-xs btn-primary" type="submit">
                           {t("finance.withdrawals.actionApprove")}
                         </button>
                       </form>
                       <form method="post" action="?/rejectWithdrawal">
                         <input type="hidden" name="id" value={withdrawal.id} />
+                        <input type="hidden" name="totpCode" value={stepUpCode} />
                         <button class="btn btn-xs btn-outline" type="submit">
                           {t("finance.withdrawals.actionReject")}
                         </button>
@@ -186,6 +212,7 @@
                     {/if}
                     <form method="post" action="?/payWithdrawal">
                       <input type="hidden" name="id" value={withdrawal.id} />
+                      <input type="hidden" name="totpCode" value={stepUpCode} />
                       <button class="btn btn-xs btn-primary" type="submit">
                         {t("finance.withdrawals.actionPay")}
                       </button>

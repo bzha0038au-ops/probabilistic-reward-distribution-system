@@ -13,6 +13,7 @@ export type Messages = {
     navAdmin: string;
     navFinance: string;
     navSecurity: string;
+    totpCode: string;
     prev: string;
     next: string;
   };
@@ -22,12 +23,31 @@ export type Messages = {
     heading: string;
     description: string;
     emailPlaceholder: string;
+    totpPlaceholder: string;
     submit: string;
   };
   admin: {
     eyebrow: string;
     heading: string;
     description: string;
+    mfa: {
+      title: string;
+      description: string;
+      enabled: string;
+      disabled: string;
+      start: string;
+      secret: string;
+      otpauthUrl: string;
+      codePlaceholder: string;
+      confirm: string;
+      enabledHint: string;
+    };
+    stepUp: {
+      title: string;
+      description: string;
+      placeholder: string;
+      mfaRequired: string;
+    };
     config: {
       title: string;
       description: string;
@@ -111,6 +131,11 @@ export type Messages = {
   finance: {
     title: string;
     description: string;
+    stepUp: {
+      title: string;
+      description: string;
+      placeholder: string;
+    };
     deposits: {
       title: string;
       description: string;
@@ -154,6 +179,11 @@ export type Messages = {
   security: {
     title: string;
     description: string;
+    stepUp: {
+      title: string;
+      description: string;
+      placeholder: string;
+    };
     filters: {
       title: string;
       description: string;
@@ -181,6 +211,13 @@ export type Messages = {
         createdAt: string;
       };
       empty: string;
+    };
+    alerts: {
+      title: string;
+      description: string;
+      empty: string;
+      signals: string;
+      previousIp: string;
     };
     freeze: {
       title: string;
@@ -251,6 +288,7 @@ const translations: Record<Locale, Messages> = {
       navAdmin: 'Control',
       navFinance: 'Finance',
       navSecurity: 'Security',
+      totpCode: 'TOTP Code',
       prev: 'Prev',
       next: 'Next',
     },
@@ -260,12 +298,31 @@ const translations: Record<Locale, Messages> = {
       heading: 'Sign in to manage the prize pool',
       description: 'Use your admin credentials to access analytics and prize controls.',
       emailPlaceholder: 'admin@reward.dev',
+      totpPlaceholder: 'Required when MFA is enabled',
       submit: 'Sign In',
     },
     admin: {
       eyebrow: 'Admin Console',
       heading: 'Prize Pool Control Center',
       description: 'Configure prizes, tune weights, and monitor draw performance.',
+      mfa: {
+        title: 'Admin MFA',
+        description: 'Enroll a TOTP authenticator before using finance or config changes.',
+        enabled: 'Enabled',
+        disabled: 'Not enabled',
+        start: 'Start MFA Enrollment',
+        secret: 'Manual Secret',
+        otpauthUrl: 'OTPAuth URL',
+        codePlaceholder: 'Enter the 6-digit code from your authenticator',
+        confirm: 'Enable MFA',
+        enabledHint: 'MFA is active for this admin account.',
+      },
+      stepUp: {
+        title: 'High-Risk Step-Up',
+        description: 'Finance approvals, payouts, freezes, and config changes require a fresh TOTP code.',
+        placeholder: 'Enter a 6-digit code before submitting high-risk actions',
+        mfaRequired: 'Enable MFA first to perform high-risk actions.',
+      },
       config: {
         title: 'System Controls',
         description: 'Adjust pool balance, draw cost, and randomization.',
@@ -349,6 +406,11 @@ const translations: Record<Locale, Messages> = {
     finance: {
       title: 'Finance Operations',
       description: 'Approve deposits and manage withdrawals.',
+      stepUp: {
+        title: 'Finance Step-Up',
+        description: 'Finance mutations require a fresh TOTP code.',
+        placeholder: 'Enter a 6-digit authenticator code',
+      },
       deposits: {
         title: 'Deposits',
         description: 'Pending and completed top-ups.',
@@ -392,6 +454,11 @@ const translations: Record<Locale, Messages> = {
     security: {
       title: 'Security Monitor',
       description: 'Recent authentication failures and security events.',
+      stepUp: {
+        title: 'Risk Step-Up',
+        description: 'Freeze and release actions require a fresh TOTP code.',
+        placeholder: 'Enter a 6-digit authenticator code',
+      },
       filters: {
         title: 'Filters',
         description: 'Filter by email, event type, or time range.',
@@ -419,6 +486,13 @@ const translations: Record<Locale, Messages> = {
           createdAt: 'Created',
         },
         empty: 'No auth events found.',
+      },
+      alerts: {
+        title: 'Anomalous Login Alerts',
+        description: 'Recent login events flagged for a new IP or user agent.',
+        empty: 'No anomalous login alerts on this page.',
+        signals: 'Signals',
+        previousIp: 'Previous IP',
       },
       freeze: {
         title: 'Frozen Accounts',
@@ -483,6 +557,7 @@ const translations: Record<Locale, Messages> = {
       navAdmin: '控制台',
       navFinance: '财务',
       navSecurity: '安全',
+      totpCode: 'TOTP 验证码',
       prev: '上一页',
       next: '下一页',
     },
@@ -492,12 +567,31 @@ const translations: Record<Locale, Messages> = {
       heading: '登录以管理奖池',
       description: '使用管理员账号访问分析与奖品配置。',
       emailPlaceholder: 'admin@reward.dev',
+      totpPlaceholder: '启用 MFA 后需要填写',
       submit: '登录',
     },
     admin: {
       eyebrow: '管理控制台',
       heading: '奖池控制中心',
       description: '配置奖品、调整权重，并监控抽奖表现。',
+      mfa: {
+        title: '管理员 MFA',
+        description: '在执行财务或系统配置前，先绑定一个 TOTP 验证器。',
+        enabled: '已启用',
+        disabled: '未启用',
+        start: '开始绑定 MFA',
+        secret: '手动密钥',
+        otpauthUrl: 'OTPAuth 链接',
+        codePlaceholder: '输入验证器中的 6 位验证码',
+        confirm: '启用 MFA',
+        enabledHint: '当前管理员账号已启用 MFA。',
+      },
+      stepUp: {
+        title: '高风险 Step-Up',
+        description: '财务审批、打款、冻结和配置修改都需要新的 TOTP 验证码。',
+        placeholder: '执行高风险操作前先输入 6 位验证码',
+        mfaRequired: '请先启用 MFA，再执行高风险操作。',
+      },
       config: {
         title: '系统控制',
         description: '调整奖池余额、抽奖成本与随机化参数。',
@@ -581,6 +675,11 @@ const translations: Record<Locale, Messages> = {
     finance: {
       title: '财务操作',
       description: '审批充值与处理提现请求。',
+      stepUp: {
+        title: '财务 Step-Up',
+        description: '财务写操作需要新的 TOTP 验证码。',
+        placeholder: '输入 6 位验证器验证码',
+      },
       deposits: {
         title: '充值记录',
         description: '待处理与已完成的充值。',
@@ -624,6 +723,11 @@ const translations: Record<Locale, Messages> = {
     security: {
       title: '安全监控',
       description: '最近的登录失败与安全事件。',
+      stepUp: {
+        title: '风控 Step-Up',
+        description: '冻结和解冻操作需要新的 TOTP 验证码。',
+        placeholder: '输入 6 位验证器验证码',
+      },
       filters: {
         title: '筛选',
         description: '按邮箱、事件类型或时间范围筛选。',
@@ -651,6 +755,13 @@ const translations: Record<Locale, Messages> = {
           createdAt: '创建时间',
         },
         empty: '暂无登录事件。',
+      },
+      alerts: {
+        title: '异常登录告警',
+        description: '这里会显示因新 IP 或新设备指纹触发的最近登录事件。',
+        empty: '当前页没有异常登录告警。',
+        signals: '触发信号',
+        previousIp: '上次 IP',
       },
       freeze: {
         title: '冻结账号',

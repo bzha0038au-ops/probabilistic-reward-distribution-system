@@ -24,9 +24,102 @@
     --input: 214 32% 91%;
     --ring: 199 89% 48%;
     --radius: 0.75rem;
+    --app-height: 100vh;
+    --app-width: 100vw;
+  }
+
+  html {
+    min-height: 100%;
+    background: hsl(var(--background));
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
 
   body {
     @apply bg-background text-foreground antialiased;
+    min-height: 100%;
+  }
+
+  body,
+  button,
+  input,
+  select,
+  textarea,
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button,
+  [role='button'],
+  a[href] {
+    touch-action: manipulation;
+  }
+}
+
+@supports (height: 100dvh) {
+  :root {
+    --app-height: 100dvh;
+  }
+}
+
+@supports (-webkit-touch-callout: none) {
+  html,
+  body {
+    min-height: -webkit-fill-available;
+  }
+}
+
+@layer utilities {
+  .min-h-app-screen {
+    min-height: 100vh;
+    min-height: var(--app-height);
+  }
+
+  .page-safe-x {
+    padding-left: calc(env(safe-area-inset-left, 0px) + 1rem);
+    padding-right: calc(env(safe-area-inset-right, 0px) + 1rem);
+  }
+
+  .page-safe-y {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 1rem);
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem);
+  }
+
+  .page-safe-top {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 1rem);
+  }
+
+  .page-safe-bottom {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem);
+  }
+
+  .page-safe-left {
+    padding-left: calc(env(safe-area-inset-left, 0px) + 1rem);
+  }
+
+  .page-safe-right {
+    padding-right: calc(env(safe-area-inset-right, 0px) + 1rem);
+  }
+}
+
+@media (min-width: 640px) {
+  @layer utilities {
+    .page-safe-x {
+      padding-left: calc(env(safe-area-inset-left, 0px) + 1.5rem);
+      padding-right: calc(env(safe-area-inset-right, 0px) + 1.5rem);
+    }
+
+    .page-safe-y {
+      padding-top: calc(env(safe-area-inset-top, 0px) + 1.5rem);
+      padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 1.5rem);
+    }
+
+    .page-safe-top {
+      padding-top: calc(env(safe-area-inset-top, 0px) + 1.5rem);
+    }
+
+    .page-safe-bottom {
+      padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 1.5rem);
+    }
   }
 }
