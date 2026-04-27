@@ -39,3 +39,6 @@ playwright-report/
 # IDE
 .vscode/
 .idea/
+
+# Local agent workspaces
+.claude/
