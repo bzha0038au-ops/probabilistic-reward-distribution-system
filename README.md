@@ -19,10 +19,10 @@ Prefer Chinese documentation? See [README-cn.md](./README-cn.md).
 
 ## Why This Repo
 
-- Transaction-safe wallet flows for top-up, draw, and withdrawal paths
-- Separate public user surfaces and admin tooling, so customer flows and operations logic stay isolated
-- Backend-owned financial mutations with ledger-style records and DB transaction boundaries
-- Shared contracts, schema, and migrations inside one workspace, so changes move together
+- Transaction-safe wallet, draw, and game-settlement flows for reward-center style products
+- Separate public web/native user surfaces and admin tooling, so customer flows and higher-risk operations stay isolated
+- Backend-owned financial mutations, async worker loops, and audit trails with explicit DB transaction boundaries
+- Shared contracts, schema, first-party clients, and SaaS SDK boundaries inside one workspace, so changes move together
 
 ## Quick Start
 
@@ -113,11 +113,13 @@ pnpm db:up
 pnpm db:migrate
 ```
 
-### 6. Start all apps
+### 6. Start the primary local stack
 
 ```bash
 pnpm dev
 ```
+
+This starts the main web, admin, and backend apps together.
 
 To drain queued auth notifications locally, start the notification worker in a
 second terminal:
@@ -126,10 +128,26 @@ second terminal:
 pnpm dev:notifications
 ```
 
-To run the three user surfaces together:
+Optional worker processes that are useful while developing payment or SaaS
+flows:
+
+```bash
+pnpm dev:reconciliation
+pnpm dev:payment-webhooks
+pnpm dev:saas-billing
+```
+
+To run the three user-facing surfaces together:
 
 ```bash
 pnpm dev:user
+```
+
+Additional backend workers are available inside `apps/backend`:
+
+```bash
+pnpm --dir apps/backend dev:worker:payment-outbound
+pnpm --dir apps/backend dev:worker:payment-operations
 ```
 
 ### 7. Open the local apps
@@ -145,11 +163,18 @@ pnpm dev:user
 
 ```bash
 pnpm db:seed:manual
+pnpm check
+pnpm lint
 pnpm test
 pnpm test:integration
 pnpm test:e2e
+pnpm test:e2e:install
 pnpm test:load
 pnpm test:load:mutations
+pnpm dev:notifications
+pnpm dev:reconciliation
+pnpm dev:payment-webhooks
+pnpm dev:saas-billing
 pnpm build
 pnpm db:reset
 ```
@@ -201,30 +226,36 @@ the executable Postgres backup/restore assets under [`deploy/`](./deploy).
 
 ```mermaid
 flowchart LR
-    A["User Web<br/>Next.js"] --> C["Backend API<br/>Fastify"]
+    A["User Web<br/>Next.js + Auth.js"] --> C["Backend API<br/>Fastify"]
     B["User Native<br/>Expo iOS + Android"] --> C
     G["Admin Frontend<br/>SvelteKit"] --> C
-    C --> D["PostgreSQL"]
+    A --> F["@reward/user-core<br/>User routes + helpers"]
+    B --> F
+    H["@reward/prize-engine-sdk<br/>/v1/engine/* client"] --> C
+    C --> D["PostgreSQL + Drizzle schema"]
     C --> E["Redis"]
-    C --> F["Shared Contracts + User Core<br/>Zod + TypeScript"]
+    I["Worker processes<br/>notifications / finance / SaaS"] --> C
+    C --> J["Shared contracts<br/>@reward/shared-types"]
 ```
 
 ## What This Project Does
 
-- Lets users register, log in, top up, withdraw, draw rewards, and inspect wallet history
-- Gives operators a separate admin console to manage prizes, update runtime config, inspect finance data, and review audit/security records
-- Keeps draw execution and balance mutation logic inside the backend, protected by DB transactions and ledger entries
-- Keeps schema, migrations, and shared contracts inside the same workspace so the system evolves together
+- Lets users register, log in, manage sessions, top up, withdraw, draw rewards, inspect wallet history, and play additional user-facing games such as blackjack and quick-eight
+- Gives operators a separate admin console to manage prizes, review finance flows, inspect risk and audit events, issue SaaS API keys, and change runtime config safely
+- Exposes a separate SaaS prize-engine surface under `/v1/engine/*` for trusted project-to-project integrations through `@reward/prize-engine-sdk`
+- Keeps draw execution, wallet mutation, finance review, notification delivery, and background reconciliation inside the backend with explicit ledger writes and worker boundaries
+- Keeps schema, migrations, shared contracts, and client packages inside the same workspace so product and platform changes evolve together
 
 The highest-risk path is `executeDraw(userId)`: debit the draw cost, evaluate prize eligibility, write ledger entries, update the house account, and persist the result inside one transaction.
 
 ## Highlights
 
-- Weighted draw execution with prize eligibility checks
-- Prize-pool and payout controls in the backend
-- Wallet ledger and transaction boundaries for financial flows
-- Admin audit and finance surfaces separated from the public app
-- Workspace-level tests plus backend integration tests against local Postgres
+- Weighted draw execution with fairness metadata, prize eligibility checks, and house-account updates
+- Wallet ledger, house transactions, and transaction boundaries for financial correctness
+- Manual-review payment flows plus dedicated webhook, reconciliation, outbound, and operations worker paths
+- Shared first-party user API client (`@reward/user-core`) and separate external SaaS SDK (`@reward/prize-engine-sdk`)
+- Admin audit, risk, MFA, finance, and configuration surfaces separated from the public apps
+- Workspace-level tests plus backend integration tests against a self-bootstrapped real Postgres instance
 
 ## Workspace Map
 
@@ -233,13 +264,25 @@ The highest-risk path is `executeDraw(userId)`: debit the draw cost, evaluate pr
 | [`apps/frontend`](./apps/frontend) | User-facing web app |
 | [`apps/mobile`](./apps/mobile) | User-facing native app for iOS and Android |
 | [`apps/admin`](./apps/admin) | Internal operations and finance console |
-| [`apps/backend`](./apps/backend) | HTTP API, auth, wallet flows, draw engine |
+| [`apps/backend`](./apps/backend) | HTTP API, worker entrypoints, auth, wallet flows, draw engine, game modules, finance orchestration, SaaS surface |
 | [`apps/database`](./apps/database) | Drizzle schema and migrations |
-| [`apps/shared-types`](./apps/shared-types) | Shared request/response contracts |
+| [`apps/shared-types`](./apps/shared-types) | Shared Zod contracts for auth, draw, finance, notification, games, and SaaS |
 | [`packages/user-core`](./packages/user-core) | Shared first-party user API client, routes, and fairness helpers |
 | [`packages/prize-engine-sdk`](./packages/prize-engine-sdk) | External-facing SaaS prize-engine SDK for `/v1/engine/*` |
 | [`packages/README.md`](./packages/README.md) | Package ownership, boundary, and lifecycle guide |
 | [`docs`](./docs) | Architecture, environment, deployment, and test docs |
+
+## Worker Processes
+
+Production behavior is not just the Fastify API process. Several loops run as
+their own workers and are available locally too:
+
+- `pnpm dev:notifications`: drains auth notification deliveries from the durable outbox
+- `pnpm dev:reconciliation`: runs payment reconciliation cycles and repair workflows
+- `pnpm dev:payment-webhooks`: processes inbound payment webhook tasks
+- `pnpm dev:saas-billing`: runs SaaS billing and webhook automation loops
+- `pnpm --dir apps/backend dev:worker:payment-outbound`: submits queued provider orders
+- `pnpm --dir apps/backend dev:worker:payment-operations`: handles timeout cleanup and compensation cycles
 
 ## Tech Stack
 
@@ -291,6 +334,10 @@ Run from the repo root:
 ```bash
 pnpm dev
 pnpm dev:user
+pnpm dev:notifications
+pnpm dev:reconciliation
+pnpm dev:payment-webhooks
+pnpm dev:saas-billing
 pnpm dev:mobile
 pnpm mobile:ios
 pnpm mobile:android
@@ -300,7 +347,11 @@ pnpm lint
 pnpm test
 pnpm test:integration
 pnpm test:e2e
+pnpm test:e2e:install
 pnpm test:load
+pnpm ops:health
+pnpm ops:tail-errors
+pnpm ops:check-finance
 
 pnpm db:generate
 pnpm db:migrate
@@ -313,14 +364,29 @@ pnpm db:reset
 
 ## Environment
 
-Minimum required values:
+Minimum local values:
 
-- Backend: `DATABASE_URL` or `POSTGRES_URL`, `ADMIN_JWT_SECRET`, `USER_JWT_SECRET`
-- Frontend: `AUTH_SECRET`, `API_BASE_URL`
+- Backend: `DATABASE_URL` or `POSTGRES_URL`, `REDIS_URL`, `ADMIN_JWT_SECRET`, `USER_JWT_SECRET`, `WEB_BASE_URL`, `ADMIN_BASE_URL`
+- Frontend: `AUTH_SECRET`, `API_BASE_URL`, `NEXT_PUBLIC_API_BASE_URL`
 - Mobile: `EXPO_PUBLIC_API_BASE_URL`
 - Admin: `ADMIN_JWT_SECRET`, `API_BASE_URL`
 
+Secret boundaries matter:
+
+- `USER_JWT_SECRET` is backend-only and must not be reused for admin or web session encryption
+- `ADMIN_JWT_SECRET` must match between backend and admin, and must stay distinct from user auth and Auth.js secrets
+- `AUTH_SECRET` is for the Next.js/Auth.js session layer only
+- Automated money movement still requires both `PAYMENT_OPERATING_MODE=automated` and `PAYMENT_AUTOMATED_MODE_OPT_IN=true`
+
 Full details live in [`docs/environment.md`](./docs/environment.md).
+
+## Auth And Session Boundaries
+
+- Web login uses Auth.js credentials, then exchanges them for a backend session token through `POST /auth/user/session`
+- The frontend keeps that backend token only inside the encrypted Auth.js httpOnly cookie and forwards browser business calls through `/api/backend/*`
+- The Expo app calls the same user-facing backend endpoints through `@reward/user-core` and stores the backend token in secure native storage
+- Admin login uses `POST /auth/admin/login` and stores the admin session in `reward_admin_session`
+- Admin MFA is its own backend domain and uses separate production secrets from the user and web auth layers
 
 ## Testing
 
