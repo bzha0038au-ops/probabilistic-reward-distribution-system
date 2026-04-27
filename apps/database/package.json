@@ -19,7 +19,7 @@
   "dependencies": {
     "@opentelemetry/api": "^1.9.1",
     "@reward/shared-types": "workspace:*",
-    "drizzle-orm": "^0.29.2"
+    "drizzle-orm": "^0.45.2"
   },
   "devDependencies": {
     "dotenv": "^17.3.1",
