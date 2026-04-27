@@ -4,6 +4,8 @@ A full-stack reward and draw system with wallet accounting, prize-pool controls,
 
 This repo is designed as a practical system skeleton for products such as spin-the-wheel, prize-pool, or reward-center apps, where financial correctness matters more than demo-only UI.
 
+Prefer Chinese documentation? See [README-cn.md](./README-cn.md).
+
 > Payment scope: deposits and withdrawals are still manual-review finance flows.
 > This stack does not yet implement outbound gateway execution, signed payment
 > webhooks, idempotent retry handling, or recovery
@@ -186,6 +188,7 @@ Default local accounts:
 - Shared internal user client: [`packages/user-core`](./packages/user-core)
 - External prize-engine SDK: [`packages/prize-engine-sdk`](./packages/prize-engine-sdk)
 - Package boundary guide: [`packages/README.md`](./packages/README.md)
+- Contributor and agent workflow notes: [`AGENTS.md`](./AGENTS.md)
 
 If you want the architecture view after bootstrapping, start with [`docs/architecture.md`](./docs/architecture.md).
 
