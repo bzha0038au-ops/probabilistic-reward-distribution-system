@@ -39,7 +39,16 @@ const ALLOWED_BROWSER_ROUTES: readonly AllowedRoute[] = [
   },
   { pattern: /^\/wallet$/, methods: ['GET'], auth: true },
   { pattern: /^\/transactions$/, methods: ['GET'], auth: true },
+  { pattern: /^\/rewards\/center$/, methods: ['GET'], auth: true },
+  { pattern: /^\/rewards\/claim$/, methods: ['POST'], auth: true },
+  { pattern: /^\/blackjack$/, methods: ['GET'], auth: true },
+  { pattern: /^\/blackjack\/start$/, methods: ['POST'], auth: true },
+  { pattern: /^\/blackjack\/\d+\/action$/, methods: ['POST'], auth: true },
+  { pattern: /^\/draw\/catalog$/, methods: ['GET'], auth: true },
+  { pattern: /^\/draw\/overview$/, methods: ['GET'], auth: true },
+  { pattern: /^\/quick-eight$/, methods: ['POST'], auth: true },
   { pattern: /^\/draw$/, methods: ['POST'], auth: true },
+  { pattern: /^\/draw\/play$/, methods: ['POST'], auth: true },
   { pattern: /^\/bank-cards$/, methods: ['GET', 'POST'], auth: true },
   { pattern: /^\/bank-cards\/\d+\/default$/, methods: ['PATCH'], auth: true },
   { pattern: /^\/crypto-deposit-channels$/, methods: ['GET'], auth: true },
@@ -56,6 +65,7 @@ const ALLOWED_BROWSER_ROUTES: readonly AllowedRoute[] = [
   },
   { pattern: /^\/top-ups$/, methods: ['GET', 'POST'], auth: true },
   { pattern: /^\/withdrawals$/, methods: ['GET', 'POST'], auth: true },
+  { pattern: /^\/crypto-withdrawals$/, methods: ['POST'], auth: true },
 ] as const;
 
 export const normalizeBackendPath = (path: string) => {

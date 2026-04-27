@@ -5,4 +5,4 @@ export type {
   PaymentOperatingMode,
   PaymentOrderStatus,
   PaymentProcessingMode,
-} from '@reward/shared-types';
+} from "@reward/shared-types/finance";

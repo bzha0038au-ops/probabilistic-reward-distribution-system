@@ -20,6 +20,7 @@ import { getConfig } from './config';
 import { getRuntimeMetadata } from './runtime-metadata';
 
 type ObservabilityCaptureContext = {
+  level?: 'fatal' | 'error' | 'warning' | 'log' | 'info' | 'debug';
   tags?: Record<string, string | number | boolean | null | undefined>;
   extra?: Record<string, unknown>;
 };
@@ -241,6 +242,10 @@ export const captureMessage = (
 ) => {
   Sentry.withScope((scope) => {
     setSentryScopeTags();
+
+    if (captureContext.level) {
+      scope.setLevel(captureContext.level);
+    }
 
     for (const [key, value] of Object.entries(captureContext.tags ?? {})) {
       if (value !== undefined && value !== null) {

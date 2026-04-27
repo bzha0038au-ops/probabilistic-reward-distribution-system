@@ -128,9 +128,23 @@ Current metrics include:
 - `reward_backend_auth_notification_oldest_pending_age_seconds`
 - `reward_backend_withdrawals_stuck_total`
 - `reward_backend_withdrawals_oldest_stuck_age_seconds`
+- `reward_backend_payment_webhook_signature_verifications_total`
+- `reward_backend_payment_webhook_events_total`
+- `reward_backend_payment_webhook_oldest_pending_age_seconds`
+- `reward_backend_payment_reconciliation_open_issues_total`
+- `reward_backend_payment_reconciliation_oldest_open_issue_age_seconds`
+- `reward_backend_payment_outbound_requests_total`
+- `reward_backend_payment_outbound_oldest_retry_age_seconds`
+- `reward_backend_payment_outbound_idempotency_conflicts_total`
+- `reward_backend_saas_billing_runs_total`
+- `reward_backend_saas_webhook_events_total`
+- `reward_backend_saas_webhook_oldest_ready_age_seconds`
+- `reward_backend_saas_webhook_retry_exhausted_total`
+- `reward_backend_stripe_api_requests_total`
+- `reward_backend_stripe_api_failures_total`
 
-`/metrics` refreshes dependency probes, notification backlog state, and stuck
-withdrawal gauges before rendering.
+`/metrics` refreshes dependency probes, notification backlog state, stuck
+withdrawal gauges, and payment / SaaS queue gauges before rendering.
 
 ## Dashboards And Alerts
 
@@ -147,6 +161,12 @@ The minimum production dashboard should show:
 - draw success vs error rate
 - notification backlog counts and oldest pending age
 - stuck withdrawals by status and age
+- payment webhook signature volume / failure ratio
+- payment reconciliation manual-review queue depth and oldest issue age
+- outbound payment queue state and idempotency conflicts
+- Stripe rate-limit / 5xx failures and retry backlog
+- failed SaaS billing runs and retry-exhausted SaaS webhooks
+- PostgreSQL data volume usage, Redis maxmemory usage, and registry storage usage
 - current `reward_backend_build_info` release / commit
 
 The minimum production alert set should cover:
@@ -156,6 +176,60 @@ The minimum production alert set should cover:
 - draw error rate
 - withdraw stuck
 - notification backlog / dead-letter growth
+- payment webhook signature failure spikes
+- reconciliation manual-review queue growth
+- outbound idempotency conflicts
+- Stripe rate-limit / 5xx degradation
+- failed SaaS billing runs and retry-exhausted SaaS webhooks
+- PostgreSQL data volume thresholds at 70% / 85% / 95%
+- Redis memory thresholds at 70% / 85% / 95%
+- Registry storage threshold at 80%
+
+## Payment Runtime Thresholds
+
+These thresholds are the repo's minimum operational defaults for payment runtime
+alerts. They are alert thresholds, not customer-facing SLAs.
+
+- Webhook signature verification spike:
+  more than 20 failed verifications for a provider in 10 minutes, with a
+  failure ratio above 20%.
+- Reconciliation diff queue growth:
+  more than 10 open manual-review reconciliation issues for a provider for
+  15 minutes, or any such issue staying open for more than 30 minutes.
+- Outbound idempotency conflict:
+  any conflicting idempotency-key reuse within 15 minutes pages the on-call
+  after a 5-minute hold period.
+- Stripe API degradation:
+  more than 2 Stripe `rate_limit` or `server_error` failures in 10 minutes, or
+  any outbound queue entries stuck with `stripe_rate_limit` or
+  `stripe_server_error` for 10 minutes.
+- SaaS billing collection risk:
+  any `reward_backend_saas_billing_runs_total{status="failed"}` sample
+  persisting for 15 minutes, or any
+  `reward_backend_saas_webhook_retry_exhausted_total` sample above 0 for
+  15 minutes.
+- SaaS webhook retry exhaustion threshold:
+  `reward_backend_saas_webhook_retry_exhausted_total` counts failed webhook
+  rows whose `attempts` are at least 8.
+
+## Capacity Thresholds
+
+These thresholds are the repo's minimum operational defaults for infra capacity
+alerts.
+
+- PostgreSQL data volume:
+  ticket at 70% sustained usage for 15 minutes, page at 85% for 10 minutes,
+  and page plus AI-agent auto-expansion attempt at 95% for 5 minutes.
+- Redis memory:
+  ticket at 70% of configured `maxmemory` for 15 minutes, page at 85% for
+  10 minutes, and page at 95% for 5 minutes.
+- Container image registry storage:
+  ticket the Telegram ops chat at 80% sustained usage for 15 minutes so old
+  rollback images are not garbage-collected under pressure.
+
+These alerts assume `node_exporter` is scraping Docker volume mountpoints and
+registry storage paths, and that `redis_exporter` exposes
+`redis_memory_used_bytes` plus `redis_memory_max_bytes`.
 
 ## Correlation Flow
 

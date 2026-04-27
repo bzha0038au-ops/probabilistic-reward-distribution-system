@@ -21,6 +21,8 @@ export const adminActions = pgTable(
     targetType: varchar('target_type', { length: 64 }),
     targetId: integer('target_id'),
     ip: varchar('ip', { length: 64 }),
+    sessionId: varchar('session_id', { length: 255 }),
+    userAgent: varchar('user_agent', { length: 255 }),
     metadata: jsonb('metadata'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
@@ -28,7 +30,12 @@ export const adminActions = pgTable(
   },
   (table) => ({
     adminIdx: index('admin_actions_admin_idx').on(table.adminId),
+    adminCreatedIdx: index('admin_actions_admin_created_idx').on(
+      table.adminId,
+      table.createdAt
+    ),
     actionIdx: index('admin_actions_action_idx').on(table.action),
+    sessionIdx: index('admin_actions_session_idx').on(table.sessionId),
   })
 );
 

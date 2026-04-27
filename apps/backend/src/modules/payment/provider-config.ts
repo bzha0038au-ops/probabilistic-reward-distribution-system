@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const PAYMENT_PROVIDER_SECRET_REFS_KEY = 'secretRefs' as const;
+export const PAYMENT_PROVIDER_SECRET_REFS_KEY = 'secretRefs' as const;
 
 export const PAYMENT_PROVIDER_ADMIN_EDITABLE_FIELDS = [
   'isActive',
@@ -72,6 +72,10 @@ const PaymentProviderSecretRefsSchema = z
 const PLAINTEXT_SECRET_KEY_ALIASES: Record<string, PaymentProviderSecretReferenceField> = {
   api_key: 'apiKey',
   apikey: 'apiKey',
+  secret_key: 'apiKey',
+  secretkey: 'apiKey',
+  stripe_secret_key: 'apiKey',
+  stripesecretkey: 'apiKey',
   private_key: 'privateKey',
   privatekey: 'privateKey',
   certificate: 'certificate',
@@ -80,6 +84,8 @@ const PLAINTEXT_SECRET_KEY_ALIASES: Record<string, PaymentProviderSecretReferenc
   certpem: 'certificate',
   signing_key: 'signingKey',
   signingkey: 'signingKey',
+  webhook_secret: 'signingKey',
+  webhooksecret: 'signingKey',
   signature_key: 'signingKey',
   signaturekey: 'signingKey',
 };
@@ -90,6 +96,24 @@ const toRecord = (value: unknown): Record<string, unknown> => {
   }
 
   return Object.fromEntries(Object.entries(value));
+};
+
+export const readPaymentProviderSecretRefs = (
+  value: unknown
+): PaymentProviderSecretRefs => {
+  const config = toRecord(value);
+  const secretRefs = toRecord(Reflect.get(config, PAYMENT_PROVIDER_SECRET_REFS_KEY));
+
+  return Object.fromEntries(
+    PAYMENT_PROVIDER_SECRET_REFERENCE_FIELDS.flatMap((field) => {
+      const reference = Reflect.get(secretRefs, field);
+      if (typeof reference !== 'string' || reference.trim() === '') {
+        return [];
+      }
+
+      return [[field, reference.trim()] as const];
+    })
+  ) as PaymentProviderSecretRefs;
 };
 
 const normalizeKey = (value: string) =>

@@ -7,6 +7,7 @@ import { registerAdminControlRoutes } from './control';
 import { registerAdminFinanceRoutes } from './finance';
 import { registerAdminMfaRoutes } from './mfa';
 import { registerAdminPrizeRoutes } from './prizes';
+import { registerAdminSaasRoutes } from './saas';
 import { registerAdminSecurityRoutes } from './security';
 
 export async function registerAdminRoutes(app: AppInstance) {
@@ -21,5 +22,6 @@ export async function registerAdminRoutes(app: AppInstance) {
     await registerAdminConfigRoutes(adminRoutes);
     await registerAdminControlRoutes(adminRoutes);
     await registerAdminFinanceRoutes(adminRoutes);
+    await registerAdminSaasRoutes(adminRoutes);
   });
 }

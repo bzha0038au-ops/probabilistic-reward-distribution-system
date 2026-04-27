@@ -7,7 +7,7 @@ import {
   readPaymentWebhookEventIdFromHeaders,
   readPaymentWebhookSignatureFromHeaders,
   verifyPaymentWebhookSignature,
-} from '../../modules/payment/webhook-service';
+} from '../../modules/payment/webhook';
 
 const readString = (value: unknown) =>
   typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
@@ -51,6 +51,7 @@ export async function registerPaymentRoutes(app: AppInstance) {
         readPaymentWebhookEventIdFromHeaders(headers);
       const verification = await verifyPaymentWebhookSignature({
         provider,
+        headers,
         signature,
         payloadRaw,
       });

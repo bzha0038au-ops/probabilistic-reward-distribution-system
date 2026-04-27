@@ -1,11 +1,11 @@
-import { SignJWT, jwtVerify } from 'jose';
+import { SignJWT } from 'jose';
 
 import {
   createAuthSession,
   type AuthSessionRole,
   validateAuthSession,
 } from '../modules/session/service';
-import { getSessionSecret } from './session-secret';
+import { getSessionSecret, verifySessionJwt } from './session-secret';
 
 export const USER_SESSION_COOKIE = 'reward_user_session';
 export const USER_SESSION_TTL_SECONDS =
@@ -55,7 +55,7 @@ export async function verifyUserSessionToken(token?: string | null) {
   if (!token) return null;
 
   try {
-    const { payload } = await jwtVerify(token, getSessionSecret('user'));
+    const { payload } = await verifySessionJwt(token, 'user');
     const userId = Number(payload.userId ?? payload.sub ?? 0);
     const sessionId = typeof payload.jti === 'string' ? payload.jti : '';
     if (!userId || !sessionId) return null;

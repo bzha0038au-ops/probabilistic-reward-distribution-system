@@ -12,7 +12,7 @@ import {
   OptionalPositiveIntSchema,
   OptionalStringSchema,
   SortOrderSchema,
-} from './common.js';
+} from './common';
 
 export const PrizeCreateSchema = z.object({
   name: z.string().min(1).max(255),
@@ -38,6 +38,22 @@ export const SystemConfigPatchSchema = z.object({
   authFailureWindowMinutes: MoneyLikeSchema.optional(),
   authFailureFreezeThreshold: MoneyLikeSchema.optional(),
   adminFailureFreezeThreshold: MoneyLikeSchema.optional(),
+  profileSecurityRewardAmount: MoneyLikeSchema.optional(),
+  firstDrawRewardAmount: MoneyLikeSchema.optional(),
+  drawStreakDailyRewardAmount: MoneyLikeSchema.optional(),
+  topUpStarterRewardAmount: MoneyLikeSchema.optional(),
+  blackjackMinStake: MoneyLikeSchema.optional(),
+  blackjackMaxStake: MoneyLikeSchema.optional(),
+  blackjackWinPayoutMultiplier: MoneyLikeSchema.optional(),
+  blackjackPushPayoutMultiplier: MoneyLikeSchema.optional(),
+  blackjackNaturalPayoutMultiplier: MoneyLikeSchema.optional(),
+  blackjackDealerHitsSoft17: OptionalBooleanSchema,
+  blackjackDoubleDownAllowed: OptionalBooleanSchema,
+  blackjackSplitAcesAllowed: OptionalBooleanSchema,
+  blackjackHitSplitAcesAllowed: OptionalBooleanSchema,
+  blackjackResplitAllowed: OptionalBooleanSchema,
+  blackjackMaxSplitHands: z.number().int().min(2).max(8).optional(),
+  blackjackSplitTenValueCardsAllowed: OptionalBooleanSchema,
 });
 
 export const FreezeCreateSchema = z.object({
@@ -56,6 +72,8 @@ export const AdminActionSchema = z.object({
   targetType: z.string().nullable(),
   targetId: z.number().int().nullable(),
   ip: z.string().nullable(),
+  sessionId: z.string().nullable().optional(),
+  userAgent: z.string().nullable().optional(),
   metadata: z.record(z.string(), z.unknown()).nullable().optional(),
   createdAt: z.union([z.string(), z.date()]),
 });

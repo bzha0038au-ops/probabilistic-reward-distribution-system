@@ -208,7 +208,6 @@ ON CONFLICT ("config_key") DO NOTHING;
 --> statement-breakpoint
 INSERT INTO "system_config" ("config_key", "config_number", "config_value", "description")
 VALUES
-  ('pool_balance', 0, NULL, 'System pool balance'),
   ('pool_system.pool_min_reserve', 0, NULL, 'Pool minimum reserve'),
   ('pool_system.pool_max_payout_ratio', 1, NULL, 'Pool max payout ratio'),
   ('pool_system.pool_noise_enabled', 0, NULL, 'Pool noise enabled'),

@@ -53,7 +53,7 @@ describe('system config reads', () => {
 
   it('reads numeric config values', async () => {
     const { db } = makeDb({ config_number: '12.50', config_value: null });
-    const value = await getConfigDecimal(db, 'pool_balance', 0);
+    const value = await getConfigDecimal(db, 'draw_cost', 0);
     expect(value.toFixed(2)).toBe('12.50');
   });
 

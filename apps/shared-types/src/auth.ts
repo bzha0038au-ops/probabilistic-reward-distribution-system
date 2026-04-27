@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { MoneyLikeSchema, OptionalPositiveIntSchema } from './common.js';
+import { MoneyLikeSchema, OptionalPositiveIntSchema } from './common';
 
 export const AuthCredentialsSchema = z.object({
   email: z.string().email(),

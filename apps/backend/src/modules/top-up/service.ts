@@ -2,6 +2,12 @@ import { desc, eq, sql } from '@reward/database/orm';
 
 import { deposits, userWallets } from '@reward/database';
 import { db, type DbTransaction } from '../../db';
+import {
+  conflictError,
+  persistenceError,
+  serviceUnavailableError,
+  unprocessableEntityError,
+} from '../../shared/errors';
 import { toDecimal, toMoneyString } from '../../shared/money';
 import { readSqlRows } from '../../shared/sql-result';
 import {
@@ -31,6 +37,7 @@ import {
   resolvePaymentProcessingContext,
   withPaymentProcessingMetadata,
 } from '../payment/service';
+import { preparePaymentOutboundRequest } from '../payment/outbound';
 import { getPaymentConfig } from '../system/service';
 
 type DepositRecord = typeof deposits.$inferSelect;
@@ -196,7 +203,7 @@ const updateDepositStatus = async (
 
   const normalized = normalizeDepositRecord(updated);
   if (!normalized) {
-    throw new Error('Deposit not found.');
+    throw persistenceError('Deposit not found.');
   }
 
   return normalized;
@@ -382,7 +389,7 @@ const creditDepositRecord = async (
 
   const wallet = readSqlRows<{ withdrawable_balance: string | number }>(walletResult)[0];
   if (!wallet) {
-    throw new Error('Wallet not found.');
+    throw persistenceError('Wallet not found.');
   }
 
   assertDepositLedgerMutationStatus('credited');
@@ -473,72 +480,104 @@ export async function createTopUp(payload: {
   referenceId?: string | null;
   metadata?: Record<string, unknown> | null;
 }) {
-  const paymentConfig = await getPaymentConfig(db);
-  if (!paymentConfig.depositEnabled) {
-    throw new Error('Deposits are currently disabled.');
-  }
+  return db.transaction(async (tx) => {
+    const paymentConfig = await getPaymentConfig(tx);
+    if (!paymentConfig.depositEnabled) {
+      throw serviceUnavailableError('Deposits are currently disabled.');
+    }
 
-  const amount = toDecimal(payload.amount);
-  if (amount.lte(0)) {
-    throw new Error('Amount must be greater than 0.');
-  }
-  if (paymentConfig.minDepositAmount.gt(0) && amount.lt(paymentConfig.minDepositAmount)) {
-    throw new Error('Amount below minimum deposit.');
-  }
-  if (paymentConfig.maxDepositAmount.gt(0) && amount.gt(paymentConfig.maxDepositAmount)) {
-    throw new Error('Amount exceeds maximum deposit.');
-  }
+    const amount = toDecimal(payload.amount);
+    if (amount.lte(0)) {
+      throw unprocessableEntityError('Amount must be greater than 0.');
+    }
+    if (
+      paymentConfig.minDepositAmount.gt(0) &&
+      amount.lt(paymentConfig.minDepositAmount)
+    ) {
+      throw unprocessableEntityError('Amount below minimum deposit.');
+    }
+    if (
+      paymentConfig.maxDepositAmount.gt(0) &&
+      amount.gt(paymentConfig.maxDepositAmount)
+    ) {
+      throw unprocessableEntityError('Amount exceeds maximum deposit.');
+    }
 
-  const processing = await resolvePaymentProcessingContext(db, 'deposit', {
-    userId: payload.userId,
-    amount: toMoneyString(amount),
-    metadata: payload.metadata ?? null,
-  });
-  const capability = getPaymentCapabilitySummary();
-  const metadata = appendFinanceStateMetadata(
-    appendDepositWorkflowMetadata(
-      withPaymentProcessingMetadata(payload.metadata, {
-        flow: 'deposit',
-        processingMode: processing.mode,
-        manualFallbackRequired: processing.manualFallbackRequired,
-        manualFallbackReason: processing.manualFallbackReason,
-        paymentProviderId: processing.providerId,
-        paymentOperatingMode: capability.operatingMode,
-        paymentAutomationRequested: capability.automatedExecutionEnabled,
-        paymentAutomationReady: capability.automatedExecutionReady,
-        paymentAdapterKey: processing.adapterKey,
-        paymentAdapterRegistered: processing.adapterRegistered,
-      }),
+    const processing = await resolvePaymentProcessingContext(tx, 'deposit', {
+      userId: payload.userId,
+      amount: toMoneyString(amount),
+      metadata: payload.metadata ?? null,
+    });
+    const capability = getPaymentCapabilitySummary();
+    const metadata = appendFinanceStateMetadata(
+      appendDepositWorkflowMetadata(
+        withPaymentProcessingMetadata(payload.metadata, {
+          flow: 'deposit',
+          processingMode: processing.mode,
+          manualFallbackRequired: processing.manualFallbackRequired,
+          manualFallbackReason: processing.manualFallbackReason,
+          paymentProviderId: processing.providerId,
+          paymentOperatingMode: capability.operatingMode,
+          paymentAutomationRequested: capability.automatedExecutionRequested,
+          paymentAutomationReady: capability.automatedExecutionReady,
+          paymentAdapterKey: processing.adapterKey,
+          paymentAdapterRegistered: processing.adapterRegistered,
+        }),
+        {
+          fromStatus: null,
+          toStatus: 'requested',
+          actor: 'user',
+          event: 'deposit_requested',
+          providerStatus: null,
+          settlementStatus: null,
+        }
+      ),
       {
-        fromStatus: null,
-        toStatus: 'requested',
-        actor: 'user',
-        event: 'deposit_requested',
+        flow: 'deposit',
+        status: 'requested',
         providerStatus: null,
         settlementStatus: null,
       }
-    ),
-    {
-      flow: 'deposit',
-      status: 'requested',
-      providerStatus: null,
-      settlementStatus: null,
+    );
+
+    const [created] = await tx
+      .insert(deposits)
+      .values({
+        userId: payload.userId,
+        providerId: processing.providerId,
+        amount: toMoneyString(amount),
+        status: 'requested',
+        referenceId: payload.referenceId ?? null,
+        metadata,
+      })
+      .returning();
+
+    const normalized = normalizeDepositRecord(created);
+    if (
+      normalized &&
+      processing.mode === 'provider' &&
+      processing.providerId !== null
+    ) {
+      await preparePaymentOutboundRequest(
+        {
+          orderType: 'deposit',
+          orderId: normalized.id,
+          providerId: processing.providerId,
+          flow: 'deposit',
+          action: 'create_deposit_order',
+          operation: 'create_deposit_order',
+          requestPayload: {
+            userId: payload.userId,
+            amount: toMoneyString(amount),
+            referenceId: payload.referenceId ?? null,
+          },
+        },
+        tx
+      );
     }
-  );
 
-  const [created] = await db
-    .insert(deposits)
-    .values({
-      userId: payload.userId,
-      providerId: processing.providerId,
-      amount: toMoneyString(amount),
-      status: 'requested',
-      referenceId: payload.referenceId ?? null,
-      metadata,
-    })
-    .returning();
-
-  return normalizeDepositRecord(created);
+    return normalized;
+  });
 }
 
 export async function markDepositProviderPending(
@@ -818,13 +857,13 @@ export async function reverseDeposit(depositId: number, review: DepositReview = 
 
       const wallet = readSqlRows<{ withdrawable_balance: string | number }>(walletResult)[0];
       if (!wallet) {
-        throw new Error('Wallet not found.');
+        throw persistenceError('Wallet not found.');
       }
 
       const amount = toDecimal(deposit.amount ?? 0);
       const before = toDecimal(wallet.withdrawable_balance ?? 0);
       if (before.lt(amount)) {
-        throw new Error('Withdrawable balance is insufficient to reverse the deposit.');
+        throw conflictError('Withdrawable balance is insufficient to reverse the deposit.');
       }
 
       const after = before.minus(amount);

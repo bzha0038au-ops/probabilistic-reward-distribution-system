@@ -1,0 +1,97 @@
+name: Dependabot Auto Merge
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - edited
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: dependabot-auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  auto-merge:
+    if: github.actor == 'dependabot[bot]' && github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
+
+      - name: Evaluate auto-merge policy
+        id: policy
+        env:
+          DEPENDENCY_GROUP: ${{ steps.metadata.outputs.dependency-group }}
+          UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
+        run: |
+          set -euo pipefail
+
+          auto_merge=false
+          reason="manual-review"
+
+          if [ "$UPDATE_TYPE" = "version-update:semver-patch" ] && [ "$DEPENDENCY_GROUP" != "stripe" ]; then
+            auto_merge=true
+            reason="eligible-patch"
+          elif [ "$UPDATE_TYPE" != "version-update:semver-patch" ]; then
+            reason="non-patch"
+          else
+            reason="stripe-group"
+          fi
+
+          echo "auto_merge=${auto_merge}" >> "$GITHUB_OUTPUT"
+          echo "reason=${reason}" >> "$GITHUB_OUTPUT"
+
+      - name: Approve eligible PR
+        if: steps.policy.outputs.auto_merge == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          set -euo pipefail
+
+          review_decision="$(gh pr view "$PR_URL" --json reviewDecision -q '.reviewDecision')"
+          if [ "$review_decision" != "APPROVED" ]; then
+            gh pr review --approve "$PR_URL" --body "Auto-approve Dependabot semver patch update."
+          else
+            echo "PR already approved; skipping review."
+          fi
+
+      - name: Enable squash auto-merge
+        if: steps.policy.outputs.auto_merge == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          set -euo pipefail
+
+          auto_merge_enabled="$(gh pr view "$PR_URL" --json autoMergeRequest -q '.autoMergeRequest != null')"
+          if [ "$auto_merge_enabled" != "true" ]; then
+            gh pr merge --auto --squash "$PR_URL"
+          else
+            echo "Auto-merge already enabled; skipping."
+          fi
+
+      - name: Write workflow summary
+        env:
+          DEPENDENCY_GROUP: ${{ steps.metadata.outputs.dependency-group }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
+        run: |
+          {
+            echo "## Dependabot auto-merge"
+            echo
+            echo "- PR: $PR_URL"
+            echo "- Title: $PR_TITLE"
+            echo "- Update type: ${UPDATE_TYPE:-unknown}"
+            echo "- Dependency group: ${DEPENDENCY_GROUP:-<none>}"
+            echo "- Eligible: ${{ steps.policy.outputs.auto_merge }}"
+            echo "- Reason: ${{ steps.policy.outputs.reason }}"
+          } >> "$GITHUB_STEP_SUMMARY"

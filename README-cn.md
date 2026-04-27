@@ -8,8 +8,10 @@
 > 这套后端还没有实现真实资金自动闭环所需的出入金网关调用、签名
 > webhook、幂等重试和故障补偿恢复。现在已经有定时对账任务和人工差异
 > 队列，但这还不足以支撑真实资金自动结算。请保持
-> `PAYMENT_OPERATING_MODE=manual_review`，不要把真实资金自动出入金直接接到
-> 这套 backend 上。
+> `PAYMENT_OPERATING_MODE=manual_review` 作为默认值。只有在部署已被明确评估
+> 为可进入自动执行时，才同时设置 `PAYMENT_OPERATING_MODE=automated` 和
+> `PAYMENT_AUTOMATED_MODE_OPT_IN=true`。不要在没有这道显式批准的情况下，把
+> 真实资金自动出入金直接接到这套 backend 上。
 > 即使未来补齐自动执行，也应该按通道灰度放量：先只放自动充值，再限白名单 /
 > 小额单，最后再按国家、币种、金额分层，不要靠单一全局开关一次性全量放开。
 
@@ -76,6 +78,7 @@ REDIS_URL=redis://127.0.0.1:6379
 
 ```dotenv
 AUTH_SECRET=local_frontend_auth_secret_change_me_123456
+USER_JWT_SECRET=local_user_secret_change_me_123456
 API_BASE_URL=http://localhost:4000
 NEXT_PUBLIC_API_BASE_URL=http://localhost:4000
 ```
@@ -147,6 +150,7 @@ pnpm test
 pnpm test:integration
 pnpm test:e2e
 pnpm test:load
+pnpm test:load:mutations
 pnpm build
 pnpm db:reset
 ```
@@ -182,7 +186,9 @@ pnpm db:seed:manual
 - 后端与财务逻辑：[`apps/backend`](./apps/backend)
 - 数据库 schema 与 migration：[`apps/database`](./apps/database)
 - 前后端共享契约：[`apps/shared-types`](./apps/shared-types)
-- 用户侧共享基础层：[`packages/user-core`](./packages/user-core)
+- 用户侧内部共享 client：[`packages/user-core`](./packages/user-core)
+- 对外奖品引擎 SDK：[`packages/prize-engine-sdk`](./packages/prize-engine-sdk)
+- package 边界说明：[`packages/README.md`](./packages/README.md)
 
 如果你在系统跑起来之后想继续看架构，先读 [`docs/architecture.md`](./docs/architecture.md)。
 
@@ -230,7 +236,9 @@ flowchart LR
 | [`apps/backend`](./apps/backend)             | HTTP API、鉴权、钱包流程、抽奖引擎            |
 | [`apps/database`](./apps/database)           | Drizzle schema 与 migration                   |
 | [`apps/shared-types`](./apps/shared-types)   | 前后端共享请求 / 响应契约                     |
-| [`packages/user-core`](./packages/user-core) | 用户侧共享 API client、路由常量和平台辅助能力 |
+| [`packages/user-core`](./packages/user-core) | 用户侧内部共享 API client、路由常量和公平性辅助能力 |
+| [`packages/prize-engine-sdk`](./packages/prize-engine-sdk) | 面向 SaaS / B2B 的奖品引擎 SDK |
+| [`packages/README.md`](./packages/README.md) | package 职责边界与生命周期说明 |
 | [`docs`](./docs)                             | 架构、环境、部署、测试文档                    |
 
 ## 技术栈
@@ -244,8 +252,9 @@ flowchart LR
 | 数据库         | PostgreSQL                              |
 | ORM / schema   | Drizzle ORM                             |
 | 共享契约       | TypeScript + Zod                        |
-| 用户共享基础层 | Workspace package (`@reward/user-core`) |
-| 工程工具       | pnpm workspace、Vitest、GitHub Actions  |
+| 用户侧内部共享 client | Workspace package (`@reward/user-core`) |
+| 对外奖品引擎 SDK | Workspace package (`@reward/prize-engine-sdk`) |
+| 工程工具             | pnpm workspace、Vitest、GitHub Actions      |
 
 ### 为什么是 Web + Native + Admin？
 
@@ -321,6 +330,8 @@ pnpm db:reset
 - `pnpm test:e2e`：基于 Playwright 的全量浏览器回归流
 - `pnpm test:e2e:critical`：CI 阻断的认证 + 用户/管理员关键业务链路门禁
 - `pnpm test:load`：基于 `autocannon` 的认证 `/wallet` + `/draw` 压测 smoke
+- `pnpm test:load:mutations`：隔离数据库上的写路径 smoke，覆盖 `POST /draw` + `POST /rewards/claim`
+- 测 BFF 性能时请使用 `next build && next start`；`next dev` 会引入明显代理开销，不能代表真实吞吐。
 - 首次在某台机器上跑浏览器用例前，先执行一次 `pnpm test:e2e:install`。
 
 当前测试重点明显偏后端，这是刻意的。这个系统最大的风险是财务路径出错，而不是页面细节不够漂亮。详细说明见 [`docs/test-strategy.md`](./docs/test-strategy.md)。

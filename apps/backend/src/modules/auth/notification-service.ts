@@ -1,5 +1,5 @@
-import { and, desc, eq, ilike, lte, sql } from '@reward/database/orm';
-import nodemailer from 'nodemailer';
+import nodemailer from "nodemailer";
+import { and, desc, eq, ilike, lte, sql } from "@reward/database/orm";
 import type {
   AuthNotificationChannel,
   AuthNotificationKind,
@@ -9,71 +9,79 @@ import type {
   NotificationDeliverySummary,
   NotificationProvider,
   NotificationProviderStatus,
-} from '@reward/shared-types';
-import { notificationDeliveryStatusValues } from '@reward/shared-types';
+} from "@reward/shared-types/notification";
+import { notificationDeliveryStatusValues } from "@reward/shared-types/notification";
 
-import { client, db, type DbClient, type DbTransaction } from '../../db';
-import { getConfig } from '../../shared/config';
-import { logger } from '../../shared/logger';
-import { createRateLimiter } from '../../shared/rate-limit';
+import { client, db, type DbClient, type DbTransaction } from "../../db";
+import { getConfigView } from "../../shared/config";
+import { logger } from "../../shared/logger";
+import { createRateLimiter } from "../../shared/rate-limit";
 import {
   notificationDeliveries,
   notificationDeliveryAttempts,
-} from '@reward/database';
+} from "@reward/database";
 
-export type DeliveryStatus = NotificationDeliveryStatus;
+export type DeliveryPayload = Record<string, unknown>;
 
-type NotificationDb = DbClient | DbTransaction;
-type DeliveryPayload = Record<string, unknown>;
-type DeliveryAttemptStatus = NotificationDeliveryAttemptStatus;
-
-type ClaimedDelivery = {
+export type NotificationDeliveryLike = {
   id: number;
   kind: AuthNotificationKind;
   channel: AuthNotificationChannel;
   recipient: string;
-  recipientKey: string;
   provider: NotificationProvider;
   subject: string;
   payload: DeliveryPayload;
-  status: DeliveryStatus;
-  attempts: number;
-  maxAttempts: number;
-  nextAttemptAt: Date;
-  lastAttemptAt: Date | null;
-  lockedAt: Date | null;
-  deliveredAt: Date | null;
-  providerMessageId: string | null;
-  lastError: string | null;
-  createdAt: Date;
-  updatedAt: Date;
 };
 
-type ProviderSendResult = {
+export type ProviderSendResult = {
   providerMessageId?: string | null;
   responseCode?: number | null;
   metadata?: Record<string, unknown> | null;
 };
 
-const config = getConfig();
-const emailLimiter = createRateLimiter({
-  limit: config.authNotificationEmailThrottleMax,
-  windowMs: config.authNotificationEmailThrottleWindowMs,
-  prefix: 'auth-notify-email',
-});
-const smsLimiter = createRateLimiter({
-  limit: config.authNotificationSmsThrottleMax,
-  windowMs: config.authNotificationSmsThrottleWindowMs,
-  prefix: 'auth-notify-sms',
-});
-const alertLimiter = createRateLimiter({
-  limit: config.authNotificationAlertThrottleMax,
-  windowMs: config.authNotificationAlertThrottleWindowMs,
-  prefix: 'auth-notify-alert',
-});
+const config = getConfigView();
+
+let emailLimiter: ReturnType<typeof createRateLimiter> | null = null;
+let smsLimiter: ReturnType<typeof createRateLimiter> | null = null;
+let alertLimiter: ReturnType<typeof createRateLimiter> | null = null;
+
+const getEmailLimiter = () => {
+  if (!emailLimiter) {
+    emailLimiter = createRateLimiter({
+      limit: config.authNotificationEmailThrottleMax,
+      windowMs: config.authNotificationEmailThrottleWindowMs,
+      prefix: "auth-notify-email",
+    });
+  }
+
+  return emailLimiter;
+};
+
+const getSmsLimiter = () => {
+  if (!smsLimiter) {
+    smsLimiter = createRateLimiter({
+      limit: config.authNotificationSmsThrottleMax,
+      windowMs: config.authNotificationSmsThrottleWindowMs,
+      prefix: "auth-notify-sms",
+    });
+  }
+
+  return smsLimiter;
+};
+
+const getAlertLimiter = () => {
+  if (!alertLimiter) {
+    alertLimiter = createRateLimiter({
+      limit: config.authNotificationAlertThrottleMax,
+      windowMs: config.authNotificationAlertThrottleWindowMs,
+      prefix: "auth-notify-alert",
+    });
+  }
+
+  return alertLimiter;
+};
 
 let smtpTransport: nodemailer.Transporter | null = null;
-let enqueueHook: (() => void) | null = null;
 
 const hasSmtpProvider = () =>
   Boolean(config.authSmtpHost && config.authEmailFrom);
@@ -81,39 +89,41 @@ const hasSmtpProvider = () =>
 const hasTwilioProvider = () =>
   Boolean(
     config.authTwilioAccountSid &&
-      config.authTwilioAuthToken &&
-      (config.authTwilioFromNumber || config.authTwilioMessagingServiceSid)
+    config.authTwilioAuthToken &&
+    (config.authTwilioFromNumber || config.authTwilioMessagingServiceSid),
   );
 
 const maskEmail = (email: string) => {
-  const [name = '', domain = ''] = email.split('@');
+  const [name = "", domain = ""] = email.split("@");
   const visible = name.slice(0, 2);
-  return `${visible}${name.length > 2 ? '***' : ''}@${domain}`;
+  return `${visible}${name.length > 2 ? "***" : ""}@${domain}`;
 };
 
 const maskPhone = (phone: string) =>
   phone.length <= 4
-    ? '****'
-    : `${'*'.repeat(Math.max(phone.length - 4, 1))}${phone.slice(-4)}`;
+    ? "****"
+    : `${"*".repeat(Math.max(phone.length - 4, 1))}${phone.slice(-4)}`;
 
-const maskRecipient = (
+export const maskRecipient = (
   channel: AuthNotificationChannel,
-  recipient: string
-) => (channel === 'email' ? maskEmail(recipient) : maskPhone(recipient));
+  recipient: string,
+) => (channel === "email" ? maskEmail(recipient) : maskPhone(recipient));
 
-const normalizeEmail = (email: string) => email.trim().toLowerCase();
+export const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
-const normalizePhone = (phone: string) => phone.trim().replace(/[^\d+]/g, '');
+export const normalizePhone = (phone: string) =>
+  phone.trim().replace(/[^\d+]/g, "");
 
-const normalizeRecipient = (
+export const normalizeRecipient = (
   channel: AuthNotificationChannel,
-  recipient: string
-) => (channel === 'email' ? normalizeEmail(recipient) : normalizePhone(recipient));
+  recipient: string,
+) =>
+  channel === "email" ? normalizeEmail(recipient) : normalizePhone(recipient);
 
-const truncate = (value: string, max = 500) =>
+export const truncate = (value: string, max = 500) =>
   value.length <= max ? value : `${value.slice(0, max - 1)}…`;
 
-const computeRetryDelayMs = (attempts: number) => {
+export const computeRetryDelayMs = (attempts: number) => {
   const exponent = Math.max(attempts - 1, 0);
   const delay = config.authNotificationRetryBaseMs * 2 ** exponent;
   return Math.min(delay, config.authNotificationRetryMaxMs);
@@ -122,10 +132,10 @@ const computeRetryDelayMs = (attempts: number) => {
 const readString = (
   payload: DeliveryPayload,
   key: string,
-  required = true
+  required = true,
 ): string | null => {
   const value = payload[key];
-  if (typeof value === 'string' && value.trim()) {
+  if (typeof value === "string" && value.trim()) {
     return value;
   }
   if (!required) {
@@ -152,7 +162,7 @@ const readIsoDate = (payload: DeliveryPayload, key: string) => {
       `Notification payload contains invalid ${key}`,
       {
         retryable: false,
-      }
+      },
     );
   }
   return parsed;
@@ -162,24 +172,24 @@ export class NotificationThrottleError extends Error {
   constructor(
     message: string,
     readonly resetAt: number,
-    readonly limit: number
+    readonly limit: number,
   ) {
     super(message);
-    this.name = 'NotificationThrottleError';
+    this.name = "NotificationThrottleError";
   }
 }
 
 export class NotificationProviderUnavailableError extends Error {
   constructor(
     message: string,
-    readonly channel: AuthNotificationChannel
+    readonly channel: AuthNotificationChannel,
   ) {
     super(message);
-    this.name = 'NotificationProviderUnavailableError';
+    this.name = "NotificationProviderUnavailableError";
   }
 }
 
-class NotificationDeliveryError extends Error {
+export class NotificationDeliveryError extends Error {
   readonly retryable: boolean;
   readonly responseCode: number | null;
   readonly metadata: Record<string, unknown> | null;
@@ -190,66 +200,66 @@ class NotificationDeliveryError extends Error {
       retryable?: boolean;
       responseCode?: number | null;
       metadata?: Record<string, unknown> | null;
-    }
+    },
   ) {
     super(message);
-    this.name = 'NotificationDeliveryError';
+    this.name = "NotificationDeliveryError";
     this.retryable = options?.retryable ?? true;
     this.responseCode = options?.responseCode ?? null;
     this.metadata = options?.metadata ?? null;
   }
 }
 
-const resolveNotificationProvider = (
-  channel: AuthNotificationChannel
+export const resolveNotificationProvider = (
+  channel: AuthNotificationChannel,
 ): NotificationProvider => {
-  if (channel === 'email' && hasSmtpProvider()) {
-    return 'smtp';
+  if (channel === "email" && hasSmtpProvider()) {
+    return "smtp";
   }
-  if (channel === 'sms' && hasTwilioProvider()) {
-    return 'twilio';
+  if (channel === "sms" && hasTwilioProvider()) {
+    return "twilio";
   }
-  if (config.nodeEnv !== 'production' && config.authNotificationWebhookUrl) {
-    return 'webhook';
+  if (config.nodeEnv !== "production" && config.authNotificationWebhookUrl) {
+    return "webhook";
   }
-  if (config.nodeEnv !== 'production') {
-    return 'mock';
+  if (config.nodeEnv !== "production") {
+    return "mock";
   }
 
   throw new NotificationProviderUnavailableError(
-    channel === 'email'
-      ? 'Auth email provider is not configured.'
-      : 'Auth SMS provider is not configured.',
-    channel
+    channel === "email"
+      ? "Auth email provider is not configured."
+      : "Auth SMS provider is not configured.",
+    channel,
   );
 };
 
 export const assertNotificationChannelAvailable = (
-  channel: AuthNotificationChannel
+  channel: AuthNotificationChannel,
 ) => {
   resolveNotificationProvider(channel);
 };
 
 const resolveLimiter = (kind: AuthNotificationKind) => {
-  if (kind === 'phone_verification') {
+  if (kind === "phone_verification") {
     return {
       enabled: config.authNotificationSmsThrottleMax > 0,
-      limiter: smsLimiter,
+      limiter: getSmsLimiter(),
     };
   }
-  if (kind === 'security_alert') {
+  if (kind === "security_alert") {
     return {
       enabled: config.authNotificationAlertThrottleMax > 0,
-      limiter: alertLimiter,
+      limiter: getAlertLimiter(),
     };
   }
   return {
     enabled: config.authNotificationEmailThrottleMax > 0,
-    limiter: emailLimiter,
+    limiter: getEmailLimiter(),
   };
 };
 
-const enforceRecipientThrottle = async (payload: {
+export const enforceRecipientThrottle = async (payload: {
   kind: AuthNotificationKind;
   recipientKey: string;
 }) => {
@@ -259,13 +269,13 @@ const enforceRecipientThrottle = async (payload: {
   }
 
   const result = await selected.limiter.consume(
-    `${payload.kind}:${payload.recipientKey}`
+    `${payload.kind}:${payload.recipientKey}`,
   );
   if (!result.allowed) {
     throw new NotificationThrottleError(
-      'Too many notification requests. Please wait before trying again.',
+      "Too many notification requests. Please wait before trying again.",
       result.resetAt,
-      result.limit
+      result.limit,
     );
   }
 };
@@ -295,16 +305,19 @@ const withTimeout = async <T>(runner: (signal: AbortSignal) => Promise<T>) => {
   const controller = new AbortController();
   const timeout = setTimeout(
     () => controller.abort(),
-    config.authNotificationRequestTimeoutMs
+    config.authNotificationRequestTimeoutMs,
   );
 
   try {
     return await runner(controller.signal);
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new NotificationDeliveryError('Notification provider request timed out.', {
-        retryable: true,
-      });
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new NotificationDeliveryError(
+        "Notification provider request timed out.",
+        {
+          retryable: true,
+        },
+      );
     }
     throw error;
   } finally {
@@ -312,113 +325,145 @@ const withTimeout = async <T>(runner: (signal: AbortSignal) => Promise<T>) => {
   }
 };
 
-const renderEmailBody = (delivery: ClaimedDelivery) => {
+const renderEmailBody = (delivery: NotificationDeliveryLike) => {
   switch (delivery.kind) {
-    case 'password_reset': {
-      const resetUrl = readString(delivery.payload, 'resetUrl');
-      const expiresAt = readIsoDate(delivery.payload, 'expiresAt');
+    case "password_reset": {
+      const resetUrl = readString(delivery.payload, "resetUrl");
+      const expiresAt = readIsoDate(delivery.payload, "expiresAt");
       return [
-        'We received a request to reset your password.',
-        '',
+        "We received a request to reset your password.",
+        "",
         `Reset your password: ${resetUrl}`,
-        '',
+        "",
         `This link expires at ${expiresAt.toISOString()}.`,
-        '',
-        'If you did not request this, you can ignore this email.',
-      ].join('\n');
+        "",
+        "If you did not request this, you can ignore this email.",
+      ].join("\n");
     }
-    case 'email_verification': {
-      const verificationUrl = readString(delivery.payload, 'verificationUrl');
-      const expiresAt = readIsoDate(delivery.payload, 'expiresAt');
+    case "email_verification": {
+      const verificationUrl = readString(delivery.payload, "verificationUrl");
+      const expiresAt = readIsoDate(delivery.payload, "expiresAt");
       return [
-        'Verify your email address to finish setting up your account.',
-        '',
+        "Verify your email address to finish setting up your account.",
+        "",
         `Verify now: ${verificationUrl}`,
-        '',
+        "",
         `This link expires at ${expiresAt.toISOString()}.`,
-      ].join('\n');
+      ].join("\n");
     }
-    case 'security_alert': {
-      const occurredAt = readIsoDate(delivery.payload, 'occurredAt');
-      const currentIp = readOptionalString(delivery.payload, 'currentIp');
-      const previousIp = readOptionalString(delivery.payload, 'previousIp');
+    case "security_alert": {
+      const occurredAt = readIsoDate(delivery.payload, "occurredAt");
+      const currentIp = readOptionalString(delivery.payload, "currentIp");
+      const previousIp = readOptionalString(delivery.payload, "previousIp");
       const currentUserAgent = readOptionalString(
         delivery.payload,
-        'currentUserAgent'
+        "currentUserAgent",
       );
       const previousUserAgent = readOptionalString(
         delivery.payload,
-        'previousUserAgent'
+        "previousUserAgent",
       );
       return [
-        'We detected a new login pattern on your account.',
-        '',
+        "We detected a new login pattern on your account.",
+        "",
         `Occurred at: ${occurredAt.toISOString()}`,
-        `Current IP: ${currentIp ?? 'unknown'}`,
-        `Previous IP: ${previousIp ?? 'unknown'}`,
-        `Current device: ${currentUserAgent ?? 'unknown'}`,
-        `Previous device: ${previousUserAgent ?? 'unknown'}`,
-        '',
-        'If this was not you, reset your password and review active sessions immediately.',
-      ].join('\n');
+        `Current IP: ${currentIp ?? "unknown"}`,
+        `Previous IP: ${previousIp ?? "unknown"}`,
+        `Current device: ${currentUserAgent ?? "unknown"}`,
+        `Previous device: ${previousUserAgent ?? "unknown"}`,
+        "",
+        "If this was not you, reset your password and review active sessions immediately.",
+      ].join("\n");
+    }
+    case "saas_tenant_invite": {
+      const inviteUrl = readString(delivery.payload, "inviteUrl");
+      const tenantName = readString(delivery.payload, "tenantName");
+      const role = readString(delivery.payload, "role");
+      const expiresAt = readIsoDate(delivery.payload, "expiresAt");
+      const invitedBy = readOptionalString(delivery.payload, "invitedBy");
+      return [
+        `You've been invited to the Reward SaaS tenant "${tenantName}".`,
+        "",
+        `Role: ${role}`,
+        `Invited by: ${invitedBy ?? "Reward admin"}`,
+        `Expires at: ${expiresAt.toISOString()}`,
+        "",
+        `Accept invitation: ${inviteUrl}`,
+      ].join("\n");
     }
     default:
       throw new NotificationDeliveryError(
         `Unsupported email notification kind: ${delivery.kind}`,
-        { retryable: false }
+        { retryable: false },
       );
   }
 };
 
-const renderSmsBody = (delivery: ClaimedDelivery) => {
-  if (delivery.kind !== 'phone_verification') {
+const renderSmsBody = (delivery: NotificationDeliveryLike) => {
+  if (delivery.kind !== "phone_verification") {
     throw new NotificationDeliveryError(
       `Unsupported SMS notification kind: ${delivery.kind}`,
-      { retryable: false }
+      { retryable: false },
     );
   }
 
-  const code = readString(delivery.payload, 'code');
-  const expiresAt = readIsoDate(delivery.payload, 'expiresAt');
+  const code = readString(delivery.payload, "code");
+  const expiresAt = readIsoDate(delivery.payload, "expiresAt");
   return `Your Reward verification code is ${code}. It expires at ${expiresAt.toISOString()}.`;
 };
 
-const redactNotificationPayload = (
+export const redactNotificationPayload = (
   kind: AuthNotificationKind,
-  payload: DeliveryPayload
+  payload: DeliveryPayload,
 ) => {
   switch (kind) {
-    case 'password_reset':
+    case "password_reset":
       return {
-        resetUrl: '[redacted]',
-        expiresAt: readOptionalString(payload, 'expiresAt'),
+        resetUrl: "[redacted]",
+        expiresAt: readOptionalString(payload, "expiresAt"),
       };
-    case 'email_verification':
+    case "email_verification":
       return {
-        verificationUrl: '[redacted]',
-        expiresAt: readOptionalString(payload, 'expiresAt'),
+        verificationUrl: "[redacted]",
+        expiresAt: readOptionalString(payload, "expiresAt"),
       };
-    case 'phone_verification':
+    case "phone_verification":
       return {
-        code: '[redacted]',
-        expiresAt: readOptionalString(payload, 'expiresAt'),
+        code: "[redacted]",
+        expiresAt: readOptionalString(payload, "expiresAt"),
       };
-    case 'security_alert':
+    case "security_alert":
       return {
-        eventType: readOptionalString(payload, 'eventType'),
-        occurredAt: readOptionalString(payload, 'occurredAt'),
-        currentIp: readOptionalString(payload, 'currentIp'),
-        previousIp: readOptionalString(payload, 'previousIp'),
-        currentUserAgent: readOptionalString(payload, 'currentUserAgent'),
-        previousUserAgent: readOptionalString(payload, 'previousUserAgent'),
+        eventType: readOptionalString(payload, "eventType"),
+        occurredAt: readOptionalString(payload, "occurredAt"),
+        currentIp: readOptionalString(payload, "currentIp"),
+        previousIp: readOptionalString(payload, "previousIp"),
+        currentUserAgent: readOptionalString(payload, "currentUserAgent"),
+        previousUserAgent: readOptionalString(payload, "previousUserAgent"),
+      };
+    case "saas_tenant_invite":
+      return {
+        inviteUrl: "[redacted]",
+        tenantName: readOptionalString(payload, "tenantName"),
+        role: readOptionalString(payload, "role"),
+        invitedBy: readOptionalString(payload, "invitedBy"),
+        expiresAt: readOptionalString(payload, "expiresAt"),
       };
     default:
       return {};
   }
 };
 
+const buildTwilioBody = (payload: Record<string, string>) => {
+  const body = new URLSearchParams();
+  for (const [key, value] of Object.entries(payload)) {
+    body.set(key, value);
+  }
+  return body.toString();
+};
+
 const sendViaSmtp = async (
-  delivery: ClaimedDelivery
+  delivery: NotificationDeliveryLike,
 ): Promise<ProviderSendResult> => {
   const transporter = getSmtpTransport();
   const info = await transporter.sendMail({
@@ -434,16 +479,8 @@ const sendViaSmtp = async (
   };
 };
 
-const buildTwilioBody = (payload: Record<string, string>) => {
-  const body = new URLSearchParams();
-  for (const [key, value] of Object.entries(payload)) {
-    body.set(key, value);
-  }
-  return body.toString();
-};
-
 const sendViaTwilio = async (
-  delivery: ClaimedDelivery
+  delivery: NotificationDeliveryLike,
 ): Promise<ProviderSendResult> => {
   const body = buildTwilioBody({
     To: delivery.recipient,
@@ -457,17 +494,17 @@ const sendViaTwilio = async (
     fetch(
       `https://api.twilio.com/2010-04-01/Accounts/${config.authTwilioAccountSid}/Messages.json`,
       {
-        method: 'POST',
+        method: "POST",
         signal,
         headers: {
           authorization: `Basic ${Buffer.from(
-            `${config.authTwilioAccountSid}:${config.authTwilioAuthToken}`
-          ).toString('base64')}`,
-          'content-type': 'application/x-www-form-urlencoded',
+            `${config.authTwilioAccountSid}:${config.authTwilioAuthToken}`,
+          ).toString("base64")}`,
+          "content-type": "application/x-www-form-urlencoded",
         },
         body,
-      }
-    )
+      },
+    ),
   );
 
   const responseText = await response.text();
@@ -484,30 +521,32 @@ const sendViaTwilio = async (
     throw new NotificationDeliveryError(
       `Twilio request failed with status ${response.status}`,
       {
-        retryable: response.status >= 500 || response.status === 408 || response.status === 429,
+        retryable:
+          response.status >= 500 ||
+          response.status === 408 ||
+          response.status === 429,
         responseCode: response.status,
         metadata: parsed,
-      }
+      },
     );
   }
 
   return {
-    providerMessageId:
-      typeof parsed.sid === 'string' ? parsed.sid : null,
+    providerMessageId: typeof parsed.sid === "string" ? parsed.sid : null,
     responseCode: response.status,
     metadata: parsed,
   };
 };
 
 const sendViaWebhook = async (
-  delivery: ClaimedDelivery
+  delivery: NotificationDeliveryLike,
 ): Promise<ProviderSendResult> => {
   const response = await withTimeout((signal) =>
     fetch(config.authNotificationWebhookUrl, {
-      method: 'POST',
+      method: "POST",
       signal,
       headers: {
-        'content-type': 'application/json',
+        "content-type": "application/json",
       },
       body: JSON.stringify({
         kind: delivery.kind,
@@ -516,16 +555,19 @@ const sendViaWebhook = async (
         subject: delivery.subject,
         metadata: delivery.payload,
       }),
-    })
+    }),
   );
 
   if (!response.ok) {
     throw new NotificationDeliveryError(
       `Auth notification webhook failed with status ${response.status}`,
       {
-        retryable: response.status >= 500 || response.status === 408 || response.status === 429,
+        retryable:
+          response.status >= 500 ||
+          response.status === 408 ||
+          response.status === 429,
         responseCode: response.status,
-      }
+      },
     );
   }
 
@@ -535,9 +577,9 @@ const sendViaWebhook = async (
 };
 
 const sendViaMock = async (
-  delivery: ClaimedDelivery
+  delivery: NotificationDeliveryLike,
 ): Promise<ProviderSendResult> => {
-  logger.info('auth notification mock-delivered', {
+  logger.info("auth notification mock-delivered", {
     deliveryId: delivery.id,
     kind: delivery.kind,
     channel: delivery.channel,
@@ -549,44 +591,99 @@ const sendViaMock = async (
   };
 };
 
-const sendDelivery = async (delivery: ClaimedDelivery) => {
+export const sendDelivery = async (delivery: NotificationDeliveryLike) => {
   switch (delivery.provider) {
-    case 'smtp':
+    case "smtp":
       return sendViaSmtp(delivery);
-    case 'twilio':
+    case "twilio":
       return sendViaTwilio(delivery);
-    case 'webhook':
+    case "webhook":
       return sendViaWebhook(delivery);
-    case 'mock':
+    case "mock":
       return sendViaMock(delivery);
     default:
       throw new NotificationDeliveryError(
         `Unsupported notification provider: ${String(delivery.provider)}`,
-        { retryable: false }
+        { retryable: false },
       );
   }
 };
 
+export const getNotificationProviderStatus = (): NotificationProviderStatus => {
+  const emailProvider = (() => {
+    try {
+      return resolveNotificationProvider("email");
+    } catch {
+      return "unavailable" as const;
+    }
+  })();
+
+  const smsProvider = (() => {
+    try {
+      return resolveNotificationProvider("sms");
+    } catch {
+      return "unavailable" as const;
+    }
+  })();
+
+  return {
+    emailProvider,
+    smsProvider,
+  };
+};
+
+export type DeliveryStatus = NotificationDeliveryStatus;
+
+type NotificationDb = DbClient | DbTransaction;
+type DeliveryAttemptStatus = NotificationDeliveryAttemptStatus;
+
+type ClaimedDelivery = {
+  id: number;
+  kind: AuthNotificationKind;
+  channel: AuthNotificationChannel;
+  recipient: string;
+  recipientKey: string;
+  provider: NotificationProvider;
+  subject: string;
+  payload: DeliveryPayload;
+  status: DeliveryStatus;
+  attempts: number;
+  maxAttempts: number;
+  nextAttemptAt: Date;
+  lastAttemptAt: Date | null;
+  lockedAt: Date | null;
+  deliveredAt: Date | null;
+  providerMessageId: string | null;
+  lastError: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+let enqueueHook: (() => void) | null = null;
+
 const finalizeSuccess = async (
   delivery: ClaimedDelivery,
   result: ProviderSendResult,
-  latencyMs: number
+  latencyMs: number,
 ) => {
   await db.transaction(async (tx) => {
-    await tx.update(notificationDeliveries).set({
-      status: 'sent',
-      deliveredAt: new Date(),
-      lockedAt: null,
-      providerMessageId: result.providerMessageId ?? null,
-      lastError: null,
-      updatedAt: new Date(),
-    }).where(eq(notificationDeliveries.id, delivery.id));
+    await tx
+      .update(notificationDeliveries)
+      .set({
+        status: "sent",
+        deliveredAt: new Date(),
+        lockedAt: null,
+        providerMessageId: result.providerMessageId ?? null,
+        lastError: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(notificationDeliveries.id, delivery.id));
 
     await tx.insert(notificationDeliveryAttempts).values({
       deliveryId: delivery.id,
       attemptNumber: delivery.attempts,
       provider: delivery.provider,
-      status: 'sent',
+      status: "sent",
       responseCode: result.responseCode ?? null,
       providerMessageId: result.providerMessageId ?? null,
       latencyMs,
@@ -594,7 +691,7 @@ const finalizeSuccess = async (
     });
   });
 
-  logger.info('auth notification delivered', {
+  logger.info("auth notification delivered", {
     deliveryId: delivery.id,
     kind: delivery.kind,
     channel: delivery.channel,
@@ -607,7 +704,7 @@ const finalizeSuccess = async (
 const finalizeFailure = async (
   delivery: ClaimedDelivery,
   error: unknown,
-  latencyMs: number
+  latencyMs: number,
 ) => {
   const wrapped =
     error instanceof NotificationDeliveryError
@@ -615,8 +712,8 @@ const finalizeFailure = async (
       : new NotificationDeliveryError(
           error instanceof Error
             ? error.message
-            : 'Unknown notification delivery error.',
-          { retryable: true }
+            : "Unknown notification delivery error.",
+          { retryable: true },
         );
 
   const exhausted =
@@ -624,18 +721,21 @@ const finalizeFailure = async (
   const nextAttemptAt = exhausted
     ? delivery.nextAttemptAt
     : new Date(Date.now() + computeRetryDelayMs(delivery.attempts));
-  const status: DeliveryStatus = exhausted ? 'failed' : 'pending';
-  const attemptStatus: DeliveryAttemptStatus = exhausted ? 'failed' : 'retry';
+  const status: DeliveryStatus = exhausted ? "failed" : "pending";
+  const attemptStatus: DeliveryAttemptStatus = exhausted ? "failed" : "retry";
   const errorMessage = truncate(wrapped.message);
 
   await db.transaction(async (tx) => {
-    await tx.update(notificationDeliveries).set({
-      status,
-      nextAttemptAt,
-      lockedAt: null,
-      lastError: errorMessage,
-      updatedAt: new Date(),
-    }).where(eq(notificationDeliveries.id, delivery.id));
+    await tx
+      .update(notificationDeliveries)
+      .set({
+        status,
+        nextAttemptAt,
+        lockedAt: null,
+        lastError: errorMessage,
+        updatedAt: new Date(),
+      })
+      .where(eq(notificationDeliveries.id, delivery.id));
 
     await tx.insert(notificationDeliveryAttempts).values({
       deliveryId: delivery.id,
@@ -649,7 +749,7 @@ const finalizeFailure = async (
     });
   });
 
-  logger.warning('auth notification delivery failed', {
+  logger.warning("auth notification delivery failed", {
     deliveryId: delivery.id,
     kind: delivery.kind,
     channel: delivery.channel,
@@ -712,22 +812,22 @@ export async function recoverStuckAuthNotifications() {
   const recovered = await db
     .update(notificationDeliveries)
     .set({
-      status: 'pending',
+      status: "pending",
       lockedAt: null,
-      lastError: 'Recovered from stale processing lock.',
+      lastError: "Recovered from stale processing lock.",
       nextAttemptAt: new Date(),
       updatedAt: new Date(),
     })
     .where(
       and(
-        eq(notificationDeliveries.status, 'processing'),
-        lte(notificationDeliveries.lockedAt, cutoff)
-      )
+        eq(notificationDeliveries.status, "processing"),
+        lte(notificationDeliveries.lockedAt, cutoff),
+      ),
     )
     .returning({ id: notificationDeliveries.id });
 
   if (recovered.length > 0) {
-    logger.warning('recovered stale auth notification locks', {
+    logger.warning("recovered stale auth notification locks", {
       count: recovered.length,
     });
   }
@@ -736,7 +836,7 @@ export async function recoverStuckAuthNotifications() {
 }
 
 export async function processPendingAuthNotifications(
-  limit = config.authNotificationBatchSize
+  limit = config.authNotificationBatchSize,
 ) {
   const claimed = await claimPendingDeliveries(limit);
   for (const delivery of claimed) {
@@ -756,7 +856,7 @@ export async function retryFailedNotificationDelivery(deliveryId: number) {
   const [delivery] = await db
     .update(notificationDeliveries)
     .set({
-      status: 'pending',
+      status: "pending",
       attempts: 0,
       nextAttemptAt: new Date(),
       lastAttemptAt: null,
@@ -769,15 +869,15 @@ export async function retryFailedNotificationDelivery(deliveryId: number) {
     .where(
       and(
         eq(notificationDeliveries.id, deliveryId),
-        eq(notificationDeliveries.status, 'failed')
-      )
+        eq(notificationDeliveries.status, "failed"),
+      ),
     )
     .returning({
       id: notificationDeliveries.id,
     });
 
   if (delivery) {
-    logger.info('auth notification requeued', {
+    logger.info("auth notification requeued", {
       deliveryId: delivery.id,
     });
     enqueueHook?.();
@@ -798,18 +898,20 @@ export async function retryFailedNotificationDelivery(deliveryId: number) {
   if (!existing) {
     return {
       ok: false as const,
-      reason: 'not_found' as const,
+      reason: "not_found" as const,
     };
   }
 
   return {
     ok: false as const,
-    reason: 'invalid_status' as const,
+    reason: "invalid_status" as const,
     status: existing.status as DeliveryStatus,
   };
 }
 
-export const registerAuthNotificationEnqueueHook = (hook: (() => void) | null) => {
+export const registerAuthNotificationEnqueueHook = (
+  hook: (() => void) | null,
+) => {
   enqueueHook = hook;
 };
 
@@ -821,7 +923,7 @@ const queueAuthNotification = async (
     subject: string;
     metadata: DeliveryPayload;
   },
-  database: NotificationDb = db
+  database: NotificationDb = db,
 ) => {
   const provider = resolveNotificationProvider(payload.channel);
   const recipientKey = normalizeRecipient(payload.channel, payload.recipient);
@@ -841,7 +943,7 @@ const queueAuthNotification = async (
       provider,
       subject: payload.subject,
       payload: payload.metadata,
-      status: 'pending',
+      status: "pending",
       attempts: 0,
       maxAttempts: config.authNotificationMaxAttempts,
       nextAttemptAt: new Date(),
@@ -849,7 +951,7 @@ const queueAuthNotification = async (
     })
     .returning();
 
-  logger.info('auth notification queued', {
+  logger.info("auth notification queued", {
     deliveryId: delivery.id,
     kind: payload.kind,
     channel: payload.channel,
@@ -868,20 +970,20 @@ export async function sendPasswordResetNotification(
     resetUrl: string;
     expiresAt: Date;
   },
-  database?: NotificationDb
+  database?: NotificationDb,
 ) {
   return queueAuthNotification(
     {
-      kind: 'password_reset',
-      channel: 'email',
+      kind: "password_reset",
+      channel: "email",
       recipient: normalizeEmail(payload.email),
-      subject: 'Password reset requested',
+      subject: "Password reset requested",
       metadata: {
         resetUrl: payload.resetUrl,
         expiresAt: payload.expiresAt.toISOString(),
       },
     },
-    database
+    database,
   );
 }
 
@@ -891,20 +993,20 @@ export async function sendEmailVerificationNotification(
     verificationUrl: string;
     expiresAt: Date;
   },
-  database?: NotificationDb
+  database?: NotificationDb,
 ) {
   return queueAuthNotification(
     {
-      kind: 'email_verification',
-      channel: 'email',
+      kind: "email_verification",
+      channel: "email",
       recipient: normalizeEmail(payload.email),
-      subject: 'Verify your email',
+      subject: "Verify your email",
       metadata: {
         verificationUrl: payload.verificationUrl,
         expiresAt: payload.expiresAt.toISOString(),
       },
     },
-    database
+    database,
   );
 }
 
@@ -914,41 +1016,70 @@ export async function sendPhoneVerificationNotification(
     code: string;
     expiresAt: Date;
   },
-  database?: NotificationDb
+  database?: NotificationDb,
 ) {
   return queueAuthNotification(
     {
-      kind: 'phone_verification',
-      channel: 'sms',
+      kind: "phone_verification",
+      channel: "sms",
       recipient: normalizePhone(payload.phone),
-      subject: 'Verify your phone',
+      subject: "Verify your phone",
       metadata: {
         code: payload.code,
         expiresAt: payload.expiresAt.toISOString(),
       },
     },
-    database
+    database,
+  );
+}
+
+export async function sendSaasTenantInviteNotification(
+  payload: {
+    email: string;
+    inviteUrl: string;
+    tenantName: string;
+    role: string;
+    invitedBy?: string | null;
+    expiresAt: Date;
+  },
+  database?: NotificationDb,
+) {
+  return queueAuthNotification(
+    {
+      kind: "saas_tenant_invite",
+      channel: "email",
+      recipient: normalizeEmail(payload.email),
+      subject: `Invitation to ${payload.tenantName}`,
+      metadata: {
+        inviteUrl: payload.inviteUrl,
+        tenantName: payload.tenantName,
+        role: payload.role,
+        invitedBy: payload.invitedBy ?? null,
+        expiresAt: payload.expiresAt.toISOString(),
+      },
+    },
+    database,
   );
 }
 
 export async function sendAnomalousLoginAlert(
   payload: {
     email: string;
-    eventType: 'user_login_anomaly' | 'admin_login_anomaly';
+    eventType: "user_login_anomaly" | "admin_login_anomaly";
     currentIp?: string | null;
     previousIp?: string | null;
     currentUserAgent?: string | null;
     previousUserAgent?: string | null;
     occurredAt: Date;
   },
-  database?: NotificationDb
+  database?: NotificationDb,
 ) {
   return queueAuthNotification(
     {
-      kind: 'security_alert',
-      channel: 'email',
+      kind: "security_alert",
+      channel: "email",
       recipient: normalizeEmail(payload.email),
-      subject: 'New login activity detected',
+      subject: "New login activity detected",
       metadata: {
         eventType: payload.eventType,
         occurredAt: payload.occurredAt.toISOString(),
@@ -958,34 +1089,13 @@ export async function sendAnomalousLoginAlert(
         previousUserAgent: payload.previousUserAgent ?? null,
       },
     },
-    database
+    database,
   );
 }
 
-export const getNotificationProviderStatus = (): NotificationProviderStatus => {
-  const emailProvider = (() => {
-    try {
-      return resolveNotificationProvider('email');
-    } catch {
-      return 'unavailable' as const;
-    }
-  })();
-
-  const smsProvider = (() => {
-    try {
-      return resolveNotificationProvider('sms');
-    } catch {
-      return 'unavailable' as const;
-    }
-  })();
-
-  return {
-    emailProvider,
-    smsProvider,
-  };
-};
-
-export async function listNotificationDeliveries(options?: NotificationDeliveryQuery) {
+export async function listNotificationDeliveries(
+  options?: NotificationDeliveryQuery,
+) {
   const conditions = [];
   if (options?.status) {
     conditions.push(eq(notificationDeliveries.status, options.status));
@@ -995,7 +1105,7 @@ export async function listNotificationDeliveries(options?: NotificationDeliveryQ
   }
   if (options?.recipient) {
     conditions.push(
-      ilike(notificationDeliveries.recipient, `%${options.recipient.trim()}%`)
+      ilike(notificationDeliveries.recipient, `%${options.recipient.trim()}%`),
     );
   }
 
@@ -1012,12 +1122,18 @@ export async function listNotificationDeliveries(options?: NotificationDeliveryQ
   }
 
   const rows = await query
-    .orderBy(desc(notificationDeliveries.createdAt), desc(notificationDeliveries.id))
+    .orderBy(
+      desc(notificationDeliveries.createdAt),
+      desc(notificationDeliveries.id),
+    )
     .limit(options?.limit ?? 50);
 
   return rows.map((row) => ({
     ...row,
-    payload: redactNotificationPayload(row.kind, row.payload as DeliveryPayload),
+    payload: redactNotificationPayload(
+      row.kind,
+      row.payload as DeliveryPayload,
+    ),
   }));
 }
 
@@ -1031,7 +1147,7 @@ export async function getNotificationDeliverySummary(): Promise<NotificationDeli
     .groupBy(notificationDeliveries.status);
 
   const counts = Object.fromEntries(
-    notificationDeliveryStatusValues.map((status) => [status, 0])
+    notificationDeliveryStatusValues.map((status) => [status, 0]),
   ) as Record<NotificationDeliveryStatus, number>;
 
   for (const row of statusRows) {
@@ -1043,7 +1159,7 @@ export async function getNotificationDeliverySummary(): Promise<NotificationDeli
       createdAt: notificationDeliveries.createdAt,
     })
     .from(notificationDeliveries)
-    .where(eq(notificationDeliveries.status, 'pending'))
+    .where(eq(notificationDeliveries.status, "pending"))
     .orderBy(notificationDeliveries.createdAt)
     .limit(1);
 

@@ -1,9 +1,20 @@
-import { and, desc, eq, gte, sql } from '@reward/database/orm';
-import Decimal from 'decimal.js';
-import { randomBytes } from 'node:crypto';
+import { and, desc, eq, gte, sql } from "@reward/database/orm";
+import Decimal from "decimal.js";
+import { randomBytes } from "node:crypto";
+import { API_ERROR_CODES } from "@reward/shared-types/api";
 
-import { db, type DbTransaction } from '../../db';
-import { drawRecords, ledgerEntries, userWallets, users } from '@reward/database';
+import { db, type DbTransaction } from "../../db";
+import {
+  drawRecords,
+  ledgerEntries,
+  userWallets,
+  users,
+} from "@reward/database";
+import {
+  conflictError,
+  notFoundError,
+  serviceUnavailableError,
+} from "../../shared/errors";
 import {
   getBonusReleaseConfig,
   getDrawCost,
@@ -13,20 +24,24 @@ import {
   getPoolSystemConfig,
   getProbabilityControlConfig,
   getRandomizationConfig,
-} from '../system/service';
-import { ensureFairnessSeed } from '../fairness/service';
-import { logger } from '../../shared/logger';
-import { toDecimal, toMoneyString } from '../../shared/money';
-import { resolveDrawOutcome } from './outcome';
-import { loadLockedDrawUser } from './queries';
-import { applyHouseDrawEntries, createDrawRecord, updateUserDrawState } from './record';
-import { prepareDrawSelection } from './selection';
+} from "../system/service";
+import { ensureFairnessSeed } from "../fairness/service";
+import { logger } from "../../shared/logger";
+import { toDecimal, toMoneyString } from "../../shared/money";
+import { resolveDrawOutcome } from "./outcome";
+import { loadLockedDrawUser } from "./queries";
+import {
+  applyHouseDrawEntries,
+  createDrawRecord,
+  updateUserDrawState,
+} from "./record";
+import { prepareDrawSelection } from "./selection";
 import type {
   DebitedDrawState,
   DrawConfigBundle,
   DrawOptions,
   DrawUserRow,
-} from './types';
+} from "./types";
 
 const loadDrawConfig = async (tx: DbTransaction): Promise<DrawConfigBundle> => {
   const [
@@ -56,31 +71,34 @@ const loadDrawConfig = async (tx: DbTransaction): Promise<DrawConfigBundle> => {
 };
 
 const resolveClientNonce = (value?: string | null) => {
-  const rawNonce = value ? String(value).trim() : '';
+  const rawNonce = value ? String(value).trim() : "";
   if (!rawNonce) {
     return {
-      clientNonce: randomBytes(16).toString('hex'),
-      nonceSource: 'server' as const,
+      clientNonce: randomBytes(16).toString("hex"),
+      nonceSource: "server" as const,
     };
   }
 
   return {
     clientNonce: rawNonce,
-    nonceSource: 'client' as const,
+    nonceSource: "client" as const,
   };
 };
 
 const enforceDrawGuards = async (
   tx: DbTransaction,
   userId: number,
-  drawSystem: DrawConfigBundle['drawSystem'],
-  now: Date
+  drawSystem: DrawConfigBundle["drawSystem"],
+  now: Date,
 ) => {
   if (!drawSystem.drawEnabled) {
-    throw new Error('Draws are disabled.');
+    throw serviceUnavailableError("Draws are disabled.");
   }
-  if (drawSystem.maxDrawPerRequest.gt(0) && drawSystem.maxDrawPerRequest.lt(1)) {
-    throw new Error('Draw limit configured to zero.');
+  if (
+    drawSystem.maxDrawPerRequest.gt(0) &&
+    drawSystem.maxDrawPerRequest.lt(1)
+  ) {
+    throw serviceUnavailableError("Draw limit configured to zero.");
   }
 
   if (drawSystem.maxDrawPerDay.gt(0)) {
@@ -92,17 +110,19 @@ const enforceDrawGuards = async (
       .where(
         and(
           eq(drawRecords.userId, userId),
-          gte(drawRecords.createdAt, startOfDay)
-        )
+          gte(drawRecords.createdAt, startOfDay),
+        ),
       );
     if (Number(total ?? 0) >= Number(drawSystem.maxDrawPerDay)) {
-      throw new Error('Daily draw limit reached.');
+      throw conflictError("Daily draw limit reached.", {
+        code: API_ERROR_CODES.DRAW_DAILY_LIMIT_REACHED,
+      });
     }
   }
 
   if (drawSystem.cooldownSeconds.gt(0)) {
     const cooldownSince = new Date(
-      now.getTime() - Number(drawSystem.cooldownSeconds) * 1000
+      now.getTime() - Number(drawSystem.cooldownSeconds) * 1000,
     );
     const [recent] = await tx
       .select({ id: drawRecords.id })
@@ -110,13 +130,15 @@ const enforceDrawGuards = async (
       .where(
         and(
           eq(drawRecords.userId, userId),
-          gte(drawRecords.createdAt, cooldownSince)
-        )
+          gte(drawRecords.createdAt, cooldownSince),
+        ),
       )
       .orderBy(desc(drawRecords.createdAt))
       .limit(1);
     if (recent) {
-      throw new Error('Draw cooldown active.');
+      throw conflictError("Draw cooldown active.", {
+        code: API_ERROR_CODES.DRAW_COOLDOWN_ACTIVE,
+      });
     }
   }
 };
@@ -125,8 +147,8 @@ const debitDrawCost = async (
   tx: DbTransaction,
   userId: number,
   user: DrawUserRow,
-  drawSystem: DrawConfigBundle['drawSystem'],
-  now: Date
+  drawSystem: DrawConfigBundle["drawSystem"],
+  now: Date,
 ): Promise<DebitedDrawState> => {
   const drawCostBase = await getDrawCost(tx);
   let drawCost = drawCostBase;
@@ -143,7 +165,9 @@ const debitDrawCost = async (
   const wageredBefore = toDecimal(user.wagered_amount ?? 0);
   const pityStreakBefore = Number(user.pity_streak ?? 0);
   if (walletBefore.lt(drawCost)) {
-    throw new Error('Insufficient balance.');
+    throw conflictError("Insufficient balance.", {
+      code: API_ERROR_CODES.INSUFFICIENT_BALANCE,
+    });
   }
 
   const walletAfterDebit = walletBefore.minus(drawCost);
@@ -169,12 +193,12 @@ const debitDrawCost = async (
 
   await tx.insert(ledgerEntries).values({
     userId,
-    entryType: 'draw_cost',
+    entryType: "draw_cost",
     amount: toMoneyString(drawCost.negated()),
     balanceBefore: toMoneyString(walletBefore),
     balanceAfter: toMoneyString(walletAfterDebit),
-    referenceType: 'draw',
-    metadata: { reason: 'draw_cost' },
+    referenceType: "draw",
+    metadata: { reason: "draw_cost" },
   });
 
   return {
@@ -206,21 +230,25 @@ const applyAutoBonusRelease = async (params: {
     bonusAfterReward.gt(0) &&
     bonusReleaseConfig.bonusUnlockWagerRatio.gt(0)
   ) {
-    const maxRelease = wageredAfter.div(bonusReleaseConfig.bonusUnlockWagerRatio);
-    const releaseAmount = Decimal.min(bonusAfterReward, maxRelease).toDecimalPlaces(
-      2,
-      Decimal.ROUND_FLOOR
+    const maxRelease = wageredAfter.div(
+      bonusReleaseConfig.bonusUnlockWagerRatio,
     );
+    const releaseAmount = Decimal.min(
+      bonusAfterReward,
+      maxRelease,
+    ).toDecimalPlaces(2, Decimal.ROUND_FLOOR);
 
     if (releaseAmount.gt(0)) {
       const bonusAfterRelease = Decimal.max(
         bonusAfterReward.minus(releaseAmount),
-        0
+        0,
       );
       const walletAfterRelease = walletAfterDebit.plus(releaseAmount);
       const wageredAfterRelease = Decimal.max(
-        wageredAfter.minus(releaseAmount.mul(bonusReleaseConfig.bonusUnlockWagerRatio)),
-        0
+        wageredAfter.minus(
+          releaseAmount.mul(bonusReleaseConfig.bonusUnlockWagerRatio),
+        ),
+        0,
       );
 
       await tx
@@ -235,14 +263,14 @@ const applyAutoBonusRelease = async (params: {
 
       await tx.insert(ledgerEntries).values({
         userId,
-        entryType: 'bonus_release_auto',
+        entryType: "bonus_release_auto",
         amount: toMoneyString(releaseAmount),
         balanceBefore: toMoneyString(bonusAfterReward),
         balanceAfter: toMoneyString(bonusAfterRelease),
-        referenceType: 'bonus_release',
+        referenceType: "bonus_release",
         metadata: {
-          reason: 'auto_release',
-          balanceType: 'bonus',
+          reason: "auto_release",
+          balanceType: "bonus",
           unlockRatio: toMoneyString(bonusReleaseConfig.bonusUnlockWagerRatio),
         },
       });
@@ -256,55 +284,25 @@ const applyAutoBonusRelease = async (params: {
 
 export type ExecuteDrawDependencies = {
   now: () => Date;
-  loadDrawConfig: typeof loadDrawConfig;
-  ensureFairnessSeed: typeof ensureFairnessSeed;
   resolveClientNonce: typeof resolveClientNonce;
   loadLockedDrawUser: typeof loadLockedDrawUser;
-  enforceDrawGuards: typeof enforceDrawGuards;
-  debitDrawCost: typeof debitDrawCost;
-  prepareDrawSelection: typeof prepareDrawSelection;
-  resolveDrawOutcome: typeof resolveDrawOutcome;
-  applyHouseDrawEntries: typeof applyHouseDrawEntries;
-  applyAutoBonusRelease: typeof applyAutoBonusRelease;
-  updateUserDrawState: typeof updateUserDrawState;
-  createDrawRecord: typeof createDrawRecord;
-  logDrawExecution: (payload: {
-    userId: number;
-    status: string;
-    prizeId: number | null;
-    rewardAmount: string;
-    drawCost: string;
-    poolBalanceBefore: string;
-    poolBalanceAfter: string;
-  }) => void;
 };
 
-const defaultExecuteDrawDependencies: ExecuteDrawDependencies = {
-  now: () => new Date(),
-  loadDrawConfig,
-  ensureFairnessSeed,
-  resolveClientNonce,
-  loadLockedDrawUser,
-  enforceDrawGuards,
-  debitDrawCost,
-  prepareDrawSelection,
-  resolveDrawOutcome,
-  applyHouseDrawEntries,
-  applyAutoBonusRelease,
-  updateUserDrawState,
-  createDrawRecord,
-  logDrawExecution: (payload) => {
-    logger.info('draw executed', payload);
-  },
+type ExecuteDrawInTransactionOptions = {
+  dependencies?: Partial<ExecuteDrawDependencies>;
+  skipGuards?: boolean;
 };
 
 export async function executeDrawInTransaction(
   tx: DbTransaction,
   userId: number,
   options?: DrawOptions,
-  dependencies: Partial<ExecuteDrawDependencies> = {}
+  executionOptions: ExecuteDrawInTransactionOptions = {},
 ) {
-  const deps = { ...defaultExecuteDrawDependencies, ...dependencies };
+  const { dependencies = {}, skipGuards = false } = executionOptions;
+  const getNow = dependencies.now ?? (() => new Date());
+  const resolveNonce = dependencies.resolveClientNonce ?? resolveClientNonce;
+  const loadUser = dependencies.loadLockedDrawUser ?? loadLockedDrawUser;
 
   const [existingUser] = await tx
     .select({ id: users.id })
@@ -313,34 +311,36 @@ export async function executeDrawInTransaction(
     .limit(1);
 
   if (!existingUser) {
-    throw new Error('User not found.');
+    throw notFoundError("User not found.");
   }
 
   await tx.insert(userWallets).values({ userId }).onConflictDoNothing();
 
-  const user = await deps.loadLockedDrawUser(tx, userId);
+  const user = await loadUser(tx, userId);
   if (!user) {
-    throw new Error('User not found.');
+    throw notFoundError("User not found.");
   }
 
-  const config = await deps.loadDrawConfig(tx);
-  const fairnessSeed = await deps.ensureFairnessSeed(
+  const config = await loadDrawConfig(tx);
+  const fairnessSeed = await ensureFairnessSeed(
     tx,
-    Number(config.poolSystem.epochSeconds ?? 0)
+    Number(config.poolSystem.epochSeconds ?? 0),
   );
-  const { clientNonce, nonceSource } = deps.resolveClientNonce(options?.clientNonce);
+  const { clientNonce, nonceSource } = resolveNonce(options?.clientNonce);
 
-  const now = deps.now();
-  await deps.enforceDrawGuards(tx, userId, config.drawSystem, now);
+  const currentTime = getNow();
+  if (!skipGuards) {
+    await enforceDrawGuards(tx, userId, config.drawSystem, currentTime);
+  }
 
-  const drawState = await deps.debitDrawCost(
+  const drawState = await debitDrawCost(
     tx,
     userId,
     user,
     config.drawSystem,
-    now
+    currentTime,
   );
-  const selectionState = await deps.prepareDrawSelection({
+  const selectionState = await prepareDrawSelection({
     tx,
     drawState,
     poolSystem: config.poolSystem,
@@ -350,7 +350,7 @@ export async function executeDrawInTransaction(
     clientNonce,
   });
 
-  const outcome = await deps.resolveDrawOutcome({
+  const outcome = await resolveDrawOutcome({
     tx,
     userId,
     user,
@@ -359,10 +359,10 @@ export async function executeDrawInTransaction(
     economy: config.economy,
     poolSystem: config.poolSystem,
     payoutControl: config.payoutControl,
-    now,
+    now: currentTime,
   });
 
-  await deps.applyHouseDrawEntries({
+  await applyHouseDrawEntries({
     tx,
     userId,
     drawCost: drawState.drawCost,
@@ -370,7 +370,7 @@ export async function executeDrawInTransaction(
     prizeId: outcome.prizeId,
   });
 
-  await deps.applyAutoBonusRelease({
+  await applyAutoBonusRelease({
     tx,
     userId,
     user,
@@ -379,15 +379,15 @@ export async function executeDrawInTransaction(
     wageredAfter: drawState.wageredAfter,
   });
 
-  const pityStreakAfter = await deps.updateUserDrawState({
+  const pityStreakAfter = await updateUserDrawState({
     tx,
     user,
     status: outcome.status,
     pityStreakBefore: drawState.pityStreakBefore,
-    now,
+    now: currentTime,
   });
 
-  const { record, updatedPoolBalance } = await deps.createDrawRecord({
+  const { record, updatedPoolBalance } = await createDrawRecord({
     tx,
     userId,
     drawState,
@@ -402,7 +402,7 @@ export async function executeDrawInTransaction(
     pityStreakAfter,
   });
 
-  deps.logDrawExecution({
+  logger.info("draw executed", {
     userId,
     status: outcome.status,
     prizeId: outcome.prizeId,

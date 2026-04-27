@@ -1,9 +1,9 @@
 {
   "private": true,
   "scripts": {
-    "dev": "next dev --hostname localhost --port 3000",
-    "dev:turbo": "next dev --turbo --hostname localhost --port 3000",
-    "build": "next build",
+    "dev": "rm -rf .next-dev && next dev --hostname localhost --port 3000",
+    "dev:turbo": "rm -rf .next-dev && next dev --turbo --hostname localhost --port 3000",
+    "build": "rm -rf .next-dev && next build",
     "start": "next start -H 0.0.0.0 -p 3000",
     "lint": "next lint",
     "check": "next lint",

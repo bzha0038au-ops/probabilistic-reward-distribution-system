@@ -5,7 +5,7 @@ import {
   DepositRecordSchema,
   PaymentCapabilityOverviewSchema,
   WithdrawalRecordSchema,
-} from "@reward/shared-types"
+} from "@reward/shared-types/finance"
 
 import { apiRequest } from "$lib/server/api"
 
@@ -33,7 +33,9 @@ export const load: PageServerLoad = async ({ fetch, cookies }) => {
       }
     }
 
-    const deposits = DepositRecordSchema.array().safeParse(depositsRes.data ?? [])
+    const deposits = DepositRecordSchema.array().safeParse(
+      depositsRes.data ?? [],
+    )
     const withdrawals = WithdrawalRecordSchema.array().safeParse(
       withdrawalsRes.data ?? [],
     )
@@ -59,8 +61,9 @@ export const load: PageServerLoad = async ({ fetch, cookies }) => {
       cryptoDepositChannels: cryptoDepositChannels?.success
         ? cryptoDepositChannels.data
         : [],
-      paymentCapabilities:
-        paymentCapabilities?.success ? paymentCapabilities.data : null,
+      paymentCapabilities: paymentCapabilities?.success
+        ? paymentCapabilities.data
+        : null,
       error: hasUnexpectedResponse
         ? "Finance API returned an unexpected response."
         : null,
@@ -241,7 +244,8 @@ export const actions: Actions = {
     if (!response.ok) {
       return fail(response.status, {
         error:
-          response.error?.message ?? "Failed to mark deposit as provider succeeded.",
+          response.error?.message ??
+          "Failed to mark deposit as provider succeeded.",
       })
     }
 
@@ -306,7 +310,8 @@ export const actions: Actions = {
     if (!response.ok) {
       return fail(response.status, {
         error:
-          response.error?.message ?? "Failed to mark deposit as provider failed.",
+          response.error?.message ??
+          "Failed to mark deposit as provider failed.",
       })
     }
 
@@ -716,7 +721,8 @@ export const actions: Actions = {
 
     if (!response.ok) {
       return fail(response.status, {
-        error: response.error?.message ?? "Failed to confirm crypto withdrawal.",
+        error:
+          response.error?.message ?? "Failed to confirm crypto withdrawal.",
       })
     }
 

@@ -3,6 +3,11 @@
 .github
 .vscode
 .idea
+.claude
+.tmp
+references
+test-results
+playwright-report
 .env.d
 node_modules
 apps/**/node_modules

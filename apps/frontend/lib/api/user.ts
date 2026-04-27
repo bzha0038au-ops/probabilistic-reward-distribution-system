@@ -1,38 +1,57 @@
+import type { ApiError, ApiResponse } from "@reward/shared-types/api";
 import type {
-  ApiError,
-  ApiResponse,
   AuthCredentials,
-  DrawRequest,
-  DrawResult,
   RegisterRequest,
   RegisterResponse,
   UserSessionResponse,
-  WalletBalanceResponse,
-} from '@reward/shared-types';
+} from "@reward/shared-types/auth";
+import type {
+  BlackjackActionRequest,
+  BlackjackMutationResponse,
+  BlackjackOverviewResponse,
+  BlackjackStartRequest,
+} from "@reward/shared-types/blackjack";
+import type {
+  DrawCatalogResponse,
+  DrawPlayRequest,
+  DrawPlayResponse,
+  DrawRequest,
+  DrawOverviewResponse,
+  DrawResult,
+} from "@reward/shared-types/draw";
+import type {
+  QuickEightRequest,
+  QuickEightRound,
+} from "@reward/shared-types/quick-eight";
+import type { WalletBalanceResponse } from "@reward/shared-types/user";
 
 export type ApiResult<T> = ApiResponse<T>;
 
 export const USER_API_ROUTES = {
   auth: {
-    register: '/auth/register',
-    session: '/auth/user/session',
+    register: "/auth/register",
+    session: "/auth/user/session",
   },
-  wallet: '/wallet',
-  draw: '/draw',
+  wallet: "/wallet",
+  blackjack: "/blackjack",
+  blackjackStart: "/blackjack/start",
+  draw: "/draw",
+  quickEight: "/quick-eight",
+  drawCatalog: "/draw/catalog",
+  drawOverview: "/draw/overview",
+  drawPlay: "/draw/play",
 } as const;
 
-const fallbackError: ApiError = { message: 'Request failed.' };
+const fallbackError: ApiError = { message: "Request failed." };
 
-const trimTrailingSlash = (value: string) => value.replace(/\/+$/, '');
+const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
 
 export const parseApiResponse = async <T>(
-  response: Response
+  response: Response,
 ): Promise<ApiResult<T>> => {
   const payload = await response.json().catch(() => ({}));
   const traceId =
-    payload?.traceId ??
-    response.headers.get('x-trace-id') ??
-    undefined;
+    payload?.traceId ?? response.headers.get("x-trace-id") ?? undefined;
 
   if (!response.ok || !payload?.ok) {
     return {
@@ -73,11 +92,11 @@ export async function requestUserApi<T>({
   const headers = new Headers(init.headers ?? {});
 
   if (locale) {
-    headers.set('x-locale', locale);
+    headers.set("x-locale", locale);
   }
 
   if (authToken) {
-    headers.set('Authorization', `Bearer ${authToken}`);
+    headers.set("Authorization", `Bearer ${authToken}`);
   }
 
   let response: Response;
@@ -88,14 +107,13 @@ export async function requestUserApi<T>({
       headers,
     });
   } catch (error) {
-    if (typeof window !== 'undefined') {
-      const { captureFrontendApiFailure } = await import(
-        '@/lib/observability/client'
-      );
+    if (typeof window !== "undefined") {
+      const { captureFrontendApiFailure } =
+        await import("@/lib/observability/client");
       captureFrontendApiFailure({
         path,
         message:
-          error instanceof Error ? error.message : 'Network request failed.',
+          error instanceof Error ? error.message : "Network request failed.",
       });
     }
     throw error;
@@ -103,10 +121,9 @@ export async function requestUserApi<T>({
 
   const parsed = await parseApiResponse<T>(response);
 
-  if (!parsed.ok && typeof window !== 'undefined') {
-    const { captureFrontendApiFailure } = await import(
-      '@/lib/observability/client'
-    );
+  if (!parsed.ok && typeof window !== "undefined") {
+    const { captureFrontendApiFailure } =
+      await import("@/lib/observability/client");
     captureFrontendApiFailure({
       path,
       status: parsed.status,
@@ -160,7 +177,7 @@ export function createUserApiClient(runtime: UserApiRuntime) {
   const request = async <T>(
     path: string,
     init: RequestInit = {},
-    overrides: UserApiOverrides = {}
+    overrides: UserApiOverrides = {},
   ) =>
     requestUserApi<T>({
       path,
@@ -177,37 +194,81 @@ export function createUserApiClient(runtime: UserApiRuntime) {
       return request<RegisterResponse>(
         USER_API_ROUTES.auth.register,
         {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         },
-        { auth: false }
+        { auth: false },
       );
     },
     createSession(payload: AuthCredentials) {
       return request<UserSessionResponse>(
         USER_API_ROUTES.auth.session,
         {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
-          cache: 'no-store',
+          cache: "no-store",
         },
-        { auth: false }
+        { auth: false },
       );
     },
     getWalletBalance() {
       return request<WalletBalanceResponse>(USER_API_ROUTES.wallet);
     },
-    runDraw(payload: DrawRequest = {}) {
-      return request<DrawResult>(
-        USER_API_ROUTES.draw,
+    getBlackjackOverview() {
+      return request<BlackjackOverviewResponse>(USER_API_ROUTES.blackjack, {
+        cache: "no-store",
+      });
+    },
+    startBlackjack(payload: BlackjackStartRequest) {
+      return request<BlackjackMutationResponse>(
+        USER_API_ROUTES.blackjackStart,
         {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
-        }
+          cache: "no-store",
+        },
       );
+    },
+    actOnBlackjack(gameId: number, payload: BlackjackActionRequest) {
+      return request<BlackjackMutationResponse>(
+        `${USER_API_ROUTES.blackjack}/${gameId}/action`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          cache: "no-store",
+        },
+      );
+    },
+    getDrawOverview() {
+      return request<DrawOverviewResponse>(USER_API_ROUTES.drawOverview);
+    },
+    getDrawCatalog() {
+      return request<DrawCatalogResponse>(USER_API_ROUTES.drawCatalog);
+    },
+    runDraw(payload: DrawRequest = {}) {
+      return request<DrawResult>(USER_API_ROUTES.draw, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    },
+    playQuickEight(payload: QuickEightRequest) {
+      return request<QuickEightRound>(USER_API_ROUTES.quickEight, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    },
+    playDraw(payload: DrawPlayRequest) {
+      return request<DrawPlayResponse>(USER_API_ROUTES.drawPlay, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
     },
   };
 }

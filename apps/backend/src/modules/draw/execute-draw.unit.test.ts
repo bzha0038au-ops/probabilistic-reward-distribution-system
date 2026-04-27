@@ -1,5 +1,6 @@
+import { ledgerEntries, userWallets, users } from '@reward/database';
 import Decimal from 'decimal.js';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DbTransaction } from '../../db';
 
@@ -48,12 +49,28 @@ vi.mock('./selection', () => ({
   prepareDrawSelection: vi.fn(),
 }));
 
+import { logger } from '../../shared/logger';
+import { ensureFairnessSeed } from '../fairness/service';
 import {
-  executeDrawInTransaction,
-  type ExecuteDrawDependencies,
-} from './execute-draw';
+  getBonusReleaseConfig,
+  getDrawCost,
+  getDrawSystemConfig,
+  getEconomyConfig,
+  getPayoutControlConfig,
+  getPoolSystemConfig,
+  getProbabilityControlConfig,
+  getRandomizationConfig,
+} from '../system/service';
+import { executeDrawInTransaction } from './execute-draw';
+import { resolveDrawOutcome } from './outcome';
+import { loadLockedDrawUser } from './queries';
+import {
+  applyHouseDrawEntries,
+  createDrawRecord,
+  updateUserDrawState,
+} from './record';
+import { prepareDrawSelection } from './selection';
 import type {
-  DebitedDrawState,
   DrawConfigBundle,
   DrawUserRow,
   FairnessSeed,
@@ -61,8 +78,38 @@ import type {
   ResolvedDrawOutcome,
 } from './types';
 
-const makeTx = (userId = 123) =>
-  ({
+type TxState = {
+  wallet: {
+    withdrawableBalance: string;
+    bonusBalance: string;
+    wageredAmount: string;
+    updatedAt: Date | null;
+  };
+  user: {
+    userPoolBalance: string;
+    updatedAt: Date | null;
+  };
+  insertedWallets: Array<Record<string, unknown>>;
+  insertedLedgerEntries: Array<Record<string, unknown>>;
+};
+
+const makeTx = (userId = 123) => {
+  const state: TxState = {
+    wallet: {
+      withdrawableBalance: '100.00',
+      bonusBalance: '0.00',
+      wageredAmount: '0.00',
+      updatedAt: null,
+    },
+    user: {
+      userPoolBalance: '0.00',
+      updatedAt: null,
+    },
+    insertedWallets: [],
+    insertedLedgerEntries: [],
+  };
+
+  const tx = {
     select: () => ({
       from: () => ({
         where: () => ({
@@ -70,12 +117,37 @@ const makeTx = (userId = 123) =>
         }),
       }),
     }),
-    insert: () => ({
-      values: () => ({
-        onConflictDoNothing: async () => undefined,
+    update: (table: unknown) => ({
+      set: (values: Record<string, unknown>) => ({
+        where: async () => {
+          if (table === userWallets) {
+            Object.assign(state.wallet, values);
+          }
+          if (table === users) {
+            Object.assign(state.user, values);
+          }
+        },
       }),
     }),
-  }) as unknown as DbTransaction;
+    insert: (table: unknown) => ({
+      values: (values: Record<string, unknown>) => {
+        if (table === userWallets) {
+          state.insertedWallets.push(values);
+        }
+        if (table === ledgerEntries) {
+          state.insertedLedgerEntries.push(values);
+        }
+
+        return {
+          onConflictDoNothing: async () => undefined,
+          returning: async () => [],
+        };
+      },
+    }),
+  } as unknown as DbTransaction;
+
+  return { tx, state };
+};
 
 const makeDrawUser = (): DrawUserRow => ({
   id: 123,
@@ -138,18 +210,6 @@ const makeFairnessSeed = (): FairnessSeed => ({
   seed: 'seed-value',
 });
 
-const makeDrawState = (): DebitedDrawState => ({
-  drawCostBase: new Decimal(10),
-  drawCost: new Decimal(10),
-  drawCostClamped: false,
-  walletAfterDebit: new Decimal(90),
-  userPoolBefore: new Decimal(0),
-  userPoolAfterDebit: new Decimal(10),
-  bonusBefore: new Decimal(0),
-  wageredAfter: new Decimal(10),
-  pityStreakBefore: 0,
-});
-
 const makeSelectionState = (): PreparedDrawSelection => ({
   poolBalance: new Decimal(25),
   poolNoise: { effective: new Decimal(25), noiseApplied: 0 },
@@ -199,14 +259,28 @@ const makeOutcome = (): ResolvedDrawOutcome => ({
   payoutLimitReason: null,
 });
 
+const mockConfigBundle = (config: DrawConfigBundle) => {
+  vi.mocked(getDrawSystemConfig).mockResolvedValue(config.drawSystem);
+  vi.mocked(getEconomyConfig).mockResolvedValue(config.economy);
+  vi.mocked(getPoolSystemConfig).mockResolvedValue(config.poolSystem);
+  vi.mocked(getPayoutControlConfig).mockResolvedValue(config.payoutControl);
+  vi.mocked(getProbabilityControlConfig).mockResolvedValue(
+    config.probabilityControl
+  );
+  vi.mocked(getRandomizationConfig).mockResolvedValue(config.randomization);
+};
+
+beforeEach(() => {
+  vi.resetAllMocks();
+});
+
 describe('executeDrawInTransaction', () => {
-  it('orchestrates the happy path with injectable dependencies', async () => {
-    const tx = makeTx();
+  it('orchestrates the happy path with direct module mocks', async () => {
+    const { tx, state } = makeTx();
     const now = new Date('2026-03-10T12:00:00.000Z');
     const user = makeDrawUser();
     const config = makeConfig();
     const fairnessSeed = makeFairnessSeed();
-    const drawState = makeDrawState();
     const selectionState = makeSelectionState();
     const outcome = makeOutcome();
     const record = {
@@ -220,73 +294,78 @@ describe('executeDrawInTransaction', () => {
       metadata: {},
     };
 
-    const deps: Partial<ExecuteDrawDependencies> = {
-      now: vi.fn(() => now),
-      loadDrawConfig: vi.fn(async () => config),
-      ensureFairnessSeed: vi.fn(async () => fairnessSeed),
-      resolveClientNonce: vi.fn(() => ({
-        clientNonce: 'client-nonce',
-        nonceSource: 'client' as const,
-      })),
-      loadLockedDrawUser: vi.fn(async () => user),
-      enforceDrawGuards: vi.fn(async () => undefined),
-      debitDrawCost: vi.fn(async () => drawState),
-      prepareDrawSelection: vi.fn(async () => selectionState),
-      resolveDrawOutcome: vi.fn(async () => outcome),
-      applyHouseDrawEntries: vi.fn(async () => undefined),
-      applyAutoBonusRelease: vi.fn(async () => outcome.bonusAfterReward),
-      updateUserDrawState: vi.fn(async () => 0),
-      createDrawRecord: vi.fn(async () => ({
-        record,
-        updatedPoolBalance: new Decimal(30),
-      })),
-      logDrawExecution: vi.fn(),
-    };
+    mockConfigBundle(config);
+    vi.mocked(getDrawCost).mockResolvedValue(new Decimal(10));
+    vi.mocked(getBonusReleaseConfig).mockResolvedValue({
+      bonusAutoReleaseEnabled: true,
+      bonusUnlockWagerRatio: new Decimal(2),
+    });
+    vi.mocked(ensureFairnessSeed).mockResolvedValue(fairnessSeed);
+    vi.mocked(loadLockedDrawUser).mockResolvedValue(user);
+    vi.mocked(prepareDrawSelection).mockResolvedValue(selectionState);
+    vi.mocked(resolveDrawOutcome).mockResolvedValue(outcome);
+    vi.mocked(applyHouseDrawEntries).mockResolvedValue(undefined);
+    vi.mocked(updateUserDrawState).mockResolvedValue(0);
+    vi.mocked(createDrawRecord).mockResolvedValue({
+      record,
+      updatedPoolBalance: new Decimal(30),
+    });
 
     const result = await executeDrawInTransaction(
       tx,
       123,
       { clientNonce: 'user-supplied' },
-      deps
+      {
+        dependencies: {
+          now: () => now,
+        },
+      }
     );
 
     expect(result).toEqual(record);
-    expect(deps.ensureFairnessSeed).toHaveBeenCalledWith(tx, 3600);
-    expect(deps.enforceDrawGuards).toHaveBeenCalledWith(
-      tx,
-      123,
-      config.drawSystem,
-      now
-    );
-    expect(deps.prepareDrawSelection).toHaveBeenCalledWith(
+    expect(ensureFairnessSeed).toHaveBeenCalledWith(tx, 3600);
+    expect(prepareDrawSelection).toHaveBeenCalledWith(
       expect.objectContaining({
         tx,
-        drawState,
+        clientNonce: 'user-supplied',
         fairnessSeed,
-        clientNonce: 'client-nonce',
       })
     );
-    expect(deps.resolveDrawOutcome).toHaveBeenCalledWith(
+    expect(resolveDrawOutcome).toHaveBeenCalledWith(
       expect.objectContaining({
         tx,
         userId: 123,
         user,
-        drawState,
-        selectionState,
         now,
       })
     );
-    expect(deps.createDrawRecord).toHaveBeenCalledWith(
+    expect(applyHouseDrawEntries).toHaveBeenCalledWith({
+      tx,
+      userId: 123,
+      drawCost: new Decimal(10),
+      rewardAmount: new Decimal(5),
+      prizeId: 7,
+    });
+    expect(updateUserDrawState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tx,
+        user,
+        status: 'won',
+        pityStreakBefore: 0,
+        now,
+      })
+    );
+    expect(createDrawRecord).toHaveBeenCalledWith(
       expect.objectContaining({
         tx,
         userId: 123,
         fairnessSeed,
-        clientNonce: 'client-nonce',
+        clientNonce: 'user-supplied',
         nonceSource: 'client',
         pityStreakAfter: 0,
       })
     );
-    expect(deps.logDrawExecution).toHaveBeenCalledWith({
+    expect(logger.info).toHaveBeenCalledWith('draw executed', {
       userId: 123,
       status: 'won',
       prizeId: 7,
@@ -295,43 +374,80 @@ describe('executeDrawInTransaction', () => {
       poolBalanceBefore: '25.00',
       poolBalanceAfter: '30.00',
     });
+
+    expect(state.insertedWallets).toEqual([{ userId: 123 }]);
+    expect(state.wallet).toEqual({
+      withdrawableBalance: '95.00',
+      bonusBalance: '0.00',
+      wageredAmount: '0.00',
+      updatedAt: expect.any(Date),
+    });
+    expect(state.user).toEqual({
+      userPoolBalance: '10.00',
+      updatedAt: now,
+    });
+    expect(state.insertedLedgerEntries).toEqual([
+      expect.objectContaining({
+        userId: 123,
+        entryType: 'draw_cost',
+        amount: '-10.00',
+        balanceBefore: '100.00',
+        balanceAfter: '90.00',
+        referenceType: 'draw',
+        metadata: { reason: 'draw_cost' },
+      }),
+      expect.objectContaining({
+        userId: 123,
+        entryType: 'bonus_release_auto',
+        amount: '5.00',
+        balanceBefore: '5.00',
+        balanceAfter: '0.00',
+        referenceType: 'bonus_release',
+        metadata: {
+          reason: 'auto_release',
+          balanceType: 'bonus',
+          unlockRatio: '2.00',
+        },
+      }),
+    ]);
   });
 
   it('fails before config loading when the locked draw user is missing', async () => {
-    const tx = makeTx();
-    const loadDrawConfig = vi.fn();
+    const { tx } = makeTx();
 
-    await expect(
-      executeDrawInTransaction(tx, 123, undefined, {
-        loadLockedDrawUser: vi.fn(async () => null),
-        loadDrawConfig,
-      })
-    ).rejects.toThrow('User not found.');
+    vi.mocked(loadLockedDrawUser).mockResolvedValue(null);
 
-    expect(loadDrawConfig).not.toHaveBeenCalled();
+    await expect(executeDrawInTransaction(tx, 123)).rejects.toThrow(
+      'User not found.'
+    );
+
+    expect(getDrawSystemConfig).not.toHaveBeenCalled();
   });
 
   it('stops the flow when draw guards reject the request', async () => {
-    const tx = makeTx();
-    const debitDrawCost = vi.fn();
+    const { tx } = makeTx();
+    const config = makeConfig();
+    config.drawSystem.drawEnabled = false;
+
+    mockConfigBundle(config);
+    vi.mocked(ensureFairnessSeed).mockResolvedValue(makeFairnessSeed());
+    vi.mocked(loadLockedDrawUser).mockResolvedValue(makeDrawUser());
 
     await expect(
-      executeDrawInTransaction(tx, 123, undefined, {
-        now: () => new Date('2026-03-10T12:00:00.000Z'),
-        loadLockedDrawUser: vi.fn(async () => makeDrawUser()),
-        loadDrawConfig: vi.fn(async () => makeConfig()),
-        ensureFairnessSeed: vi.fn(async () => makeFairnessSeed()),
-        resolveClientNonce: vi.fn(() => ({
-          clientNonce: 'server-nonce',
-          nonceSource: 'server' as const,
-        })),
-        enforceDrawGuards: vi.fn(async () => {
-          throw new Error('Draw cooldown active.');
-        }),
-        debitDrawCost,
-      })
-    ).rejects.toThrow('Draw cooldown active.');
+      executeDrawInTransaction(
+        tx,
+        123,
+        { clientNonce: 'user-supplied' },
+        {
+          dependencies: {
+            now: () => new Date('2026-03-10T12:00:00.000Z'),
+          },
+        }
+      )
+    ).rejects.toThrow('Draws are disabled.');
 
-    expect(debitDrawCost).not.toHaveBeenCalled();
+    expect(getDrawCost).not.toHaveBeenCalled();
+    expect(prepareDrawSelection).not.toHaveBeenCalled();
+    expect(resolveDrawOutcome).not.toHaveBeenCalled();
   });
 });

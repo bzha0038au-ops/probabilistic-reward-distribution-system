@@ -1,3 +1,5 @@
+import { internalInvariantError } from '../../shared/errors';
+
 type TransitionActor = 'user' | 'admin' | 'provider' | 'system';
 
 type TransitionGraph<Status extends string> = Record<Status, readonly Status[]>;
@@ -89,7 +91,7 @@ const assertTransition = <Status extends string>(
     return;
   }
 
-  throw new Error(`Invalid ${flow} status transition: ${from} -> ${to}.`);
+  throw internalInvariantError(`Invalid ${flow} status transition: ${from} -> ${to}.`);
 };
 
 const assertInitialState = (
@@ -100,7 +102,7 @@ const assertInitialState = (
     return;
   }
 
-  throw new Error(`Invalid initial ${flow} status: ${to}.`);
+  throw internalInvariantError(`Invalid initial ${flow} status: ${to}.`);
 };
 
 export type FinanceStateTransitionInput<Status extends string> = {
@@ -154,7 +156,7 @@ export const parseDepositStatus = (value: string | null | undefined): DepositSta
     return value;
   }
 
-  throw new Error(`Unknown deposit status: ${value ?? 'null'}.`);
+  throw internalInvariantError(`Unknown deposit status: ${value ?? 'null'}.`);
 };
 
 export const parseWithdrawalStatus = (
@@ -164,7 +166,7 @@ export const parseWithdrawalStatus = (
     return value;
   }
 
-  throw new Error(`Unknown withdrawal status: ${value ?? 'null'}.`);
+  throw internalInvariantError(`Unknown withdrawal status: ${value ?? 'null'}.`);
 };
 
 export const canTransitionDepositStatus = (from: DepositStatus, to: DepositStatus) =>
@@ -206,7 +208,7 @@ export const assertDepositLedgerMutationStatus = (status: DepositStatus) => {
     return;
   }
 
-  throw new Error(`Ledger writes are not allowed for deposit status ${status}.`);
+  throw internalInvariantError(`Ledger writes are not allowed for deposit status ${status}.`);
 };
 
 export const assertWithdrawalLedgerMutationStatus = (status: WithdrawalStatus) => {
@@ -214,5 +216,7 @@ export const assertWithdrawalLedgerMutationStatus = (status: WithdrawalStatus) =
     return;
   }
 
-  throw new Error(`Ledger writes are not allowed for withdrawal status ${status}.`);
+  throw internalInvariantError(
+    `Ledger writes are not allowed for withdrawal status ${status}.`
+  );
 };

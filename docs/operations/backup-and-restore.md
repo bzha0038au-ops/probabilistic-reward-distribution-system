@@ -11,10 +11,16 @@ control, not as an ad hoc DBA task.
 - Schedule at least one logical backup per day using
   `.github/workflows/operations-backup.yml`, which calls
   `deploy/scripts/backup-runner.sh`.
+- Schedule at least one daily readability check using
+  `.github/workflows/backup-verify.yml`, which downloads the newest S3 backup
+  copy and runs `pg_restore --list`.
 - Schedule at least one volume-level PostgreSQL backup every week using the same
   workflow with `INCLUDE_VOLUME_BACKUP=true`.
 - Store backup artifacts encrypted and offsite from the primary runtime
   account/region through `OFFSITE_STORAGE_URI`.
+- Keep a readable logical dump copy in `BACKUP_ARCHIVE_S3_URI` for automated
+  validation, and mirror it to `BACKUP_ARCHIVE_CROSS_REGION_S3_URI` when your
+  cloud provider does not already replicate that bucket or prefix.
 - Run a restore drill at least once every 90 days using
   `deploy/scripts/restore-drill.sh` against an isolated target database.
 - Record and review actual RPO/RTO after every drill and every real incident.
@@ -38,6 +44,13 @@ The repo-owned scheduler is
 - Daily schedule: logical backup only
 - Weekly schedule: logical backup plus PostgreSQL volume backup
 - Monthly schedule: logical backup, volume backup, and a full restore drill
+- Daily verification schedule:
+  [`.github/workflows/backup-verify.yml`](../../.github/workflows/backup-verify.yml)
+- Daily restore-drill freshness check: page on-call if the newest committed
+  evidence in `docs/operations/evidence/` is older than 90 days
+
+Successful monthly drills copy their report into `docs/operations/evidence/`
+as `restore-drill-YYYY-MM.*` and open an automated pull request for review.
 
 For local cron or another scheduler, use `deploy/env/ops.env.example` as the
 configuration contract for `deploy/scripts/backup-runner.sh`.
@@ -64,7 +77,10 @@ BACKUP_ENCRYPTION_PASSPHRASE=change-me \
    - checksum files for encrypted bundles
    - `backup-manifest.json` with run metadata
 4. Confirm the encrypted bundles arrived at `OFFSITE_STORAGE_URI`.
-5. Alert on backup job failure or missing daily artifact through `BACKUP_ALERT_WEBHOOK_URL`.
+5. Confirm the readable logical dump copy arrived at `BACKUP_ARCHIVE_S3_URI`.
+6. If bucket replication is not enabled in infra, confirm the manual
+   cross-region copy arrived at `BACKUP_ARCHIVE_CROSS_REGION_S3_URI`.
+7. Alert on backup job failure or missing daily artifact through `BACKUP_ALERT_WEBHOOK_URL`.
 
 ## Restore Procedure
 
@@ -72,6 +88,7 @@ Use restores in two cases:
 
 - isolated drill or analytics clone restore
 - production recovery after corruption, accidental deletion, or bad migration
+- Migrations `0028` through `0035` do not ship repo-owned down SQL; rollback for `quick_eight`, `blackjack`, and `saas` / `prize_engine_saas` changes means restoring to a pre-deploy snapshot or PITR target and then redeploying the previous application release.
 
 Before restoring a production target:
 

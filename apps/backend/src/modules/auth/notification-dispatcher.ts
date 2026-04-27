@@ -1,4 +1,4 @@
-import { getConfig } from '../../shared/config';
+import { getConfigView } from '../../shared/config';
 import { logger } from '../../shared/logger';
 import { captureException } from '../../shared/telemetry';
 import {
@@ -8,7 +8,7 @@ import {
   registerAuthNotificationEnqueueHook,
 } from './notification-service';
 
-const config = getConfig();
+const config = getConfigView();
 
 class AuthNotificationDispatcher {
   private timer: NodeJS.Timeout | null = null;

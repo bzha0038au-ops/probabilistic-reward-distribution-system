@@ -98,44 +98,48 @@ export async function softDeletePrize(id: number) {
 }
 
 export async function getAnalyticsSummary() {
-  const [{ total = 0 }] = await db
-    .select({ total: sql<number>`count(*)` })
-    .from(drawRecords);
-
-  const [{ won = 0 }] = await db
-    .select({ won: sql<number>`count(*)` })
-    .from(drawRecords)
-    .where(eq(drawRecords.status, 'won'));
-
-  const [{ miss = 0 }] = await db
-    .select({ miss: sql<number>`count(*)` })
-    .from(drawRecords)
-    .where(and(isNotNull(drawRecords.status), ne(drawRecords.status, 'won')));
-
-  const distribution = await db
-    .select({
-      prizeId: drawRecords.prizeId,
-      total: sql<number>`count(*)`,
-    })
-    .from(drawRecords)
-    .where(isNotNull(drawRecords.prizeId))
-    .groupBy(drawRecords.prizeId)
-    .orderBy(desc(sql`count(*)`));
-
-  const topSpenders = await db
-    .select({
-      userId: ledgerEntries.userId,
-      spent: sql<number>`abs(sum(${ledgerEntries.amount}))`,
-    })
-    .from(ledgerEntries)
-    .where(
-      and(eq(ledgerEntries.entryType, 'draw_cost'), isNotNull(ledgerEntries.userId))
-    )
-    .groupBy(ledgerEntries.userId)
-    .orderBy(desc(sql`abs(sum(${ledgerEntries.amount}))`))
-    .limit(20);
-
-  const poolBalance = await getPoolBalance(db);
+  const [
+    [{ total = 0 }],
+    [{ won = 0 }],
+    [{ miss = 0 }],
+    distribution,
+    topSpenders,
+    poolBalance,
+  ] = await Promise.all([
+    db
+      .select({ total: sql<number>`count(*)` })
+      .from(drawRecords),
+    db
+      .select({ won: sql<number>`count(*)` })
+      .from(drawRecords)
+      .where(eq(drawRecords.status, 'won')),
+    db
+      .select({ miss: sql<number>`count(*)` })
+      .from(drawRecords)
+      .where(and(isNotNull(drawRecords.status), ne(drawRecords.status, 'won'))),
+    db
+      .select({
+        prizeId: drawRecords.prizeId,
+        total: sql<number>`count(*)`,
+      })
+      .from(drawRecords)
+      .where(isNotNull(drawRecords.prizeId))
+      .groupBy(drawRecords.prizeId)
+      .orderBy(desc(sql`count(*)`)),
+    db
+      .select({
+        userId: ledgerEntries.userId,
+        spent: sql<number>`abs(sum(${ledgerEntries.amount}))`,
+      })
+      .from(ledgerEntries)
+      .where(
+        and(eq(ledgerEntries.entryType, 'draw_cost'), isNotNull(ledgerEntries.userId))
+      )
+      .groupBy(ledgerEntries.userId)
+      .orderBy(desc(sql`abs(sum(${ledgerEntries.amount}))`))
+      .limit(20),
+    getPoolBalance(db),
+  ]);
 
   return {
     totalDrawCount: Number(total ?? 0),
@@ -152,42 +156,46 @@ export async function getPublicStats(options: {
   cutoff: Date;
   includePoolBalance: boolean;
 }) {
-  const [{ total = 0 }] = await db
-    .select({ total: sql<number>`count(*)` })
-    .from(drawRecords)
-    .where(lte(drawRecords.createdAt, options.cutoff));
-
-  const [{ won = 0 }] = await db
-    .select({ won: sql<number>`count(*)` })
-    .from(drawRecords)
-    .where(
-      and(eq(drawRecords.status, 'won'), lte(drawRecords.createdAt, options.cutoff))
-    );
-
-  const [{ miss = 0 }] = await db
-    .select({ miss: sql<number>`count(*)` })
-    .from(drawRecords)
-    .where(
-      and(
-        isNotNull(drawRecords.status),
-        ne(drawRecords.status, 'won'),
-        lte(drawRecords.createdAt, options.cutoff)
+  const [
+    [{ total = 0 }],
+    [{ won = 0 }],
+    [{ miss = 0 }],
+    distribution,
+    poolBalance,
+  ] = await Promise.all([
+    db
+      .select({ total: sql<number>`count(*)` })
+      .from(drawRecords)
+      .where(lte(drawRecords.createdAt, options.cutoff)),
+    db
+      .select({ won: sql<number>`count(*)` })
+      .from(drawRecords)
+      .where(
+        and(eq(drawRecords.status, 'won'), lte(drawRecords.createdAt, options.cutoff))
+      ),
+    db
+      .select({ miss: sql<number>`count(*)` })
+      .from(drawRecords)
+      .where(
+        and(
+          isNotNull(drawRecords.status),
+          ne(drawRecords.status, 'won'),
+          lte(drawRecords.createdAt, options.cutoff)
+        )
+      ),
+    db
+      .select({
+        prizeId: drawRecords.prizeId,
+        total: sql<number>`count(*)`,
+      })
+      .from(drawRecords)
+      .where(
+        and(isNotNull(drawRecords.prizeId), lte(drawRecords.createdAt, options.cutoff))
       )
-    );
-
-  const distribution = await db
-    .select({
-      prizeId: drawRecords.prizeId,
-      total: sql<number>`count(*)`,
-    })
-    .from(drawRecords)
-    .where(
-      and(isNotNull(drawRecords.prizeId), lte(drawRecords.createdAt, options.cutoff))
-    )
-    .groupBy(drawRecords.prizeId)
-    .orderBy(desc(sql`count(*)`));
-
-  const poolBalance = options.includePoolBalance ? await getPoolBalance(db) : null;
+      .groupBy(drawRecords.prizeId)
+      .orderBy(desc(sql`count(*)`)),
+    options.includePoolBalance ? getPoolBalance(db) : Promise.resolve(null),
+  ]);
 
   return {
     totalDrawCount: Number(total ?? 0),

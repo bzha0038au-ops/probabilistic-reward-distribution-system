@@ -11,6 +11,16 @@ export type RateLimitResult = {
   remaining: number;
   resetAt: number;
   limit: number;
+  used: number;
+  windowMs: number;
+};
+
+export type RateLimitSnapshot = {
+  remaining: number;
+  resetAt: number | null;
+  limit: number;
+  used: number;
+  windowMs: number;
 };
 
 export const createRateLimiter = (options: {
@@ -20,16 +30,29 @@ export const createRateLimiter = (options: {
 }) => {
   const buckets = new Map<string, Bucket>();
   const { limit, windowMs, prefix } = options;
-  const redis = getRedis();
-  const config = getConfig();
-  const keyPrefix = prefix
-    ? `${config.rateLimitRedisPrefix}:${prefix}`
-    : config.rateLimitRedisPrefix;
 
-  const consume = async (key: string): Promise<RateLimitResult> => {
+  const resolveLimit = (overrideLimit?: number) => {
+    const parsed = Math.floor(Number(overrideLimit ?? limit));
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : limit;
+  };
+
+  const resolveRedisKey = (key: string) => {
+    const { rateLimitRedisPrefix } = getConfig();
+    const keyPrefix = prefix
+      ? `${rateLimitRedisPrefix}:${prefix}`
+      : rateLimitRedisPrefix;
+    return `${keyPrefix}:${key}`;
+  };
+
+  const consume = async (
+    key: string,
+    overrideLimit?: number
+  ): Promise<RateLimitResult> => {
     const now = Date.now();
+    const resolvedLimit = resolveLimit(overrideLimit);
+    const redis = getRedis();
     if (redis) {
-      const redisKey = `${keyPrefix}:${key}`;
+      const redisKey = resolveRedisKey(key);
       const count = await redis.incr(redisKey);
       if (count === 1) {
         await redis.pexpire(redisKey, windowMs);
@@ -38,10 +61,12 @@ export const createRateLimiter = (options: {
       const resetAt = now + Math.max(ttl, 0);
 
       return {
-        allowed: count <= limit,
-        remaining: Math.max(limit - count, 0),
+        allowed: count <= resolvedLimit,
+        remaining: Math.max(resolvedLimit - count, 0),
         resetAt,
-        limit,
+        limit: resolvedLimit,
+        used: count,
+        windowMs,
       };
     }
 
@@ -51,9 +76,11 @@ export const createRateLimiter = (options: {
       buckets.set(key, { count: 1, resetAt });
       return {
         allowed: true,
-        remaining: Math.max(limit - 1, 0),
+        remaining: Math.max(resolvedLimit - 1, 0),
         resetAt,
-        limit,
+        limit: resolvedLimit,
+        used: 1,
+        windowMs,
       };
     }
 
@@ -62,12 +89,61 @@ export const createRateLimiter = (options: {
     buckets.set(key, existing);
 
     return {
-      allowed: nextCount <= limit,
-      remaining: Math.max(limit - nextCount, 0),
+      allowed: nextCount <= resolvedLimit,
+      remaining: Math.max(resolvedLimit - nextCount, 0),
       resetAt: existing.resetAt,
-      limit,
+      limit: resolvedLimit,
+      used: nextCount,
+      windowMs,
     };
   };
 
-  return { consume };
+  const peek = async (
+    key: string,
+    overrideLimit?: number
+  ): Promise<RateLimitSnapshot> => {
+    const now = Date.now();
+    const resolvedLimit = resolveLimit(overrideLimit);
+    const redis = getRedis();
+
+    if (redis) {
+      const redisKey = resolveRedisKey(key);
+      const [storedCount, ttl] = await Promise.all([
+        redis.get(redisKey),
+        redis.pttl(redisKey),
+      ]);
+      const count = Math.max(Number(storedCount ?? 0), 0);
+      const resetAt = ttl > 0 ? now + ttl : null;
+
+      return {
+        remaining: Math.max(resolvedLimit - count, 0),
+        resetAt,
+        limit: resolvedLimit,
+        used: count,
+        windowMs,
+      };
+    }
+
+    const existing = buckets.get(key);
+    if (!existing || now >= existing.resetAt) {
+      buckets.delete(key);
+      return {
+        remaining: resolvedLimit,
+        resetAt: null,
+        limit: resolvedLimit,
+        used: 0,
+        windowMs,
+      };
+    }
+
+    return {
+      remaining: Math.max(resolvedLimit - existing.count, 0),
+      resetAt: existing.resetAt,
+      limit: resolvedLimit,
+      used: existing.count,
+      windowMs,
+    };
+  };
+
+  return { consume, peek };
 };

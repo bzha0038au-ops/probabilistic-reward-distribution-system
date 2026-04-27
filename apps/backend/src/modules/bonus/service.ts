@@ -4,6 +4,11 @@ import Decimal from 'decimal.js';
 import { db } from '../../db';
 import { ledgerEntries, userWallets } from '@reward/database';
 import type { DbClient, DbTransaction } from '../../db';
+import {
+  conflictError,
+  persistenceError,
+  unprocessableEntityError,
+} from '../../shared/errors';
 import { toDecimal, toMoneyString } from '../../shared/money';
 import { readSqlRows } from '../../shared/sql-result';
 
@@ -34,12 +39,12 @@ export async function grantBonus(
       bonus_balance: string | number;
     }>(walletResult)[0];
     if (!wallet) {
-      throw new Error('Wallet not found.');
+      throw persistenceError('Wallet not found.');
     }
 
     const amount = toDecimal(payload.amount);
     if (amount.lte(0)) {
-      throw new Error('Bonus amount must be greater than 0.');
+      throw unprocessableEntityError('Bonus amount must be greater than 0.');
     }
 
     const bonusBefore = toDecimal(wallet.bonus_balance ?? 0);
@@ -97,12 +102,12 @@ export async function releaseBonusManual(payload: {
       bonus_balance: string | number;
     }>(walletResult)[0];
     if (!wallet) {
-      throw new Error('Wallet not found.');
+      throw persistenceError('Wallet not found.');
     }
 
     const bonusBefore = toDecimal(wallet.bonus_balance ?? 0);
     if (bonusBefore.lte(0)) {
-      throw new Error('No bonus balance to release.');
+      throw conflictError('No bonus balance to release.');
     }
 
     let releaseAmount =
@@ -111,7 +116,7 @@ export async function releaseBonusManual(payload: {
         : bonusBefore;
 
     if (releaseAmount.lte(0)) {
-      throw new Error('Release amount must be greater than 0.');
+      throw unprocessableEntityError('Release amount must be greater than 0.');
     }
 
     if (releaseAmount.gt(bonusBefore)) {

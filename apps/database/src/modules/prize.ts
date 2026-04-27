@@ -9,94 +9,99 @@ import {
   text,
   timestamp,
   varchar,
-} from 'drizzle-orm/pg-core';
-import { drawStatusValues } from '@reward/shared-types';
+} from "drizzle-orm/pg-core";
+import { drawStatusValues } from "@reward/shared-types/draw";
 
-import { users } from './user.js';
+import { users } from "./user.js";
 
 export const prizes = pgTable(
-  'prizes',
+  "prizes",
   {
-    id: serial('id').primaryKey(),
-    name: text('name').notNull(),
-    stock: integer('stock').notNull().default(0),
-    weight: integer('weight').notNull().default(1),
-    poolThreshold: numeric('pool_threshold', { precision: 14, scale: 2 })
+    id: serial("id").primaryKey(),
+    name: text("name").notNull(),
+    stock: integer("stock").notNull().default(0),
+    weight: integer("weight").notNull().default(1),
+    poolThreshold: numeric("pool_threshold", { precision: 14, scale: 2 })
       .notNull()
-      .default('0'),
-    userPoolThreshold: numeric('user_pool_threshold', { precision: 14, scale: 2 })
+      .default("0"),
+    userPoolThreshold: numeric("user_pool_threshold", {
+      precision: 14,
+      scale: 2,
+    })
       .notNull()
-      .default('0'),
-    rewardAmount: numeric('reward_amount', { precision: 14, scale: 2 })
+      .default("0"),
+    rewardAmount: numeric("reward_amount", { precision: 14, scale: 2 })
       .notNull()
-      .default('0'),
-    payoutBudget: numeric('payout_budget', { precision: 14, scale: 2 })
+      .default("0"),
+    payoutBudget: numeric("payout_budget", { precision: 14, scale: 2 })
       .notNull()
-      .default('0'),
-    payoutSpent: numeric('payout_spent', { precision: 14, scale: 2 })
+      .default("0"),
+    payoutSpent: numeric("payout_spent", { precision: 14, scale: 2 })
       .notNull()
-      .default('0'),
-    payoutPeriodDays: integer('payout_period_days').notNull().default(1),
-    payoutPeriodStartedAt: timestamp('payout_period_started_at', {
+      .default("0"),
+    payoutPeriodDays: integer("payout_period_days").notNull().default(1),
+    payoutPeriodStartedAt: timestamp("payout_period_started_at", {
       withTimezone: true,
     })
       .notNull()
       .defaultNow(),
-    isActive: boolean('is_active').notNull().default(true),
-    deletedAt: timestamp('deleted_at', { withTimezone: true }),
-    createdAt: timestamp('created_at', { withTimezone: true })
+    isActive: boolean("is_active").notNull().default(true),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: true })
+    updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
   (table) => ({
-    activeStockIdx: index('prizes_active_stock_idx').on(
+    activeStockIdx: index("prizes_active_stock_idx").on(
       table.isActive,
-      table.stock
+      table.stock,
     ),
-    deletedAtIdx: index('prizes_deleted_at_idx').on(table.deletedAt),
-    poolThresholdIdx: index('prizes_pool_threshold_idx').on(table.poolThreshold),
-    userPoolThresholdIdx: index('prizes_user_pool_threshold_idx').on(
-      table.userPoolThreshold
+    deletedAtIdx: index("prizes_deleted_at_idx").on(table.deletedAt),
+    poolThresholdIdx: index("prizes_pool_threshold_idx").on(
+      table.poolThreshold,
     ),
-  })
+    userPoolThresholdIdx: index("prizes_user_pool_threshold_idx").on(
+      table.userPoolThreshold,
+    ),
+  }),
 );
 
 export const drawRecords = pgTable(
-  'draw_records',
+  "draw_records",
   {
-    id: serial('id').primaryKey(),
-    userId: integer('user_id')
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
       .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    prizeId: integer('prize_id').references(() => prizes.id, {
-      onDelete: 'set null',
+      .references(() => users.id, { onDelete: "cascade" }),
+    prizeId: integer("prize_id").references(() => prizes.id, {
+      onDelete: "set null",
     }),
-    drawCost: numeric('draw_cost', { precision: 14, scale: 2 }).notNull(),
-    rewardAmount: numeric('reward_amount', { precision: 14, scale: 2 })
+    drawCost: numeric("draw_cost", { precision: 14, scale: 2 }).notNull(),
+    rewardAmount: numeric("reward_amount", { precision: 14, scale: 2 })
       .notNull()
-      .default('0'),
-    status: varchar('status', { length: 32, enum: drawStatusValues }).notNull(),
-    metadata: jsonb('metadata'),
-    createdAt: timestamp('created_at', { withTimezone: true })
+      .default("0"),
+    status: varchar("status", { length: 32, enum: drawStatusValues }).notNull(),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
   (table) => ({
-    userCreatedIdx: index('draw_records_user_created_idx').on(
+    userCreatedIdx: index("draw_records_user_created_idx").on(
       table.userId,
-      table.createdAt
+      table.createdAt,
     ),
-    prizeStatusIdx: index('draw_records_prize_status_idx').on(
+    prizeStatusIdx: index("draw_records_prize_status_idx").on(
       table.prizeId,
-      table.status
-    ),
-    statusIdx: index('draw_records_status_idx').on(table.status),
-    statusCreatedIdx: index('draw_records_status_created_idx').on(
       table.status,
-      table.createdAt
     ),
-  })
+    statusIdx: index("draw_records_status_idx").on(table.status),
+    statusCreatedIdx: index("draw_records_status_created_idx").on(
+      table.status,
+      table.createdAt,
+    ),
+  }),
 );

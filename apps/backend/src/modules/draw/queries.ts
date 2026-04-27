@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { prizes, userWallets, users } from '@reward/database';
 import type { DbTransaction } from '../../db';
+import { internalInvariantError } from '../../shared/errors';
 import { parseSchema } from '../../shared/validation';
 import { readSqlRows } from '../../shared/sql-result';
 import {
@@ -22,7 +23,7 @@ const parseSqlRows = <T>(
 ) => {
   const parsed = parseSchema(schema, readSqlRows<T>(result));
   if (!parsed.isValid) {
-    throw new Error(errorMessage);
+    throw internalInvariantError(errorMessage);
   }
   return parsed.data;
 };

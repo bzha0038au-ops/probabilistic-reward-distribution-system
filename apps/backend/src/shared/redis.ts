@@ -24,3 +24,18 @@ export const getRedis = () => {
   cachedClient = client;
   return cachedClient;
 };
+
+export const closeRedis = async () => {
+  if (!cachedClient) {
+    return;
+  }
+
+  const client = cachedClient;
+  cachedClient = null;
+
+  try {
+    await client.quit();
+  } catch {
+    client.disconnect();
+  }
+};

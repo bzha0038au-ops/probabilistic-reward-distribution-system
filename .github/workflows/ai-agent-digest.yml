@@ -1,0 +1,78 @@
+name: AI Agent Digest
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * *'
+
+permissions:
+  pull-requests: read
+
+jobs:
+  dependabot-digest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build Dependabot digest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          since_ts="$(date -u -d '24 hours ago' '+%Y-%m-%dT%H:%M:%SZ')"
+          since_day="$(date -u -d '24 hours ago' '+%Y-%m-%d')"
+          now_ts="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+
+          auto_merged_json="$(gh pr list \
+            --app dependabot \
+            --limit 100 \
+            --state merged \
+            --search "merged:>=${since_day}" \
+            --json number,title,url,mergedAt,mergedBy)"
+
+          auto_merged_count="$(printf '%s' "$auto_merged_json" | jq --arg since "$since_ts" '
+            [
+              .[]
+              | select(.mergedAt >= $since)
+              | select((.mergedBy.login // "") == "github-actions[bot]")
+            ]
+            | length
+          ')"
+
+          pending_json="$(gh pr list \
+            --app dependabot \
+            --limit 100 \
+            --state open \
+            --search "review:required" \
+            --json number,title,url)"
+
+          pending_count="$(printf '%s' "$pending_json" | jq 'length')"
+
+          digest_line="自动合并 ${auto_merged_count} / 待审 ${pending_count}"
+          echo "$digest_line"
+
+          {
+            echo "## AI Agent Digest"
+            echo
+            echo "- Window: ${since_ts} to ${now_ts}"
+            echo "- ${digest_line}"
+            echo
+
+            if [ "$auto_merged_count" -gt 0 ]; then
+              echo "### Auto-merged in the last 24 hours"
+              printf '%s' "$auto_merged_json" | jq -r --arg since "$since_ts" '
+                .[]
+                | select(.mergedAt >= $since)
+                | select((.mergedBy.login // "") == "github-actions[bot]")
+                | "- #\(.number) [\(.title)](\(.url))"
+              '
+              echo
+            fi
+
+            if [ "$pending_count" -gt 0 ]; then
+              echo "### Pending manual review"
+              printf '%s' "$pending_json" | jq -r '
+                .[]
+                | "- #\(.number) [\(.title)](\(.url))"
+              '
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

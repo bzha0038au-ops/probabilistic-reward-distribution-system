@@ -65,4 +65,5 @@ Every drill should produce:
 - a short drill report
 - a list of runbook corrections
 - a ticket for every manual step worth automating
-- a saved copy under `docs/operations/evidence/` or the workflow artifact store
+- a saved copy under `docs/operations/evidence/`; the monthly scheduler opens
+  an automated PR with `restore-drill-YYYY-MM.*`

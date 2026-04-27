@@ -3,13 +3,13 @@ import { beforeAll, describe, expect, it } from 'vitest';
 process.env.DATABASE_URL ||= 'postgresql://postgres:postgres@127.0.0.1:5432/reward_test';
 process.env.POSTGRES_URL ||= process.env.DATABASE_URL;
 
-let derivePaymentWebhookTransition: typeof import('./webhook-service').derivePaymentWebhookTransition;
-let readPaymentWebhookEventId: typeof import('./webhook-service').readPaymentWebhookEventId;
-let readPaymentWebhookEventIdFromHeaders: typeof import('./webhook-service').readPaymentWebhookEventIdFromHeaders;
-let readPaymentWebhookSignatureFromHeaders: typeof import('./webhook-service').readPaymentWebhookSignatureFromHeaders;
+let derivePaymentWebhookTransition: typeof import('./webhook').derivePaymentWebhookTransition;
+let readPaymentWebhookEventId: typeof import('./webhook').readPaymentWebhookEventId;
+let readPaymentWebhookEventIdFromHeaders: typeof import('./webhook').readPaymentWebhookEventIdFromHeaders;
+let readPaymentWebhookSignatureFromHeaders: typeof import('./webhook').readPaymentWebhookSignatureFromHeaders;
 
 beforeAll(async () => {
-  const mod = await import('./webhook-service');
+  const mod = await import('./webhook');
   derivePaymentWebhookTransition = mod.derivePaymentWebhookTransition;
   readPaymentWebhookEventId = mod.readPaymentWebhookEventId;
   readPaymentWebhookEventIdFromHeaders = mod.readPaymentWebhookEventIdFromHeaders;
@@ -70,6 +70,40 @@ describe('payment webhook helpers', () => {
     });
   });
 
+  it('maps real stripe checkout session payloads by reading order references from metadata', () => {
+    expect(
+      derivePaymentWebhookTransition(
+        {
+          id: 'evt_checkout_complete_1',
+          type: 'checkout.session.completed',
+          data: {
+            object: {
+              id: 'cs_test_123',
+              status: 'complete',
+              payment_status: 'paid',
+              client_reference_id: '44',
+              metadata: {
+                referenceType: 'deposit',
+                orderId: '44',
+                referenceId: '44',
+              },
+            },
+          },
+        },
+        'stripe'
+      )
+    ).toEqual({
+      decision: 'process',
+      orderType: 'deposit',
+      orderId: 44,
+      action: 'deposit_mark_provider_succeeded',
+      providerStatus: 'paid',
+      settlementReference: null,
+      processingChannel: 'stripe',
+      eventType: 'checkout.session.completed',
+    });
+  });
+
   it('maps deposit pending payloads into provider pending actions', () => {
     expect(
       derivePaymentWebhookTransition(
@@ -93,6 +127,52 @@ describe('payment webhook helpers', () => {
       processingChannel: 'stripe',
       orderType: 'deposit',
       orderId: 19,
+    });
+  });
+
+  it('ignores unknown webhook event types with non-actionable provider statuses', () => {
+    expect(
+      derivePaymentWebhookTransition(
+        {
+          id: 'evt_unknown_1',
+          type: 'provider.unknown',
+          data: {
+            referenceType: 'deposit',
+            referenceId: 21,
+            status: 'mystery',
+          },
+        },
+        'stripe'
+      )
+    ).toEqual({
+      decision: 'ignore',
+      reason: 'status_not_actionable',
+      eventType: 'provider.unknown',
+      providerStatus: 'mystery',
+      orderType: 'deposit',
+      orderId: 21,
+    });
+  });
+
+  it('ignores payloads that do not carry an order reference', () => {
+    expect(
+      derivePaymentWebhookTransition(
+        {
+          id: 'evt_missing_reference_1',
+          type: 'deposit.succeeded',
+          data: {
+            status: 'succeeded',
+          },
+        },
+        'stripe'
+      )
+    ).toEqual({
+      decision: 'ignore',
+      reason: 'missing_order_reference',
+      eventType: 'deposit.succeeded',
+      providerStatus: 'succeeded',
+      orderType: 'deposit',
+      orderId: null,
     });
   });
 

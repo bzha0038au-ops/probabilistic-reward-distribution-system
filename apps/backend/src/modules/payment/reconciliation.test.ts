@@ -4,7 +4,7 @@ import {
   buildOrderFindings,
   buildProviderAdapterMissingFinding,
   buildRemoteOnlyFinding,
-} from './reconciliation';
+} from './reconciliation/findings';
 
 describe('payment reconciliation logic', () => {
   it('flags missing provider references for local orders', () => {

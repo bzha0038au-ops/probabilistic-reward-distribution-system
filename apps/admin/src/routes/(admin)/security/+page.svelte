@@ -117,6 +117,8 @@
     targetType?: string | null
     targetId?: number | null
     ip?: string | null
+    sessionId?: string | null
+    userAgent?: string | null
     createdAt?: string
   }
 </script>
@@ -693,6 +695,8 @@
             <th>{t("security.adminActions.headers.targetType")}</th>
             <th>{t("security.adminActions.headers.targetId")}</th>
             <th>{t("security.adminActions.headers.ip")}</th>
+            <th>{t("security.adminActions.headers.sessionId")}</th>
+            <th>{t("security.adminActions.headers.userAgent")}</th>
             <th>{t("security.adminActions.headers.createdAt")}</th>
           </tr>
         </thead>
@@ -705,12 +709,18 @@
               <td>{action.targetType ?? "-"}</td>
               <td>{action.targetId ?? "-"}</td>
               <td>{action.ip ?? "-"}</td>
+              <td class="max-w-xs truncate" title={action.sessionId ?? ""}>
+                {action.sessionId ?? "-"}
+              </td>
+              <td class="max-w-xs truncate" title={action.userAgent ?? ""}>
+                {action.userAgent ?? "-"}
+              </td>
               <td>{formatDate(action.createdAt)}</td>
             </tr>
           {/each}
           {#if adminActions.length === 0}
             <tr>
-              <td colspan="7" class="text-center text-slate-500">
+              <td colspan="9" class="text-center text-slate-500">
                 {t("security.adminActions.empty")}
               </td>
             </tr>

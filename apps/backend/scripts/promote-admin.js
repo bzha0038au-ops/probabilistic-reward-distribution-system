@@ -1,15 +1,48 @@
 #!/usr/bin/env node
 
-require('dotenv').config();
-const postgres = require('postgres');
+import 'dotenv/config';
+import postgres from 'postgres';
 
 const email = process.argv[2];
-const DEFAULT_ADMIN_PERMISSIONS = [
-  'prizes.manage',
-  'finance.manage',
-  'security.manage',
-  'config.manage',
+const PRIZES_ADMIN_PERMISSIONS = [
+  'analytics.read',
+  'prizes.read',
+  'prizes.create',
+  'prizes.update',
+  'prizes.toggle',
+  'prizes.delete',
 ];
+const FINANCE_ADMIN_PERMISSIONS = [
+  'finance.read',
+  'finance.approve_deposit',
+  'finance.fail_deposit',
+  'finance.approve_withdrawal',
+  'finance.reject_withdrawal',
+  'finance.pay_withdrawal',
+  'finance.reconcile',
+];
+const SECURITY_ADMIN_PERMISSIONS = [
+  'audit.read',
+  'audit.export',
+  'audit.retry_notification',
+  'risk.read',
+  'risk.freeze_user',
+  'risk.release_user',
+];
+const CONFIG_ADMIN_PERMISSIONS = [
+  'analytics.read',
+  'config.read',
+  'config.release_bonus',
+  'config.update',
+];
+const DEFAULT_ADMIN_PERMISSIONS = Array.from(
+  new Set([
+    ...PRIZES_ADMIN_PERMISSIONS,
+    ...FINANCE_ADMIN_PERMISSIONS,
+    ...SECURITY_ADMIN_PERMISSIONS,
+    ...CONFIG_ADMIN_PERMISSIONS,
+  ]),
+);
 
 if (!email) {
   console.error('Usage: node scripts/promote-admin.js <user_email>');

@@ -4,7 +4,7 @@ import {
   CursorAdminActionPageSchema,
   CursorAuthEventPageSchema,
   FreezeRecordPageSchema,
-} from "@reward/shared-types"
+} from "@reward/shared-types/admin"
 
 import { apiRequest } from "$lib/server/api"
 

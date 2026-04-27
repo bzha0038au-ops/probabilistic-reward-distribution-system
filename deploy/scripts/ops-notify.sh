@@ -11,15 +11,23 @@ Posts a backup / restore alert to a webhook endpoint.
 Configuration:
   ALERT_WEBHOOK_URL      Required
   ALERT_WEBHOOK_FORMAT   slack|generic, default: slack
+  ALERT_RUNBOOK_URL      Optional; if set, sent as the first message line
   ALERT_SOURCE           Optional source label
 EOF
 }
 
 json_escape() {
-  printf '%s' "${1}" | sed \
-    -e 's/\\/\\\\/g' \
-    -e 's/"/\\"/g' \
-    -e ':a;N;$!ba;s/\n/\\n/g'
+  printf '%s' "${1}" | awk '
+    BEGIN { ORS = "" }
+    {
+      gsub(/\\/, "\\\\");
+      gsub(/"/, "\\\"");
+      if (NR > 1) {
+        printf "\\n";
+      }
+      printf "%s", $0;
+    }
+  '
 }
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
@@ -42,6 +50,7 @@ title="$2"
 body="${3:-}"
 webhook_url="${ALERT_WEBHOOK_URL:-}"
 webhook_format="${ALERT_WEBHOOK_FORMAT:-slack}"
+runbook_url="${ALERT_RUNBOOK_URL:-}"
 alert_source="${ALERT_SOURCE:-reward-system-ops}"
 
 if [[ -z "${webhook_url}" ]]; then
@@ -49,16 +58,25 @@ if [[ -z "${webhook_url}" ]]; then
   exit 1
 fi
 
+formatted_message="[$severity] $title"
+if [[ -n "${runbook_url}" ]]; then
+  formatted_message="${runbook_url}"$'\n'"${formatted_message}"
+fi
+if [[ -n "${body}" ]]; then
+  formatted_message="${formatted_message}"$'\n'"${body}"
+fi
+formatted_message="${formatted_message}"$'\n'"source=${alert_source}"
+
 case "${webhook_format}" in
   slack)
     payload="$(cat <<EOF
-{"text":"[$(json_escape "${severity}")] $(json_escape "${title}")\n$(json_escape "${body}")\nsource=$(json_escape "${alert_source}")"}
+{"text":"$(json_escape "${formatted_message}")"}
 EOF
 )"
     ;;
   generic)
     payload="$(cat <<EOF
-{"severity":"$(json_escape "${severity}")","title":"$(json_escape "${title}")","body":"$(json_escape "${body}")","source":"$(json_escape "${alert_source}")"}
+{"severity":"$(json_escape "${severity}")","title":"$(json_escape "${title}")","body":"$(json_escape "${formatted_message}")","runbook_url":"$(json_escape "${runbook_url}")","source":"$(json_escape "${alert_source}")"}
 EOF
 )"
     ;;

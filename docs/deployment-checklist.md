@@ -75,6 +75,9 @@ topology in `docker-compose.prod.yml`.
   `OFFSITE_STORAGE_URI`.
 - `BACKUP_ALERT_WEBHOOK_URL` pages the current on-call owner on backup or
   restore-drill failure.
+- `DEPLOY_TG_BOT_TOKEN`, `DEPLOY_TG_PAGE_CHAT_ID`, and
+  `DEPLOY_TG_DIGEST_CHAT_ID` are configured on the GitHub environment used by
+  the manual deploy workflow.
 - `docs/operations/alert-routing.md` and
   `docs/operations/on-call-schedule.md` are current.
 - A restore drill has been completed within the last 90 days.
@@ -91,9 +94,11 @@ topology in `docker-compose.prod.yml`.
 - Confirm CORS origin list matches public domains.
 - Confirm CSRF protections are enabled.
 - Confirm rate limiting is enabled.
-- Keep `PAYMENT_OPERATING_MODE=manual_review` unless the backend actually owns
-  outbound gateway execution, signed payment callbacks, idempotent retries, and
-  recovery/compensation end to end.
+- Keep `PAYMENT_OPERATING_MODE=manual_review` by default. Only set
+  `PAYMENT_OPERATING_MODE=automated` together with
+  `PAYMENT_AUTOMATED_MODE_OPT_IN=true` after an explicit rollout decision and
+  a deployment review of outbound execution, signed callbacks, idempotent
+  retries, and recovery/compensation coverage.
 - Confirm the reconciliation worker is deployed and `PAYMENT_RECONCILIATION_*`
   settings match expected provider volume and timeout windows.
 - If automated funds movement is ever enabled later, keep withdrawals manual
@@ -118,10 +123,17 @@ topology in `docker-compose.prod.yml`.
 - `/metrics` is scraped from an internal path or monitoring network.
 - `deploy/monitoring/prometheus-alerts.yml` is loaded into Prometheus or your
   equivalent alerting stack.
+- The deploy host preserves `previous-known-good` tags for backend, frontend,
+  and admin images, plus
+  `$DEPLOY_PATH/shared/<environment>/ops/release-state.env`.
 - Dashboards cover readiness, 5xx, draw error rate, withdraw stuck,
-  notification backlog, and `reward_backend_build_info`.
-- Draw errors, payout limits, withdraw stuck, notification backlog, and
-  delivery failures are monitored.
+  notification backlog, payment webhook signature failures, reconciliation
+  manual-review queue depth, outbound idempotency conflicts, Stripe provider
+  degradation, SaaS billing failures, and `reward_backend_build_info`.
+- Draw errors, payout limits, withdraw stuck, notification backlog, delivery
+  failures, webhook signature spikes, reconciliation queue growth, Stripe
+  rate-limit / 5xx failures, outbound idempotency conflicts, and SaaS billing
+  collection failures are monitored.
 - Disk-capacity, inode, and filesystem-read-only alerts exist for the host,
   Docker storage, and persistent volumes.
 - Host patching, least privilege, and access controls match
@@ -167,3 +179,7 @@ topology in `docker-compose.prod.yml`.
   frontend, and admin images, upload them plus the proxy config over SSH, boot
   local `postgres` and `redis`, run `docker compose run --rm migrate`, and
   refresh the running stack behind the reverse proxy.
+- After the new containers come up, the deploy workflow watches
+  `/health/ready`, backend 5xx ratio, and draw error ratio for 15 minutes; on
+  failure it redeploys `previous-known-good`, pages the deploy Telegram chat,
+  and leaves the old release directory as `current`.

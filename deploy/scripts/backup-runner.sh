@@ -280,6 +280,14 @@ logical_dump_file="$(extract_output_value "${logical_output}" "BACKUP_DUMP_FILE"
 logical_toc_file="$(extract_output_value "${logical_output}" "BACKUP_TOC_FILE")"
 logical_checksum_file="$(extract_output_value "${logical_output}" "BACKUP_CHECKSUM_FILE")"
 logical_metadata_file="$(extract_output_value "${logical_output}" "BACKUP_METADATA_FILE")"
+logical_dump_s3_uri="$(extract_output_value "${logical_output}" "S3_BACKUP_DUMP_URI")"
+logical_toc_s3_uri="$(extract_output_value "${logical_output}" "S3_BACKUP_TOC_URI")"
+logical_checksum_s3_uri="$(extract_output_value "${logical_output}" "S3_BACKUP_CHECKSUM_URI")"
+logical_metadata_s3_uri="$(extract_output_value "${logical_output}" "S3_BACKUP_METADATA_URI")"
+logical_dump_cross_region_s3_uri="$(extract_output_value "${logical_output}" "S3_CROSS_REGION_DUMP_URI")"
+logical_toc_cross_region_s3_uri="$(extract_output_value "${logical_output}" "S3_CROSS_REGION_TOC_URI")"
+logical_checksum_cross_region_s3_uri="$(extract_output_value "${logical_output}" "S3_CROSS_REGION_CHECKSUM_URI")"
+logical_metadata_cross_region_s3_uri="$(extract_output_value "${logical_output}" "S3_CROSS_REGION_METADATA_URI")"
 
 if [[ -z "${logical_dump_file}" || -z "${logical_toc_file}" || -z "${logical_checksum_file}" || -z "${logical_metadata_file}" ]]; then
   echo "Unable to determine logical backup outputs." >&2
@@ -359,6 +367,14 @@ cat > "${manifest_file}" <<EOF
   "logical_bundle_checksum_file": "${logical_bundle_checksum}",
   "logical_bundle_encrypted_file": "${logical_bundle_encrypted}",
   "logical_bundle_encrypted_checksum_file": "${logical_bundle_encrypted_checksum}",
+  "logical_dump_s3_uri": "${logical_dump_s3_uri}",
+  "logical_toc_s3_uri": "${logical_toc_s3_uri}",
+  "logical_checksum_s3_uri": "${logical_checksum_s3_uri}",
+  "logical_metadata_s3_uri": "${logical_metadata_s3_uri}",
+  "logical_dump_cross_region_s3_uri": "${logical_dump_cross_region_s3_uri}",
+  "logical_toc_cross_region_s3_uri": "${logical_toc_cross_region_s3_uri}",
+  "logical_checksum_cross_region_s3_uri": "${logical_checksum_cross_region_s3_uri}",
+  "logical_metadata_cross_region_s3_uri": "${logical_metadata_cross_region_s3_uri}",
   "volume_bundle_file": "${volume_bundle_file}",
   "volume_bundle_checksum_file": "${volume_bundle_checksum}",
   "volume_bundle_encrypted_file": "${volume_bundle_encrypted}",

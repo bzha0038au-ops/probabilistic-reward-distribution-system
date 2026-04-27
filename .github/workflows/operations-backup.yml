@@ -25,13 +25,15 @@ on:
     - cron: '15 16 * * *'
     - cron: '30 16 * * 0'
     - cron: '45 16 1 * *'
+    - cron: '0 18 * * *'
 
 concurrency:
-  group: ops-backups-${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }}
+  group: ops-backups-${{ github.event_name == 'workflow_dispatch' && inputs.environment || github.event.schedule || 'production' }}
   cancel-in-progress: false
 
 jobs:
   backup:
+    if: ${{ github.event_name != 'schedule' || github.event.schedule != '0 18 * * *' }}
     runs-on: ubuntu-latest
     environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }}
     outputs:
@@ -43,6 +45,11 @@ jobs:
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
       BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
       OFFSITE_STORAGE_URI: ${{ secrets.OFFSITE_STORAGE_URI }}
+      BACKUP_ARCHIVE_S3_URI: ${{ secrets.BACKUP_ARCHIVE_S3_URI }}
+      BACKUP_ARCHIVE_CROSS_REGION_S3_URI: ${{ secrets.BACKUP_ARCHIVE_CROSS_REGION_S3_URI }}
+      BACKUP_ARCHIVE_S3_KMS_KEY_ID: ${{ secrets.BACKUP_ARCHIVE_S3_KMS_KEY_ID }}
+      BACKUP_ARCHIVE_S3_SSE: ${{ vars.BACKUP_ARCHIVE_S3_SSE }}
+      BACKUP_ARCHIVE_S3_STORAGE_CLASS: ${{ vars.BACKUP_ARCHIVE_S3_STORAGE_CLASS }}
       LOCAL_BACKUP_RETENTION_DAYS: ${{ vars.LOCAL_BACKUP_RETENTION_DAYS }}
       OFFSITE_BACKUP_RETENTION_DAYS: ${{ vars.OFFSITE_BACKUP_RETENTION_DAYS }}
       PRIMARY_ONCALL: ${{ vars.PRIMARY_ONCALL }}
@@ -118,6 +125,11 @@ jobs:
           BACKUP_RUN_ID="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
           BACKUP_ENCRYPTION_PASSPHRASE="${BACKUP_ENCRYPTION_PASSPHRASE}" \
           OFFSITE_STORAGE_URI="${OFFSITE_STORAGE_URI}" \
+          S3_BACKUP_URI="${BACKUP_ARCHIVE_S3_URI}" \
+          S3_CROSS_REGION_URI="${BACKUP_ARCHIVE_CROSS_REGION_S3_URI}" \
+          S3_BACKUP_KMS_KEY_ID="${BACKUP_ARCHIVE_S3_KMS_KEY_ID}" \
+          S3_BACKUP_SSE="${BACKUP_ARCHIVE_S3_SSE}" \
+          S3_BACKUP_STORAGE_CLASS="${BACKUP_ARCHIVE_S3_STORAGE_CLASS}" \
           LOCAL_RETENTION_DAYS="${local_retention_days}" \
           OFFSITE_RETENTION_DAYS="${offsite_retention_days}" \
           INCLUDE_VOLUME_BACKUP="${{ steps.mode.outputs.include_volume_backup }}" \
@@ -167,6 +179,9 @@ jobs:
     needs: backup
     runs-on: ubuntu-latest
     environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }}
+    permissions:
+      contents: write
+      pull-requests: write
     services:
       postgres:
         image: postgres:16
@@ -197,6 +212,8 @@ jobs:
       RESTORE_APPROVER: ${{ vars.RESTORE_APPROVER }}
       PRIMARY_ONCALL: ${{ vars.PRIMARY_ONCALL }}
       SECONDARY_ONCALL: ${{ vars.SECONDARY_ONCALL }}
+      DEPLOY_TG_BOT_TOKEN: ${{ secrets.DEPLOY_TG_BOT_TOKEN }}
+      DEPLOY_TG_PAGE_CHAT_ID: ${{ secrets.DEPLOY_TG_PAGE_CHAT_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -246,6 +263,29 @@ jobs:
           BACKEND_START_COMMAND="pnpm --dir apps/backend start" \
           ./deploy/scripts/restore-drill.sh "$bundle_path"
 
+      - name: Prepare Committed Restore Drill Evidence
+        id: evidence
+        run: |
+          report_path="$(find ops-restore-drills -type f -name 'restore-drill-report.md' | head -n 1)"
+          summary_path="$(find ops-restore-drills -type f -name 'restore-drill-summary.json' | head -n 1)"
+          test -n "$report_path"
+          test -n "$summary_path"
+
+          started_at="$(jq -r '.started_at_utc' "$summary_path")"
+          evidence_month="$(date -u -d "$started_at" +%Y-%m)"
+
+          mkdir -p docs/operations/evidence
+
+          report_target="docs/operations/evidence/restore-drill-${evidence_month}.md"
+          summary_target="docs/operations/evidence/restore-drill-${evidence_month}.summary.json"
+
+          cp "$report_path" "$report_target"
+          cp "$summary_path" "$summary_target"
+
+          echo "report_path=${report_target}" >> "$GITHUB_OUTPUT"
+          echo "summary_path=${summary_target}" >> "$GITHUB_OUTPUT"
+          echo "evidence_month=${evidence_month}" >> "$GITHUB_OUTPUT"
+
       - name: Upload Restore Drill Evidence
         uses: actions/upload-artifact@v4
         with:
@@ -253,6 +293,34 @@ jobs:
           path: ops-restore-drills/
           retention-days: 90
           if-no-files-found: error
+
+      - name: Create Restore Drill Evidence Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          add-paths: |
+            ${{ steps.evidence.outputs.report_path }}
+            ${{ steps.evidence.outputs.summary_path }}
+          base: ${{ github.event.repository.default_branch }}
+          branch: codex/ops-restore-drill-${{ steps.evidence.outputs.evidence_month }}
+          commit-message: 'docs: add restore drill evidence for ${{ steps.evidence.outputs.evidence_month }}'
+          delete-branch: true
+          title: 'docs: add restore drill evidence for ${{ steps.evidence.outputs.evidence_month }}'
+          body: |
+            Automated restore drill evidence generated by `${{ github.workflow }}`.
+
+            - Run: `${{ github.run_id }}`
+            - Attempt: `${{ github.run_attempt }}`
+            - Environment: `${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }}`
+            - Evidence month: `${{ steps.evidence.outputs.evidence_month }}`
+
+      - name: Page Restore Drill Failure
+        if: failure()
+        run: |
+          if [ -n "${DEPLOY_TG_BOT_TOKEN:-}" ] && [ -n "${DEPLOY_TG_PAGE_CHAT_ID:-}" ]; then
+            ./deploy/scripts/telegram-notify.sh \
+              "${DEPLOY_TG_PAGE_CHAT_ID}" \
+              "restore-drill=failed run=${GITHUB_RUN_ID} workflow=${GITHUB_WORKFLOW} env=${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }} approver=${RESTORE_APPROVER:-unassigned}"
+          fi
 
       - name: Notify Restore Drill Failure
         if: failure()
@@ -263,5 +331,40 @@ jobs:
           if [ -n "${ALERT_WEBHOOK_URL:-}" ]; then
             ./deploy/scripts/ops-notify.sh critical \
               "Restore drill failed" \
-              "Run $GITHUB_RUN_ID failed during restore validation in workflow $GITHUB_WORKFLOW. Primary on-call: ${PRIMARY_ONCALL}. Secondary on-call: ${SECONDARY_ONCALL}. Restore approver: ${RESTORE_APPROVER:-unassigned}."
+              "Run $GITHUB_RUN_ID failed during restore validation or evidence publication in workflow $GITHUB_WORKFLOW. Primary on-call: ${PRIMARY_ONCALL}. Secondary on-call: ${SECONDARY_ONCALL}. Restore approver: ${RESTORE_APPROVER:-unassigned}."
           fi
+
+  restore-drill-freshness:
+    if: ${{ github.event_name == 'schedule' && github.event.schedule == '0 18 * * *' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      PRIMARY_ONCALL: ${{ vars.PRIMARY_ONCALL }}
+      SECONDARY_ONCALL: ${{ vars.SECONDARY_ONCALL }}
+      DEPLOY_TG_BOT_TOKEN: ${{ secrets.DEPLOY_TG_BOT_TOKEN }}
+      DEPLOY_TG_PAGE_CHAT_ID: ${{ secrets.DEPLOY_TG_PAGE_CHAT_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check Restore Drill Freshness
+        id: freshness
+        continue-on-error: true
+        run: ./deploy/scripts/check-restore-drill-freshness.sh docs/operations/evidence 90
+
+      - name: Page Stale Restore Drill Evidence
+        if: ${{ steps.freshness.outcome == 'failure' }}
+        env:
+          LATEST_FILE: ${{ steps.freshness.outputs.latest_file || 'none' }}
+          LATEST_AGE_DAYS: ${{ steps.freshness.outputs.latest_age_days || 'unknown' }}
+        run: |
+          if [ -n "${DEPLOY_TG_BOT_TOKEN:-}" ] && [ -n "${DEPLOY_TG_PAGE_CHAT_ID:-}" ]; then
+            ./deploy/scripts/telegram-notify.sh \
+              "${DEPLOY_TG_PAGE_CHAT_ID}" \
+              "restore-drill=stale latest=${LATEST_FILE} age_days=${LATEST_AGE_DAYS} max_days=90 primary=${PRIMARY_ONCALL} secondary=${SECONDARY_ONCALL}"
+          fi
+
+      - name: Fail On Stale Restore Drill Evidence
+        if: ${{ steps.freshness.outcome == 'failure' }}
+        run: exit 1

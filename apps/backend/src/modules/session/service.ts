@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 
 import { db } from '../../db';
 import { authSessions } from '@reward/database';
+import { persistenceError } from '../../shared/errors';
 import { recordAuthEvent } from '../audit/service';
 
 export type AuthSessionKind = 'user' | 'admin';
@@ -40,7 +41,7 @@ export async function createAuthSession(payload: {
     .returning();
 
   if (!session) {
-    throw new Error('Failed to create auth session.');
+    throw persistenceError('Failed to create auth session.');
   }
 
   return session;

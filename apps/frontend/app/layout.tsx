@@ -6,6 +6,7 @@ import { GeistSans } from 'geist/font/sans';
 
 import { I18nProvider } from '@/components/i18n-provider';
 import { ObservabilityBootstrap } from '@/components/observability-bootstrap';
+import { ToastProvider } from '@/components/ui/toast-provider';
 import { WebviewBridge } from '@/components/webview-bridge';
 import { getServerLocale, getServerMessages } from '@/lib/i18n/server';
 
@@ -51,7 +52,7 @@ export default function RootLayout({
         <ObservabilityBootstrap />
         <WebviewBridge />
         <I18nProvider locale={locale} messages={messages}>
-          {children}
+          <ToastProvider>{children}</ToastProvider>
         </I18nProvider>
       </body>
     </html>

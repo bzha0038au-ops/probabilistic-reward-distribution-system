@@ -1,9 +1,10 @@
-import type { AppInstance } from '../types';
-import { SystemConfigPatchSchema } from '@reward/shared-types';
-import { z } from 'zod';
+import type { AppInstance } from "../types";
+import { SystemConfigPatchSchema } from "@reward/shared-types/admin";
+import { API_ERROR_CODES } from "@reward/shared-types/api";
+import { z } from "zod";
 
-import { ADMIN_PERMISSION_KEYS } from '../../../modules/admin-permission/definitions';
-import { recordAdminAction } from '../../../modules/admin/audit';
+import { ADMIN_PERMISSION_KEYS } from "../../../modules/admin-permission/definitions";
+import { recordAdminAction } from "../../../modules/admin/audit";
 import {
   createPaymentProviderDraft,
   createSystemConfigDraft,
@@ -14,16 +15,17 @@ import {
   submitControlChangeRequest,
   approveControlChangeRequest,
   tripPaymentProviderCircuitBreaker,
-} from '../../../modules/control/service';
-import { parseSchema } from '../../../shared/validation';
-import { requireAdminPermission } from '../../guards';
-import { sendError, sendSuccess } from '../../respond';
+} from "../../../modules/control/service";
+import { withAdminAuditContext } from "../../admin-audit";
+import { parseSchema } from "../../../shared/validation";
+import { requireAdminPermission } from "../../guards";
+import { sendError, sendErrorForException, sendSuccess } from "../../respond";
 import {
   adminRateLimit,
   enforceAdminLimit,
   parseIdParam,
   toObject,
-} from './common';
+} from "./common";
 
 const ControlChangeTransitionSchema = z.object({
   confirmationText: z.string().trim().max(64).optional(),
@@ -59,8 +61,8 @@ const PaymentProviderDraftSchema = z.object({
   providerType: z.string().trim().min(1).max(64),
   priority: z.number().int().min(0).max(100000),
   isActive: z.boolean(),
-  supportedFlows: z.array(z.enum(['deposit', 'withdrawal'])).max(2),
-  executionMode: z.enum(['manual', 'automated']),
+  supportedFlows: z.array(z.enum(["deposit", "withdrawal"])).max(2),
+  executionMode: z.enum(["manual", "automated"]),
   adapter: z.string().trim().max(80).nullable().optional(),
   grayPercent: z.number().min(0).max(100).nullable().optional(),
   grayUserIds: z.array(z.number().int().positive()).max(200).optional(),
@@ -76,27 +78,18 @@ const CircuitBreakerSchema = z.object({
   reason: z.string().trim().min(1).max(255),
 });
 
-const isNotFoundError = (error: unknown) =>
-  error instanceof Error && /not found/i.test(error.message);
-
-const isConflictError = (error: unknown) =>
-  error instanceof Error &&
-  (/only .* can be/i.test(error.message) ||
-    /already finalized/i.test(error.message) ||
-    /cannot approve their own/i.test(error.message));
-
 export async function registerAdminControlRoutes(protectedRoutes: AppInstance) {
   protectedRoutes.get(
-    '/admin/control-center',
+    "/admin/control-center",
     { preHandler: [requireAdminPermission(ADMIN_PERMISSION_KEYS.CONFIG_READ)] },
     async (_request, reply) => {
       const overview = await getControlCenterOverview();
       return sendSuccess(reply, overview);
-    }
+    },
   );
 
   protectedRoutes.post(
-    '/admin/control-center/system-config/drafts',
+    "/admin/control-center/system-config/drafts",
     {
       config: { rateLimit: adminRateLimit },
       preHandler: [
@@ -109,10 +102,16 @@ export async function registerAdminControlRoutes(protectedRoutes: AppInstance) {
     async (request, reply) => {
       const parsed = parseSchema(
         SystemConfigDraftRequestSchema,
-        toObject(request.body)
+        toObject(request.body),
       );
       if (!parsed.isValid) {
-        return sendError(reply, 400, 'Invalid request.', parsed.errors);
+        return sendError(
+          reply,
+          400,
+          "Invalid request.",
+          parsed.errors,
+          API_ERROR_CODES.INVALID_REQUEST,
+        );
       }
 
       try {
@@ -123,31 +122,32 @@ export async function registerAdminControlRoutes(protectedRoutes: AppInstance) {
           reason,
         });
 
-        await recordAdminAction({
-          adminId: request.admin?.adminId ?? null,
-          action: 'config_change_request_created',
-          targetType: 'config_change_request',
-          targetId: created.id,
-          ip: request.ip,
-          metadata: {
-            changeType: created.changeType,
-            summary: created.summary,
-          },
-        });
+        await recordAdminAction(
+          withAdminAuditContext(request, {
+            adminId: request.admin?.adminId ?? null,
+            action: "config_change_request_created",
+            targetType: "config_change_request",
+            targetId: created.id,
+            metadata: {
+              changeType: created.changeType,
+              summary: created.summary,
+            },
+          }),
+        );
 
         return sendSuccess(reply, created, 201);
       } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : 'Failed to create config draft.';
-        return sendError(reply, 422, message);
+        return sendErrorForException(
+          reply,
+          error,
+          "Failed to create config draft.",
+        );
       }
-    }
+    },
   );
 
   protectedRoutes.post(
-    '/admin/control-center/payment-providers/drafts',
+    "/admin/control-center/payment-providers/drafts",
     {
       config: { rateLimit: adminRateLimit },
       preHandler: [
@@ -158,9 +158,18 @@ export async function registerAdminControlRoutes(protectedRoutes: AppInstance) {
       ],
     },
     async (request, reply) => {
-      const parsed = parseSchema(PaymentProviderDraftSchema, toObject(request.body));
+      const parsed = parseSchema(
+        PaymentProviderDraftSchema,
+        toObject(request.body),
+      );
       if (!parsed.isValid) {
-        return sendError(reply, 400, 'Invalid request.', parsed.errors);
+        return sendError(
+          reply,
+          400,
+          "Invalid request.",
+          parsed.errors,
+          API_ERROR_CODES.INVALID_REQUEST,
+        );
       }
 
       try {
@@ -187,35 +196,32 @@ export async function registerAdminControlRoutes(protectedRoutes: AppInstance) {
           reason,
         });
 
-        await recordAdminAction({
-          adminId: request.admin?.adminId ?? null,
-          action: 'payment_provider_change_request_created',
-          targetType: 'config_change_request',
-          targetId: created.id,
-          ip: request.ip,
-          metadata: {
-            changeType: created.changeType,
-            summary: created.summary,
-          },
-        });
+        await recordAdminAction(
+          withAdminAuditContext(request, {
+            adminId: request.admin?.adminId ?? null,
+            action: "payment_provider_change_request_created",
+            targetType: "config_change_request",
+            targetId: created.id,
+            metadata: {
+              changeType: created.changeType,
+              summary: created.summary,
+            },
+          }),
+        );
 
         return sendSuccess(reply, created, 201);
       } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : 'Failed to create provider draft.';
-        return sendError(
+        return sendErrorForException(
           reply,
-          isNotFoundError(error) ? 404 : 422,
-          message
+          error,
+          "Failed to create provider draft.",
         );
       }
-    }
+    },
   );
 
   protectedRoutes.post(
-    '/admin/control-center/change-requests/:requestId/submit',
+    "/admin/control-center/change-requests/:requestId/submit",
     {
       config: { rateLimit: adminRateLimit },
       preHandler: [
@@ -226,17 +232,29 @@ export async function registerAdminControlRoutes(protectedRoutes: AppInstance) {
       ],
     },
     async (request, reply) => {
-      const requestId = parseIdParam(request.params, 'requestId');
+      const requestId = parseIdParam(request.params, "requestId");
       if (!requestId) {
-        return sendError(reply, 400, 'Invalid config change request id.');
+        return sendError(
+          reply,
+          400,
+          "Invalid config change request id.",
+          undefined,
+          API_ERROR_CODES.INVALID_CONFIG_CHANGE_REQUEST_ID,
+        );
       }
 
       const parsed = parseSchema(
         ControlChangeTransitionSchema,
-        toObject(request.body)
+        toObject(request.body),
       );
       if (!parsed.isValid) {
-        return sendError(reply, 400, 'Invalid request.', parsed.errors);
+        return sendError(
+          reply,
+          400,
+          "Invalid request.",
+          parsed.errors,
+          API_ERROR_CODES.INVALID_REQUEST,
+        );
       }
 
       try {
@@ -246,35 +264,32 @@ export async function registerAdminControlRoutes(protectedRoutes: AppInstance) {
           confirmationText: parsed.data.confirmationText,
         });
 
-        await recordAdminAction({
-          adminId: request.admin?.adminId ?? null,
-          action: 'config_change_request_submitted',
-          targetType: 'config_change_request',
-          targetId: updated.id,
-          ip: request.ip,
-          metadata: {
-            changeType: updated.changeType,
-            summary: updated.summary,
-          },
-        });
+        await recordAdminAction(
+          withAdminAuditContext(request, {
+            adminId: request.admin?.adminId ?? null,
+            action: "config_change_request_submitted",
+            targetType: "config_change_request",
+            targetId: updated.id,
+            metadata: {
+              changeType: updated.changeType,
+              summary: updated.summary,
+            },
+          }),
+        );
 
         return sendSuccess(reply, updated);
       } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : 'Failed to submit config change request.';
-        return sendError(
+        return sendErrorForException(
           reply,
-          isNotFoundError(error) ? 404 : isConflictError(error) ? 409 : 422,
-          message
+          error,
+          "Failed to submit config change request.",
         );
       }
-    }
+    },
   );
 
   protectedRoutes.post(
-    '/admin/control-center/change-requests/:requestId/approve',
+    "/admin/control-center/change-requests/:requestId/approve",
     {
       config: { rateLimit: adminRateLimit },
       preHandler: [
@@ -285,9 +300,15 @@ export async function registerAdminControlRoutes(protectedRoutes: AppInstance) {
       ],
     },
     async (request, reply) => {
-      const requestId = parseIdParam(request.params, 'requestId');
+      const requestId = parseIdParam(request.params, "requestId");
       if (!requestId) {
-        return sendError(reply, 400, 'Invalid config change request id.');
+        return sendError(
+          reply,
+          400,
+          "Invalid config change request id.",
+          undefined,
+          API_ERROR_CODES.INVALID_CONFIG_CHANGE_REQUEST_ID,
+        );
       }
 
       try {
@@ -296,35 +317,32 @@ export async function registerAdminControlRoutes(protectedRoutes: AppInstance) {
           adminId: request.admin?.adminId ?? 0,
         });
 
-        await recordAdminAction({
-          adminId: request.admin?.adminId ?? null,
-          action: 'config_change_request_approved',
-          targetType: 'config_change_request',
-          targetId: updated.id,
-          ip: request.ip,
-          metadata: {
-            changeType: updated.changeType,
-            summary: updated.summary,
-          },
-        });
+        await recordAdminAction(
+          withAdminAuditContext(request, {
+            adminId: request.admin?.adminId ?? null,
+            action: "config_change_request_approved",
+            targetType: "config_change_request",
+            targetId: updated.id,
+            metadata: {
+              changeType: updated.changeType,
+              summary: updated.summary,
+            },
+          }),
+        );
 
         return sendSuccess(reply, updated);
       } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : 'Failed to approve config change request.';
-        return sendError(
+        return sendErrorForException(
           reply,
-          isNotFoundError(error) ? 404 : isConflictError(error) ? 409 : 422,
-          message
+          error,
+          "Failed to approve config change request.",
         );
       }
-    }
+    },
   );
 
   protectedRoutes.post(
-    '/admin/control-center/change-requests/:requestId/reject',
+    "/admin/control-center/change-requests/:requestId/reject",
     {
       config: { rateLimit: adminRateLimit },
       preHandler: [
@@ -335,17 +353,29 @@ export async function registerAdminControlRoutes(protectedRoutes: AppInstance) {
       ],
     },
     async (request, reply) => {
-      const requestId = parseIdParam(request.params, 'requestId');
+      const requestId = parseIdParam(request.params, "requestId");
       if (!requestId) {
-        return sendError(reply, 400, 'Invalid config change request id.');
+        return sendError(
+          reply,
+          400,
+          "Invalid config change request id.",
+          undefined,
+          API_ERROR_CODES.INVALID_CONFIG_CHANGE_REQUEST_ID,
+        );
       }
 
       const parsed = parseSchema(
         ControlChangeTransitionSchema,
-        toObject(request.body)
+        toObject(request.body),
       );
       if (!parsed.isValid) {
-        return sendError(reply, 400, 'Invalid request.', parsed.errors);
+        return sendError(
+          reply,
+          400,
+          "Invalid request.",
+          parsed.errors,
+          API_ERROR_CODES.INVALID_REQUEST,
+        );
       }
 
       try {
@@ -355,35 +385,32 @@ export async function registerAdminControlRoutes(protectedRoutes: AppInstance) {
           reason: parsed.data.reason,
         });
 
-        await recordAdminAction({
-          adminId: request.admin?.adminId ?? null,
-          action: 'config_change_request_rejected',
-          targetType: 'config_change_request',
-          targetId: updated.id,
-          ip: request.ip,
-          metadata: {
-            changeType: updated.changeType,
-            summary: updated.summary,
-          },
-        });
+        await recordAdminAction(
+          withAdminAuditContext(request, {
+            adminId: request.admin?.adminId ?? null,
+            action: "config_change_request_rejected",
+            targetType: "config_change_request",
+            targetId: updated.id,
+            metadata: {
+              changeType: updated.changeType,
+              summary: updated.summary,
+            },
+          }),
+        );
 
         return sendSuccess(reply, updated);
       } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : 'Failed to reject config change request.';
-        return sendError(
+        return sendErrorForException(
           reply,
-          isNotFoundError(error) ? 404 : isConflictError(error) ? 409 : 422,
-          message
+          error,
+          "Failed to reject config change request.",
         );
       }
-    }
+    },
   );
 
   protectedRoutes.post(
-    '/admin/control-center/change-requests/:requestId/publish',
+    "/admin/control-center/change-requests/:requestId/publish",
     {
       config: { rateLimit: adminRateLimit },
       preHandler: [
@@ -392,57 +419,71 @@ export async function registerAdminControlRoutes(protectedRoutes: AppInstance) {
       ],
     },
     async (request, reply) => {
-      const requestId = parseIdParam(request.params, 'requestId');
+      const requestId = parseIdParam(request.params, "requestId");
       if (!requestId) {
-        return sendError(reply, 400, 'Invalid config change request id.');
+        return sendError(
+          reply,
+          400,
+          "Invalid config change request id.",
+          undefined,
+          API_ERROR_CODES.INVALID_CONFIG_CHANGE_REQUEST_ID,
+        );
       }
 
       const parsed = parseSchema(
         ControlChangeTransitionSchema,
-        toObject(request.body)
+        toObject(request.body),
       );
       if (!parsed.isValid) {
-        return sendError(reply, 400, 'Invalid request.', parsed.errors);
+        return sendError(
+          reply,
+          400,
+          "Invalid request.",
+          parsed.errors,
+          API_ERROR_CODES.INVALID_REQUEST,
+        );
       }
 
       try {
-        const updated = await publishControlChangeRequest({
+        const result = await publishControlChangeRequest({
           requestId,
           adminId: request.admin?.adminId ?? 0,
           confirmationText: parsed.data.confirmationText,
         });
+        const updated = result.changeRequest;
 
-        await recordAdminAction({
-          adminId: request.admin?.adminId ?? null,
-          action: 'config_change_request_published',
-          targetType: 'config_change_request',
-          targetId: updated.id,
-          ip: request.ip,
-          metadata: {
-            changeType: updated.changeType,
-            summary: updated.summary,
-            targetId: updated.targetId,
-            requiresMfa: updated.requiresMfa,
-          },
-        });
+        await recordAdminAction(
+          withAdminAuditContext(request, {
+            adminId: request.admin?.adminId ?? null,
+            action: "config_change_request_published",
+            targetType: "config_change_request",
+            targetId: updated.id,
+            metadata: {
+              changeType: updated.changeType,
+              summary: updated.summary,
+              publishedResource: result.audit?.resource ?? updated.targetType,
+              publishedTargetId: result.audit?.targetId ?? updated.targetId,
+              changedKeys: result.audit?.changedKeys ?? [],
+              fieldDiff: result.audit?.fieldDiff ?? [],
+              changeRequestRequiresMfa: updated.requiresMfa,
+              publishStepUpRequired: true,
+            },
+          }),
+        );
 
         return sendSuccess(reply, updated);
       } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : 'Failed to publish config change request.';
-        return sendError(
+        return sendErrorForException(
           reply,
-          isNotFoundError(error) ? 404 : isConflictError(error) ? 409 : 422,
-          message
+          error,
+          "Failed to publish config change request.",
         );
       }
-    }
+    },
   );
 
   protectedRoutes.post(
-    '/admin/control-center/payment-providers/:providerId/circuit-break',
+    "/admin/control-center/payment-providers/:providerId/circuit-break",
     {
       config: { rateLimit: adminRateLimit },
       preHandler: [
@@ -451,14 +492,26 @@ export async function registerAdminControlRoutes(protectedRoutes: AppInstance) {
       ],
     },
     async (request, reply) => {
-      const providerId = parseIdParam(request.params, 'providerId');
+      const providerId = parseIdParam(request.params, "providerId");
       if (!providerId) {
-        return sendError(reply, 400, 'Invalid payment provider id.');
+        return sendError(
+          reply,
+          400,
+          "Invalid payment provider id.",
+          undefined,
+          API_ERROR_CODES.INVALID_PAYMENT_PROVIDER_ID,
+        );
       }
 
       const parsed = parseSchema(CircuitBreakerSchema, toObject(request.body));
       if (!parsed.isValid) {
-        return sendError(reply, 400, 'Invalid request.', parsed.errors);
+        return sendError(
+          reply,
+          400,
+          "Invalid request.",
+          parsed.errors,
+          API_ERROR_CODES.INVALID_REQUEST,
+        );
       }
 
       try {
@@ -467,31 +520,32 @@ export async function registerAdminControlRoutes(protectedRoutes: AppInstance) {
           reason: parsed.data.reason,
         });
 
-        await recordAdminAction({
-          adminId: request.admin?.adminId ?? null,
-          action: 'payment_provider_circuit_break',
-          targetType: 'payment_provider',
-          targetId: providerId,
-          ip: request.ip,
-          metadata: {
-            reason: parsed.data.reason,
-            providerName: updated.name,
-          },
-        });
+        await recordAdminAction(
+          withAdminAuditContext(request, {
+            adminId: request.admin?.adminId ?? null,
+            action: "payment_provider_circuit_break",
+            targetType: "payment_provider",
+            targetId: providerId,
+            metadata: {
+              reason: parsed.data.reason,
+              providerName: updated.name,
+            },
+          }),
+        );
 
         return sendSuccess(reply, updated);
       } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : 'Failed to trip payment provider circuit breaker.';
-        return sendError(reply, isNotFoundError(error) ? 404 : 422, message);
+        return sendErrorForException(
+          reply,
+          error,
+          "Failed to trip payment provider circuit breaker.",
+        );
       }
-    }
+    },
   );
 
   protectedRoutes.post(
-    '/admin/control-center/payment-providers/:providerId/circuit-reset',
+    "/admin/control-center/payment-providers/:providerId/circuit-reset",
     {
       config: { rateLimit: adminRateLimit },
       preHandler: [
@@ -500,9 +554,15 @@ export async function registerAdminControlRoutes(protectedRoutes: AppInstance) {
       ],
     },
     async (request, reply) => {
-      const providerId = parseIdParam(request.params, 'providerId');
+      const providerId = parseIdParam(request.params, "providerId");
       if (!providerId) {
-        return sendError(reply, 400, 'Invalid payment provider id.');
+        return sendError(
+          reply,
+          400,
+          "Invalid payment provider id.",
+          undefined,
+          API_ERROR_CODES.INVALID_PAYMENT_PROVIDER_ID,
+        );
       }
 
       try {
@@ -510,25 +570,26 @@ export async function registerAdminControlRoutes(protectedRoutes: AppInstance) {
           providerId,
         });
 
-        await recordAdminAction({
-          adminId: request.admin?.adminId ?? null,
-          action: 'payment_provider_circuit_reset',
-          targetType: 'payment_provider',
-          targetId: providerId,
-          ip: request.ip,
-          metadata: {
-            providerName: updated.name,
-          },
-        });
+        await recordAdminAction(
+          withAdminAuditContext(request, {
+            adminId: request.admin?.adminId ?? null,
+            action: "payment_provider_circuit_reset",
+            targetType: "payment_provider",
+            targetId: providerId,
+            metadata: {
+              providerName: updated.name,
+            },
+          }),
+        );
 
         return sendSuccess(reply, updated);
       } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : 'Failed to reset payment provider circuit breaker.';
-        return sendError(reply, isNotFoundError(error) ? 404 : 422, message);
+        return sendErrorForException(
+          reply,
+          error,
+          "Failed to reset payment provider circuit breaker.",
+        );
       }
-    }
+    },
   );
 }

@@ -3,6 +3,34 @@
 @tailwind utilities;
 
 @layer base {
+  @keyframes slot-light-pulse {
+    0%,
+    100% {
+      opacity: 0.42;
+      transform: scale(0.92);
+    }
+
+    50% {
+      opacity: 1;
+      transform: scale(1.08);
+    }
+  }
+
+  @keyframes slot-cabinet-glow {
+    0%,
+    100% {
+      box-shadow:
+        0 0 0 rgba(0, 0, 0, 0),
+        0 18px 45px rgba(15, 23, 42, 0.32);
+    }
+
+    50% {
+      box-shadow:
+        0 0 30px rgba(251, 191, 36, 0.22),
+        0 22px 55px rgba(15, 23, 42, 0.5);
+    }
+  }
+
   :root {
     --background: 0 0% 100%;
     --foreground: 222 47% 11%;
@@ -70,6 +98,14 @@
 }
 
 @layer utilities {
+  .slot-marquee-light {
+    animation: slot-light-pulse 1.8s ease-in-out infinite;
+  }
+
+  .slot-cabinet-glow {
+    animation: slot-cabinet-glow 2.8s ease-in-out infinite;
+  }
+
   .min-h-app-screen {
     min-height: 100vh;
     min-height: var(--app-height);
@@ -100,6 +136,49 @@
   .page-safe-right {
     padding-right: calc(env(safe-area-inset-right, 0px) + 1rem);
   }
+
+  .gacha-aurora {
+    background:
+      radial-gradient(circle at 18% 18%, rgba(251, 191, 36, 0.24), transparent 28%),
+      radial-gradient(circle at 82% 24%, rgba(244, 114, 182, 0.18), transparent 30%),
+      radial-gradient(circle at 50% 80%, rgba(56, 189, 248, 0.14), transparent 34%);
+    animation: gacha-aurora-shift 10s ease-in-out infinite alternate;
+  }
+
+  .gacha-shell::after {
+    content: '';
+    position: absolute;
+    inset: 1rem;
+    border-radius: 1.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    pointer-events: none;
+  }
+
+  .gacha-window::after {
+    content: '';
+    position: absolute;
+    inset: 0.6rem;
+    border-radius: 9999px;
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.68),
+      transparent 38%,
+      rgba(255, 255, 255, 0.2) 62%,
+      transparent 100%
+    );
+    pointer-events: none;
+  }
+
+  .gacha-capsule {
+    animation: gacha-float 5.6s ease-in-out infinite;
+    transition:
+      transform 180ms ease,
+      box-shadow 180ms ease;
+  }
+
+  .gacha-mini-capsule {
+    animation: gacha-bob 4.8s ease-in-out infinite;
+  }
 }
 
 @media (min-width: 640px) {
@@ -121,5 +200,37 @@
     .page-safe-bottom {
       padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 1.5rem);
     }
+  }
+}
+
+@keyframes gacha-aurora-shift {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  100% {
+    transform: translate3d(0, -1%, 0) scale(1.03);
+  }
+}
+
+@keyframes gacha-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes gacha-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-4px);
   }
 }

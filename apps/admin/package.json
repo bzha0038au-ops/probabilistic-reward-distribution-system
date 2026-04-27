@@ -2,6 +2,10 @@
   "name": "reward-admin",
   "version": "0.0.1",
   "private": true,
+  "files": [
+    "build",
+    "package.json"
+  ],
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",

@@ -1,9 +1,10 @@
-import { sql } from '@reward/database/orm';
+import { inArray, sql } from '@reward/database/orm';
 import Decimal from 'decimal.js';
 
 import { systemConfig } from '@reward/database';
 import type { DbClient, DbTransaction } from '../../db';
 import { getConfig } from '../../shared/config';
+import { internalInvariantError } from '../../shared/errors';
 import { toDecimal, toMoneyString } from '../../shared/money';
 import { readSqlRows } from '../../shared/sql-result';
 import { getPrizePoolBalance, setPrizePoolBalance } from '../house/service';
@@ -11,20 +12,22 @@ import { DEFAULT_DRAW_COST, DEFAULT_DRAW_COST_KEY } from './keys';
 
 export type DbExecutor = DbClient | DbTransaction;
 
-type ConfigRow = {
+export type ConfigRow = {
   config_number: string | number | null;
   config_value: Record<string, unknown> | null;
 };
 
+export type ConfigRowMap = Map<string, ConfigRow>;
+
 const isStrictSystemConfigMode = () => getConfig().nodeEnv === 'production';
 
 const buildMissingConfigError = (key: string) =>
-  new Error(
+  internalInvariantError(
     `Missing required system_config entry "${key}" in production. Run the latest migrations and seed the key before startup.`
   );
 
 const buildInvalidConfigError = (key: string, expected: string) =>
-  new Error(
+  internalInvariantError(
     `Invalid system_config entry "${key}" in production. Expected ${expected}.`
   );
 
@@ -61,6 +64,35 @@ const readConfigRow = async (
   `);
 
   return readSqlRows<ConfigRow>(result)[0] ?? null;
+};
+
+export const getConfigRowsByKeys = async (
+  db: DbExecutor,
+  keys: string[]
+): Promise<ConfigRowMap> => {
+  const uniqueKeys = [...new Set(keys)];
+  if (uniqueKeys.length === 0) {
+    return new Map();
+  }
+
+  const rows = await db
+    .select({
+      configKey: systemConfig.configKey,
+      configNumber: systemConfig.configNumber,
+      configValue: systemConfig.configValue,
+    })
+    .from(systemConfig)
+    .where(inArray(systemConfig.configKey, uniqueKeys));
+
+  return new Map(
+    rows.map((row) => [
+      row.configKey,
+      {
+        config_number: row.configNumber,
+        config_value: row.configValue as Record<string, unknown> | null,
+      },
+    ])
+  );
 };
 
 const parseConfigNumber = (
@@ -135,6 +167,27 @@ export async function getConfigBool(
   return parseConfigBool(key, row, fallback);
 }
 
+export async function getConfigBoolFromRows(
+  db: DbExecutor,
+  rows: ConfigRowMap,
+  key: string,
+  fallback = false
+) {
+  const row = rows.get(key) ?? null;
+  if (!row) {
+    await autoCreateOrThrow(key, () =>
+      setConfigDecimal(db, key, fallback ? 1 : 0, 'Auto-created config entry')
+    );
+    rows.set(key, {
+      config_number: fallback ? '1.00' : '0.00',
+      config_value: null,
+    });
+    return fallback;
+  }
+
+  return parseConfigBool(key, row, fallback);
+}
+
 export async function getConfigString(
   db: DbExecutor,
   key: string,
@@ -159,6 +212,35 @@ export async function getConfigString(
   return parseConfigString(key, row, fallback);
 }
 
+export async function getConfigStringFromRows(
+  db: DbExecutor,
+  rows: ConfigRowMap,
+  key: string,
+  fallback = ''
+) {
+  const row = rows.get(key) ?? null;
+  if (!row) {
+    await autoCreateOrThrow(key, () =>
+      db
+        .insert(systemConfig)
+        .values({
+          configKey: key,
+          configNumber: null,
+          configValue: { value: fallback },
+          description: 'Auto-created config entry',
+        })
+        .onConflictDoNothing()
+    );
+    rows.set(key, {
+      config_number: null,
+      config_value: { value: fallback },
+    });
+    return fallback;
+  }
+
+  return parseConfigString(key, row, fallback);
+}
+
 export async function getConfigJson<T>(
   db: DbExecutor,
   key: string,
@@ -180,6 +262,35 @@ export async function getConfigJson<T>(
     );
     return fallback;
   }
+  return parseConfigJson(key, row, fallback);
+}
+
+export async function getConfigJsonFromRows<T>(
+  db: DbExecutor,
+  rows: ConfigRowMap,
+  key: string,
+  fallback: T
+) {
+  const row = rows.get(key) ?? null;
+  if (!row) {
+    await autoCreateOrThrow(key, () =>
+      db
+        .insert(systemConfig)
+        .values({
+          configKey: key,
+          configNumber: null,
+          configValue: fallback as unknown as Record<string, unknown>,
+          description: 'Auto-created config entry',
+        })
+        .onConflictDoNothing()
+    );
+    rows.set(key, {
+      config_number: null,
+      config_value: fallback as Record<string, unknown>,
+    });
+    return fallback;
+  }
+
   return parseConfigJson(key, row, fallback);
 }
 
@@ -223,6 +334,28 @@ export async function getConfigDecimal(
     await autoCreateOrThrow(key, () =>
       setConfigDecimal(db, key, fallback, 'Auto-created config entry')
     );
+    return toDecimal(fallback);
+  }
+
+  return parseConfigNumber(key, row, fallback);
+}
+
+export async function getConfigDecimalFromRows(
+  db: DbExecutor,
+  rows: ConfigRowMap,
+  key: string,
+  fallback: Decimal.Value = 0
+) {
+  const row = rows.get(key) ?? null;
+  if (!row) {
+    await autoCreateOrThrow(key, () =>
+      setConfigDecimal(db, key, fallback, 'Auto-created config entry')
+    );
+    const normalizedFallback = toMoneyString(fallback);
+    rows.set(key, {
+      config_number: normalizedFallback,
+      config_value: null,
+    });
     return toDecimal(fallback);
   }
 

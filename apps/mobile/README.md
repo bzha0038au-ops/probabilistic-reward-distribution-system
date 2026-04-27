@@ -17,8 +17,29 @@ Useful commands:
 ```bash
 pnpm mobile:ios
 pnpm mobile:android
+pnpm mobile:android:dev-client
+pnpm mobile:android:regression
 pnpm --dir apps/mobile check
 ```
+
+## Android Dev-Build Regression
+
+Use two terminals:
+
+```bash
+# Terminal A: start Metro for the Expo dev client
+pnpm mobile:android:dev-client
+
+# Terminal B: generate android/ if needed, build, install, adb reverse, and launch
+pnpm mobile:android:regression
+```
+
+Notes:
+
+- Keep the backend running on `http://127.0.0.1:4000` before launching the app.
+- The regression script auto-detects the Android SDK from `ANDROID_HOME`, `ANDROID_SDK_ROOT`, `~/Library/Android/sdk`, or `~/Android/Sdk`.
+- On a debug build, the login screen exposes a `Use seeded user` button. Use that path for repeatable reward-center regression checks.
+- If you need a non-emulator Metro host, set `REWARD_ANDROID_DEV_SERVER_HOST` before running `pnpm mobile:android:regression`.
 
 ## EAS Release
 

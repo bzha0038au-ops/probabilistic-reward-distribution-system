@@ -3,6 +3,7 @@ import { eq, and } from '@reward/database/orm';
 
 import type { DbClient, DbTransaction } from '../../db';
 import { fairnessSeeds } from '@reward/database';
+import { persistenceError } from '../../shared/errors';
 
 type DbExecutor = DbClient | DbTransaction;
 
@@ -61,7 +62,7 @@ export async function ensureFairnessSeed(
     .limit(1);
 
   if (!created?.seed) {
-    throw new Error('Failed to create fairness seed.');
+    throw persistenceError('Failed to create fairness seed.');
   }
 
   return {

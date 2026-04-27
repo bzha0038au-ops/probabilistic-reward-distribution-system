@@ -16,6 +16,8 @@ const sharedInstallationDir = path.join(repoRoot, '.tmp', 'pg-embedded');
 const sharedArtifactsDir = path.join(repoRoot, '.tmp', 'tests');
 
 const TEST_DATABASE_NAME = 'reward_local';
+const TEST_DATABASE_IDENTIFIER_LIMIT = 63;
+const EXTERNAL_TEST_DATABASE_MODES = new Set(['external', 'service']);
 
 type CommandOptions = {
   cwd?: string;
@@ -67,6 +69,73 @@ const buildDatabaseUrl = (payload: {
     payload.password,
   )}@${payload.host}:${payload.port}/${payload.databaseName}`;
 
+const sanitizeDatabaseIdentifier = (value: string) => {
+  const sanitized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+
+  return sanitized === '' ? 'test' : sanitized;
+};
+
+const createEphemeralDatabaseName = (profile: string, runId: string) => {
+  const name = [
+    'reward',
+    sanitizeDatabaseIdentifier(profile),
+    sanitizeDatabaseIdentifier(runId),
+  ].join('_');
+
+  return name.slice(0, TEST_DATABASE_IDENTIFIER_LIMIT).replace(/_+$/g, '');
+};
+
+const replaceDatabaseName = (databaseUrl: string, databaseName: string) => {
+  const parsed = new URL(databaseUrl);
+  parsed.pathname = `/${databaseName}`;
+  return parsed.toString();
+};
+
+const redactDatabaseUrl = (databaseUrl: string) => {
+  const parsed = new URL(databaseUrl);
+  if (parsed.password !== '') {
+    parsed.password = '***';
+  }
+  return parsed.toString();
+};
+
+const quoteDatabaseIdentifier = (databaseName: string) =>
+  `"${databaseName.replace(/"/g, '""')}"`;
+
+const shouldUseExternalTestDatabase = () => {
+  const mode = process.env.TEST_DATABASE_MODE?.trim().toLowerCase();
+  return mode ? EXTERNAL_TEST_DATABASE_MODES.has(mode) : false;
+};
+
+const resolveExternalAdminDatabaseUrl = () =>
+  process.env.TEST_DATABASE_ADMIN_URL ??
+  process.env.DATABASE_URL ??
+  process.env.POSTGRES_URL ??
+  null;
+
+const dropExternalTestDatabase = async (
+  adminDatabaseUrl: string,
+  databaseName: string,
+) => {
+  const sql = createSqlClient(adminDatabaseUrl);
+
+  try {
+    await sql`
+      select pg_terminate_backend(pid)
+      from pg_stat_activity
+      where datname = ${databaseName}
+        and pid <> pg_backend_pid()
+    `;
+    await sql.unsafe(`drop database if exists ${quoteDatabaseIdentifier(databaseName)}`);
+  } finally {
+    await sql.end({ timeout: 5 }).catch(() => undefined);
+  }
+};
+
 export const backendTestSecrets = {
   adminJwtSecret: 'integration-admin-secret-1234567890-abcdefghijklmnopqrstuvwxyz',
   userJwtSecret: 'integration-user-secret-1234567890-abcdefghijklmnopqrstuvwxyz',
@@ -106,6 +175,7 @@ export const createFrontendEnv = (payload: {
   API_BASE_URL: payload.apiBaseUrl,
   NEXT_PUBLIC_API_BASE_URL: payload.apiBaseUrl,
   AUTH_SECRET: backendTestSecrets.authSecret,
+  USER_JWT_SECRET: backendTestSecrets.userJwtSecret,
   AUTH_TRUST_HOST: 'true',
   AUTH_URL: payload.appBaseUrl,
   NEXTAUTH_URL: payload.appBaseUrl,
@@ -253,6 +323,57 @@ export async function startService(
 export async function startTestDatabase(profile: string): Promise<TestDatabase> {
   const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const runDir = path.join(sharedArtifactsDir, profile, runId);
+
+  await mkdir(runDir, { recursive: true });
+
+  if (shouldUseExternalTestDatabase()) {
+    const adminDatabaseUrl = resolveExternalAdminDatabaseUrl();
+    if (!adminDatabaseUrl) {
+      throw new Error(
+        'TEST_DATABASE_MODE requires TEST_DATABASE_ADMIN_URL, DATABASE_URL, or POSTGRES_URL.',
+      );
+    }
+
+    const databaseName = createEphemeralDatabaseName(profile, runId);
+    const databaseUrl = replaceDatabaseName(adminDatabaseUrl, databaseName);
+    const safeDatabaseUrl = redactDatabaseUrl(databaseUrl);
+
+    try {
+      const adminSql = createSqlClient(adminDatabaseUrl);
+      try {
+        await adminSql.unsafe(`create database ${quoteDatabaseIdentifier(databaseName)}`);
+      } finally {
+        await adminSql.end({ timeout: 5 }).catch(() => undefined);
+      }
+
+      await runCommand(
+        'pnpm',
+        ['--dir', 'apps/database', 'exec', 'drizzle-kit', 'migrate'],
+        {
+          env: {
+            DATABASE_URL: databaseUrl,
+            POSTGRES_URL: databaseUrl,
+          },
+        },
+      );
+    } catch (error) {
+      await dropExternalTestDatabase(adminDatabaseUrl, databaseName).catch(() => undefined);
+      await rm(runDir, { recursive: true, force: true });
+      throw error;
+    }
+
+    return {
+      databaseUrl,
+      safeDatabaseUrl,
+      databaseName,
+      runDir,
+      stop: async () => {
+        await dropExternalTestDatabase(adminDatabaseUrl, databaseName).catch(() => undefined);
+        await rm(runDir, { recursive: true, force: true });
+      },
+    };
+  }
+
   const dataDir = path.join(runDir, 'pgdata');
 
   await mkdir(dataDir, { recursive: true });

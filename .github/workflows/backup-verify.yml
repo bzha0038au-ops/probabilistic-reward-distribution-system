@@ -1,0 +1,112 @@
+name: Backup Verify
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Operations environment
+        required: true
+        default: production
+        type: choice
+        options:
+          - staging
+          - production
+  schedule:
+    - cron: '30 18 * * *'
+
+concurrency:
+  group: backup-verify-${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }}
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      AWS_REGION: ${{ vars.BACKUP_VERIFY_AWS_REGION }}
+      AWS_DEFAULT_REGION: ${{ vars.BACKUP_VERIFY_AWS_REGION }}
+      S3_BACKUP_URI: ${{ secrets.BACKUP_VERIFY_S3_URI }}
+      BACKUP_S3_PATTERN: ${{ vars.BACKUP_VERIFY_OBJECT_PATTERN }}
+      BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
+      VERIFY_OUTPUT_DIR: ${{ github.workspace }}/ops-backup-verify
+      PRIMARY_ONCALL: ${{ vars.PRIMARY_ONCALL }}
+      SECONDARY_ONCALL: ${{ vars.SECONDARY_ONCALL }}
+      BACKUP_OWNER: ${{ vars.BACKUP_OWNER }}
+      DEPLOY_TG_BOT_TOKEN: ${{ secrets.DEPLOY_TG_BOT_TOKEN }}
+      DEPLOY_TG_PAGE_CHAT_ID: ${{ secrets.DEPLOY_TG_PAGE_CHAT_ID }}
+      DEPLOY_TG_DIGEST_CHAT_ID: ${{ secrets.DEPLOY_TG_DIGEST_CHAT_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Verification Secrets
+        run: |
+          test -n "$AWS_ACCESS_KEY_ID"
+          test -n "$AWS_SECRET_ACCESS_KEY"
+          test -n "$AWS_REGION"
+          test -n "$S3_BACKUP_URI"
+          test -n "$PRIMARY_ONCALL"
+          test -n "$SECONDARY_ONCALL"
+          test -n "$BACKUP_OWNER"
+          test -n "$DEPLOY_TG_BOT_TOKEN"
+          test -n "$DEPLOY_TG_PAGE_CHAT_ID"
+          test -n "$DEPLOY_TG_DIGEST_CHAT_ID"
+
+          case "$S3_BACKUP_URI" in
+            s3://*)
+              ;;
+            *)
+              echo "S3_BACKUP_URI must start with s3://." >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Install PostgreSQL Client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client awscli
+
+      - name: Verify Latest Backup
+        run: ./deploy/scripts/verify-backup.sh
+
+      - name: Publish Backup Verify Summary
+        if: always()
+        run: |
+          if [ -f "${VERIFY_OUTPUT_DIR}/verify-backup-report.md" ]; then
+            cat "${VERIFY_OUTPUT_DIR}/verify-backup-report.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload Backup Verify Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-verify-${{ github.run_id }}
+          path: ops-backup-verify/
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Notify Ticket Chat
+        if: success()
+        run: |
+          summary_body="backup-verify=ok"
+          if [ -f "${VERIFY_OUTPUT_DIR}/verify-backup-summary.txt" ]; then
+            summary_body="$(tr '\n' ' ' < "${VERIFY_OUTPUT_DIR}/verify-backup-summary.txt" | sed 's/[[:space:]]\+/ /g')"
+          fi
+
+          ./deploy/scripts/telegram-notify.sh \
+            "${DEPLOY_TG_DIGEST_CHAT_ID}" \
+            "${summary_body}"
+
+      - name: Notify Page Chat
+        if: failure()
+        run: |
+          summary_body="backup-verify=failed primary=${PRIMARY_ONCALL} secondary=${SECONDARY_ONCALL} owner=${BACKUP_OWNER}"
+          if [ -f "${VERIFY_OUTPUT_DIR}/verify-backup-summary.txt" ]; then
+            summary_body="$(tr '\n' ' ' < "${VERIFY_OUTPUT_DIR}/verify-backup-summary.txt" | sed 's/[[:space:]]\+/ /g')"
+            summary_body="${summary_body} primary=${PRIMARY_ONCALL} secondary=${SECONDARY_ONCALL} owner=${BACKUP_OWNER}"
+          fi
+
+          ./deploy/scripts/telegram-notify.sh \
+            "${DEPLOY_TG_PAGE_CHAT_ID}" \
+            "${summary_body}"

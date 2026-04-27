@@ -13,20 +13,26 @@ import {
   type SQL,
 } from '@reward/database/orm';
 
-export async function recordAdminAction(payload: {
+export type AdminActionPayload = {
   adminId?: number | null;
   action: string;
   targetType?: string | null;
   targetId?: number | null;
   ip?: string | null;
+  sessionId?: string | null;
+  userAgent?: string | null;
   metadata?: Record<string, unknown> | null;
-}) {
+};
+
+export async function recordAdminAction(payload: AdminActionPayload) {
   await db.insert(adminActions).values({
     adminId: payload.adminId ?? null,
     action: payload.action,
     targetType: payload.targetType ?? null,
     targetId: payload.targetId ?? null,
     ip: payload.ip ?? null,
+    sessionId: payload.sessionId ?? null,
+    userAgent: payload.userAgent ?? null,
     metadata: payload.metadata ?? null,
   });
 }

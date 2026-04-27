@@ -2,6 +2,7 @@ import { and, desc, eq } from 'drizzle-orm';
 
 import { db } from '../../db';
 import { fiatPayoutMethods, payoutMethods } from '@reward/database';
+import { persistenceError } from '../../shared/errors';
 
 type PayoutMethodJoinRow =
   | {
@@ -110,7 +111,7 @@ export async function createBankCard(payload: {
       .returning();
 
     if (!method) {
-      throw new Error('Failed to create payout method.');
+      throw persistenceError('Failed to create payout method.');
     }
 
     await tx.insert(fiatPayoutMethods).values({

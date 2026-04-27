@@ -3,7 +3,7 @@
 Production secrets are expected to arrive through a secret manager and be
 materialized as files in `$DEPLOY_PATH/shared/<environment>/secrets`.
 
-## Required Secret Files
+## Secret Files
 
 | Filename | Used by |
 | --- | --- |
@@ -12,7 +12,9 @@ materialized as files in `$DEPLOY_PATH/shared/<environment>/secrets`.
 | `backend_database_url` | backend, migration job |
 | `backend_redis_url` | backend, notification worker |
 | `admin_jwt_secret` | backend, admin |
-| `user_jwt_secret` | backend |
+| `user_jwt_secret` | backend, frontend |
+| `admin_jwt_secret_previous` | backend, admin (optional rotation window) |
+| `user_jwt_secret_previous` | backend, frontend (optional rotation window) |
 | `admin_mfa_encryption_secret` | backend |
 | `admin_mfa_break_glass_secret` | backend |
 | `frontend_auth_secret` | frontend |
@@ -35,16 +37,26 @@ Optional provider secret files:
 1. Create the new value in the secret manager.
 2. Sync the updated secret file into
    `$DEPLOY_PATH/shared/<environment>/secrets`.
-3. If the rotated secret changes a connection string, update the matching env
+3. If the rotated secret is `admin_jwt_secret` or `user_jwt_secret`, copy the
+   old live value into `admin_jwt_secret_previous` or `user_jwt_secret_previous`
+   before deploying. Keep the new value in the primary file; signers only use
+   the primary file and verifiers accept both values during the drain window.
+4. If the rotated secret changes a connection string, update the matching env
    file in `$DEPLOY_PATH/shared/<environment>/env`.
-4. Deploy the target environment so containers restart against the new secret.
-5. Validate login, write paths, and readiness probes.
-6. Revoke the old value after the new deployment is healthy.
+5. Deploy the target environment so containers restart against the new secret.
+6. Validate login, write paths, and readiness probes.
+7. Wait at least one full session TTL (`ADMIN_SESSION_TTL` for admin sessions,
+   `USER_SESSION_TTL` for user sessions) so old cookies naturally age out.
+8. Remove the `*_previous` file, deploy again, then revoke the old value.
 
-## High-Impact Rotations
+## Session Rotation Notes
 
-- Rotating `admin_jwt_secret`, `user_jwt_secret`, or `frontend_auth_secret`
-  invalidates active sessions. Schedule this change and expect re-authentication.
+- `admin_jwt_secret` rotates without downtime when backend and admin both load
+  the new current secret and the previous fallback secret in the same deploy.
+- `user_jwt_secret` rotates without downtime when backend and frontend both load
+  the new current secret and the previous fallback secret in the same deploy.
+- `frontend_auth_secret` still invalidates Auth.js sessions. Schedule that
+  rotation separately if you also need to preserve active web logins.
 - Rotating `postgres_password` requires a coordinated update of
   `backend_database_url`.
 - Rotating `redis_password` requires a coordinated update of

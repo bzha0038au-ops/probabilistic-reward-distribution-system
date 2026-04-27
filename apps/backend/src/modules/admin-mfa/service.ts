@@ -9,10 +9,16 @@ import {
 
 import { SignJWT, jwtVerify } from "jose";
 import { and, eq, sql } from "@reward/database/orm";
+import { API_ERROR_CODES } from "@reward/shared-types/api";
 
 import { admins } from "@reward/database";
 import { db, type DbClient, type DbTransaction } from "../../db";
 import { getConfig } from "../../shared/config";
+import {
+  conflictError,
+  internalInvariantError,
+  unprocessableEntityError,
+} from "../../shared/errors";
 import {
   createAdminSessionToken,
   type AdminMfaRecoveryMode,
@@ -62,13 +68,15 @@ const getMfaEncryptionKey = () => {
   const rawSecret = dedicatedSecret || fallbackSecret;
 
   if (!rawSecret) {
-    throw new Error(
+    throw internalInvariantError(
       "ADMIN_MFA_ENCRYPTION_SECRET or ADMIN_JWT_SECRET must be set.",
     );
   }
 
   if (process.env.NODE_ENV === "production" && !dedicatedSecret) {
-    throw new Error("ADMIN_MFA_ENCRYPTION_SECRET must be set in production.");
+    throw internalInvariantError(
+      "ADMIN_MFA_ENCRYPTION_SECRET must be set in production.",
+    );
   }
 
   return createHash("sha256").update(rawSecret, "utf8").digest();
@@ -105,7 +113,7 @@ const decodeBase32 = (value: string) => {
   for (const char of normalized) {
     const index = BASE32_ALPHABET.indexOf(char);
     if (index < 0) {
-      throw new Error("Invalid base32 secret.");
+      throw internalInvariantError("Invalid base32 secret.");
     }
 
     accumulator = (accumulator << 5) | index;
@@ -158,7 +166,7 @@ const decryptSecret = (ciphertext: string) => {
   const [version, ivEncoded, tagEncoded, payloadEncoded] =
     ciphertext.split(".");
   if (version !== "v1" || !ivEncoded || !tagEncoded || !payloadEncoded) {
-    throw new Error("Invalid admin MFA secret payload.");
+    throw internalInvariantError("Invalid admin MFA secret payload.");
   }
 
   const decipher = createDecipheriv(
@@ -399,7 +407,7 @@ const createEnrollmentToken = async (payload: {
 const verifyEnrollmentToken = async (token: string) => {
   const { payload } = await jwtVerify(token, getSessionSecret("admin"));
   if (payload.purpose !== ENROLLMENT_PURPOSE) {
-    throw new Error("Invalid MFA enrollment token.");
+    throw unprocessableEntityError("Invalid MFA enrollment token.");
   }
 
   const adminId = Number(payload.adminId ?? payload.sub ?? 0);
@@ -407,7 +415,7 @@ const verifyEnrollmentToken = async (token: string) => {
   const secret = String(payload.secret ?? "");
 
   if (!adminId || !email || !secret) {
-    throw new Error("Invalid MFA enrollment token.");
+    throw unprocessableEntityError("Invalid MFA enrollment token.");
   }
 
   return {
@@ -439,7 +447,9 @@ export async function createAdminMfaEnrollment(payload: {
   mfaEnabled: boolean;
 }) {
   if (payload.mfaEnabled) {
-    throw new Error("Admin MFA is already enabled.");
+    throw conflictError("Admin MFA is already enabled.", {
+      code: API_ERROR_CODES.ADMIN_MFA_ALREADY_ENABLED,
+    });
   }
 
   const secret = encodeBase32(randomBytes(20));
@@ -480,15 +490,27 @@ export async function confirmAdminMfaEnrollment(payload: {
 }) {
   const enrollment = await verifyEnrollmentToken(payload.enrollmentToken);
   if (enrollment.adminId !== payload.currentAdmin.adminId) {
-    throw new Error("MFA enrollment token does not match the active admin.");
+    throw conflictError(
+      "MFA enrollment token does not match the active admin.",
+      {
+        code: API_ERROR_CODES.ADMIN_MFA_ENROLLMENT_TOKEN_MISMATCH,
+      },
+    );
   }
 
   if (enrollment.email !== payload.currentAdmin.email) {
-    throw new Error("MFA enrollment token does not match the active admin.");
+    throw conflictError(
+      "MFA enrollment token does not match the active admin.",
+      {
+        code: API_ERROR_CODES.ADMIN_MFA_ENROLLMENT_TOKEN_MISMATCH,
+      },
+    );
   }
 
   if (!verifyTotpCode(enrollment.secret, payload.totpCode)) {
-    throw new Error("Invalid admin MFA code.");
+    throw unprocessableEntityError("Invalid admin MFA code.", {
+      code: API_ERROR_CODES.INVALID_ADMIN_MFA_CODE,
+    });
   }
 
   const recoveryCodes = createRecoveryCodeSet();
@@ -650,7 +672,9 @@ export async function regenerateAdminRecoveryCodes(payload: {
     code: payload.totpCode,
   });
   if (!verified.valid || !verified.method) {
-    throw new Error("Invalid admin MFA code.");
+    throw unprocessableEntityError("Invalid admin MFA code.", {
+      code: API_ERROR_CODES.INVALID_ADMIN_MFA_CODE,
+    });
   }
 
   const recoveryCodes = createRecoveryCodeSet();
@@ -688,7 +712,9 @@ export async function disableAdminMfa(payload: {
 }) {
   const admin = await loadAdminMfaRow(db, payload.currentAdmin.adminId);
   if (!admin?.mfaEnabled) {
-    throw new Error("Admin MFA is not enabled.");
+    throw conflictError("Admin MFA is not enabled.", {
+      code: API_ERROR_CODES.ADMIN_MFA_NOT_ENABLED,
+    });
   }
 
   let verifiedMethod: AdminMfaMethod;
@@ -697,7 +723,9 @@ export async function disableAdminMfa(payload: {
   } else {
     const code = payload.totpCode?.trim() ?? "";
     if (!code) {
-      throw new Error("Admin MFA code required.");
+      throw unprocessableEntityError("Admin MFA code required.", {
+        code: API_ERROR_CODES.ADMIN_MFA_CODE_REQUIRED,
+      });
     }
 
     const verified = await verifyAdminMfaChallenge({
@@ -705,7 +733,9 @@ export async function disableAdminMfa(payload: {
       code,
     });
     if (!verified.valid || !verified.method) {
-      throw new Error("Invalid admin MFA code.");
+      throw unprocessableEntityError("Invalid admin MFA code.", {
+        code: API_ERROR_CODES.INVALID_ADMIN_MFA_CODE,
+      });
     }
     verifiedMethod = verified.method;
   }

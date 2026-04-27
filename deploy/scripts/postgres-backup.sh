@@ -17,6 +17,11 @@ Configuration:
   BACKUP_DIR                    Optional output directory
   BACKUP_PREFIX                 Optional filename prefix when no positional arg is passed
   BACKUP_TIMESTAMP              Optional UTC timestamp override (YYYYMMDDTHHMMSSZ)
+  S3_BACKUP_URI                 Optional S3 prefix for readable backup copies
+  S3_CROSS_REGION_URI           Optional secondary S3 prefix for manual cross-region copy
+  S3_BACKUP_SSE                 Optional S3 server-side encryption mode, default: AES256
+  S3_BACKUP_KMS_KEY_ID          Optional KMS key id for S3 uploads / copies
+  S3_BACKUP_STORAGE_CLASS       Optional S3 storage class override
 
 Examples:
   ENV_FILE=deploy/env/backend.env ./deploy/scripts/postgres-backup.sh
@@ -66,6 +71,44 @@ write_checksum() {
   exit 1
 }
 
+aws_s3_cp() {
+  local source_path="$1"
+  local destination_path="$2"
+  local sse_mode="${S3_BACKUP_SSE:-AES256}"
+  local -a cmd=(aws s3 cp --only-show-errors)
+
+  if [[ -n "${S3_BACKUP_STORAGE_CLASS:-}" ]]; then
+    cmd+=(--storage-class "${S3_BACKUP_STORAGE_CLASS}")
+  fi
+
+  if [[ -n "${S3_BACKUP_KMS_KEY_ID:-}" ]]; then
+    cmd+=(--sse aws:kms --sse-kms-key-id "${S3_BACKUP_KMS_KEY_ID}")
+  elif [[ -n "${sse_mode}" ]]; then
+    cmd+=(--sse "${sse_mode}")
+  fi
+
+  cmd+=("${source_path}" "${destination_path}")
+  "${cmd[@]}"
+}
+
+upload_artifact_to_s3() {
+  local input_file="$1"
+  local destination_prefix="$2"
+  local destination_uri="${destination_prefix%/}/$(basename "${input_file}")"
+
+  aws_s3_cp "${input_file}" "${destination_uri}"
+  printf '%s\n' "${destination_uri}"
+}
+
+copy_artifact_to_cross_region() {
+  local source_uri="$1"
+  local destination_prefix="$2"
+  local destination_uri="${destination_prefix%/}/$(basename "${source_uri}")"
+
+  aws_s3_cp "${source_uri}" "${destination_uri}"
+  printf '%s\n' "${destination_uri}"
+}
+
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   usage
   exit 0
@@ -86,6 +129,17 @@ timestamp="${BACKUP_TIMESTAMP:-$(date -u +"%Y%m%dT%H%M%SZ")}"
 default_backup_dir="${TMPDIR:-/tmp}/reward-system-backups"
 backup_dir="${BACKUP_DIR:-${default_backup_dir}}"
 backup_prefix="${1:-${BACKUP_PREFIX:-reward-system}}"
+s3_backup_uri="${S3_BACKUP_URI:-}"
+s3_cross_region_uri="${S3_CROSS_REGION_URI:-}"
+
+if [[ -n "${s3_cross_region_uri}" && -z "${s3_backup_uri}" ]]; then
+  echo "S3_CROSS_REGION_URI requires S3_BACKUP_URI." >&2
+  exit 1
+fi
+
+if [[ -n "${s3_backup_uri}" ]]; then
+  require_cmd aws
+fi
 
 mkdir -p "${backup_dir}"
 
@@ -121,11 +175,48 @@ source_git_branch: ${git_branch}
 pg_dump_version: $(pg_dump --version)
 EOF
 
+s3_dump_uri=""
+s3_toc_uri=""
+s3_checksum_uri=""
+s3_metadata_uri=""
+s3_cross_region_dump_uri=""
+s3_cross_region_toc_uri=""
+s3_cross_region_checksum_uri=""
+s3_cross_region_metadata_uri=""
+
+if [[ -n "${s3_backup_uri}" ]]; then
+  s3_dump_uri="$(upload_artifact_to_s3 "${dump_file}" "${s3_backup_uri}")"
+  s3_toc_uri="$(upload_artifact_to_s3 "${toc_file}" "${s3_backup_uri}")"
+  s3_checksum_uri="$(upload_artifact_to_s3 "${checksum_file}" "${s3_backup_uri}")"
+  s3_metadata_uri="$(upload_artifact_to_s3 "${metadata_file}" "${s3_backup_uri}")"
+
+  if [[ -n "${s3_cross_region_uri}" ]]; then
+    s3_cross_region_dump_uri="$(copy_artifact_to_cross_region "${s3_dump_uri}" "${s3_cross_region_uri}")"
+    s3_cross_region_toc_uri="$(copy_artifact_to_cross_region "${s3_toc_uri}" "${s3_cross_region_uri}")"
+    s3_cross_region_checksum_uri="$(copy_artifact_to_cross_region "${s3_checksum_uri}" "${s3_cross_region_uri}")"
+    s3_cross_region_metadata_uri="$(copy_artifact_to_cross_region "${s3_metadata_uri}" "${s3_cross_region_uri}")"
+  fi
+fi
+
 echo "Backup created: ${dump_file}"
 echo "Table of contents: ${toc_file}"
 echo "Checksum: ${checksum_file}"
 echo "Metadata: ${metadata_file}"
+if [[ -n "${s3_dump_uri}" ]]; then
+  echo "S3 backup copy: ${s3_dump_uri}"
+fi
+if [[ -n "${s3_cross_region_dump_uri}" ]]; then
+  echo "S3 cross-region copy: ${s3_cross_region_dump_uri}"
+fi
 echo "BACKUP_DUMP_FILE=${dump_file}"
 echo "BACKUP_TOC_FILE=${toc_file}"
 echo "BACKUP_CHECKSUM_FILE=${checksum_file}"
 echo "BACKUP_METADATA_FILE=${metadata_file}"
+echo "S3_BACKUP_DUMP_URI=${s3_dump_uri}"
+echo "S3_BACKUP_TOC_URI=${s3_toc_uri}"
+echo "S3_BACKUP_CHECKSUM_URI=${s3_checksum_uri}"
+echo "S3_BACKUP_METADATA_URI=${s3_metadata_uri}"
+echo "S3_CROSS_REGION_DUMP_URI=${s3_cross_region_dump_uri}"
+echo "S3_CROSS_REGION_TOC_URI=${s3_cross_region_toc_uri}"
+echo "S3_CROSS_REGION_CHECKSUM_URI=${s3_cross_region_checksum_uri}"
+echo "S3_CROSS_REGION_METADATA_URI=${s3_cross_region_metadata_uri}"

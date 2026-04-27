@@ -1,37 +1,56 @@
-import type { FastifyReply, FastifyRequest } from 'fastify';
-import type { CursorDirection, SortOrder } from '@reward/shared-types';
+import type { FastifyReply, FastifyRequest } from "fastify";
+import type { CursorDirection, SortOrder } from "@reward/shared-types/common";
+import { API_ERROR_CODES } from "@reward/shared-types/api";
 
-import { getConfig } from '../../../shared/config';
-import { createRateLimiter } from '../../../shared/rate-limit';
-import { sendError } from '../../respond';
-import { parseLimit } from '../../utils';
+import { getConfigView } from "../../../shared/config";
+import { createRateLimiter } from "../../../shared/rate-limit";
+import { sendError } from "../../respond";
+import { parseLimit } from "../../utils";
 
-const config = getConfig();
+const config = getConfigView();
 
 export const adminRateLimit = {
-  max: config.rateLimitAdminMax,
-  timeWindow: config.rateLimitAdminWindowMs,
+  get max() {
+    return config.rateLimitAdminMax;
+  },
+  get timeWindow() {
+    return config.rateLimitAdminWindowMs;
+  },
 };
 
-const adminLimiter = createRateLimiter({
-  limit: config.rateLimitAdminMax,
-  windowMs: config.rateLimitAdminWindowMs,
-});
+let adminLimiter: ReturnType<typeof createRateLimiter> | null = null;
+
+const getAdminLimiter = () => {
+  if (!adminLimiter) {
+    adminLimiter = createRateLimiter({
+      limit: config.rateLimitAdminMax,
+      windowMs: config.rateLimitAdminWindowMs,
+    });
+  }
+
+  return adminLimiter;
+};
 
 export const enforceAdminLimit = async (
   request: FastifyRequest,
-  reply: FastifyReply
+  reply: FastifyReply,
 ) => {
   const admin = request.admin;
   if (!admin) return;
-  const result = await adminLimiter.consume(`admin:${admin.userId}`);
+  const result = await getAdminLimiter().consume(`admin:${admin.userId}`);
   if (!result.allowed) {
-    return sendError(reply, 429, 'Too many requests.');
+    return sendError(
+      reply,
+      429,
+      "Too many requests.",
+      undefined,
+      API_ERROR_CODES.TOO_MANY_REQUESTS,
+    );
   }
 };
 
 export const toObject = (value: unknown) => {
-  if (typeof value !== 'object' || value === null) {
+  if (typeof value !== "object" || value === null) {
     return {};
   }
 
@@ -39,9 +58,14 @@ export const toObject = (value: unknown) => {
 };
 
 export const readString = (value: unknown) =>
-  typeof value === 'string' ? value : value === null || value === undefined ? undefined : String(value);
+  typeof value === "string"
+    ? value
+    : value === null || value === undefined
+      ? undefined
+      : String(value);
 
-export const readStringValue = (source: unknown, key: string) => readString(Reflect.get(toObject(source), key));
+export const readStringValue = (source: unknown, key: string) =>
+  readString(Reflect.get(toObject(source), key));
 
 export const parseIdParam = (source: unknown, key: string) => {
   const raw = readStringValue(source, key);
@@ -55,12 +79,16 @@ export const parseDateFilter = (value: string | number | undefined) => {
   return Number.isNaN(parsed.valueOf()) ? null : parsed;
 };
 
-export const parseLimitFromQuery = (query: unknown) => parseLimit(readStringValue(query, 'limit'));
+export const parseLimitFromQuery = (query: unknown) =>
+  parseLimit(readStringValue(query, "limit"));
 
 const encodeCursorPayload = (payload: { id: number; createdAt: string }) =>
-  Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+  Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
 
-export const encodeCursor = (item: { id: number; createdAt: Date | string | null | undefined }) => {
+export const encodeCursor = (item: {
+  id: number;
+  createdAt: Date | string | null | undefined;
+}) => {
   if (!item.createdAt) return null;
   const createdAt = new Date(item.createdAt);
   if (Number.isNaN(createdAt.valueOf())) return null;
@@ -74,14 +102,18 @@ export const decodeCursor = (cursor?: string | null) => {
   if (!cursor) return null;
 
   try {
-    const raw = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
-    const parsed = typeof raw === 'object' && raw !== null ? raw : {};
-    const id = Number(Reflect.get(parsed, 'id'));
-    const createdAtValue = Reflect.get(parsed, 'createdAt');
+    const raw = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
+    const parsed = typeof raw === "object" && raw !== null ? raw : {};
+    const id = Number(Reflect.get(parsed, "id"));
+    const createdAtValue = Reflect.get(parsed, "createdAt");
     const createdAt =
-      typeof createdAtValue === 'string' ? new Date(createdAtValue) : null;
+      typeof createdAtValue === "string" ? new Date(createdAtValue) : null;
 
-    if (!Number.isFinite(id) || !createdAt || Number.isNaN(createdAt.valueOf())) {
+    if (
+      !Number.isFinite(id) ||
+      !createdAt ||
+      Number.isNaN(createdAt.valueOf())
+    ) {
       return null;
     }
 
@@ -91,7 +123,9 @@ export const decodeCursor = (cursor?: string | null) => {
   }
 };
 
-export const buildCursorPage = <T extends { id: number; createdAt: Date | string | null | undefined }>(params: {
+export const buildCursorPage = <
+  T extends { id: number; createdAt: Date | string | null | undefined },
+>(params: {
   items: T[];
   limit: number;
   direction: CursorDirection;
@@ -99,13 +133,15 @@ export const buildCursorPage = <T extends { id: number; createdAt: Date | string
   cursor: string | null;
 }) => {
   const hasOverflow = params.items.length > params.limit;
-  const pageItems = hasOverflow ? params.items.slice(0, params.limit) : params.items;
+  const pageItems = hasOverflow
+    ? params.items.slice(0, params.limit)
+    : params.items;
   const hasNext =
-    params.direction === 'prev'
+    params.direction === "prev"
       ? Boolean(params.cursor && pageItems.length > 0)
       : hasOverflow;
   const hasPrevious =
-    params.direction === 'next'
+    params.direction === "next"
       ? Boolean(params.cursor && pageItems.length > 0)
       : hasOverflow;
 
@@ -114,8 +150,12 @@ export const buildCursorPage = <T extends { id: number; createdAt: Date | string
     limit: params.limit,
     hasNext,
     hasPrevious,
-    nextCursor: hasNext && pageItems.length > 0 ? encodeCursor(pageItems[pageItems.length - 1]) : null,
-    prevCursor: hasPrevious && pageItems.length > 0 ? encodeCursor(pageItems[0]) : null,
+    nextCursor:
+      hasNext && pageItems.length > 0
+        ? encodeCursor(pageItems[pageItems.length - 1])
+        : null,
+    prevCursor:
+      hasPrevious && pageItems.length > 0 ? encodeCursor(pageItems[0]) : null,
     direction: params.direction,
     sort: params.sort,
   };

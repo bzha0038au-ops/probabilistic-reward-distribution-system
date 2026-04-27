@@ -11,6 +11,7 @@ groups:
         annotations:
           summary: Reward backend is not ready
           description: A required dependency has been unhealthy for at least 5 minutes.
+          runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/runbooks/RewardBackendNotReady.md
 
       - alert: RewardBackend5xxRateHigh
         expr: |
@@ -26,6 +27,7 @@ groups:
         annotations:
           summary: Reward backend 5xx ratio is high
           description: More than 5% of backend requests have returned 5xx for 10 minutes.
+          runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/runbooks/RewardBackend5xxRateHigh.md
 
       - alert: RewardBackendDrawErrorRateHigh
         expr: |
@@ -41,6 +43,7 @@ groups:
         annotations:
           summary: Reward draw error rate is high
           description: More than 2% of draw attempts have failed for 10 minutes.
+          runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/runbooks/RewardBackendDrawErrorRateHigh.md
 
       - alert: RewardBackendWithdrawalsStuck
         expr: sum(reward_backend_withdrawals_stuck_total) > 0
@@ -51,6 +54,7 @@ groups:
         annotations:
           summary: Reward withdrawals are stuck
           description: At least one withdrawal has exceeded the stuck threshold.
+          runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/runbooks/RewardBackendWithdrawalsStuck.md
 
       - alert: RewardBackendNotificationBacklogGrowing
         expr: |
@@ -59,8 +63,285 @@ groups:
           sum(reward_backend_auth_notification_deliveries{status=~"pending|processing|failed"}) > 25
         for: 10m
         labels:
-          severity: page
+          severity: ticket
           service: reward-backend
         annotations:
           summary: Reward notification backlog is unhealthy
           description: Notification backlog age or queue depth is above threshold.
+          runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/runbooks/RewardBackendNotificationBacklogGrowing.md
+
+      - alert: RewardBackendPaymentWebhookSignatureFailuresHigh
+        expr: |
+          (
+            sum by (provider) (
+              increase(reward_backend_payment_webhook_signature_verifications_total{status="failed"}[10m])
+            )
+            /
+            clamp_min(
+              sum by (provider) (
+                increase(reward_backend_payment_webhook_signature_verifications_total[10m])
+              ),
+              1
+            )
+          ) > 0.20
+          and
+          sum by (provider) (
+            increase(reward_backend_payment_webhook_signature_verifications_total{status="failed"}[10m])
+          ) > 20
+        for: 5m
+        labels:
+          severity: page
+          service: reward-backend
+        annotations:
+          summary: Reward payment webhook signature failures are spiking
+          description: More than 20 failed webhook signature verifications for a provider in 10 minutes, with a failure ratio above 20%.
+          runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/runbooks/RewardBackendPaymentWebhookSignatureFailuresHigh.md
+
+      - alert: RewardBackendPaymentReconciliationQueueGrowing
+        expr: |
+          sum by (provider) (
+            reward_backend_payment_reconciliation_open_issues_total{requires_manual_review="true"}
+          ) > 10
+          or
+          max by (provider) (
+            reward_backend_payment_reconciliation_oldest_open_issue_age_seconds{requires_manual_review="true"}
+          ) > 1800
+        for: 15m
+        labels:
+          severity: ticket
+          service: reward-backend
+        annotations:
+          summary: Reward payment reconciliation queue is growing
+          description: Manual-review reconciliation issues have exceeded the queue depth or age threshold.
+          runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/runbooks/RewardBackendPaymentReconciliationQueueGrowing.md
+
+      - alert: RewardBackendSaasBillingCollectionAtRisk
+        expr: |
+          sum(reward_backend_saas_billing_runs_total{status="failed"}) > 0
+          or
+          reward_backend_saas_webhook_retry_exhausted_total > 0
+        for: 15m
+        labels:
+          severity: ticket
+          service: reward-backend
+        annotations:
+          summary: Reward SaaS billing collection is at risk
+          description: Failed SaaS billing runs or retry-exhausted SaaS Stripe webhooks indicate tenants may not have been charged.
+          runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/runbooks/RewardBackendSaasBillingCollectionAtRisk.md
+
+      # Prometheus alert rules do not honor repeat_interval directly; downstream
+      # Alertmanager or equivalent routing should consume this annotation.
+      - alert: RewardBackendStripeApiDegraded
+        expr: |
+          sum by (surface) (
+            increase(reward_backend_stripe_api_failures_total{reason=~"rate_limit|server_error"}[10m])
+          ) > 2
+          or
+          sum(
+            reward_backend_payment_outbound_requests_total{
+              send_status=~"unknown|failed",
+              error_code=~"stripe_rate_limit|stripe_server_error"
+            }
+          ) > 0
+        for: 10m
+        labels:
+          severity: ticket
+          service: reward-backend
+        annotations:
+          repeat_interval: "4h"
+          summary: Reward Stripe API is degraded
+          description: Stripe rate limiting, Stripe 5xx responses, or queued outbound retries indicate degraded provider automation.
+          runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/runbooks/RewardBackendStripeApiDegraded.md
+
+      - alert: RewardBackendPaymentOutboundIdempotencyConflict
+        expr: |
+          sum(increase(reward_backend_payment_outbound_idempotency_conflicts_total[15m])) > 0
+        for: 5m
+        labels:
+          severity: page
+          service: reward-backend
+        annotations:
+          summary: Reward payment outbound idempotency conflict detected
+          description: An outbound request reused an idempotency key in a conflicting way and needs investigation.
+          runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/runbooks/RewardBackendPaymentOutboundIdempotencyConflict.md
+
+  - name: reward-capacity
+    interval: 30s
+    rules:
+      # These rules assume node_exporter is scraping host mountpoints, including
+      # Docker volume paths such as reward_postgres_data / reward_redis_data /
+      # reward_ops_src_pgdata, and that redis_exporter exposes maxmemory metrics.
+      - alert: RewardPostgresDataVolumeUsage70
+        expr: |
+          (
+            1 -
+            (
+              node_filesystem_avail_bytes{
+                fstype!~"tmpfs|ramfs|overlay|squashfs|nsfs|fuse.lxcfs",
+                mountpoint=~".*(reward[_-]postgres[_-]data|reward_ops_src_pgdata|pgdata).*"
+              }
+              /
+              clamp_min(
+                node_filesystem_size_bytes{
+                  fstype!~"tmpfs|ramfs|overlay|squashfs|nsfs|fuse.lxcfs",
+                  mountpoint=~".*(reward[_-]postgres[_-]data|reward_ops_src_pgdata|pgdata).*"
+                },
+                1
+              )
+            )
+          ) > 0.70
+        for: 15m
+        labels:
+          severity: ticket
+          service: reward-infra
+          component: postgres-data-volume
+        annotations:
+          summary: PostgreSQL data volume usage is above 70%
+          description: PostgreSQL data volume {{ $labels.mountpoint }} on {{ $labels.instance }} has remained above 70% usage for 15 minutes. Open a capacity ticket before WAL growth, autovacuum, or backups compete for free space.
+          runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/on-call-runbook.md
+
+      - alert: RewardPostgresDataVolumeUsage85
+        expr: |
+          (
+            1 -
+            (
+              node_filesystem_avail_bytes{
+                fstype!~"tmpfs|ramfs|overlay|squashfs|nsfs|fuse.lxcfs",
+                mountpoint=~".*(reward[_-]postgres[_-]data|reward_ops_src_pgdata|pgdata).*"
+              }
+              /
+              clamp_min(
+                node_filesystem_size_bytes{
+                  fstype!~"tmpfs|ramfs|overlay|squashfs|nsfs|fuse.lxcfs",
+                  mountpoint=~".*(reward[_-]postgres[_-]data|reward_ops_src_pgdata|pgdata).*"
+                },
+                1
+              )
+            )
+          ) > 0.85
+        for: 10m
+        labels:
+          severity: page
+          service: reward-infra
+          component: postgres-data-volume
+        annotations:
+          summary: PostgreSQL data volume usage is above 85%
+          description: PostgreSQL data volume {{ $labels.mountpoint }} on {{ $labels.instance }} has remained above 85% usage for 10 minutes. Page on-call and prepare an immediate expansion or cleanup plan before the database hits a hard stop.
+          runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/on-call-runbook.md
+
+      - alert: RewardPostgresDataVolumeUsage95
+        expr: |
+          (
+            1 -
+            (
+              node_filesystem_avail_bytes{
+                fstype!~"tmpfs|ramfs|overlay|squashfs|nsfs|fuse.lxcfs",
+                mountpoint=~".*(reward[_-]postgres[_-]data|reward_ops_src_pgdata|pgdata).*"
+              }
+              /
+              clamp_min(
+                node_filesystem_size_bytes{
+                  fstype!~"tmpfs|ramfs|overlay|squashfs|nsfs|fuse.lxcfs",
+                  mountpoint=~".*(reward[_-]postgres[_-]data|reward_ops_src_pgdata|pgdata).*"
+                },
+                1
+              )
+            )
+          ) > 0.95
+        for: 5m
+        labels:
+          severity: page
+          service: reward-infra
+          component: postgres-data-volume
+          ai_agent_action: attempt-postgres-volume-expansion
+        annotations:
+          summary: PostgreSQL data volume usage is above 95%
+          description: PostgreSQL data volume {{ $labels.mountpoint }} on {{ $labels.instance }} is in a critical state. Page on-call immediately and have the AI ops agent attempt the documented online expansion path before the filesystem reaches 100%.
+          runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/on-call-runbook.md
+
+      - alert: RewardRedisMemoryUsage70
+        expr: |
+          (
+            redis_memory_used_bytes
+            /
+            clamp_min(redis_memory_max_bytes, 1)
+          ) > 0.70
+          and
+          redis_memory_max_bytes > 0
+        for: 15m
+        labels:
+          severity: ticket
+          service: reward-infra
+          component: redis-memory
+        annotations:
+          summary: Redis memory usage is above 70%
+          description: Redis on {{ $labels.instance }} has remained above 70% of configured maxmemory for 15 minutes. Open a capacity ticket before cache churn or evictions start hurting the API.
+          runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/on-call-runbook.md
+
+      - alert: RewardRedisMemoryUsage85
+        expr: |
+          (
+            redis_memory_used_bytes
+            /
+            clamp_min(redis_memory_max_bytes, 1)
+          ) > 0.85
+          and
+          redis_memory_max_bytes > 0
+        for: 10m
+        labels:
+          severity: page
+          service: reward-infra
+          component: redis-memory
+        annotations:
+          summary: Redis memory usage is above 85%
+          description: Redis on {{ $labels.instance }} has remained above 85% of configured maxmemory for 10 minutes. Page on-call and reduce pressure before write failures or aggressive evictions start.
+          runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/on-call-runbook.md
+
+      - alert: RewardRedisMemoryUsage95
+        expr: |
+          (
+            redis_memory_used_bytes
+            /
+            clamp_min(redis_memory_max_bytes, 1)
+          ) > 0.95
+          and
+          redis_memory_max_bytes > 0
+        for: 5m
+        labels:
+          severity: page
+          service: reward-infra
+          component: redis-memory
+        annotations:
+          summary: Redis memory usage is above 95%
+          description: Redis on {{ $labels.instance }} is critically close to maxmemory. Page on-call immediately and scale, shed load, or flush non-essential data before the cache stops accepting writes.
+          runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/on-call-runbook.md
+
+      - alert: RewardImageRegistryCapacity80
+        expr: |
+          (
+            1 -
+            (
+              node_filesystem_avail_bytes{
+                fstype!~"tmpfs|ramfs|overlay|squashfs|nsfs|fuse.lxcfs",
+                mountpoint=~".*(registry|harbor).*"
+              }
+              /
+              clamp_min(
+                node_filesystem_size_bytes{
+                  fstype!~"tmpfs|ramfs|overlay|squashfs|nsfs|fuse.lxcfs",
+                  mountpoint=~".*(registry|harbor).*"
+                },
+                1
+              )
+            )
+          ) > 0.80
+        for: 15m
+        labels:
+          severity: ticket
+          service: reward-infra
+          component: image-registry-storage
+          notification_channel: tg-ticket-chat
+        annotations:
+          summary: Container image registry capacity is above 80%
+          description: Registry storage mountpoint {{ $labels.mountpoint }} on {{ $labels.instance }} has remained above 80% usage for 15 minutes. Notify the Telegram ticket chat before old rollback images are garbage-collected under pressure.
+          runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/host-hardening.md

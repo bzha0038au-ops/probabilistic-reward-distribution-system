@@ -4,11 +4,17 @@ import { client } from '../db';
 import {
   startPaymentOutboundDispatcher,
   stopPaymentOutboundDispatcher,
-} from '../modules/payment/outbound-dispatcher';
-import { getConfig } from '../shared/config';
+} from '../modules/payment/outbound';
+import { getConfigView } from '../shared/config';
 import { logger } from '../shared/logger';
+import {
+  captureException,
+  initializeObservability,
+  shutdownObservability,
+} from '../shared/telemetry';
 
-const config = getConfig();
+initializeObservability();
+const config = getConfigView();
 
 type ShutdownSignal =
   | NodeJS.Signals
@@ -29,6 +35,12 @@ const shutdown = async (signal: ShutdownSignal, error?: unknown) => {
       signal,
       err: error,
     });
+    captureException(error, {
+      tags: {
+        service_role: 'payment_outbound_worker',
+        signal,
+      },
+    });
   } else {
     logger.info('payment outbound worker shutting down', {
       signal,
@@ -44,6 +56,8 @@ const shutdown = async (signal: ShutdownSignal, error?: unknown) => {
       err: closeError,
     });
   }
+
+  await shutdownObservability();
 
   process.exit(error ? 1 : 0);
 };

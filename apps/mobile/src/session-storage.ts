@@ -1,16 +1,15 @@
-import * as SecureStore from 'expo-secure-store';
-import { Platform } from 'react-native';
+import * as SecureStore from "expo-secure-store";
+import { Platform } from "react-native";
+import type { UserSessionResponse } from "@reward/shared-types/auth";
 
-import type { UserSessionResponse } from '@reward/shared-types';
-
-const USER_SESSION_STORAGE_KEY = 'reward.mobile.user-session';
+const USER_SESSION_STORAGE_KEY = "reward.mobile.user-session";
 
 type StoredUserSession = UserSessionResponse & {
   storedAt: number;
 };
 
 const readBrowserStorage = () => {
-  if (typeof window === 'undefined') {
+  if (typeof window === "undefined") {
     return null;
   }
 
@@ -18,7 +17,7 @@ const readBrowserStorage = () => {
 };
 
 const writeBrowserStorage = (value: string) => {
-  if (typeof window === 'undefined') {
+  if (typeof window === "undefined") {
     return;
   }
 
@@ -26,7 +25,7 @@ const writeBrowserStorage = (value: string) => {
 };
 
 const clearBrowserStorage = () => {
-  if (typeof window === 'undefined') {
+  if (typeof window === "undefined") {
     return;
   }
 
@@ -34,7 +33,7 @@ const clearBrowserStorage = () => {
 };
 
 const readStoredValue = async () => {
-  if (Platform.OS === 'web') {
+  if (Platform.OS === "web") {
     return readBrowserStorage();
   }
 
@@ -46,7 +45,7 @@ const readStoredValue = async () => {
 };
 
 const writeStoredValue = async (value: string) => {
-  if (Platform.OS === 'web') {
+  if (Platform.OS === "web") {
     writeBrowserStorage(value);
     return;
   }
@@ -59,7 +58,7 @@ const writeStoredValue = async (value: string) => {
 };
 
 const clearStoredValue = async () => {
-  if (Platform.OS === 'web') {
+  if (Platform.OS === "web") {
     clearBrowserStorage();
     return;
   }
@@ -81,11 +80,11 @@ export async function readStoredUserSession() {
     const parsed = JSON.parse(raw) as Partial<StoredUserSession> | null;
     if (
       !parsed ||
-      typeof parsed.token !== 'string' ||
-      typeof parsed.expiresAt !== 'number' ||
-      typeof parsed.user?.id !== 'number' ||
-      typeof parsed.user.email !== 'string' ||
-      (parsed.user.role !== 'user' && parsed.user.role !== 'admin')
+      typeof parsed.token !== "string" ||
+      typeof parsed.expiresAt !== "number" ||
+      typeof parsed.user?.id !== "number" ||
+      typeof parsed.user.email !== "string" ||
+      (parsed.user.role !== "user" && parsed.user.role !== "admin")
     ) {
       await clearStoredValue();
       return null;
@@ -96,19 +95,20 @@ export async function readStoredUserSession() {
       email: parsed.user.email,
       role: parsed.user.role,
       emailVerifiedAt:
-        typeof parsed.user.emailVerifiedAt === 'string'
+        typeof parsed.user.emailVerifiedAt === "string"
           ? parsed.user.emailVerifiedAt
           : null,
       phoneVerifiedAt:
-        typeof parsed.user.phoneVerifiedAt === 'string'
+        typeof parsed.user.phoneVerifiedAt === "string"
           ? parsed.user.phoneVerifiedAt
           : null,
-    } satisfies UserSessionResponse['user'];
+    } satisfies UserSessionResponse["user"];
 
     return {
       token: parsed.token,
       expiresAt: parsed.expiresAt,
-      sessionId: typeof parsed.sessionId === 'string' ? parsed.sessionId : undefined,
+      sessionId:
+        typeof parsed.sessionId === "string" ? parsed.sessionId : undefined,
       user: storedUser,
     } satisfies UserSessionResponse;
   } catch {

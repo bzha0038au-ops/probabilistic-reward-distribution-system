@@ -1,7 +1,10 @@
+import { rm } from 'node:fs/promises';
+
 import {
   createBackendEnv,
   createFrontendEnv,
   findFreePort,
+  repoRoot,
   runCommand,
   startService,
   startTestDatabase,
@@ -20,9 +23,9 @@ async function main() {
   const backendPort = await findFreePort();
   const frontendPort = await findFreePort();
 
-  const backendBaseUrl = `http://127.0.0.1:${backendPort}`;
-  const frontendBaseUrl = `http://127.0.0.1:${frontendPort}`;
-  const adminBaseUrl = 'http://127.0.0.1:5173';
+  const backendBaseUrl = `http://localhost:${backendPort}`;
+  const frontendBaseUrl = `http://localhost:${frontendPort}`;
+  const adminBaseUrl = 'http://localhost:5173';
 
   let backend: Awaited<ReturnType<typeof startService>> | null = null;
   let frontend: Awaited<ReturnType<typeof startService>> | null = null;
@@ -55,6 +58,11 @@ async function main() {
       },
     );
 
+    await rm(`${repoRoot}/apps/frontend/.next-dev`, {
+      recursive: true,
+      force: true,
+    });
+
     frontend = await startService(
       'pnpm',
       [
@@ -64,7 +72,7 @@ async function main() {
         'next',
         'dev',
         '--hostname',
-        '127.0.0.1',
+        'localhost',
         '--port',
         String(frontendPort),
       ],

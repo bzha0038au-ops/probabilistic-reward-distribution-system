@@ -13,6 +13,7 @@ import {
   users,
 } from '@reward/database';
 import { client, db } from '../src/db';
+import { DEFAULT_ADMIN_PERMISSION_KEYS } from '../src/modules/admin-permission/definitions';
 import { grantAdminPermission } from '../src/modules/admin-permission/service';
 import { recordAuthEvent } from '../src/modules/audit/service';
 import { executeDraw } from '../src/modules/draw/service';
@@ -56,6 +57,7 @@ const USER_PASSWORD = 'User123!';
 const SEED_VERSION_KEY = 'manual_test.seed_version';
 const SEED_VERSION = '1';
 const MANUAL_PROCESSING_CHANNEL = 'manual_bank_transfer';
+const MANUAL_DEMO_POOL_BALANCE = '100000.00';
 
 type SeedUserSpec = {
   email: string;
@@ -249,7 +251,7 @@ const seedConfig = async () => {
     ),
   ]);
 
-  await setPrizePoolBalance(db, '300.00', {
+  await setPrizePoolBalance(db, MANUAL_DEMO_POOL_BALANCE, {
     entryType: 'manual_seed_pool_set',
     referenceType: 'manual_seed',
   });
@@ -266,8 +268,8 @@ const createAdminProfile = async (userId: number, displayName: string) => {
     .returning();
 
   await Promise.all(
-    ['prizes.manage', 'finance.manage', 'security.manage', 'config.manage'].map(
-      (permission) => grantAdminPermission(admin.id, permission)
+    DEFAULT_ADMIN_PERMISSION_KEYS.map((permission) =>
+      grantAdminPermission(admin.id, permission)
     )
   );
 

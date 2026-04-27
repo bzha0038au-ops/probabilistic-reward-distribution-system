@@ -1,5 +1,5 @@
-import { and, desc, eq } from '@reward/database/orm';
 import Decimal from 'decimal.js';
+import { and, desc, eq } from '@reward/database/orm';
 
 import {
   cryptoChainTransactions,
@@ -11,6 +11,13 @@ import {
   withdrawals,
 } from '@reward/database';
 import { db, type DbTransaction } from '../../db';
+import {
+  conflictError,
+  notFoundError,
+  persistenceError,
+  serviceUnavailableError,
+  unprocessableEntityError,
+} from '../../shared/errors';
 import { toDecimal, toMoneyString } from '../../shared/money';
 import {
   appendFinanceStateMetadata,
@@ -38,16 +45,15 @@ import {
 type CryptoWithdrawAddressRecord = typeof cryptoWithdrawAddresses.$inferSelect;
 type DepositRecord = typeof deposits.$inferSelect;
 type WithdrawalRecord = typeof withdrawals.$inferSelect;
-
 type RecordLike = Record<string, unknown> | null;
 
-type ParsedTokenAmount = {
+export type ParsedTokenAmount = {
   decimal: Decimal;
   walletAmount: string;
   preciseAmount: string;
 };
 
-type CryptoReviewPayload = {
+export type CryptoReviewPayload = {
   adminId?: number | null;
   operatorNote?: string | null;
   processingChannel?: string | null;
@@ -63,7 +69,7 @@ type CryptoReviewPayload = {
 
 const MANUAL_CRYPTO_CHANNEL = 'manual_crypto';
 
-const toRecord = (value: unknown): RecordLike => {
+export const toRecord = (value: unknown): RecordLike => {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return null;
   }
@@ -71,7 +77,7 @@ const toRecord = (value: unknown): RecordLike => {
   return Object.fromEntries(Object.entries(value));
 };
 
-const mergeMetadata = (
+export const mergeMetadata = (
   existing: unknown,
   key: string,
   updates: Record<string, unknown>
@@ -83,22 +89,22 @@ const mergeMetadata = (
   },
 });
 
-const requireString = (
+export const requireString = (
   value: string | null | undefined,
   label: string,
   maxLength: number
 ) => {
   const normalized = normalizeOptionalString(value);
   if (!normalized) {
-    throw new Error(`${label} is required.`);
+    throw unprocessableEntityError(`${label} is required.`);
   }
   if (normalized.length > maxLength) {
-    throw new Error(`${label} is too long.`);
+    throw unprocessableEntityError(`${label} is too long.`);
   }
   return normalized;
 };
 
-const optionalString = (
+export const optionalString = (
   value: string | null | undefined,
   maxLength: number
 ) => {
@@ -107,26 +113,29 @@ const optionalString = (
     return null;
   }
   if (normalized.length > maxLength) {
-    throw new Error('Field is too long.');
+    throw unprocessableEntityError('Field is too long.');
   }
   return normalized;
 };
 
-const parseTokenAmount = (value: string | number, label: string): ParsedTokenAmount => {
+export const parseTokenAmount = (
+  value: string | number,
+  label: string
+): ParsedTokenAmount => {
   let decimal: Decimal;
   try {
     decimal = toDecimal(value);
   } catch {
-    throw new Error(`${label} is invalid.`);
+    throw unprocessableEntityError(`${label} is invalid.`);
   }
 
   if (!decimal.isFinite() || decimal.lte(0)) {
-    throw new Error(`${label} must be greater than 0.`);
+    throw unprocessableEntityError(`${label} must be greater than 0.`);
   }
 
   const decimalPlaces = decimal.decimalPlaces();
   if (decimalPlaces !== null && decimalPlaces > 18) {
-    throw new Error(`${label} supports at most 18 decimal places.`);
+    throw unprocessableEntityError(`${label} supports at most 18 decimal places.`);
   }
 
   return {
@@ -136,29 +145,29 @@ const parseTokenAmount = (value: string | number, label: string): ParsedTokenAmo
   };
 };
 
-const parseOptionalPositiveInteger = (value: unknown) => {
+export const parseOptionalPositiveInteger = (value: unknown) => {
   if (value === null || value === undefined || value === '') {
     return null;
   }
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed < 0) {
-    throw new Error('Confirmations must be a non-negative integer.');
+    throw unprocessableEntityError('Confirmations must be a non-negative integer.');
   }
   return Math.trunc(parsed);
 };
 
-const toDateValue = (value: string | Date | null | undefined) => {
+export const toDateValue = (value: string | Date | null | undefined) => {
   if (!value) {
     return null;
   }
   const parsed = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(parsed.getTime())) {
-    throw new Error('Sent time is invalid.');
+    throw unprocessableEntityError('Sent time is invalid.');
   }
   return parsed;
 };
 
-const serializeDeposit = (deposit: DepositRecord | null) =>
+export const serializeDeposit = (deposit: DepositRecord | null) =>
   deposit
     ? {
         ...deposit,
@@ -166,7 +175,7 @@ const serializeDeposit = (deposit: DepositRecord | null) =>
       }
     : null;
 
-const serializeWithdrawal = (withdrawal: WithdrawalRecord | null) =>
+export const serializeWithdrawal = (withdrawal: WithdrawalRecord | null) =>
   withdrawal
     ? {
         ...withdrawal,
@@ -176,7 +185,7 @@ const serializeWithdrawal = (withdrawal: WithdrawalRecord | null) =>
       }
     : null;
 
-const mapCryptoWithdrawAddressView = (
+export const mapCryptoWithdrawAddressView = (
   payoutMethod: typeof payoutMethods.$inferSelect,
   address: CryptoWithdrawAddressRecord
 ) => ({
@@ -199,6 +208,33 @@ const mapCryptoWithdrawAddressView = (
   createdAt: payoutMethod.createdAt,
   updatedAt: payoutMethod.updatedAt,
 });
+
+export const readCryptoChannelId = (metadata: unknown) => {
+  const cryptoMetadata = toRecord(Reflect.get(toRecord(metadata) ?? {}, 'crypto'));
+  const value = Reflect.get(cryptoMetadata ?? {}, 'channelId');
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+export const readCryptoProcessingChannel = (
+  value: string | null | undefined
+) => optionalString(value, 64) ?? MANUAL_CRYPTO_CHANNEL;
+
+export const readSettlementReference = (
+  review: CryptoReviewPayload,
+  fallbackTxHash: string | null
+) => optionalString(review.settlementReference, 128) ?? fallbackTxHash;
+
+export const readExactAmount = (
+  review: CryptoReviewPayload,
+  fallbackAmount: string | number
+) => {
+  if (review.actualAmount === null || review.actualAmount === undefined) {
+    return parseTokenAmount(String(fallbackAmount), 'Actual amount');
+  }
+
+  return parseTokenAmount(review.actualAmount, 'Actual amount');
+};
 
 const getDepositById = async (depositId: number) => {
   const [deposit] = await db
@@ -322,31 +358,6 @@ const updateWithdrawalSubmittedTxHash = async (
     .where(eq(withdrawals.id, withdrawalId));
 };
 
-const readCryptoChannelId = (metadata: unknown) => {
-  const value = Reflect.get(toRecord(Reflect.get(toRecord(metadata) ?? {}, 'crypto')) ?? {}, 'channelId');
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-};
-
-const readCryptoProcessingChannel = (value: string | null | undefined) =>
-  optionalString(value, 64) ?? MANUAL_CRYPTO_CHANNEL;
-
-const readSettlementReference = (
-  review: CryptoReviewPayload,
-  fallbackTxHash: string | null
-) => optionalString(review.settlementReference, 128) ?? fallbackTxHash;
-
-const readExactAmount = (
-  review: CryptoReviewPayload,
-  fallbackAmount: string | number
-) => {
-  if (review.actualAmount === null || review.actualAmount === undefined) {
-    return parseTokenAmount(String(fallbackAmount), 'Actual amount');
-  }
-
-  return parseTokenAmount(review.actualAmount, 'Actual amount');
-};
-
 export async function listCryptoDepositChannels(activeOnly = true) {
   const query = db
     .select()
@@ -391,7 +402,7 @@ export async function createCryptoDepositChannel(payload: {
     .returning();
 
   if (!created) {
-    throw new Error('Failed to create crypto deposit channel.');
+    throw persistenceError('Failed to create crypto deposit channel.');
   }
 
   await db.transaction(async (tx) => {
@@ -495,7 +506,7 @@ export async function createCryptoWithdrawAddress(payload: {
       .returning();
 
     if (!payoutMethod) {
-      throw new Error('Failed to create crypto payout method.');
+      throw persistenceError('Failed to create crypto payout method.');
     }
 
     const [address] = await tx
@@ -511,7 +522,7 @@ export async function createCryptoWithdrawAddress(payload: {
       .returning();
 
     if (!address) {
-      throw new Error('Failed to create crypto withdrawal address.');
+      throw persistenceError('Failed to create crypto withdrawal address.');
     }
 
     return mapCryptoWithdrawAddressView(payoutMethod, address);
@@ -556,7 +567,7 @@ export async function setDefaultCryptoWithdrawAddress(
       .limit(1);
 
     if (!address) {
-      throw new Error('Crypto withdrawal address not found.');
+      throw persistenceError('Crypto withdrawal address not found.');
     }
 
     return mapCryptoWithdrawAddressView(payoutMethod, address);
@@ -576,12 +587,12 @@ export async function createCryptoDeposit(payload: {
   return db.transaction(async (tx) => {
     const paymentConfig = await getPaymentConfig(tx);
     if (!paymentConfig.depositEnabled) {
-      throw new Error('Deposits are currently disabled.');
+      throw serviceUnavailableError('Deposits are currently disabled.');
     }
 
     const channel = await getCryptoDepositChannelById(tx, payload.channelId, true);
     if (!channel) {
-      throw new Error('Crypto deposit channel not found.');
+      throw notFoundError('Crypto deposit channel not found.');
     }
 
     const txHash = requireString(payload.txHash, 'Transaction hash', 191);
@@ -594,7 +605,7 @@ export async function createCryptoDeposit(payload: {
       .limit(1);
 
     if (existingDepositTx.length > 0) {
-      throw new Error('Transaction hash has already been claimed.');
+      throw conflictError('Transaction hash has already been claimed.');
     }
 
     const existingChainTx = await getCryptoTransactionByHash(tx, txHash);
@@ -603,7 +614,7 @@ export async function createCryptoDeposit(payload: {
       (existingChainTx.consumedByDepositId !== null ||
         existingChainTx.consumedByWithdrawalId !== null)
     ) {
-      throw new Error('Transaction hash has already been claimed.');
+      throw conflictError('Transaction hash has already been claimed.');
     }
 
     const amount = parseTokenAmount(payload.amountClaimed, 'Claimed amount');
@@ -624,7 +635,7 @@ export async function createCryptoDeposit(payload: {
       manualFallbackReason: processing.manualFallbackReason,
       paymentProviderId: channel.providerId ?? processing.providerId,
       paymentOperatingMode: capability.operatingMode,
-      paymentAutomationRequested: capability.automatedExecutionEnabled,
+      paymentAutomationRequested: capability.automatedExecutionRequested,
       paymentAutomationReady: capability.automatedExecutionReady,
       paymentAdapterKey: processing.adapterKey,
       paymentAdapterRegistered: processing.adapterRegistered,
@@ -671,7 +682,7 @@ export async function createCryptoDeposit(payload: {
       .returning();
 
     if (!deposit) {
-      throw new Error('Failed to create crypto deposit.');
+      throw persistenceError('Failed to create crypto deposit.');
     }
 
     if (existingChainTx) {
@@ -761,14 +772,14 @@ export async function confirmCryptoDeposit(
     return null;
   }
   if (deposit.channelType !== 'crypto') {
-    throw new Error('Deposit is not a crypto deposit.');
+    throw conflictError('Deposit is not a crypto deposit.');
   }
 
   const processingChannel = readCryptoProcessingChannel(review.processingChannel);
   const txHashFallback = optionalString(deposit.submittedTxHash, 191);
   const settlementReference = readSettlementReference(review, txHashFallback);
   if (!settlementReference) {
-    throw new Error('Transaction hash is required.');
+    throw unprocessableEntityError('Transaction hash is required.');
   }
 
   await db.transaction(async (tx) => {
@@ -777,7 +788,7 @@ export async function confirmCryptoDeposit(
       (await getCryptoTransactionByHash(tx, settlementReference));
 
     if (!transaction) {
-      throw new Error('Crypto chain transaction not found.');
+      throw notFoundError('Crypto chain transaction not found.');
     }
 
     const channelId = readCryptoChannelId(deposit.metadata);
@@ -790,7 +801,7 @@ export async function confirmCryptoDeposit(
     const confirmations =
       parseOptionalPositiveInteger(review.confirmations) ?? transaction.confirmations ?? 0;
     if (confirmations < minConfirmations) {
-      throw new Error(
+      throw conflictError(
         `At least ${minConfirmations} confirmations are required before crediting this deposit.`
       );
     }
@@ -867,7 +878,7 @@ export async function rejectCryptoDeposit(
     return null;
   }
   if (deposit.channelType !== 'crypto') {
-    throw new Error('Deposit is not a crypto deposit.');
+    throw conflictError('Deposit is not a crypto deposit.');
   }
 
   const processingChannel = readCryptoProcessingChannel(review.processingChannel);
@@ -919,7 +930,7 @@ export async function submitCryptoWithdrawal(
     return null;
   }
   if (withdrawal.channelType !== 'crypto') {
-    throw new Error('Withdrawal is not a crypto withdrawal.');
+    throw conflictError('Withdrawal is not a crypto withdrawal.');
   }
 
   const processingChannel = readCryptoProcessingChannel(review.processingChannel);
@@ -928,7 +939,7 @@ export async function submitCryptoWithdrawal(
     optionalString(withdrawal.submittedTxHash, 191)
   );
   if (!txHash) {
-    throw new Error('Transaction hash is required.');
+    throw unprocessableEntityError('Transaction hash is required.');
   }
 
   await db.transaction(async (tx) => {
@@ -949,7 +960,7 @@ export async function submitCryptoWithdrawal(
       .limit(1);
 
     if (!address) {
-      throw new Error('Crypto withdrawal address not found.');
+      throw notFoundError('Crypto withdrawal address not found.');
     }
 
     const existing = await getCryptoTransactionByHash(tx, txHash);
@@ -973,7 +984,7 @@ export async function submitCryptoWithdrawal(
         existing.consumedByWithdrawalId !== null &&
         existing.consumedByWithdrawalId !== withdrawalId
       ) {
-        throw new Error('Transaction hash has already been assigned to another withdrawal.');
+        throw conflictError('Transaction hash has already been assigned to another withdrawal.');
       }
       await updateCryptoTransaction(tx, existing.id, {
         direction: 'withdrawal',
@@ -1036,7 +1047,7 @@ export async function confirmCryptoWithdrawal(
     return null;
   }
   if (withdrawal.channelType !== 'crypto') {
-    throw new Error('Withdrawal is not a crypto withdrawal.');
+    throw conflictError('Withdrawal is not a crypto withdrawal.');
   }
 
   const processingChannel = readCryptoProcessingChannel(review.processingChannel);
@@ -1045,12 +1056,12 @@ export async function confirmCryptoWithdrawal(
     optionalString(withdrawal.submittedTxHash, 191)
   );
   if (!txHash) {
-    throw new Error('Transaction hash is required.');
+    throw unprocessableEntityError('Transaction hash is required.');
   }
 
   const confirmations = parseOptionalPositiveInteger(review.confirmations);
   if (confirmations === null || confirmations < 1) {
-    throw new Error('At least 1 confirmation is required.');
+    throw unprocessableEntityError('At least 1 confirmation is required.');
   }
 
   await db.transaction(async (tx) => {
@@ -1059,7 +1070,7 @@ export async function confirmCryptoWithdrawal(
       (await getCryptoTransactionByHash(tx, txHash));
 
     if (!transaction) {
-      throw new Error('Crypto chain transaction not found.');
+      throw notFoundError('Crypto chain transaction not found.');
     }
 
     await updateCryptoTransaction(tx, transaction.id, {

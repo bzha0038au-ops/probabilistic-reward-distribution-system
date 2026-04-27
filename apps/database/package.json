@@ -3,6 +3,17 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "files": [
+    "dist",
+    "drizzle",
+    "drizzle.config.ts",
+    "src",
+    "package.json",
+    "tsconfig.build.json",
+    "tsconfig.json",
+    ".env.example",
+    "README.md"
+  ],
   "exports": {
     ".": "./src/index.ts",
     "./schema": "./src/schema.ts",
@@ -19,11 +30,11 @@
   "dependencies": {
     "@opentelemetry/api": "^1.9.1",
     "@reward/shared-types": "workspace:*",
+    "drizzle-kit": "^0.21.1",
     "drizzle-orm": "^0.29.2"
   },
   "devDependencies": {
     "dotenv": "^17.3.1",
-    "drizzle-kit": "^0.21.1",
     "typescript": "^5.3.3"
   }
 }

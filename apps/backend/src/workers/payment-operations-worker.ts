@@ -4,18 +4,18 @@ import { client } from '../db';
 import {
   startPaymentOperationsDispatcher,
   stopPaymentOperationsDispatcher,
-} from '../modules/payment/operations-dispatcher';
-import { getConfig } from '../shared/config';
+} from '../modules/payment/operations';
+import { getConfigView, type AppConfig } from '../shared/config';
 import { logger } from '../shared/logger';
 
-type PaymentOperationsWorkerConfig = ReturnType<typeof getConfig> & {
+type PaymentOperationsWorkerConfig = AppConfig & {
   paymentOperationsEnabled: boolean;
   paymentOperationsIntervalMs: number;
   paymentOperationsTimeoutMinutes: number;
   paymentOperationsBatchSize: number;
 };
 
-const config = getConfig() as PaymentOperationsWorkerConfig;
+const config = getConfigView<PaymentOperationsWorkerConfig>();
 
 type ShutdownSignal =
   | NodeJS.Signals

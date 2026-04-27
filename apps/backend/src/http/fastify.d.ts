@@ -1,5 +1,6 @@
 import 'fastify';
 
+import type { ProjectApiAuth } from '../modules/saas/service';
 import type { AuthenticatedAdmin } from '../shared/admin-session';
 import type { UserSessionPayload } from '../shared/user-session';
 
@@ -13,5 +14,6 @@ declare module 'fastify' {
       verifiedAt: string;
       recoveryCodesRemaining: number;
     };
+    prizeEngineProject?: ProjectApiAuth;
   }
 }

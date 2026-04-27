@@ -1,4 +1,4 @@
-export { getConfig, resetConfig } from './config';
+export { getConfig, getConfigView, resetConfig } from './config';
 export { getPinoLogger, logger, resetLogger } from './logger';
 export { context } from './context';
 export { RequestContextPlugin } from './request-context';
@@ -11,7 +11,8 @@ export * from './admin-session';
 export * from './user-session';
 export * from './money';
 export { validateSessionSecrets } from './session-secret';
-export { getRedis } from './redis';
+export { closeRedis, getRedis } from './redis';
 export { applyAuthFailureDelay } from './auth-delay';
 export { getRuntimeMetadata } from './runtime-metadata';
 export * from './telemetry';
+export * from './notify-telegram';

@@ -25,6 +25,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/reward_test
       POSTGRES_URL: postgresql://postgres:postgres@127.0.0.1:5432/reward_test
+      TEST_DATABASE_MODE: external
       ADMIN_JWT_SECRET: ci-admin-secret-1234567890abcdefghij
       USER_JWT_SECRET: ci-user-secret-1234567890abcdefghij
       AUTH_SECRET: ci-web-secret-1234567890abcdefghij
@@ -50,6 +51,8 @@ jobs:
         run: pnpm --dir apps/database db:migrate
       - name: Check
         run: pnpm check
+      - name: Mobile Check
+        run: pnpm --dir apps/mobile check
       - name: Lint
         run: pnpm lint
       - name: Build

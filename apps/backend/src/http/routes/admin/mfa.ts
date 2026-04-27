@@ -1,4 +1,5 @@
 import type { AppInstance } from "../types";
+import { API_ERROR_CODES } from "@reward/shared-types/api";
 
 import { z } from "zod";
 
@@ -10,8 +11,9 @@ import {
   regenerateAdminRecoveryCodes,
 } from "../../../modules/admin-mfa/service";
 import { recordAdminAction } from "../../../modules/admin/audit";
+import { withAdminAuditContext } from "../../admin-audit";
 import { parseSchema } from "../../../shared/validation";
-import { sendError, sendSuccess } from "../../respond";
+import { sendError, sendErrorForException, sendSuccess } from "../../respond";
 import { adminRateLimit, enforceAdminLimit, toObject } from "./common";
 
 const AdminMfaVerifySchema = z.object({
@@ -30,7 +32,13 @@ export async function registerAdminMfaRoutes(protectedRoutes: AppInstance) {
     async (request, reply) => {
       const admin = request.admin;
       if (!admin) {
-        return sendError(reply, 401, "Unauthorized");
+        return sendError(
+          reply,
+          401,
+          "Unauthorized",
+          undefined,
+          API_ERROR_CODES.UNAUTHORIZED,
+        );
       }
 
       const status = await getAdminMfaStatus({ adminId: admin.adminId });
@@ -44,11 +52,23 @@ export async function registerAdminMfaRoutes(protectedRoutes: AppInstance) {
     async (request, reply) => {
       const admin = request.admin;
       if (!admin) {
-        return sendError(reply, 401, "Unauthorized");
+        return sendError(
+          reply,
+          401,
+          "Unauthorized",
+          undefined,
+          API_ERROR_CODES.UNAUTHORIZED,
+        );
       }
 
       if (admin.mfaEnabled) {
-        return sendError(reply, 409, "Admin MFA is already enabled.");
+        return sendError(
+          reply,
+          409,
+          "Admin MFA is already enabled.",
+          undefined,
+          API_ERROR_CODES.ADMIN_MFA_ALREADY_ENABLED,
+        );
       }
 
       const enrollment = await createAdminMfaEnrollment({
@@ -67,12 +87,24 @@ export async function registerAdminMfaRoutes(protectedRoutes: AppInstance) {
     async (request, reply) => {
       const admin = request.admin;
       if (!admin) {
-        return sendError(reply, 401, "Unauthorized");
+        return sendError(
+          reply,
+          401,
+          "Unauthorized",
+          undefined,
+          API_ERROR_CODES.UNAUTHORIZED,
+        );
       }
 
       const parsed = parseSchema(AdminMfaVerifySchema, toObject(request.body));
       if (!parsed.isValid) {
-        return sendError(reply, 400, "Invalid request.", parsed.errors);
+        return sendError(
+          reply,
+          400,
+          "Invalid request.",
+          parsed.errors,
+          API_ERROR_CODES.INVALID_REQUEST,
+        );
       }
 
       try {
@@ -87,13 +119,12 @@ export async function registerAdminMfaRoutes(protectedRoutes: AppInstance) {
           totpCode: parsed.data.totpCode,
         });
 
-        await recordAdminAction({
+        await recordAdminAction(withAdminAuditContext(request, {
           adminId: admin.adminId,
           action: "admin_mfa_enable",
           targetType: "admin",
           targetId: admin.adminId,
-          ip: request.ip,
-        });
+        }));
 
         return sendSuccess(reply, {
           token: result.token,
@@ -103,9 +134,7 @@ export async function registerAdminMfaRoutes(protectedRoutes: AppInstance) {
           recoveryCodesRemaining: result.recoveryCodesRemaining,
         });
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Failed to enable MFA.";
-        return sendError(reply, 422, message);
+        return sendErrorForException(reply, error, "Failed to enable MFA.");
       }
     },
   );
@@ -116,12 +145,24 @@ export async function registerAdminMfaRoutes(protectedRoutes: AppInstance) {
     async (request, reply) => {
       const admin = request.admin;
       if (!admin) {
-        return sendError(reply, 401, "Unauthorized");
+        return sendError(
+          reply,
+          401,
+          "Unauthorized",
+          undefined,
+          API_ERROR_CODES.UNAUTHORIZED,
+        );
       }
 
       const parsed = parseSchema(AdminMfaCodeSchema, toObject(request.body));
       if (!parsed.isValid || !parsed.data.totpCode) {
-        return sendError(reply, 400, "Admin MFA code required.");
+        return sendError(
+          reply,
+          400,
+          "Admin MFA code required.",
+          undefined,
+          API_ERROR_CODES.ADMIN_MFA_CODE_REQUIRED,
+        );
       }
 
       try {
@@ -134,17 +175,16 @@ export async function registerAdminMfaRoutes(protectedRoutes: AppInstance) {
           totpCode: parsed.data.totpCode,
         });
 
-        await recordAdminAction({
+        await recordAdminAction(withAdminAuditContext(request, {
           adminId: admin.adminId,
           action: "admin_mfa_recovery_codes_regenerated",
           targetType: "admin",
           targetId: admin.adminId,
-          ip: request.ip,
           metadata: {
             verificationMethod: result.method,
             recoveryCodesRemaining: result.recoveryCodesRemaining,
           },
-        });
+        }));
 
         return sendSuccess(reply, {
           recoveryCodes: result.recoveryCodes,
@@ -152,11 +192,11 @@ export async function registerAdminMfaRoutes(protectedRoutes: AppInstance) {
           recoveryCodesGeneratedAt: result.recoveryCodesGeneratedAt,
         });
       } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Failed to regenerate recovery codes.";
-        return sendError(reply, 422, message);
+        return sendErrorForException(
+          reply,
+          error,
+          "Failed to regenerate recovery codes.",
+        );
       }
     },
   );
@@ -167,12 +207,24 @@ export async function registerAdminMfaRoutes(protectedRoutes: AppInstance) {
     async (request, reply) => {
       const admin = request.admin;
       if (!admin) {
-        return sendError(reply, 401, "Unauthorized");
+        return sendError(
+          reply,
+          401,
+          "Unauthorized",
+          undefined,
+          API_ERROR_CODES.UNAUTHORIZED,
+        );
       }
 
       const parsed = parseSchema(AdminMfaCodeSchema, toObject(request.body));
       if (!parsed.isValid) {
-        return sendError(reply, 400, "Invalid request.", parsed.errors);
+        return sendError(
+          reply,
+          400,
+          "Invalid request.",
+          parsed.errors,
+          API_ERROR_CODES.INVALID_REQUEST,
+        );
       }
 
       try {
@@ -187,7 +239,7 @@ export async function registerAdminMfaRoutes(protectedRoutes: AppInstance) {
           totpCode: parsed.data.totpCode ?? null,
         });
 
-        await recordAdminAction({
+        await recordAdminAction(withAdminAuditContext(request, {
           adminId: admin.adminId,
           action:
             result.method === "break_glass"
@@ -195,11 +247,10 @@ export async function registerAdminMfaRoutes(protectedRoutes: AppInstance) {
               : "admin_mfa_disabled",
           targetType: "admin",
           targetId: admin.adminId,
-          ip: request.ip,
           metadata: {
             verificationMethod: result.method,
           },
-        });
+        }));
 
         return sendSuccess(reply, {
           token: result.token,
@@ -207,9 +258,7 @@ export async function registerAdminMfaRoutes(protectedRoutes: AppInstance) {
           mfaEnabled: false,
         });
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Failed to disable MFA.";
-        return sendError(reply, 422, message);
+        return sendErrorForException(reply, error, "Failed to disable MFA.");
       }
     },
   );

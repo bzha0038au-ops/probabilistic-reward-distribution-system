@@ -1,0 +1,222 @@
+import { StyleSheet } from 'react-native';
+
+import { mobileFeedbackTheme, mobilePalette as palette } from './theme';
+
+export const mobileStyles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: palette.background,
+  },
+  container: {
+    minHeight: '100%',
+    paddingHorizontal: 20,
+    paddingVertical: 28,
+    gap: 18,
+  },
+  bootSplash: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    paddingHorizontal: 24,
+  },
+  bootTitle: {
+    color: palette.text,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  bootSubtitle: {
+    color: palette.textMuted,
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  hero: {
+    gap: 10,
+  },
+  kicker: {
+    color: palette.accent,
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  title: {
+    color: palette.text,
+    fontSize: 30,
+    fontWeight: '800',
+    lineHeight: 34,
+  },
+  subtitle: {
+    color: palette.textMuted,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  endpoint: {
+    color: palette.accentMuted,
+    fontSize: 12,
+  },
+  successText: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: mobileFeedbackTheme.success.borderColor,
+    backgroundColor: mobileFeedbackTheme.success.backgroundColor,
+    color: mobileFeedbackTheme.success.accentColor,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  errorText: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: mobileFeedbackTheme.danger.borderColor,
+    backgroundColor: mobileFeedbackTheme.danger.backgroundColor,
+    color: mobileFeedbackTheme.danger.accentColor,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  appStack: {
+    gap: 18,
+  },
+  field: {
+    gap: 8,
+  },
+  fieldLabel: {
+    color: palette.text,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  input: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.input,
+    color: palette.text,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    fontSize: 15,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  badge: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.panelMuted,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  badgeSuccess: {
+    borderColor: mobileFeedbackTheme.success.borderColor,
+    backgroundColor: mobileFeedbackTheme.success.backgroundColor,
+  },
+  badgeWarning: {
+    borderColor: mobileFeedbackTheme.warning.borderColor,
+    backgroundColor: mobileFeedbackTheme.warning.backgroundColor,
+  },
+  badgeMuted: {
+    backgroundColor: palette.input,
+  },
+  badgeText: {
+    color: palette.text,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  inlineActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  balanceLabel: {
+    color: palette.textMuted,
+    fontSize: 13,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  balanceValue: {
+    color: palette.text,
+    fontSize: 36,
+    fontWeight: '800',
+  },
+  loaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  loaderText: {
+    color: palette.textMuted,
+    fontSize: 14,
+  },
+  gachaMetaCard: {
+    gap: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.panelMuted,
+    padding: 14,
+  },
+  gachaMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  gachaMetaLabel: {
+    color: palette.textMuted,
+    fontSize: 13,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  gachaMetaValue: {
+    color: palette.text,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  gachaHint: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.panelMuted,
+    color: palette.textMuted,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  routeSwitcher: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  routeSummaryRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  routeSummaryCard: {
+    flex: 1,
+    minWidth: 130,
+    gap: 4,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.panelMuted,
+    padding: 12,
+  },
+  routeSummaryLabel: {
+    color: palette.textMuted,
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  routeSummaryValue: {
+    color: palette.text,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+});

@@ -17,20 +17,15 @@ const {
   assertNotificationChannelAvailable: vi.fn(),
   assertAutomatedPaymentModeSupported: vi.fn(() => ({
     operatingMode: 'manual_review',
+    automatedExecutionRequested: false,
+    automatedModeOptIn: false,
     automatedExecutionEnabled: false,
-    automatedExecutionReady: false,
-    registeredAdapterKeys: ['manual_review'],
-    implementedAutomatedAdapters: [],
-    missingCapabilities: [
-      'outbound_gateway_execution',
-      'payment_webhook_entrypoint',
-      'payment_webhook_signature_verification',
-      'idempotent_retry_handling',
-      'automated_reconciliation',
-      'compensation_and_recovery',
-    ],
+    automatedExecutionReady: true,
+    registeredAdapterKeys: ['manual_review', 'stripe'],
+    implementedAutomatedAdapters: ['stripe'],
+    missingCapabilities: [],
   })),
-  client: vi.fn(async () => [{ ok: 1 }]),
+  client: vi.fn(async (): Promise<unknown[]> => [{ ok: 1 }]),
   config: {
     nodeEnv: 'test' as const,
     logLevel: 'info' as const,
@@ -40,23 +35,25 @@ const {
     observabilityRelease: 'dev',
     observabilityCommitSha: 'unknown',
     paymentOperatingMode: 'manual_review' as 'manual_review' | 'automated',
+    paymentAutomatedModeOptIn: false,
+    saasBillingWorkerEnabled: true,
+    saasBillingWorkerIntervalMs: 5_000,
+    saasBillingWebhookBatchSize: 25,
+    saasBillingWebhookLockTimeoutMs: 120_000,
+    saasBillingAutomationEnabled: true,
+    saasBillingAutomationBatchSize: 100,
   },
   getNotificationDeliverySummary: vi.fn(),
   getNotificationProviderStatus: vi.fn(),
   getPaymentCapabilitySummary: vi.fn(() => ({
     operatingMode: 'manual_review',
+    automatedExecutionRequested: false,
+    automatedModeOptIn: false,
     automatedExecutionEnabled: false,
-    automatedExecutionReady: false,
-    registeredAdapterKeys: ['manual_review'],
-    implementedAutomatedAdapters: [],
-    missingCapabilities: [
-      'outbound_gateway_execution',
-      'payment_webhook_entrypoint',
-      'payment_webhook_signature_verification',
-      'idempotent_retry_handling',
-      'automated_reconciliation',
-      'compensation_and_recovery',
-    ],
+    automatedExecutionReady: true,
+    registeredAdapterKeys: ['manual_review', 'stripe'],
+    implementedAutomatedAdapters: ['stripe'],
+    missingCapabilities: [],
   })),
   getRedis: vi.fn(),
   getRuntimeMetadata: vi.fn(() => ({
@@ -130,6 +127,10 @@ vi.mock('../modules/payment/service', () => ({
 import {
   buildLivenessReport,
   buildReadinessReport,
+  recordPaymentOutboundIdempotencyConflict,
+  recordPaymentWebhookSignatureVerification,
+  recordStripeApiFailure,
+  recordStripeApiRequest,
   refreshOperationalMetrics,
   registerHttpMetricsHooks,
   renderMetrics,
@@ -147,28 +148,28 @@ describe('observability', () => {
     config.observabilityRelease = 'dev';
     config.observabilityCommitSha = 'unknown';
     config.paymentOperatingMode = 'manual_review';
+    config.paymentAutomatedModeOptIn = false;
+    config.saasBillingWorkerEnabled = true;
+    config.saasBillingWorkerIntervalMs = 5_000;
+    config.saasBillingWebhookBatchSize = 25;
+    config.saasBillingWebhookLockTimeoutMs = 120_000;
+    config.saasBillingAutomationEnabled = true;
+    config.saasBillingAutomationBatchSize = 100;
     getPaymentCapabilitySummary.mockImplementation(() => ({
       operatingMode: config.paymentOperatingMode,
-      automatedExecutionEnabled: config.paymentOperatingMode === 'automated',
-      automatedExecutionReady: false,
-      registeredAdapterKeys: ['manual_review'],
-      implementedAutomatedAdapters: [],
-      missingCapabilities: [
-        'outbound_gateway_execution',
-        'payment_webhook_entrypoint',
-        'payment_webhook_signature_verification',
-        'idempotent_retry_handling',
-        'automated_reconciliation',
-        'compensation_and_recovery',
-      ],
+      automatedExecutionRequested: config.paymentOperatingMode === 'automated',
+      automatedModeOptIn: config.paymentAutomatedModeOptIn,
+      automatedExecutionEnabled:
+        config.paymentOperatingMode === 'automated' &&
+        config.paymentAutomatedModeOptIn,
+      automatedExecutionReady: true,
+      registeredAdapterKeys: ['manual_review', 'stripe'],
+      implementedAutomatedAdapters: ['stripe'],
+      missingCapabilities: [],
     }));
-    assertAutomatedPaymentModeSupported.mockImplementation(() => {
-      if (config.paymentOperatingMode === 'automated') {
-        throw new Error('PAYMENT_OPERATING_MODE=automated is not supported yet.');
-      }
-
-      return getPaymentCapabilitySummary();
-    });
+    assertAutomatedPaymentModeSupported.mockImplementation(() =>
+      getPaymentCapabilitySummary()
+    );
     client.mockResolvedValue([{ ok: 1 }]);
     redisPing.mockResolvedValue('PONG');
     getRedis.mockReturnValue({
@@ -223,7 +224,9 @@ describe('observability', () => {
           required: false,
           details: expect.objectContaining({
             operatingMode: 'manual_review',
-            automatedExecutionReady: false,
+            automatedExecutionRequested: false,
+            automatedModeOptIn: false,
+            automatedExecutionReady: true,
           }),
         }),
       ])
@@ -274,21 +277,25 @@ describe('observability', () => {
     );
   });
 
-  it('marks readiness as not_ready when automated payment mode is requested', async () => {
+  it('marks readiness payment automation as up when automated mode is requested and the backend is ready', async () => {
     config.paymentOperatingMode = 'automated';
+    config.paymentAutomatedModeOptIn = true;
 
     const report = await buildReadinessReport();
 
-    expect(report.status).toBe('not_ready');
+    expect(report.status).toBe('ready');
     expect(report.checks).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           name: 'payment_automation',
-          status: 'down',
+          status: 'up',
           required: true,
-          error: expect.stringContaining(
-            'PAYMENT_OPERATING_MODE=automated is not supported yet.'
-          ),
+          details: expect.objectContaining({
+            operatingMode: 'automated',
+            automatedExecutionRequested: true,
+            automatedModeOptIn: true,
+            automatedExecutionReady: true,
+          }),
         }),
       ])
     );
@@ -308,6 +315,63 @@ describe('observability', () => {
         smsProvider: 'mock',
       },
     });
+    client
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          provider: 'stripe',
+          processingStatus: 'pending',
+          signatureStatus: 'verified',
+          count: 2,
+          oldestPendingAt: new Date(Date.now() - 60_000),
+        },
+        {
+          provider: 'stripe',
+          processingStatus: 'failed',
+          signatureStatus: 'failed',
+          count: 1,
+          oldestPendingAt: null,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          provider: 'stripe',
+          requiresManualReview: true,
+          count: 4,
+          oldestDetectedAt: new Date(Date.now() - 120_000),
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          sendStatus: 'unknown',
+          errorCode: 'stripe_rate_limit',
+          count: 2,
+          oldestRetryAt: new Date(Date.now() - 90_000),
+        },
+        {
+          sendStatus: 'sent',
+          errorCode: 'none',
+          count: 8,
+          oldestRetryAt: null,
+        },
+      ])
+      .mockResolvedValueOnce([
+        { status: 'paid', count: 2 },
+        { status: 'failed', count: 1 },
+      ])
+      .mockResolvedValueOnce([
+        {
+          status: 'pending',
+          count: 3,
+          oldestReadyAt: new Date(Date.now() - 45_000),
+        },
+        {
+          status: 'processed',
+          count: 10,
+          oldestReadyAt: null,
+        },
+      ])
+      .mockResolvedValueOnce([{ count: 1 }]);
 
     await refreshOperationalMetrics();
 
@@ -317,6 +381,48 @@ describe('observability', () => {
     expect(metrics).toContain('status="pending"');
     expect(metrics).toContain('status="failed"');
     expect(metrics).toContain('reward_backend_auth_notification_oldest_pending_age_seconds');
+    expect(metrics).toContain('reward_backend_payment_webhook_events_total');
+    expect(metrics).toContain('reward_backend_payment_webhook_oldest_pending_age_seconds');
+    expect(metrics).toContain('reward_backend_payment_reconciliation_open_issues_total');
+    expect(metrics).toContain('reward_backend_payment_reconciliation_oldest_open_issue_age_seconds');
+    expect(metrics).toContain('reward_backend_payment_outbound_requests_total');
+    expect(metrics).toContain('reward_backend_payment_outbound_oldest_retry_age_seconds');
+    expect(metrics).toContain('reward_backend_saas_billing_runs_total');
+    expect(metrics).toContain('reward_backend_saas_webhook_events_total');
+    expect(metrics).toContain('reward_backend_saas_webhook_oldest_ready_age_seconds');
+    expect(metrics).toContain('reward_backend_saas_webhook_retry_exhausted_total');
+  });
+
+  it('records payment runtime counters for Prometheus alerts', async () => {
+    recordPaymentWebhookSignatureVerification({
+      provider: 'stripe',
+      status: 'failed',
+      reason: 'signature_mismatch',
+    });
+    recordPaymentOutboundIdempotencyConflict({
+      provider: 'stripe',
+      action: 'create_deposit_order',
+      reason: 'payload_mismatch',
+    });
+    recordStripeApiRequest({
+      surface: 'saas',
+      operation: 'invoices.retrieve',
+      outcome: 'failure',
+      statusFamily: '5xx',
+    });
+    recordStripeApiFailure({
+      surface: 'saas',
+      operation: 'invoices.retrieve',
+      reason: 'server_error',
+    });
+
+    const metrics = await renderMetrics();
+
+    expect(metrics).toContain('reward_backend_payment_webhook_signature_verifications_total');
+    expect(metrics).toContain('reason="signature_mismatch"');
+    expect(metrics).toContain('reward_backend_payment_outbound_idempotency_conflicts_total');
+    expect(metrics).toContain('reward_backend_stripe_api_requests_total');
+    expect(metrics).toContain('reward_backend_stripe_api_failures_total');
   });
 
   it('records per-route HTTP metrics', async () => {

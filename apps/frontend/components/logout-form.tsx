@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 
 type LogoutResponse =
   | { ok: true; redirectTo: string }
-  | { ok: false; error: { message: string } };
+  | { ok: false; error: { message: string; code?: string } };
 
 export function LogoutForm({ label }: { label: string }) {
   const [pending, setPending] = useState(false);

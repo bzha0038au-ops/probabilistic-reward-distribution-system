@@ -1,4 +1,5 @@
 import convict from 'convict';
+import { internalInvariantError } from './errors';
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -16,8 +17,13 @@ export type AppConfig = {
   otelExporterOtlpEndpoint: string;
   otelExporterOtlpHeaders: string;
   otelTraceSampleRatio: number;
+  telegramBotToken: string;
+  telegramPageChatId: string;
+  telegramTicketChatId: string;
+  telegramDigestChatId: string;
   observabilityWithdrawStuckThresholdMinutes: number;
   paymentOperatingMode: 'manual_review' | 'automated';
+  paymentAutomatedModeOptIn: boolean;
   paymentReconciliationEnabled: boolean;
   paymentReconciliationIntervalMs: number;
   paymentReconciliationLookbackMinutes: number;
@@ -34,6 +40,12 @@ export type AppConfig = {
   paymentOutboundBatchSize: number;
   paymentOutboundLockTimeoutMs: number;
   paymentOutboundUnknownRetryDelayMs: number;
+  saasBillingWorkerEnabled: boolean;
+  saasBillingWorkerIntervalMs: number;
+  saasBillingWebhookBatchSize: number;
+  saasBillingWebhookLockTimeoutMs: number;
+  saasBillingAutomationEnabled: boolean;
+  saasBillingAutomationBatchSize: number;
   webBaseUrl: string;
   adminBaseUrl: string;
   port: number;
@@ -91,6 +103,31 @@ export type AppConfig = {
 };
 
 let cachedConfig: AppConfig | null = null;
+
+const configViewHandler: ProxyHandler<AppConfig> = {
+  get(_target, property) {
+    return getConfig()[property as keyof AppConfig];
+  },
+  has(_target, property) {
+    return property in getConfig();
+  },
+  ownKeys() {
+    return Reflect.ownKeys(getConfig());
+  },
+  getOwnPropertyDescriptor(_target, property) {
+    const descriptor = Object.getOwnPropertyDescriptor(getConfig(), property);
+    if (!descriptor) {
+      return undefined;
+    }
+
+    return {
+      configurable: true,
+      enumerable: descriptor.enumerable ?? true,
+      writable: false,
+      value: getConfig()[property as keyof AppConfig],
+    };
+  },
+};
 
 const schema = {
   databaseUrl: {
@@ -171,6 +208,30 @@ const schema = {
     default: 1,
     env: 'OTEL_TRACE_SAMPLE_RATIO',
   },
+  telegramBotToken: {
+    doc: 'Optional Telegram bot token used by the internal notification relay routes',
+    format: String,
+    default: '',
+    env: 'TELEGRAM_BOT_TOKEN',
+  },
+  telegramPageChatId: {
+    doc: 'Telegram chat id for paging and urgent operational alerts',
+    format: String,
+    default: '',
+    env: 'TELEGRAM_PAGE_CHAT_ID',
+  },
+  telegramTicketChatId: {
+    doc: 'Telegram chat id for ticket level operational alerts',
+    format: String,
+    default: '',
+    env: 'TELEGRAM_TICKET_CHAT_ID',
+  },
+  telegramDigestChatId: {
+    doc: 'Telegram chat id for low priority digest style operational alerts',
+    format: String,
+    default: '',
+    env: 'TELEGRAM_DIGEST_CHAT_ID',
+  },
   observabilityWithdrawStuckThresholdMinutes: {
     doc: 'Age in minutes after which requested, approved, provider_submitted, or provider_processing withdrawals are considered stuck',
     format: 'int',
@@ -178,10 +239,16 @@ const schema = {
     env: 'OBSERVABILITY_WITHDRAW_STUCK_THRESHOLD_MINUTES',
   },
   paymentOperatingMode: {
-    doc: 'Keep finance orders on manual review; automated mode is reserved and rejected until the full payment execution loop exists',
+    doc: 'Choose between manual finance review and the automated payment execution path backed by registered adapters and workers',
     format: ['manual_review', 'automated'],
     default: 'manual_review',
     env: 'PAYMENT_OPERATING_MODE',
+  },
+  paymentAutomatedModeOptIn: {
+    doc: 'Require an explicit runtime opt-in before PAYMENT_OPERATING_MODE=automated can execute real payment automation',
+    format: Boolean,
+    default: false,
+    env: 'PAYMENT_AUTOMATED_MODE_OPT_IN',
   },
   paymentReconciliationEnabled: {
     doc: 'Enable scheduled provider reconciliation jobs',
@@ -278,6 +345,42 @@ const schema = {
     format: 'int',
     default: 30_000,
     env: 'PAYMENT_OUTBOUND_UNKNOWN_RETRY_DELAY_MS',
+  },
+  saasBillingWorkerEnabled: {
+    doc: 'Enable the dedicated B2B SaaS billing worker',
+    format: Boolean,
+    default: true,
+    env: 'SAAS_BILLING_WORKER_ENABLED',
+  },
+  saasBillingWorkerIntervalMs: {
+    doc: 'Interval in ms between SaaS billing worker cycles',
+    format: 'int',
+    default: 5_000,
+    env: 'SAAS_BILLING_WORKER_INTERVAL_MS',
+  },
+  saasBillingWebhookBatchSize: {
+    doc: 'Maximum queued SaaS Stripe webhook events processed per worker cycle',
+    format: 'int',
+    default: 25,
+    env: 'SAAS_BILLING_WEBHOOK_BATCH_SIZE',
+  },
+  saasBillingWebhookLockTimeoutMs: {
+    doc: 'Time in ms before an in-flight SaaS Stripe webhook event can be reclaimed',
+    format: 'int',
+    default: 120_000,
+    env: 'SAAS_BILLING_WEBHOOK_LOCK_TIMEOUT_MS',
+  },
+  saasBillingAutomationEnabled: {
+    doc: 'Enable automatic prior-month billing close for billable SaaS tenants',
+    format: Boolean,
+    default: true,
+    env: 'SAAS_BILLING_AUTOMATION_ENABLED',
+  },
+  saasBillingAutomationBatchSize: {
+    doc: 'Maximum auto-billable SaaS tenants processed per worker cycle',
+    format: 'int',
+    default: 100,
+    env: 'SAAS_BILLING_AUTOMATION_BATCH_SIZE',
   },
   webBaseUrl: {
     doc: 'Web frontend base URL',
@@ -617,7 +720,7 @@ export function getConfig(): AppConfig {
 
   const properties = config.getProperties() as AppConfig;
   if (!properties.databaseUrl) {
-    throw new Error('DATABASE_URL or POSTGRES_URL is not set');
+    throw internalInvariantError('DATABASE_URL or POSTGRES_URL is not set');
   }
 
   cachedConfig = properties;
@@ -627,4 +730,8 @@ export function getConfig(): AppConfig {
 
 export function resetConfig() {
   cachedConfig = null;
+}
+
+export function getConfigView<T extends AppConfig = AppConfig>() {
+  return new Proxy({} as AppConfig, configViewHandler) as T;
 }

@@ -5,6 +5,9 @@
 These values must be identical for auth/session verification to work:
 
 - `ADMIN_JWT_SECRET` (backend + admin console)
+- `ADMIN_JWT_SECRET_PREVIOUS` (backend + admin console when set for rotation)
+- `USER_JWT_SECRET` (backend + web app)
+- `USER_JWT_SECRET_PREVIOUS` (backend + web app when set for rotation)
 
 Production containers also support `<NAME>_FILE` counterparts. The runtime
 entrypoint resolves those secret-file paths into the expected environment
@@ -14,7 +17,9 @@ variables before the app starts.
 
 - `DATABASE_URL` / `POSTGRES_URL` (required)
 - `ADMIN_JWT_SECRET` (required)
+- `ADMIN_JWT_SECRET_PREVIOUS` (optional, enables smooth rotation verification)
 - `USER_JWT_SECRET` (required)
+- `USER_JWT_SECRET_PREVIOUS` (optional, enables smooth rotation verification)
 - The same backend env file is used by both the API process and the
   auth-notification worker process.
 - `ADMIN_MFA_ENCRYPTION_SECRET` (required in production; must differ from JWT/web secrets)
@@ -22,15 +27,23 @@ variables before the app starts.
 - `DRAW_COST` (optional seed value for `system_config.draw_cost`)
 - `DRAW_POOL_CACHE_TTL_SECONDS` (optional, probability pool cache TTL; `0` disables)
 - `REDIS_URL` (optional, enables shared rate limiting + probability pool cache)
-- `PAYMENT_OPERATING_MODE` (keep `manual_review`; `automated` is reserved and
-  intentionally rejected at startup until the backend owns outbound gateway
-  execution, signed payment callbacks, idempotent retries, and
-  recovery/compensation end to end)
+- `PAYMENT_OPERATING_MODE` (defaults to `manual_review`; only set
+  `automated` after an explicit operational approval)
+- `PAYMENT_AUTOMATED_MODE_OPT_IN` (defaults to `false`; automated execution is
+  only allowed when both this flag is `true` and
+  `PAYMENT_OPERATING_MODE=automated`)
 - `PAYMENT_RECONCILIATION_ENABLED`
 - `PAYMENT_RECONCILIATION_INTERVAL_MS`
 - `PAYMENT_RECONCILIATION_LOOKBACK_MINUTES`
 - `PAYMENT_RECONCILIATION_PENDING_TIMEOUT_MINUTES`
 - `PAYMENT_RECONCILIATION_MAX_ORDERS_PER_PROVIDER`
+- `PAYMENT_PROVIDER_SECRET_REF_DIR` (optional mounted root for
+  `payment_providers.config.secretRefs.*`; a ref like
+  `sm/payment/stripe/api-key` resolves to
+  `$PAYMENT_PROVIDER_SECRET_REF_DIR/sm/payment/stripe/api-key`)
+- `PAYMENT_PROVIDER_SECRET_REF__<NORMALIZED_REF>` (optional env override for an
+  individual logical payment secret ref; e.g.
+  `PAYMENT_PROVIDER_SECRET_REF__SM_PAYMENT_STRIPE_API_KEY`)
 - `AUTH_SMTP_HOST`, `AUTH_SMTP_PORT`, `AUTH_SMTP_SECURE`, `AUTH_SMTP_USER`,
   `AUTH_SMTP_PASS`, `AUTH_EMAIL_FROM` (required in production for password reset,
   email verification, and anomalous-login email delivery)
@@ -57,11 +70,14 @@ variables before the app starts.
 ## Web (`apps/frontend/.env`)
 
 - `AUTH_SECRET` (required, frontend-only)
+- `USER_JWT_SECRET` (required, must match backend)
+- `USER_JWT_SECRET_PREVIOUS` (optional, must match backend when set for rotation)
 - `API_BASE_URL` (server-side API base URL)
 
 ## Admin (`apps/admin/.env`)
 
 - `ADMIN_JWT_SECRET` (required, must match backend)
+- `ADMIN_JWT_SECRET_PREVIOUS` (optional, must match backend when set for rotation)
 - `API_BASE_URL` (backend base URL)
 
 ## Container Deploy Env Files (`deploy/env/*.env`)
@@ -72,9 +88,9 @@ variables before the app starts.
   PostgreSQL container that ships in `docker-compose.prod.yml`.
 - `deploy/env/frontend.env.example` is the contract for the Next.js container.
 - `deploy/env/admin.env.example` is the contract for the SvelteKit admin container.
-- `deploy/env/ops.env.example` is the local-cron contract for
-  `deploy/scripts/backup-runner.sh` when you are not using the GitHub Actions
-  scheduler.
+- `deploy/env/ops.env.example` is the local-cron and repo-ops contract for
+  `deploy/scripts/backup-runner.sh` plus the root-level `pnpm ops:*` commands
+  when you are not using the GitHub Actions scheduler.
 - `deploy/env/compose.env.example` controls the public ports, domains, TLS
   email, HSTS age, image names, and `COMPOSE_PROJECT_NAME`.
 - On a deployed host, keep runtime files under:
@@ -94,22 +110,46 @@ environment:
 - secret: `BACKUP_ENCRYPTION_PASSPHRASE`
 - secret: `OFFSITE_STORAGE_URI`
 - secret: `BACKUP_ALERT_WEBHOOK_URL`
+- secret: `BACKUP_ARCHIVE_S3_URI` (optional, readable S3 copy for daily verification)
+- secret: `BACKUP_ARCHIVE_CROSS_REGION_S3_URI` (optional, manual cross-region replica prefix)
+- secret: `BACKUP_ARCHIVE_S3_KMS_KEY_ID` (optional, for KMS-backed S3 copies)
+- secret: `DEPLOY_TG_BOT_TOKEN`
+- secret: `DEPLOY_TG_PAGE_CHAT_ID`
+- secret: `DEPLOY_TG_DIGEST_CHAT_ID`
 - variable: `LOCAL_BACKUP_RETENTION_DAYS`
 - variable: `OFFSITE_BACKUP_RETENTION_DAYS`
+- variable: `BACKUP_ARCHIVE_S3_SSE` (optional, defaults to `AES256`)
+- variable: `BACKUP_ARCHIVE_S3_STORAGE_CLASS` (optional)
 - variable: `PRIMARY_ONCALL`
 - variable: `SECONDARY_ONCALL`
 - variable: `BACKUP_OWNER`
 - variable: `RESTORE_APPROVER`
 - variable: `RELEASE_APPROVER`
 
+The daily backup verification workflow expects these additional GitHub
+environment values:
+
+- secret: `AWS_ACCESS_KEY_ID`
+- secret: `AWS_SECRET_ACCESS_KEY`
+- secret: `AWS_SESSION_TOKEN` (optional)
+- secret: `BACKUP_VERIFY_S3_URI`
+- variable: `BACKUP_VERIFY_AWS_REGION`
+- variable: `BACKUP_VERIFY_OBJECT_PATTERN` (optional; defaults to `*.dump`)
+
 ## Consistency Rules
 
 - `ADMIN_JWT_SECRET` must match between backend and admin.
+- `ADMIN_JWT_SECRET_PREVIOUS` must match between backend and admin when set.
 - `USER_JWT_SECRET` must not be shared with the admin or web secrets.
+- `USER_JWT_SECRET_PREVIOUS` must match between backend and web when set.
+- `USER_JWT_SECRET_PREVIOUS` and `ADMIN_JWT_SECRET_PREVIOUS` must not reuse any
+  current JWT secret, `AUTH_SECRET`, or the MFA secrets.
 - `ADMIN_MFA_ENCRYPTION_SECRET` must not match any JWT or web secret.
 - `ADMIN_MFA_BREAK_GLASS_SECRET` must not match any JWT, web, or MFA encryption secret.
 - `AUTH_SECRET` is only for NextAuth in the web app.
-- In production, `ADMIN_JWT_SECRET`, `USER_JWT_SECRET`, `ADMIN_MFA_ENCRYPTION_SECRET`, and `ADMIN_MFA_BREAK_GLASS_SECRET` must be at least 32 characters.
+- In production, current and previous JWT secrets, when set, plus
+  `ADMIN_MFA_ENCRYPTION_SECRET` and `ADMIN_MFA_BREAK_GLASS_SECRET` must be at
+  least 32 characters.
 - In production, prefer `*_FILE` variables in container env files so secret
   managers inject file content instead of long-lived plaintext env values.
 - In production, password-reset and verification endpoints return `503` unless the
@@ -128,5 +168,8 @@ environment:
 - The backend exposes `/health`, `/health/live`, `/health/ready`, and `/metrics`;
   production deployments should wire probes and scraping for these endpoints
   from an internal network, not from the public internet.
+- The manual deploy workflow keeps a `previous-known-good` image tag per app
+  image on the deployment host and stores release state under
+  `$DEPLOY_PATH/shared/<environment>/ops/release-state.env`.
 - Production should run the auth-notification worker as a separate process from
   the Fastify API.

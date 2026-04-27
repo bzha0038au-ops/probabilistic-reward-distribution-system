@@ -1,12 +1,27 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { DbClient } from '../../db';
+import { resetConfig } from '../../shared/config';
 
 import {
-  assertAutomatedPaymentModeSupported,
-  getPaymentCapabilityOverview,
-  getPaymentCapabilitySummary,
-  resolvePaymentProcessingContext,
-} from './service';
+  getPaymentProviderSecretReferenceEnvName,
+  resetPaymentProviderSecretReferenceCache,
+} from './secret-resolver';
+
+process.env.DATABASE_URL ||= 'postgresql://postgres:postgres@127.0.0.1:5432/reward_test';
+process.env.POSTGRES_URL ||= process.env.DATABASE_URL;
+
+const originalPaymentOperatingMode = process.env.PAYMENT_OPERATING_MODE;
+const originalPaymentAutomatedModeOptIn =
+  process.env.PAYMENT_AUTOMATED_MODE_OPT_IN;
+const originalPaymentStripeSecretKey = process.env.PAYMENT_STRIPE_SECRET_KEY;
+const originalPaymentProviderSecretRefDir =
+  process.env.PAYMENT_PROVIDER_SECRET_REF_DIR;
+
+let assertActivePaymentProviderSecretsResolvable: typeof import('./service').assertActivePaymentProviderSecretsResolvable;
+let assertAutomatedPaymentModeSupported: typeof import('./service').assertAutomatedPaymentModeSupported;
+let getPaymentCapabilityOverview: typeof import('./service').getPaymentCapabilityOverview;
+let getPaymentCapabilitySummary: typeof import('./service').getPaymentCapabilitySummary;
+let resolvePaymentProcessingContext: typeof import('./service').resolvePaymentProcessingContext;
 
 type ProviderFixture = {
   id: number;
@@ -35,6 +50,72 @@ const createDb = (providers: ProviderFixture[]) =>
     }),
   }) as unknown as DbClient;
 
+beforeAll(async () => {
+  ({
+    assertActivePaymentProviderSecretsResolvable,
+    assertAutomatedPaymentModeSupported,
+    getPaymentCapabilityOverview,
+    getPaymentCapabilitySummary,
+    resolvePaymentProcessingContext,
+  } = await import('./service'));
+}, 30000);
+
+beforeEach(() => {
+  resetConfig();
+  resetPaymentProviderSecretReferenceCache();
+  if (originalPaymentOperatingMode === undefined) {
+    delete process.env.PAYMENT_OPERATING_MODE;
+  } else {
+    process.env.PAYMENT_OPERATING_MODE = originalPaymentOperatingMode;
+  }
+  if (originalPaymentAutomatedModeOptIn === undefined) {
+    delete process.env.PAYMENT_AUTOMATED_MODE_OPT_IN;
+  } else {
+    process.env.PAYMENT_AUTOMATED_MODE_OPT_IN = originalPaymentAutomatedModeOptIn;
+  }
+  if (originalPaymentStripeSecretKey === undefined) {
+    delete process.env.PAYMENT_STRIPE_SECRET_KEY;
+  } else {
+    process.env.PAYMENT_STRIPE_SECRET_KEY = originalPaymentStripeSecretKey;
+  }
+  if (originalPaymentProviderSecretRefDir === undefined) {
+    delete process.env.PAYMENT_PROVIDER_SECRET_REF_DIR;
+  } else {
+    process.env.PAYMENT_PROVIDER_SECRET_REF_DIR = originalPaymentProviderSecretRefDir;
+  }
+  delete process.env[
+    getPaymentProviderSecretReferenceEnvName('sm/payment/stripe/api-key')
+  ];
+});
+
+afterEach(() => {
+  resetConfig();
+  resetPaymentProviderSecretReferenceCache();
+  if (originalPaymentOperatingMode === undefined) {
+    delete process.env.PAYMENT_OPERATING_MODE;
+  } else {
+    process.env.PAYMENT_OPERATING_MODE = originalPaymentOperatingMode;
+  }
+  if (originalPaymentAutomatedModeOptIn === undefined) {
+    delete process.env.PAYMENT_AUTOMATED_MODE_OPT_IN;
+  } else {
+    process.env.PAYMENT_AUTOMATED_MODE_OPT_IN = originalPaymentAutomatedModeOptIn;
+  }
+  if (originalPaymentStripeSecretKey === undefined) {
+    delete process.env.PAYMENT_STRIPE_SECRET_KEY;
+  } else {
+    process.env.PAYMENT_STRIPE_SECRET_KEY = originalPaymentStripeSecretKey;
+  }
+  if (originalPaymentProviderSecretRefDir === undefined) {
+    delete process.env.PAYMENT_PROVIDER_SECRET_REF_DIR;
+  } else {
+    process.env.PAYMENT_PROVIDER_SECRET_REF_DIR = originalPaymentProviderSecretRefDir;
+  }
+  delete process.env[
+    getPaymentProviderSecretReferenceEnvName('sm/payment/stripe/api-key')
+  ];
+});
+
 describe('resolvePaymentProcessingContext', () => {
   it('falls back to manual when no active provider exists', async () => {
     await expect(
@@ -55,6 +136,60 @@ describe('resolvePaymentProcessingContext', () => {
         createDb([
           {
             id: 7,
+            name: 'legacy-bank-proxy',
+            providerType: 'deposit',
+            config: { supportsDeposit: true, adapter: 'bank_proxy' },
+          },
+        ]),
+        'deposit'
+      )
+    ).resolves.toEqual({
+      mode: 'manual',
+      providerId: 7,
+      adapterKey: 'bank_proxy',
+      adapterRegistered: false,
+      manualFallbackRequired: true,
+      manualFallbackReason: 'provider_execution_not_implemented',
+    });
+  });
+
+  it('routes automated deposits into the provider path when a registered adapter supports the flow', async () => {
+    process.env.PAYMENT_OPERATING_MODE = 'automated';
+    process.env.PAYMENT_AUTOMATED_MODE_OPT_IN = 'true';
+    resetConfig();
+
+    await expect(
+      resolvePaymentProcessingContext(
+        createDb([
+          {
+            id: 17,
+            name: 'stripe-cn',
+            providerType: 'deposit',
+            config: { supportsDeposit: true, adapter: 'stripe' },
+          },
+        ]),
+        'deposit'
+      )
+    ).resolves.toEqual({
+      mode: 'provider',
+      providerId: 17,
+      adapterKey: 'stripe',
+      adapterRegistered: true,
+      manualFallbackRequired: false,
+      manualFallbackReason: null,
+    });
+  });
+
+  it('keeps deposits on manual review when automated mode lacks explicit opt-in', async () => {
+    process.env.PAYMENT_OPERATING_MODE = 'automated';
+    delete process.env.PAYMENT_AUTOMATED_MODE_OPT_IN;
+    resetConfig();
+
+    await expect(
+      resolvePaymentProcessingContext(
+        createDb([
+          {
+            id: 18,
             name: 'stripe-cn',
             providerType: 'deposit',
             config: { supportsDeposit: true, adapter: 'stripe' },
@@ -64,11 +199,11 @@ describe('resolvePaymentProcessingContext', () => {
       )
     ).resolves.toEqual({
       mode: 'manual',
-      providerId: 7,
+      providerId: 18,
       adapterKey: 'stripe',
-      adapterRegistered: false,
+      adapterRegistered: true,
       manualFallbackRequired: true,
-      manualFallbackReason: 'provider_execution_not_implemented',
+      manualFallbackReason: 'manual_review_mode',
     });
   });
 
@@ -344,30 +479,51 @@ describe('resolvePaymentProcessingContext', () => {
 });
 
 describe('payment capability metadata', () => {
-  it('reports the backend as manual-review only until automation exists', () => {
+  it('reports automation as implemented even while manual review mode remains the active setting', () => {
     expect(
-      getPaymentCapabilitySummary({ paymentOperatingMode: 'manual_review' })
+      getPaymentCapabilitySummary({
+        paymentOperatingMode: 'manual_review',
+        paymentAutomatedModeOptIn: false,
+      })
     ).toEqual({
       operatingMode: 'manual_review',
+      automatedExecutionRequested: false,
+      automatedModeOptIn: false,
       automatedExecutionEnabled: false,
-      automatedExecutionReady: false,
-      registeredAdapterKeys: ['manual_review'],
-      implementedAutomatedAdapters: [],
-      missingCapabilities: [
-        'outbound_gateway_execution',
-        'payment_webhook_entrypoint',
-        'payment_webhook_signature_verification',
-        'idempotent_retry_handling',
-        'automated_reconciliation',
-        'compensation_and_recovery',
-      ],
+      automatedExecutionReady: true,
+      registeredAdapterKeys: ['manual_review', 'stripe'],
+      implementedAutomatedAdapters: ['stripe'],
+      missingCapabilities: [],
     });
   });
 
-  it('rejects automated mode until the money-movement loop is implemented', () => {
+  it('rejects automated mode without the explicit opt-in flag', () => {
     expect(() =>
-      assertAutomatedPaymentModeSupported({ paymentOperatingMode: 'automated' })
-    ).toThrow('PAYMENT_OPERATING_MODE=automated is not supported yet.');
+      assertAutomatedPaymentModeSupported({
+        paymentOperatingMode: 'automated',
+        paymentAutomatedModeOptIn: false,
+      })
+    ).toThrow(
+      'PAYMENT_OPERATING_MODE=automated requires PAYMENT_AUTOMATED_MODE_OPT_IN=true.'
+    );
+  });
+
+  it('allows automated mode only when opt-in is present and outbound execution is ready', () => {
+    expect(
+      assertAutomatedPaymentModeSupported({
+        paymentOperatingMode: 'automated',
+        paymentAutomatedModeOptIn: true,
+      })
+    ).toEqual({
+      operatingMode: 'automated',
+      automatedExecutionRequested: true,
+      automatedModeOptIn: true,
+      automatedExecutionEnabled: true,
+      automatedExecutionReady: true,
+      registeredAdapterKeys: ['manual_review', 'stripe'],
+      implementedAutomatedAdapters: ['stripe'],
+      missingCapabilities: [],
+    });
   });
 
   it('summarizes configured providers separately from implemented adapters', async () => {
@@ -389,22 +545,20 @@ describe('payment capability metadata', () => {
             config: { supportsWithdraw: true, adapter: 'bank_proxy' },
           },
         ]),
-        { paymentOperatingMode: 'manual_review' }
+        {
+          paymentOperatingMode: 'manual_review',
+          paymentAutomatedModeOptIn: false,
+        }
       )
     ).resolves.toEqual({
       operatingMode: 'manual_review',
+      automatedExecutionRequested: false,
+      automatedModeOptIn: false,
       automatedExecutionEnabled: false,
-      automatedExecutionReady: false,
-      registeredAdapterKeys: ['manual_review'],
-      implementedAutomatedAdapters: [],
-      missingCapabilities: [
-        'outbound_gateway_execution',
-        'payment_webhook_entrypoint',
-        'payment_webhook_signature_verification',
-        'idempotent_retry_handling',
-        'automated_reconciliation',
-        'compensation_and_recovery',
-      ],
+      automatedExecutionReady: true,
+      registeredAdapterKeys: ['manual_review', 'stripe'],
+      implementedAutomatedAdapters: ['stripe'],
+      missingCapabilities: [],
       activeProviderCount: 2,
       configuredProviderAdapters: ['bank_proxy', 'stripe'],
       activeProviderFlows: {
@@ -461,7 +615,10 @@ describe('payment capability metadata', () => {
             },
           },
         ]),
-        { paymentOperatingMode: 'manual_review' }
+        {
+          paymentOperatingMode: 'manual_review',
+          paymentAutomatedModeOptIn: false,
+        }
       )
     ).resolves.toMatchObject({
       activeProviderCount: 1,
@@ -478,5 +635,92 @@ describe('payment capability metadata', () => {
         },
       ],
     });
+  });
+});
+
+describe('active provider secret validation', () => {
+  it('fails fast when an active provider has a malformed secretRefs payload', async () => {
+    await expect(
+      assertActivePaymentProviderSecretsResolvable(
+        createDb([
+          {
+            id: 16,
+            name: 'stripe-cn',
+            providerType: 'deposit',
+            config: {
+              supportsDeposit: true,
+              adapter: 'stripe',
+              secretRefs: 'not-an-object',
+            },
+          },
+        ])
+      )
+    ).rejects.toThrow('has an invalid secretRefs payload');
+  });
+
+  it('fails fast when an active provider secret ref cannot be resolved', async () => {
+    await expect(
+      assertActivePaymentProviderSecretsResolvable(
+        createDb([
+          {
+            id: 17,
+            name: 'stripe-cn',
+            providerType: 'deposit',
+            config: {
+              supportsDeposit: true,
+              adapter: 'stripe',
+              secretRefs: {
+                apiKey: 'sm/payment/stripe/api-key',
+              },
+            },
+          },
+        ])
+      )
+    ).rejects.toThrow(
+      'Active payment provider "stripe-cn" (17) could not resolve config.secretRefs.apiKey'
+    );
+  });
+
+  it('accepts active providers when secret refs resolve from the mapped env store', async () => {
+    process.env[
+      getPaymentProviderSecretReferenceEnvName('sm/payment/stripe/api-key')
+    ] = 'sk_test_resolved';
+
+    await expect(
+      assertActivePaymentProviderSecretsResolvable(
+        createDb([
+          {
+            id: 18,
+            name: 'stripe-cn',
+            providerType: 'deposit',
+            config: {
+              supportsDeposit: true,
+              adapter: 'stripe',
+              secretRefs: {
+                apiKey: 'sm/payment/stripe/api-key',
+              },
+            },
+          },
+        ])
+      )
+    ).resolves.toBeUndefined();
+  });
+
+  it('fails fast when an active Stripe provider has no usable API secret', async () => {
+    await expect(
+      assertActivePaymentProviderSecretsResolvable(
+        createDb([
+          {
+            id: 19,
+            name: 'stripe-cn',
+            providerType: 'deposit',
+            config: {
+              supportsDeposit: true,
+              adapter: 'stripe',
+            },
+          },
+        ])
+      )
+    ).rejects.toThrow('is missing a usable API secret');
   });
 });

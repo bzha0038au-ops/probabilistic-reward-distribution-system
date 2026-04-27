@@ -22,6 +22,7 @@
         <a href="/admin" class="btn btn-ghost btn-sm">{t("common.navAdmin")}</a>
         <a href="/finance" class="btn btn-ghost btn-sm">{t("common.navFinance")}</a>
         <a href="/security" class="btn btn-ghost btn-sm">{t("common.navSecurity")}</a>
+        <a href="/saas" class="btn btn-ghost btn-sm">SaaS</a>
       </div>
     </div>
     <div class="flex items-center gap-3">

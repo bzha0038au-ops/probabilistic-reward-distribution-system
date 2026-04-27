@@ -24,9 +24,24 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: reward_build
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d reward_build"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
     env:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/reward_build
       POSTGRES_URL: postgresql://postgres:postgres@127.0.0.1:5432/reward_build
+      TEST_DATABASE_MODE: external
       ADMIN_JWT_SECRET: deploy-admin-secret-1234567890abcdefghij
       USER_JWT_SECRET: deploy-user-secret-1234567890abcdefghij
       AUTH_SECRET: deploy-web-secret-1234567890abcdefghij
@@ -37,6 +52,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref }}
+
+      - name: Abort If Deploys Frozen
+        run: |
+          if [ -f .deploy-frozen ]; then
+            echo "Deployment freeze is active for this ref." >&2
+            cat .deploy-frozen >&2
+            exit 1
+          fi
 
       - name: Setup PNPM
         uses: pnpm/action-setup@v4
@@ -64,14 +87,24 @@ jobs:
       - name: Test
         run: pnpm test
 
-      - name: Test Integration
+      - name: Test Integration Full Suite
+        if: ${{ inputs.environment == 'staging' }}
         run: pnpm test:integration
+
+      - name: Test Integration Critical Gate
+        if: ${{ inputs.environment != 'staging' }}
+        run: pnpm test:integration:critical
 
       - name: Install Playwright
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Test E2E
+      - name: Test E2E Full Suite
+        if: ${{ inputs.environment == 'staging' }}
         run: pnpm test:e2e
+
+      - name: Test E2E Critical Gate
+        if: ${{ inputs.environment != 'staging' }}
+        run: pnpm test:e2e:critical
 
   deploy:
     runs-on: ubuntu-latest
@@ -81,12 +114,23 @@ jobs:
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
       DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
       DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      DEPLOY_TG_BOT_TOKEN: ${{ secrets.DEPLOY_TG_BOT_TOKEN }}
+      DEPLOY_TG_DIGEST_CHAT_ID: ${{ secrets.DEPLOY_TG_DIGEST_CHAT_ID }}
+      DEPLOY_TG_PAGE_CHAT_ID: ${{ secrets.DEPLOY_TG_PAGE_CHAT_ID }}
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref }}
+
+      - name: Abort If Deploys Frozen
+        run: |
+          if [ -f .deploy-frozen ]; then
+            echo "Deployment freeze is active for this ref." >&2
+            cat .deploy-frozen >&2
+            exit 1
+          fi
 
       - name: Resolve Release SHA
         run: echo "RELEASE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
@@ -96,6 +140,9 @@ jobs:
           test -n "$DEPLOY_HOST"
           test -n "$DEPLOY_USER"
           test -n "$DEPLOY_PATH"
+          test -n "$DEPLOY_TG_BOT_TOKEN"
+          test -n "$DEPLOY_TG_PAGE_CHAT_ID"
+          test -n "$DEPLOY_TG_DIGEST_CHAT_ID"
 
       - name: Build Backend Image
         run: docker build --file Dockerfile --target backend --tag reward-system/backend:${RELEASE_SHA} .
@@ -132,8 +179,10 @@ jobs:
           scp reward-system-ops-${RELEASE_SHA}.tar.gz "$DEPLOY_USER@$DEPLOY_HOST:/tmp/reward-system-ops-${RELEASE_SHA}.tar.gz"
 
       - name: Deploy Release
+        id: remote-deploy
         run: |
-          ssh "$DEPLOY_USER@$DEPLOY_HOST" 'bash -s' <<EOF
+          set +e
+          deploy_output="$(ssh "$DEPLOY_USER@$DEPLOY_HOST" 'bash -s' <<EOF
           set -euo pipefail
 
           RELEASE_DIR="${DEPLOY_PATH}/releases/${RELEASE_SHA}"
@@ -187,23 +236,97 @@ jobs:
           test -n "${API_DOMAIN:-}"
           test -n "${TLS_ACME_EMAIL:-}"
 
-          export IMAGE_TAG="${RELEASE_SHA}"
-          export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-reward-system}"
-
-          gunzip -c "/tmp/reward-system-backend-${RELEASE_SHA}.tar.gz" | docker load
-          gunzip -c "/tmp/reward-system-frontend-${RELEASE_SHA}.tar.gz" | docker load
-          gunzip -c "/tmp/reward-system-admin-${RELEASE_SHA}.tar.gz" | docker load
-
-          cd "${RELEASE_DIR}"
-          docker compose -f docker-compose.prod.yml up -d postgres redis
-          docker compose -f docker-compose.prod.yml run --rm migrate
-          docker compose -f docker-compose.prod.yml up -d --remove-orphans postgres redis backend notification-worker frontend admin reverse-proxy
-
-          ln -sfn "${RELEASE_DIR}" "${DEPLOY_PATH}/current"
-
-          rm -f "/tmp/reward-system-compose-${RELEASE_SHA}.yml"
-          rm -f "/tmp/reward-system-backend-${RELEASE_SHA}.tar.gz"
-          rm -f "/tmp/reward-system-frontend-${RELEASE_SHA}.tar.gz"
-          rm -f "/tmp/reward-system-admin-${RELEASE_SHA}.tar.gz"
-          rm -f "/tmp/reward-system-ops-${RELEASE_SHA}.tar.gz"
+          RELEASE_SHA="${RELEASE_SHA}" \
+          RELEASE_DIR="${RELEASE_DIR}" \
+          DEPLOY_PATH="${DEPLOY_PATH}" \
+          DEPLOY_ENVIRONMENT="${DEPLOY_ENVIRONMENT}" \
+          SHARED_DIR="${SHARED_DIR}" \
+          SHARED_ENV_DIR="${SHARED_ENV_DIR}" \
+          SHARED_OPS_DIR="${SHARED_OPS_DIR}" \
+          SHARED_SECRETS_DIR="${SHARED_SECRETS_DIR}" \
+          SHARED_PROXY_DIR="${SHARED_PROXY_DIR}" \
+          "${RELEASE_DIR}/deploy/scripts/remote-release.sh"
           EOF
+          )"
+          deploy_status=$?
+          set -e
+
+          printf '%s\n' "$deploy_output"
+
+          extract_output() {
+            printf '%s\n' "$deploy_output" | awk -F= -v key="$1" '$1 == key { print substr($0, index($0, "=") + 1) }' | tail -n 1
+          }
+
+          deploy_result="$(extract_output DEPLOY_RESULT)"
+          attempted_sha="$(extract_output ATTEMPTED_RELEASE_SHA)"
+          current_sha="$(extract_output CURRENT_RELEASE_SHA)"
+          rollback_sha="$(extract_output ROLLBACK_RELEASE_SHA)"
+          failure_reason="$(extract_output FAILURE_REASON)"
+
+          if [ -z "$deploy_result" ]; then
+            deploy_result="failed_unknown"
+          fi
+
+          if [ -z "$attempted_sha" ]; then
+            attempted_sha="$RELEASE_SHA"
+          fi
+
+          if [ -z "$failure_reason" ] && [ "$deploy_result" != "success" ]; then
+            failure_reason="remote_deploy_step_failed_before_status_output"
+          fi
+
+          echo "deploy_result=${deploy_result}" >> "$GITHUB_OUTPUT"
+          echo "attempted_sha=${attempted_sha}" >> "$GITHUB_OUTPUT"
+          echo "current_sha=${current_sha}" >> "$GITHUB_OUTPUT"
+          echo "rollback_sha=${rollback_sha}" >> "$GITHUB_OUTPUT"
+          {
+            echo "failure_reason<<EOF"
+            printf '%s\n' "$failure_reason"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          if [ "$deploy_status" -ne 0 ]; then
+            exit "$deploy_status"
+          fi
+
+      - name: Notify Rollback
+        if: ${{ always() && steps.remote-deploy.outputs.deploy_result == 'rolled_back' }}
+        env:
+          ATTEMPTED_SHA: ${{ steps.remote-deploy.outputs.attempted_sha }}
+          FAILURE_REASON: ${{ steps.remote-deploy.outputs.failure_reason }}
+          ROLLBACK_SHA: ${{ steps.remote-deploy.outputs.rollback_sha }}
+        run: |
+          message="$(printf '已自动回滚 sha=%s\nrollback_to=%s\nenv=%s\nreason=%s' \
+            "$ATTEMPTED_SHA" \
+            "$ROLLBACK_SHA" \
+            "$DEPLOY_ENVIRONMENT" \
+            "$FAILURE_REASON")"
+          ./deploy/scripts/telegram-notify.sh \
+            "$DEPLOY_TG_PAGE_CHAT_ID" \
+            "$message"
+
+      - name: Notify Deploy Failure
+        if: ${{ always() && steps.remote-deploy.outputs.deploy_result != 'success' && steps.remote-deploy.outputs.deploy_result != 'rolled_back' }}
+        env:
+          ATTEMPTED_SHA: ${{ steps.remote-deploy.outputs.attempted_sha }}
+          FAILURE_REASON: ${{ steps.remote-deploy.outputs.failure_reason }}
+        run: |
+          message="$(printf '部署失败且未自动回滚 sha=%s\nenv=%s\nreason=%s' \
+            "$ATTEMPTED_SHA" \
+            "$DEPLOY_ENVIRONMENT" \
+            "$FAILURE_REASON")"
+          ./deploy/scripts/telegram-notify.sh \
+            "$DEPLOY_TG_PAGE_CHAT_ID" \
+            "$message"
+
+      - name: Notify Deploy Success
+        if: ${{ steps.remote-deploy.outputs.deploy_result == 'success' }}
+        env:
+          ATTEMPTED_SHA: ${{ steps.remote-deploy.outputs.attempted_sha }}
+        run: |
+          message="$(printf 'deploy=ok sha=%s\nenv=%s' \
+            "$ATTEMPTED_SHA" \
+            "$DEPLOY_ENVIRONMENT")"
+          ./deploy/scripts/telegram-notify.sh \
+            "$DEPLOY_TG_DIGEST_CHAT_ID" \
+            "$message"

@@ -1,10 +1,10 @@
-import { SignJWT, jwtVerify } from 'jose';
+import { SignJWT } from 'jose';
 
 import {
   createAuthSession,
   validateAuthSession,
 } from '../modules/session/service';
-import { getSessionSecret } from './session-secret';
+import { getSessionSecret, verifySessionJwt } from './session-secret';
 
 export const ADMIN_SESSION_COOKIE = 'reward_admin_session';
 export const ADMIN_SESSION_TTL_SECONDS =
@@ -67,7 +67,7 @@ export async function verifyAdminSessionToken(token?: string | null) {
   if (!token) return null;
 
   try {
-    const { payload } = await jwtVerify(token, getSessionSecret('admin'));
+    const { payload } = await verifySessionJwt(token, 'admin');
     if (payload.role !== 'admin') return null;
 
     const adminId = Number(payload.adminId ?? 0);

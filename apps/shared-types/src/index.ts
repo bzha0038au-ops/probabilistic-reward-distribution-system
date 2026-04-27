@@ -1,8 +1,4 @@
-export * from './api.js';
-export * from './auth.js';
-export * from './draw.js';
-export * from './finance.js';
-export * from './notification.js';
-export * from './admin.js';
-export * from './common.js';
-export * from './user.js';
+// Keep the root barrel limited to cross-domain primitives. Domain contracts
+// must be imported from their own entrypoints to avoid hidden coupling.
+export * from "./api";
+export * from "./common";

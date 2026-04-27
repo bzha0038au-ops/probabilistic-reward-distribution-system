@@ -90,9 +90,11 @@ test('user can register, verify email, and sign in through the browser', async (
   await page.getByRole('button', { name: 'Sign In' }).click();
 
   await expect(page).toHaveURL(/\/app$/);
-  await expect(page.getByRole('heading', { name: 'User Dashboard' })).toBeVisible();
+  await expect(page.getByText('Account readiness')).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Sign Out', exact: true }),
   ).toBeVisible();
-  await expect(page.getByText('Draw Console')).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Open slot machine' }),
+  ).toBeVisible();
 });

@@ -93,10 +93,7 @@ These keys are read or written by the backend today.
 
 ## Seeded/Reserved Keys (Not Yet Wired)
 
-These keys are seeded for future expansion but are **not** referenced by the backend yet.
-
-### Pool system (legacy)
-- `pool_balance` (legacy; replaced by `house_account.prize_pool_balance`)
+There are currently no seeded/reserved keys documented here.
 
 ## Notes
 - Keys listed as **reserved** are safe to keep seeded, but should not be assumed to have

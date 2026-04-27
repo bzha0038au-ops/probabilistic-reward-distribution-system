@@ -5,7 +5,6 @@ import { adminPermissions, admins } from '@reward/database';
 import { revokeAuthSessions } from '../session/service';
 import {
   adminPermissionsRequireMfa,
-  expandAdminPermissions,
   type AdminPermissionKey,
   hasAdminPermission,
 } from './definitions';
@@ -81,7 +80,7 @@ export async function getAdminAccessProfileByUserId(userId: number) {
 
   const permissions = await listAdminPermissions(admin.adminId);
   const rawPermissions = permissions.map((permission) => permission.permissionKey);
-  const effectivePermissions = expandAdminPermissions(rawPermissions);
+  const effectivePermissions = [...new Set(rawPermissions)];
 
   return {
     ...admin,

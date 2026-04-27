@@ -1,34 +1,37 @@
-import { and, eq } from '@reward/database/orm';
-import { paymentAutomationGapValues } from '@reward/shared-types';
+import { and, eq } from "@reward/database/orm";
+import { paymentAutomationGapValues } from "@reward/shared-types/finance";
 
-import { paymentProviders } from '@reward/database';
-import type { DbClient, DbTransaction } from '../../db';
-import { getConfig, type AppConfig } from '../../shared/config';
-import { toDecimal } from '../../shared/money';
+import { paymentProviders } from "@reward/database";
+import type { DbClient, DbTransaction } from "../../db";
+import { getConfig, type AppConfig } from "../../shared/config";
+import { internalInvariantError } from "../../shared/errors";
+import { toDecimal } from "../../shared/money";
 import {
   isFinanceTerminalStatus,
   type FinanceReviewAction,
-} from './finance-order';
+} from "./finance-order";
 import {
   getRegisteredPaymentAdapter,
   listAutomatedPaymentAdapterKeys,
   listRegisteredPaymentAdapterKeys,
   normalizePaymentAdapterKey,
   paymentAdapterSupportsFlow,
-} from './adapter';
+} from "./adapters";
 import {
   getPaymentProviderConfigGovernance,
+  readPaymentProviderSecretRefs,
   reviewPaymentProviderConfig,
   type PaymentProviderConfigGovernance,
   type PaymentProviderConfigViolation,
-} from './provider-config';
+} from "./provider-config";
+import { resolvePaymentProviderSecretReference } from "./secret-resolver";
 import type {
   PaymentAutomationGap,
   PaymentFlow,
   PaymentManualFallbackReason,
   PaymentOperatingMode,
   PaymentProcessingMode,
-} from './types';
+} from "./types";
 
 type DbExecutor = DbClient | DbTransaction;
 
@@ -50,7 +53,7 @@ export type {
   PaymentManualFallbackReason,
   PaymentOperatingMode,
   PaymentProcessingMode,
-} from './types';
+} from "./types";
 
 type ProviderRow = {
   id: number;
@@ -78,6 +81,8 @@ export type PaymentProviderConfigIssue = {
 
 export type PaymentCapabilitySummary = {
   operatingMode: PaymentOperatingMode;
+  automatedExecutionRequested: boolean;
+  automatedModeOptIn: boolean;
   automatedExecutionEnabled: boolean;
   automatedExecutionReady: boolean;
   registeredAdapterKeys: string[];
@@ -102,47 +107,56 @@ export type FinanceReviewInput = {
 };
 
 const DEPOSIT_PROVIDER_TYPES = new Set([
-  'deposit',
-  'deposits',
-  'topup',
-  'top-up',
-  'top_up',
-  'cash_in',
-  'fiat_in',
+  "deposit",
+  "deposits",
+  "topup",
+  "top-up",
+  "top_up",
+  "cash_in",
+  "fiat_in",
 ]);
 
 const WITHDRAW_PROVIDER_TYPES = new Set([
-  'withdraw',
-  'withdrawal',
-  'withdrawals',
-  'payout',
-  'cash_out',
-  'fiat_out',
+  "withdraw",
+  "withdrawal",
+  "withdrawals",
+  "payout",
+  "cash_out",
+  "fiat_out",
 ]);
 
 const BOTH_PROVIDER_TYPES = new Set([
-  'all',
-  'both',
-  'gateway',
-  'manual',
-  'payment',
-  'processor',
-  'provider',
+  "all",
+  "both",
+  "gateway",
+  "manual",
+  "payment",
+  "processor",
+  "provider",
 ]);
 
 const MANUAL_REVIEW_PROVIDER_TYPES = new Set([
-  'manual',
-  'bank',
-  'bank_transfer',
-  'offline',
+  "manual",
+  "bank",
+  "bank_transfer",
+  "offline",
 ]);
 
-const PAYMENT_AUTOMATION_GAPS: PaymentAutomationGap[] = [
-  ...paymentAutomationGapValues,
-];
+type PaymentAutomationConfig = Pick<
+  AppConfig,
+  "paymentOperatingMode" | "paymentAutomatedModeOptIn"
+>;
+
+const IMPLEMENTED_PAYMENT_AUTOMATION_GAPS = new Set<PaymentAutomationGap>([
+  "payment_webhook_entrypoint",
+  "payment_webhook_signature_verification",
+  "idempotent_retry_handling",
+  "automated_reconciliation",
+  "compensation_and_recovery",
+]);
 
 const toRecord = (value: unknown): Record<string, unknown> => {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return {};
   }
 
@@ -152,13 +166,13 @@ const toRecord = (value: unknown): Record<string, unknown> => {
 const normalizeType = normalizePaymentAdapterKey;
 
 const readBoolean = (value: unknown) =>
-  typeof value === 'boolean' ? value : undefined;
+  typeof value === "boolean" ? value : undefined;
 
 const readString = (value: unknown) =>
-  typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined;
+  typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
 
 const readNumber = (value: unknown) =>
-  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+  typeof value === "number" && Number.isFinite(value) ? value : undefined;
 
 const readIntegerArray = (value: unknown) =>
   Array.isArray(value)
@@ -171,20 +185,21 @@ const readIntegerArray = (value: unknown) =>
 const readStringArray = (value: unknown) =>
   Array.isArray(value)
     ? value
-        .filter((item): item is string => typeof item === 'string')
+        .filter((item): item is string => typeof item === "string")
         .map((item) => item.trim())
-        .filter((item) => item !== '')
+        .filter((item) => item !== "")
     : [];
 
 const normalizeOptionalString = (value: string | null | undefined) => {
-  const trimmed = value?.trim() ?? '';
-  return trimmed === '' ? null : trimmed;
+  const trimmed = value?.trim() ?? "";
+  return trimmed === "" ? null : trimmed;
 };
 
 const prepareProvider = (provider: ProviderRow): PreparedPaymentProvider => {
   const reviewedConfig = reviewPaymentProviderConfig(provider.config);
   const priority =
-    provider.priority ?? readNumber(Reflect.get(reviewedConfig.config, 'priority'));
+    provider.priority ??
+    readNumber(Reflect.get(reviewedConfig.config, "priority"));
 
   return {
     ...provider,
@@ -196,7 +211,7 @@ const prepareProvider = (provider: ProviderRow): PreparedPaymentProvider => {
 
 const compareProviderPriority = (
   left: PreparedPaymentProvider,
-  right: PreparedPaymentProvider
+  right: PreparedPaymentProvider,
 ) => {
   const leftPriority = left.priority ?? Number.MAX_SAFE_INTEGER;
   const rightPriority = right.priority ?? Number.MAX_SAFE_INTEGER;
@@ -209,7 +224,7 @@ const compareProviderPriority = (
 };
 
 const readMoney = (value: unknown) => {
-  if (typeof value !== 'string' && typeof value !== 'number') {
+  if (typeof value !== "string" && typeof value !== "number") {
     return null;
   }
 
@@ -227,59 +242,61 @@ const readCodeArray = (value: unknown) =>
     new Set(
       readStringArray(value)
         .map((item) => normalizeCode(item))
-        .filter((item) => item !== '')
-    )
+        .filter((item) => item !== ""),
+    ),
   );
 
 const getGrayUserIds = (source: Record<string, unknown>) => [
-  ...readIntegerArray(Reflect.get(source, 'grayUserIds')),
-  ...readIntegerArray(Reflect.get(source, 'greyUserIds')),
-  ...readIntegerArray(Reflect.get(source, 'allowUserIds')),
-  ...readIntegerArray(Reflect.get(source, 'userAllowlist')),
+  ...readIntegerArray(Reflect.get(source, "grayUserIds")),
+  ...readIntegerArray(Reflect.get(source, "greyUserIds")),
+  ...readIntegerArray(Reflect.get(source, "allowUserIds")),
+  ...readIntegerArray(Reflect.get(source, "userAllowlist")),
 ];
 
 const getGrayCountryCodes = (source: Record<string, unknown>) => [
-  ...readCodeArray(Reflect.get(source, 'grayCountryCodes')),
-  ...readCodeArray(Reflect.get(source, 'greyCountryCodes')),
-  ...readCodeArray(Reflect.get(source, 'grayCountries')),
-  ...readCodeArray(Reflect.get(source, 'greyCountries')),
-  ...readCodeArray(Reflect.get(source, 'countryAllowlist')),
+  ...readCodeArray(Reflect.get(source, "grayCountryCodes")),
+  ...readCodeArray(Reflect.get(source, "greyCountryCodes")),
+  ...readCodeArray(Reflect.get(source, "grayCountries")),
+  ...readCodeArray(Reflect.get(source, "greyCountries")),
+  ...readCodeArray(Reflect.get(source, "countryAllowlist")),
 ];
 
 const getGrayCurrencies = (source: Record<string, unknown>) => [
-  ...readCodeArray(Reflect.get(source, 'grayCurrencies')),
-  ...readCodeArray(Reflect.get(source, 'greyCurrencies')),
-  ...readCodeArray(Reflect.get(source, 'currencyAllowlist')),
+  ...readCodeArray(Reflect.get(source, "grayCurrencies")),
+  ...readCodeArray(Reflect.get(source, "greyCurrencies")),
+  ...readCodeArray(Reflect.get(source, "currencyAllowlist")),
 ];
 
 const getGrayMinAmount = (source: Record<string, unknown>) =>
   readMoney(
-    Reflect.get(source, 'grayMinAmount') ?? Reflect.get(source, 'greyMinAmount')
+    Reflect.get(source, "grayMinAmount") ??
+      Reflect.get(source, "greyMinAmount"),
   );
 
 const getGrayMaxAmount = (source: Record<string, unknown>) =>
   readMoney(
-    Reflect.get(source, 'grayMaxAmount') ?? Reflect.get(source, 'greyMaxAmount')
+    Reflect.get(source, "grayMaxAmount") ??
+      Reflect.get(source, "greyMaxAmount"),
   );
 
 const getProviderGrayRules = (provider: PreparedPaymentProvider) =>
-  Array.isArray(Reflect.get(provider.parsedConfig, 'grayRules'))
-    ? (Reflect.get(provider.parsedConfig, 'grayRules') as unknown[])
+  Array.isArray(Reflect.get(provider.parsedConfig, "grayRules"))
+    ? (Reflect.get(provider.parsedConfig, "grayRules") as unknown[])
         .map((item) => toRecord(item))
         .filter((item) => Object.keys(item).length > 0)
     : [];
 
 const matchesGrayScope = (
   source: Record<string, unknown>,
-  routing: PaymentRoutingContext
+  routing: PaymentRoutingContext,
 ) => {
   const userId = routing.userId ?? null;
   const allowlistedUserIds = getGrayUserIds(source);
   const percentValue =
-    readNumber(Reflect.get(source, 'grayPercent')) ??
-    readNumber(Reflect.get(source, 'greyPercent')) ??
-    readNumber(Reflect.get(source, 'rolloutPercent')) ??
-    readNumber(Reflect.get(source, 'trafficPercent'));
+    readNumber(Reflect.get(source, "grayPercent")) ??
+    readNumber(Reflect.get(source, "greyPercent")) ??
+    readNumber(Reflect.get(source, "rolloutPercent")) ??
+    readNumber(Reflect.get(source, "trafficPercent"));
   const percent = percentValue ?? 100;
   const allowlisted = userId !== null && allowlistedUserIds.includes(userId);
 
@@ -299,12 +316,14 @@ const matchesGrayScope = (
   }
 
   const routingCountry =
-    typeof routing.country === 'string'
+    typeof routing.country === "string"
       ? normalizeCode(routing.country)
-      : typeof Reflect.get(routing.metadata ?? {}, 'country') === 'string'
-        ? normalizeCode(String(Reflect.get(routing.metadata ?? {}, 'country')))
-        : typeof Reflect.get(routing.metadata ?? {}, 'countryCode') === 'string'
-          ? normalizeCode(String(Reflect.get(routing.metadata ?? {}, 'countryCode')))
+      : typeof Reflect.get(routing.metadata ?? {}, "country") === "string"
+        ? normalizeCode(String(Reflect.get(routing.metadata ?? {}, "country")))
+        : typeof Reflect.get(routing.metadata ?? {}, "countryCode") === "string"
+          ? normalizeCode(
+              String(Reflect.get(routing.metadata ?? {}, "countryCode")),
+            )
           : null;
   const allowedCountries = getGrayCountryCodes(source);
   if (
@@ -315,12 +334,15 @@ const matchesGrayScope = (
   }
 
   const routingCurrency =
-    typeof routing.currency === 'string'
+    typeof routing.currency === "string"
       ? normalizeCode(routing.currency)
-      : typeof Reflect.get(routing.metadata ?? {}, 'currency') === 'string'
-        ? normalizeCode(String(Reflect.get(routing.metadata ?? {}, 'currency')))
-        : typeof Reflect.get(routing.metadata ?? {}, 'currencyCode') === 'string'
-          ? normalizeCode(String(Reflect.get(routing.metadata ?? {}, 'currencyCode')))
+      : typeof Reflect.get(routing.metadata ?? {}, "currency") === "string"
+        ? normalizeCode(String(Reflect.get(routing.metadata ?? {}, "currency")))
+        : typeof Reflect.get(routing.metadata ?? {}, "currencyCode") ===
+            "string"
+          ? normalizeCode(
+              String(Reflect.get(routing.metadata ?? {}, "currencyCode")),
+            )
           : null;
   const allowedCurrencies = getGrayCurrencies(source);
   if (
@@ -348,7 +370,7 @@ const matchesGrayScope = (
 
 const matchesGrayRule = (
   provider: PreparedPaymentProvider,
-  routing: PaymentRoutingContext
+  routing: PaymentRoutingContext,
 ) => {
   const rules = getProviderGrayRules(provider);
   if (rules.length > 0) {
@@ -360,21 +382,29 @@ const matchesGrayRule = (
 
 const matchesProviderRoute = (
   provider: PreparedPaymentProvider,
-  routing: PaymentRoutingContext
+  routing: PaymentRoutingContext,
 ) => {
   const routeChannel = normalizeOptionalString(routing.channelType);
-  if (provider.channelType && routeChannel && provider.channelType !== routeChannel) {
+  if (
+    provider.channelType &&
+    routeChannel &&
+    provider.channelType !== routeChannel
+  ) {
     return false;
   }
 
   const routeAssetType = normalizeOptionalString(routing.assetType);
-  if (provider.assetType && routeAssetType && provider.assetType !== routeAssetType) {
+  if (
+    provider.assetType &&
+    routeAssetType &&
+    provider.assetType !== routeAssetType
+  ) {
     return false;
   }
 
   const routeAssetCode = routing.assetCode
     ? normalizeCode(routing.assetCode)
-    : typeof routing.metadata?.assetCode === 'string'
+    : typeof routing.metadata?.assetCode === "string"
       ? normalizeCode(routing.metadata.assetCode)
       : null;
   if (
@@ -387,7 +417,7 @@ const matchesProviderRoute = (
 
   const routeNetwork = routing.network
     ? normalizeCode(routing.network)
-    : typeof routing.metadata?.network === 'string'
+    : typeof routing.metadata?.network === "string"
       ? normalizeCode(routing.metadata.network)
       : null;
   if (
@@ -402,7 +432,7 @@ const matchesProviderRoute = (
 };
 
 export const listActiveProviders = async (
-  db: DbExecutor
+  db: DbExecutor,
 ): Promise<PreparedPaymentProvider[]> => {
   const providers = await db
     .select({
@@ -420,8 +450,8 @@ export const listActiveProviders = async (
     .where(
       and(
         eq(paymentProviders.isActive, true),
-        eq(paymentProviders.isCircuitBroken, false)
-      )
+        eq(paymentProviders.isCircuitBroken, false),
+      ),
     );
 
   return providers.map(prepareProvider).sort(compareProviderPriority);
@@ -429,31 +459,35 @@ export const listActiveProviders = async (
 
 export const providerSupportsFlow = (
   provider: PreparedPaymentProvider,
-  flow: PaymentFlow
+  flow: PaymentFlow,
 ) => {
   const config = provider.parsedConfig;
-  const supportedFlows = readStringArray(Reflect.get(config, 'supportedFlows')).map(
-    normalizeType
-  );
+  const supportedFlows = readStringArray(
+    Reflect.get(config, "supportedFlows"),
+  ).map(normalizeType);
 
   if (supportedFlows.length > 0) {
     return supportedFlows.includes(flow);
   }
 
-  const supportsDeposit = readBoolean(Reflect.get(config, 'supportsDeposit'));
-  const supportsWithdraw = readBoolean(Reflect.get(config, 'supportsWithdraw'));
+  const supportsDeposit = readBoolean(Reflect.get(config, "supportsDeposit"));
+  const supportsWithdraw = readBoolean(Reflect.get(config, "supportsWithdraw"));
 
-  if (flow === 'deposit' && supportsDeposit !== undefined) {
+  if (flow === "deposit" && supportsDeposit !== undefined) {
     return supportsDeposit;
   }
-  if (flow === 'withdrawal' && supportsWithdraw !== undefined) {
+  if (flow === "withdrawal" && supportsWithdraw !== undefined) {
     return supportsWithdraw;
   }
-  if (flow === 'deposit' && supportsWithdraw === true && supportsDeposit === undefined) {
+  if (
+    flow === "deposit" &&
+    supportsWithdraw === true &&
+    supportsDeposit === undefined
+  ) {
     return false;
   }
   if (
-    flow === 'withdrawal' &&
+    flow === "withdrawal" &&
     supportsDeposit === true &&
     supportsWithdraw === undefined
   ) {
@@ -464,11 +498,11 @@ export const providerSupportsFlow = (
   if (BOTH_PROVIDER_TYPES.has(providerType)) {
     return true;
   }
-  if (flow === 'deposit') {
+  if (flow === "deposit") {
     if (DEPOSIT_PROVIDER_TYPES.has(providerType)) return true;
     if (WITHDRAW_PROVIDER_TYPES.has(providerType)) return false;
   }
-  if (flow === 'withdrawal') {
+  if (flow === "withdrawal") {
     if (WITHDRAW_PROVIDER_TYPES.has(providerType)) return true;
     if (DEPOSIT_PROVIDER_TYPES.has(providerType)) return false;
   }
@@ -485,57 +519,59 @@ const toReviewTrail = (value: unknown) => {
 
   return value.filter(
     (item): item is Record<string, unknown> =>
-      typeof item === 'object' && item !== null && !Array.isArray(item)
+      typeof item === "object" && item !== null && !Array.isArray(item),
   );
 };
 
 const mapFallbackStatus = (action: FinanceReviewAction) => {
   switch (action) {
-    case 'deposit_requested':
-      return 'requested';
-    case 'deposit_mark_provider_pending':
-      return 'provider_pending';
-    case 'deposit_mark_provider_succeeded':
-      return 'provider_succeeded';
-    case 'deposit_credit':
-      return 'credited';
-    case 'deposit_mark_provider_failed':
-      return 'provider_failed';
-    case 'deposit_reverse':
-      return 'reversed';
-    case 'withdrawal_requested':
-      return 'requested';
-    case 'withdrawal_approve':
-      return 'approved';
-    case 'withdrawal_mark_provider_submitted':
-      return 'provider_submitted';
-    case 'withdrawal_mark_provider_processing':
-      return 'provider_processing';
-    case 'withdrawal_pay':
-      return 'paid';
-    case 'withdrawal_mark_provider_failed':
-      return 'provider_failed';
-    case 'withdrawal_reject':
-      return 'rejected';
-    case 'withdrawal_reverse':
-      return 'reversed';
-    case 'system_timeout_cleanup':
-    case 'system_compensation':
+    case "deposit_requested":
+      return "requested";
+    case "deposit_mark_provider_pending":
+      return "provider_pending";
+    case "deposit_mark_provider_succeeded":
+      return "provider_succeeded";
+    case "deposit_credit":
+      return "credited";
+    case "deposit_mark_provider_failed":
+      return "provider_failed";
+    case "deposit_reverse":
+      return "reversed";
+    case "withdrawal_requested":
+      return "requested";
+    case "withdrawal_approve":
+      return "approved";
+    case "withdrawal_mark_provider_submitted":
+      return "provider_submitted";
+    case "withdrawal_mark_provider_processing":
+      return "provider_processing";
+    case "withdrawal_pay":
+      return "paid";
+    case "withdrawal_mark_provider_failed":
+      return "provider_failed";
+    case "withdrawal_reject":
+      return "rejected";
+    case "withdrawal_reverse":
+      return "reversed";
+    case "system_timeout_cleanup":
+    case "system_compensation":
       return null;
   }
 };
 
 const isFallbackTerminalAction = (action: FinanceReviewAction) => {
   const status = mapFallbackStatus(action);
-  const flow = action.startsWith('deposit_') ? 'deposit' : 'withdrawal';
+  const flow = action.startsWith("deposit_") ? "deposit" : "withdrawal";
   return status ? isFinanceTerminalStatus(status, flow) : false;
 };
 
 const isManualReviewProvider = (provider: PreparedPaymentProvider) => {
   const config = provider.parsedConfig;
-  const executionMode = normalizeType(readString(Reflect.get(config, 'executionMode')) ?? '');
+  const executionMode = normalizeType(
+    readString(Reflect.get(config, "executionMode")) ?? "",
+  );
 
-  if (executionMode === 'manual') {
+  if (executionMode === "manual") {
     return true;
   }
 
@@ -544,19 +580,17 @@ const isManualReviewProvider = (provider: PreparedPaymentProvider) => {
 
 export const getConfiguredAdapter = (provider: PreparedPaymentProvider) => {
   const config = provider.parsedConfig;
-  const adapterName = readString(Reflect.get(config, 'adapter'));
+  const adapterName = readString(Reflect.get(config, "adapter"));
   if (!adapterName) {
     return null;
   }
 
   const adapter = normalizeType(adapterName);
 
-  return adapter === '' ? null : adapter;
+  return adapter === "" ? null : adapter;
 };
 
-export const resolveRegisteredAdapter = (
-  provider: PreparedPaymentProvider
-) => {
+export const resolveRegisteredAdapter = (provider: PreparedPaymentProvider) => {
   const adapter = getConfiguredAdapter(provider);
   if (!adapter) {
     return null;
@@ -565,18 +599,82 @@ export const resolveRegisteredAdapter = (
   return getRegisteredPaymentAdapter(adapter);
 };
 
+const assertConfiguredProviderSecretRefsResolve = (
+  provider: PreparedPaymentProvider,
+) => {
+  const secretRefs = readPaymentProviderSecretRefs(provider.parsedConfig);
+
+  for (const [field, reference] of Object.entries(secretRefs)) {
+    if (!reference) {
+      continue;
+    }
+
+    if (resolvePaymentProviderSecretReference(reference)) {
+      continue;
+    }
+
+    throw internalInvariantError(
+      `Active payment provider "${provider.name}" (${provider.id}) could not resolve config.secretRefs.${field} from reference "${reference}".`,
+    );
+  }
+};
+
+export async function assertActivePaymentProviderSecretsResolvable(
+  db: DbExecutor,
+) {
+  const providers = await listActiveProviders(db);
+
+  for (const provider of providers) {
+    const invalidSecretReferenceViolation = provider.configViolations.find(
+      (violation) => violation.code === "invalid_secret_reference",
+    );
+    if (invalidSecretReferenceViolation) {
+      throw internalInvariantError(
+        `Active payment provider "${provider.name}" (${provider.id}) has an invalid secretRefs payload: ${invalidSecretReferenceViolation.message}`,
+      );
+    }
+
+    assertConfiguredProviderSecretRefsResolve(provider);
+
+    const adapter = resolveRegisteredAdapter(provider);
+    if (!adapter?.validateConfiguration) {
+      continue;
+    }
+
+    await adapter.validateConfiguration({
+      providerId: provider.id,
+      providerName: provider.name,
+      config: provider.parsedConfig,
+    });
+  }
+}
+
 export function getPaymentCapabilitySummary(
-  config: Pick<AppConfig, 'paymentOperatingMode'> = getConfig()
+  config: PaymentAutomationConfig = getConfig(),
 ): PaymentCapabilitySummary {
   const registeredAdapterKeys = listRegisteredPaymentAdapterKeys();
   const implementedAutomatedAdapters = listAutomatedPaymentAdapterKeys();
-  const missingCapabilities = [...PAYMENT_AUTOMATION_GAPS];
+  const implementedCapabilities = new Set(IMPLEMENTED_PAYMENT_AUTOMATION_GAPS);
+  const automatedExecutionRequested =
+    config.paymentOperatingMode === "automated";
+  const automatedModeOptIn = config.paymentAutomatedModeOptIn;
+
+  if (implementedAutomatedAdapters.length > 0) {
+    implementedCapabilities.add("outbound_gateway_execution");
+  }
+
+  const missingCapabilities = paymentAutomationGapValues.filter(
+    (gap): gap is PaymentAutomationGap => !implementedCapabilities.has(gap),
+  );
   const automatedExecutionReady =
     implementedAutomatedAdapters.length > 0 && missingCapabilities.length === 0;
 
   return {
     operatingMode: config.paymentOperatingMode,
-    automatedExecutionEnabled: config.paymentOperatingMode === 'automated',
+    automatedExecutionRequested,
+    automatedModeOptIn,
+    automatedExecutionEnabled:
+      automatedExecutionRequested && automatedModeOptIn,
     automatedExecutionReady,
     registeredAdapterKeys,
     implementedAutomatedAdapters,
@@ -585,29 +683,39 @@ export function getPaymentCapabilitySummary(
 }
 
 export function assertAutomatedPaymentModeSupported(
-  config: Pick<AppConfig, 'paymentOperatingMode'> = getConfig()
+  config: PaymentAutomationConfig = getConfig(),
 ) {
   const summary = getPaymentCapabilitySummary(config);
-  if (!summary.automatedExecutionEnabled || summary.automatedExecutionReady) {
+  if (!summary.automatedExecutionRequested) {
     return summary;
   }
 
-  throw new Error(
-    `PAYMENT_OPERATING_MODE=automated is not supported yet. Keep PAYMENT_OPERATING_MODE=manual_review until the backend owns the full payment execution loop. Missing ${summary.missingCapabilities.join(', ')}.`
+  if (!summary.automatedModeOptIn) {
+    throw internalInvariantError(
+      `PAYMENT_OPERATING_MODE=automated requires PAYMENT_AUTOMATED_MODE_OPT_IN=true. Capability ready=${summary.automatedExecutionReady}. Missing ${summary.missingCapabilities.length > 0 ? summary.missingCapabilities.join(", ") : "none"}.`,
+    );
+  }
+
+  if (summary.automatedExecutionReady) {
+    return summary;
+  }
+
+  throw internalInvariantError(
+    `PAYMENT_OPERATING_MODE=automated is not ready in this deployment. Missing ${summary.missingCapabilities.join(", ")}.`,
   );
 }
 
 export async function getPaymentCapabilityOverview(
   db: DbExecutor,
-  config: Pick<AppConfig, 'paymentOperatingMode'> = getConfig()
+  config: PaymentAutomationConfig = getConfig(),
 ): Promise<PaymentCapabilityOverview> {
   const providers = await listActiveProviders(db);
   const configuredProviderAdapters = Array.from(
     new Set(
       providers
         .map((provider) => getConfiguredAdapter(provider))
-        .filter((value): value is string => value !== null)
-    )
+        .filter((value): value is string => value !== null),
+    ),
   ).sort();
   const summary = getPaymentCapabilitySummary(config);
   const providerConfigIssues = providers
@@ -623,20 +731,22 @@ export async function getPaymentCapabilityOverview(
     activeProviderCount: providers.length,
     configuredProviderAdapters,
     activeProviderFlows: {
-      deposit: providers.some((provider) => providerSupportsFlow(provider, 'deposit')),
+      deposit: providers.some((provider) =>
+        providerSupportsFlow(provider, "deposit"),
+      ),
       withdrawal: providers.some((provider) =>
-        providerSupportsFlow(provider, 'withdrawal')
+        providerSupportsFlow(provider, "withdrawal"),
       ),
     },
     providerConfigGovernance: getPaymentProviderConfigGovernance(),
     providerConfigIssues,
   };
-};
+}
 
 export function selectPaymentProvider(
   providers: PreparedPaymentProvider[],
   flow: PaymentFlow,
-  routing: PaymentRoutingContext = {}
+  routing: PaymentRoutingContext = {},
 ) {
   return (
     providers
@@ -650,7 +760,7 @@ export function selectPaymentProvider(
 export async function resolvePaymentProcessingContext(
   db: DbExecutor,
   flow: PaymentFlow,
-  routing: PaymentRoutingContext = {}
+  routing: PaymentRoutingContext = {},
 ) {
   const providers = await listActiveProviders(db);
   const flowProviders = providers
@@ -662,23 +772,25 @@ export async function resolvePaymentProcessingContext(
 
   if (!fallbackProvider) {
     return {
-      mode: 'manual' as const,
+      mode: "manual" as const,
       providerId: null,
       adapterKey: null,
       adapterRegistered: false,
       manualFallbackRequired: true,
-      manualFallbackReason: 'no_active_payment_provider' as PaymentManualFallbackReason,
+      manualFallbackReason:
+        "no_active_payment_provider" as PaymentManualFallbackReason,
     };
   }
 
   if (!provider) {
     return {
-      mode: 'manual' as const,
+      mode: "manual" as const,
       providerId: fallbackProvider.id,
       adapterKey: getConfiguredAdapter(fallbackProvider),
       adapterRegistered: resolveRegisteredAdapter(fallbackProvider) !== null,
       manualFallbackRequired: true,
-      manualFallbackReason: 'outside_automation_gray_scope' as PaymentManualFallbackReason,
+      manualFallbackReason:
+        "outside_automation_gray_scope" as PaymentManualFallbackReason,
     };
   }
 
@@ -688,19 +800,20 @@ export async function resolvePaymentProcessingContext(
     adapter !== null && paymentAdapterSupportsFlow(adapter, flow);
 
   if (adapter && adapterSupportsFlow && adapter.supportsAutomation) {
-    if (getConfig().paymentOperatingMode !== 'automated') {
+    if (!getPaymentCapabilitySummary().automatedExecutionEnabled) {
       return {
-        mode: 'manual' as const,
+        mode: "manual" as const,
         providerId: provider.id,
         adapterKey: adapter.key,
         adapterRegistered: true,
         manualFallbackRequired: true,
-        manualFallbackReason: 'manual_review_mode' as PaymentManualFallbackReason,
+        manualFallbackReason:
+          "manual_review_mode" as PaymentManualFallbackReason,
       };
     }
 
     return {
-      mode: 'provider' as const,
+      mode: "provider" as const,
       providerId: provider.id,
       adapterKey: adapter.key,
       adapterRegistered: true,
@@ -710,17 +823,17 @@ export async function resolvePaymentProcessingContext(
   }
 
   return {
-    mode: 'manual' as const,
+    mode: "manual" as const,
     providerId: provider.id,
     adapterKey: adapterKey ?? null,
     adapterRegistered: adapterSupportsFlow,
     manualFallbackRequired: true,
     manualFallbackReason:
       adapter && adapterSupportsFlow
-        ? ('manual_provider_review_required' as PaymentManualFallbackReason)
+        ? ("manual_provider_review_required" as PaymentManualFallbackReason)
         : isManualReviewProvider(provider)
-          ? ('manual_provider_review_required' as PaymentManualFallbackReason)
-          : ('provider_execution_not_implemented' as PaymentManualFallbackReason),
+          ? ("manual_provider_review_required" as PaymentManualFallbackReason)
+          : ("provider_execution_not_implemented" as PaymentManualFallbackReason),
   };
 }
 
@@ -737,7 +850,7 @@ export function withPaymentProcessingMetadata(
     paymentAutomationReady?: boolean;
     paymentAdapterKey?: string | null;
     paymentAdapterRegistered?: boolean;
-  }
+  },
 ) {
   const metadata = toRecord(existing);
 
@@ -745,7 +858,7 @@ export function withPaymentProcessingMetadata(
     ...metadata,
     paymentFlow: params.flow,
     processingMode: params.processingMode,
-    paymentOperatingMode: params.paymentOperatingMode ?? 'manual_review',
+    paymentOperatingMode: params.paymentOperatingMode ?? "manual_review",
     paymentProviderId: params.paymentProviderId ?? null,
     paymentAutomationRequested: params.paymentAutomationRequested ?? false,
     paymentAutomationReady: params.paymentAutomationReady ?? false,
@@ -755,26 +868,28 @@ export function withPaymentProcessingMetadata(
     ...(params.manualFallbackRequired
       ? {
           manualFallbackReason:
-            params.manualFallbackReason ?? 'no_active_payment_provider',
-          manualFallbackStatus: 'requested',
+            params.manualFallbackReason ?? "no_active_payment_provider",
+          manualFallbackStatus: "requested",
           manualFallbackResolvedAt: null,
-          financeCurrentStatus: 'requested',
+          financeCurrentStatus: "requested",
         }
       : {
           manualFallbackReason: null,
           manualFallbackStatus: null,
           manualFallbackResolvedAt: null,
-          financeCurrentStatus: 'requested',
+          financeCurrentStatus: "requested",
         }),
   };
 }
 
 export function appendFinanceReviewMetadata(
   existing: unknown,
-  input: FinanceReviewInput
+  input: FinanceReviewInput,
 ) {
   const metadata = toRecord(existing);
-  const reviewTrail = toReviewTrail(Reflect.get(metadata, 'financeReviewTrail'));
+  const reviewTrail = toReviewTrail(
+    Reflect.get(metadata, "financeReviewTrail"),
+  );
   const recordedAt = new Date().toISOString();
 
   const reviewEntry: Record<string, unknown> = {
@@ -784,7 +899,9 @@ export function appendFinanceReviewMetadata(
   };
 
   const operatorNote = normalizeOptionalString(input.operatorNote);
-  const settlementReference = normalizeOptionalString(input.settlementReference);
+  const settlementReference = normalizeOptionalString(
+    input.settlementReference,
+  );
   const processingChannel = normalizeOptionalString(input.processingChannel);
 
   if (operatorNote) {

@@ -9,8 +9,11 @@ This repo is designed as a practical system skeleton for products such as spin-t
 > webhooks, idempotent retry handling, or recovery
 > compensation. Scheduled reconciliation jobs and manual-difference queues now
 > exist, but they do not make this backend safe for real-money automatic
-> settlement on their own. Keep `PAYMENT_OPERATING_MODE=manual_review` and do
-> not route real-money automatic in/out through this backend yet.
+> settlement on their own. Keep `PAYMENT_OPERATING_MODE=manual_review` by
+> default. If you intentionally enable automated execution in a deployment that
+> is deemed ready, you must set both `PAYMENT_OPERATING_MODE=automated` and
+> `PAYMENT_AUTOMATED_MODE_OPT_IN=true`. Do not route real-money automatic in/out
+> through this backend without that explicit approval.
 
 ## Why This Repo
 
@@ -73,6 +76,7 @@ REDIS_URL=redis://127.0.0.1:6379
 
 ```dotenv
 AUTH_SECRET=local_frontend_auth_secret_change_me_123456
+USER_JWT_SECRET=local_user_secret_change_me_123456
 API_BASE_URL=http://localhost:4000
 NEXT_PUBLIC_API_BASE_URL=http://localhost:4000
 ```
@@ -143,6 +147,7 @@ pnpm test
 pnpm test:integration
 pnpm test:e2e
 pnpm test:load
+pnpm test:load:mutations
 pnpm build
 pnpm db:reset
 ```
@@ -178,7 +183,9 @@ Default local accounts:
 - Backend and financial logic: [`apps/backend`](./apps/backend)
 - Database schema and migrations: [`apps/database`](./apps/database)
 - Shared API contracts: [`apps/shared-types`](./apps/shared-types)
-- Shared user client layer: [`packages/user-core`](./packages/user-core)
+- Shared internal user client: [`packages/user-core`](./packages/user-core)
+- External prize-engine SDK: [`packages/prize-engine-sdk`](./packages/prize-engine-sdk)
+- Package boundary guide: [`packages/README.md`](./packages/README.md)
 
 If you want the architecture view after bootstrapping, start with [`docs/architecture.md`](./docs/architecture.md).
 
@@ -226,7 +233,9 @@ The highest-risk path is `executeDraw(userId)`: debit the draw cost, evaluate pr
 | [`apps/backend`](./apps/backend) | HTTP API, auth, wallet flows, draw engine |
 | [`apps/database`](./apps/database) | Drizzle schema and migrations |
 | [`apps/shared-types`](./apps/shared-types) | Shared request/response contracts |
-| [`packages/user-core`](./packages/user-core) | Shared user API client, routes, and platform helpers |
+| [`packages/user-core`](./packages/user-core) | Shared first-party user API client, routes, and fairness helpers |
+| [`packages/prize-engine-sdk`](./packages/prize-engine-sdk) | External-facing SaaS prize-engine SDK for `/v1/engine/*` |
+| [`packages/README.md`](./packages/README.md) | Package ownership, boundary, and lifecycle guide |
 | [`docs`](./docs) | Architecture, environment, deployment, and test docs |
 
 ## Tech Stack
@@ -240,7 +249,8 @@ The highest-risk path is `executeDraw(userId)`: debit the draw cost, evaluate pr
 | Database | PostgreSQL |
 | ORM / schema | Drizzle ORM |
 | Shared contracts | TypeScript + Zod |
-| Shared user client | Workspace package (`@reward/user-core`) |
+| Shared internal user client | Workspace package (`@reward/user-core`) |
+| External prize-engine SDK | Workspace package (`@reward/prize-engine-sdk`) |
 | Tooling | pnpm workspace, Vitest, GitHub Actions |
 
 ### Why Web + Native + Admin?
@@ -317,6 +327,8 @@ Full details live in [`docs/environment.md`](./docs/environment.md).
 - `pnpm test:e2e`: full Playwright browser regression suite
 - `pnpm test:e2e:critical`: CI gate for auth + core user/admin flows
 - `pnpm test:load`: authenticated `/wallet` + `/draw` smoke load via `autocannon`
+- `pnpm test:load:mutations`: isolated write-path smoke for `POST /draw` + `POST /rewards/claim`
+- Measure frontend BFF performance with `next build && next start`; `next dev` adds substantial proxy overhead that is not representative.
 - Run `pnpm test:e2e:install` once before the first browser run on a machine.
 
 Test coverage is intentionally backend-heavy because the biggest risk in this system is financial correctness, not visual polish. See [`docs/test-strategy.md`](./docs/test-strategy.md).

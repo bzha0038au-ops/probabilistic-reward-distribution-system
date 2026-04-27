@@ -20,7 +20,7 @@ type LoginFormProps = {
 
 type LoginResponse =
   | { ok: true; redirectTo: string }
-  | { ok: false; error: { message: string } };
+  | { ok: false; error: { message: string; code?: string } };
 
 export function LoginForm({
   emailLabel,
@@ -52,7 +52,11 @@ export function LoginForm({
       const payload = (await response.json().catch(() => null)) as LoginResponse | null;
 
       if (!response.ok || !payload?.ok) {
-        setErrorMessage(payload?.error.message ?? 'Login request failed.');
+        setErrorMessage(
+          payload && payload.ok === false
+            ? payload.error.message
+            : 'Login request failed.'
+        );
         return;
       }
 

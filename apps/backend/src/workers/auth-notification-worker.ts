@@ -5,7 +5,7 @@ import {
   startAuthNotificationDispatcher,
   stopAuthNotificationDispatcher,
 } from '../modules/auth/notification-dispatcher';
-import { getConfig } from '../shared/config';
+import { getConfigView } from '../shared/config';
 import { logger } from '../shared/logger';
 import {
   captureException,
@@ -14,7 +14,7 @@ import {
 } from '../shared/telemetry';
 
 initializeObservability();
-const config = getConfig();
+const config = getConfigView();
 
 type ShutdownSignal =
   | NodeJS.Signals

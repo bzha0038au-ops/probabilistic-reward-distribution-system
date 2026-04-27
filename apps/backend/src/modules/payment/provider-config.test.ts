@@ -68,4 +68,27 @@ describe('payment provider config governance', () => {
       }).violations
     ).toEqual([]);
   });
+
+  it('rejects legacy inline Stripe secret fields', () => {
+    expect(
+      reviewPaymentProviderConfig({
+        adapter: 'stripe',
+        stripeSecretKey: 'sk_live_legacy',
+        webhookSecret: 'whsec_legacy',
+      }).violations
+    ).toEqual([
+      {
+        code: 'plaintext_secret_in_config',
+        path: 'stripeSecretKey',
+        message:
+          'Do not store apiKey in payment_providers.config. Store the credential in a secret manager or KMS and keep only secretRefs.apiKey as the reference id.',
+      },
+      {
+        code: 'plaintext_secret_in_config',
+        path: 'webhookSecret',
+        message:
+          'Do not store signingKey in payment_providers.config. Store the credential in a secret manager or KMS and keep only secretRefs.signingKey as the reference id.',
+      },
+    ]);
+  });
 });

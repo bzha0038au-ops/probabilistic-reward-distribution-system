@@ -41,6 +41,26 @@ type AdminSession = {
   secret: string;
 };
 
+const PLAYWRIGHT_ADMIN_PERMISSION_KEYS = [
+  'finance.read',
+  'finance.approve_deposit',
+  'finance.fail_deposit',
+  'finance.approve_withdrawal',
+  'finance.reject_withdrawal',
+  'finance.pay_withdrawal',
+  'finance.reconcile',
+  'audit.read',
+  'audit.export',
+  'audit.retry_notification',
+  'risk.read',
+  'risk.freeze_user',
+  'risk.release_user',
+  'analytics.read',
+  'config.read',
+  'config.release_bonus',
+  'config.update',
+] as const;
+
 const readBody = async <T>(response: Response) =>
   (await response.json().catch(() => ({}))) as ApiEnvelope<T>;
 
@@ -216,7 +236,7 @@ const registerAdminAccount = async (email: string, password: string) => {
     returning id
   `;
 
-  for (const permissionKey of ['finance.manage', 'security.manage', 'config.manage']) {
+  for (const permissionKey of PLAYWRIGHT_ADMIN_PERMISSION_KEYS) {
     await sql`
       insert into admin_permissions (admin_id, permission_key)
       values (${admin.id}, ${permissionKey})
@@ -435,7 +455,7 @@ test('user main flow covers deposit approval, draw, phone verification, and with
   await page.getByRole('button', { name: 'Sign In' }).click();
 
   await expect(page).toHaveURL(/\/app$/);
-  await expect(page.getByRole('heading', { name: 'User Dashboard' })).toBeVisible();
+  await expect(page.getByText('Account readiness')).toBeVisible();
 
   const userSession = await createUserSession(email, password);
 
@@ -450,11 +470,12 @@ test('user main flow covers deposit approval, draw, phone verification, and with
     throw new Error(`Missing user for ${email}.`);
   }
 
+  await page.goto('/app/wallet');
   await page.getByLabel('Top-up amount').fill('100.00');
   await page.getByLabel('Reference ID').fill('deposit-ref-001');
   await page.getByRole('button', { name: 'Create top-up request' }).click();
-  await expect(page.getByTestId('dashboard-notice')).toContainText(
-    'Top-up request submitted.',
+  await expect(page.getByTestId('dashboard-notice')).toHaveText(
+    'Top-up request submitted. The order will move through provider settlement before crediting the wallet.',
   );
 
   const deposit = await waitForRecord(
@@ -514,12 +535,18 @@ test('user main flow covers deposit approval, draw, phone verification, and with
   });
 
   await page.reload();
-  await expect(page.getByTestId('wallet-current-balance')).toHaveText('100.00');
+  await expect(page.getByText('Current balance')).toBeVisible();
+  await expect(page.getByText('100.00').first()).toBeVisible();
 
-  await page.getByRole('button', { name: 'Run Draw' }).click();
-  await expect(page.getByText('Status: won')).toBeVisible();
-  await expect(page.getByTestId('wallet-current-balance')).toHaveText('90.00');
+  await page.goto('/app/slot');
+  await page.getByRole('button', { name: /^Spin / }).first().click();
+  await expect(page.getByText('Won').first()).toBeVisible();
 
+  await page.goto('/app/wallet');
+  await expect(page.getByText('Current balance')).toBeVisible();
+  await expect(page.getByText('90.00').first()).toBeVisible();
+
+  await page.goto('/app/security');
   await page.getByLabel('Phone number').fill(phone);
   await page.getByRole('button', { name: 'Send code' }).click();
   const phoneNotification = await waitForNotificationPayload({
@@ -532,6 +559,7 @@ test('user main flow covers deposit approval, draw, phone verification, and with
     'Phone verified. Withdrawal tools are now available.',
   );
 
+  await page.goto('/app/payments');
   await page.getByLabel('Cardholder name').fill('Reward User');
   await page.getByLabel('Bank name').fill('Playwright Bank');
   await page.getByLabel('Card brand').fill('Visa');
@@ -545,8 +573,8 @@ test('user main flow covers deposit approval, draw, phone verification, and with
   await page
     .getByRole('button', { name: 'Request withdrawal', exact: true })
     .click();
-  await expect(page.getByTestId('dashboard-notice')).toContainText(
-    'Withdrawal request submitted.',
+  await expect(page.getByTestId('dashboard-notice')).toHaveText(
+    'Withdrawal request submitted. Funds are reserved while approval and payout progress.',
   );
 
   const firstWithdrawal = await waitForRecord(

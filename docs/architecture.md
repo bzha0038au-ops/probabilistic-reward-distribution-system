@@ -23,7 +23,7 @@
 - Draw contract/statuses: `apps/shared-types/src/draw.ts`
 - Finance contract/statuses: `apps/shared-types/src/finance.ts`
 - Notification contract/statuses: `apps/shared-types/src/notification.ts`
-- Finance persistence schema: `apps/database/src/modules/finance.ts`
+- Finance persistence schema: `apps/database/src/modules/finance/index.ts`
 - Draw persistence schema: `apps/database/src/modules/prize.ts`
 - Notification persistence schema: `apps/database/src/modules/notification.ts`
 - Module notes: `apps/backend/src/modules/draw/README.md`,

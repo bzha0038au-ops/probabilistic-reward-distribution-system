@@ -1,5 +1,3 @@
-import { getConfig } from '../../shared/config';
-
 export const DEFAULT_DRAW_COST_KEY = 'draw_cost';
 export const RANDOM_WEIGHT_JITTER_ENABLED_KEY = 'random_weight_jitter_enabled';
 export const RANDOM_WEIGHT_JITTER_PCT_KEY = 'random_weight_jitter_pct';
@@ -65,7 +63,35 @@ export const REWARD_REFERRAL_ENABLED_KEY = 'reward_events.referral_bonus_enabled
 export const REWARD_REFERRAL_AMOUNT_KEY = 'reward_events.referral_bonus_amount';
 export const REWARD_DAILY_ENABLED_KEY = 'reward_events.daily_bonus_enabled';
 export const REWARD_DAILY_AMOUNT_KEY = 'reward_events.daily_bonus_amount';
+export const REWARD_PROFILE_SECURITY_AMOUNT_KEY =
+  'reward_events.profile_security_bonus_amount';
+export const REWARD_FIRST_DRAW_AMOUNT_KEY =
+  'reward_events.first_draw_bonus_amount';
+export const REWARD_DRAW_STREAK_DAILY_AMOUNT_KEY =
+  'reward_events.draw_streak_daily_bonus_amount';
+export const REWARD_TOP_UP_STARTER_AMOUNT_KEY =
+  'reward_events.top_up_starter_bonus_amount';
+export const BLACKJACK_MIN_STAKE_KEY = 'blackjack.min_stake';
+export const BLACKJACK_MAX_STAKE_KEY = 'blackjack.max_stake';
+export const BLACKJACK_WIN_PAYOUT_MULTIPLIER_KEY =
+  'blackjack.win_payout_multiplier';
+export const BLACKJACK_PUSH_PAYOUT_MULTIPLIER_KEY =
+  'blackjack.push_payout_multiplier';
+export const BLACKJACK_NATURAL_PAYOUT_MULTIPLIER_KEY =
+  'blackjack.natural_payout_multiplier';
+export const BLACKJACK_DEALER_HITS_SOFT_17_KEY =
+  'blackjack.dealer_hits_soft_17';
+export const BLACKJACK_DOUBLE_DOWN_ALLOWED_KEY =
+  'blackjack.double_down_allowed';
+export const BLACKJACK_SPLIT_ACES_ALLOWED_KEY =
+  'blackjack.split_aces_allowed';
+export const BLACKJACK_HIT_SPLIT_ACES_ALLOWED_KEY =
+  'blackjack.hit_split_aces_allowed';
+export const BLACKJACK_RESPLIT_ALLOWED_KEY = 'blackjack.resplit_allowed';
+export const BLACKJACK_MAX_SPLIT_HANDS_KEY = 'blackjack.max_split_hands';
+export const BLACKJACK_SPLIT_TEN_VALUE_CARDS_ALLOWED_KEY =
+  'blackjack.split_ten_value_cards_allowed';
 export const ANALYTICS_STATS_DELAY_KEY = 'analytics.stats_visibility_delay_minutes';
 export const ANALYTICS_PUBLIC_STATS_KEY = 'analytics.public_stats_enabled';
 export const ANALYTICS_POOL_PUBLIC_KEY = 'analytics.pool_balance_public';
-export const DEFAULT_DRAW_COST = getConfig().drawCost;
+export const DEFAULT_DRAW_COST = Number(process.env.DRAW_COST ?? '10');

@@ -3,6 +3,7 @@ import { eq, sql } from '@reward/database/orm';
 import { houseAccount, houseTransactions, ledgerEntries } from '@reward/database';
 import type { DbClient, DbTransaction } from '../../db';
 import Decimal from 'decimal.js';
+import { persistenceError } from '../../shared/errors';
 import { toDecimal, toMoneyString } from '../../shared/money';
 import { readSqlRows } from '../../shared/sql-result';
 
@@ -23,7 +24,7 @@ const ensureHouseAccount = async (db: DbExecutor) => {
     .limit(1);
 
   if (!account) {
-    throw new Error('House account not initialized.');
+    throw persistenceError('House account not initialized.');
   }
 
   return account;
@@ -51,7 +52,7 @@ export async function getHouseAccount(db: DbExecutor, lock = false) {
 
   const account = readSqlRows<typeof houseAccount.$inferSelect>(result)[0];
   if (!account) {
-    throw new Error('House account not initialized.');
+    throw persistenceError('House account not initialized.');
   }
 
   return account;

@@ -1,3 +1,6 @@
+import { API_ERROR_CODES } from '@reward/shared-types/api';
+import { conflictError, unprocessableEntityError } from '../../shared/errors';
+
 export type FinanceOrderType = 'deposit' | 'withdrawal';
 
 export type DepositStatus =
@@ -280,10 +283,14 @@ export function applyDualReviewGate(
   const processingChannel = normalizeOptionalString(params.review.processingChannel);
 
   if (!operatorNote) {
-    throw new Error('Operator note is required.');
+    throw unprocessableEntityError('Operator note is required.', {
+      code: API_ERROR_CODES.OPERATOR_NOTE_REQUIRED,
+    });
   }
   if (params.requireSettlementReference && !settlementReference) {
-    throw new Error('Settlement reference is required.');
+    throw unprocessableEntityError('Settlement reference is required.', {
+      code: API_ERROR_CODES.SETTLEMENT_REFERENCE_REQUIRED,
+    });
   }
 
   if (params.bypassDualReview || adminId === null) {
@@ -308,11 +315,15 @@ export function applyDualReviewGate(
 
   const pending = readPendingReviewState(metadata);
   if (pending && (pending.action !== params.action || pending.targetStatus !== params.targetStatus)) {
-    throw new Error('Another review is already pending for this order.');
+    throw conflictError('Another review is already pending for this order.', {
+      code: API_ERROR_CODES.ANOTHER_REVIEW_PENDING,
+    });
   }
   if (pending && pending.action === params.action && pending.targetStatus === params.targetStatus) {
     if (pending.reviewerAdminIds.includes(adminId)) {
-      throw new Error('A different reviewer must confirm this action.');
+      throw conflictError('A different reviewer must confirm this action.', {
+        code: API_ERROR_CODES.DIFFERENT_REVIEWER_REQUIRED,
+      });
     }
 
     if (
@@ -320,7 +331,9 @@ export function applyDualReviewGate(
       settlementReference &&
       pending.settlementReference !== settlementReference
     ) {
-      throw new Error('Settlement reference must match the pending review.');
+      throw conflictError('Settlement reference must match the pending review.', {
+        code: API_ERROR_CODES.SETTLEMENT_REFERENCE_MISMATCH,
+      });
     }
 
     if (
@@ -328,7 +341,9 @@ export function applyDualReviewGate(
       processingChannel &&
       pending.processingChannel !== processingChannel
     ) {
-      throw new Error('Processing channel must match the pending review.');
+      throw conflictError('Processing channel must match the pending review.', {
+        code: API_ERROR_CODES.PROCESSING_CHANNEL_MISMATCH,
+      });
     }
 
     return {

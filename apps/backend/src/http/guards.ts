@@ -1,4 +1,5 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
+import { API_ERROR_CODES } from "@reward/shared-types/api";
 
 import {
   type AdminPermissionKey,
@@ -120,7 +121,7 @@ export const requireVerifiedUser = (requirements: {
         403,
         "Email verification required.",
         undefined,
-        "EMAIL_VERIFICATION_REQUIRED",
+        API_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED,
       );
     }
 
@@ -130,7 +131,7 @@ export const requireVerifiedUser = (requirements: {
         403,
         "Phone verification required.",
         undefined,
-        "PHONE_VERIFICATION_REQUIRED",
+        API_ERROR_CODES.PHONE_VERIFICATION_REQUIRED,
       );
     }
   };
@@ -210,7 +211,7 @@ export const requireAdminPermission = (
         403,
         "Admin MFA must be enabled for this action.",
         undefined,
-        "ADMIN_MFA_REQUIRED",
+        API_ERROR_CODES.ADMIN_MFA_REQUIRED,
       );
     }
 
@@ -221,7 +222,7 @@ export const requireAdminPermission = (
         401,
         "Admin step-up code required.",
         undefined,
-        "ADMIN_STEP_UP_REQUIRED",
+        API_ERROR_CODES.ADMIN_STEP_UP_REQUIRED,
       );
     }
 
@@ -235,7 +236,7 @@ export const requireAdminPermission = (
         401,
         "Invalid admin step-up code.",
         undefined,
-        "ADMIN_STEP_UP_INVALID",
+        API_ERROR_CODES.ADMIN_STEP_UP_INVALID,
       );
     }
 

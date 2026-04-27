@@ -1,6 +1,6 @@
-import Decimal from 'decimal.js';
-import { z } from 'zod';
-import type { DrawStatus } from '@reward/shared-types';
+import Decimal from "decimal.js";
+import { z } from "zod";
+import type { DrawStatus } from "@reward/shared-types/draw";
 export type { DrawStatus };
 import type {
   getDrawSystemConfig,
@@ -9,8 +9,8 @@ import type {
   getPoolSystemConfig,
   getProbabilityControlConfig,
   getRandomizationConfig,
-} from '../system/service';
-import type { ensureFairnessSeed } from '../fairness/service';
+} from "../system/service";
+import type { ensureFairnessSeed } from "../fairness/service";
 
 export type WeightedPick<T> = {
   item: T;

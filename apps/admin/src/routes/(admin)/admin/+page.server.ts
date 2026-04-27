@@ -236,6 +236,49 @@ export const actions: Actions = {
       adminFailureFreezeThreshold: toNumberString(
         formData.get("adminFailureFreezeThreshold"),
       ),
+      profileSecurityRewardAmount: toNumberString(
+        formData.get("profileSecurityRewardAmount"),
+        "8",
+      ),
+      firstDrawRewardAmount: toNumberString(
+        formData.get("firstDrawRewardAmount"),
+        "3",
+      ),
+      drawStreakDailyRewardAmount: toNumberString(
+        formData.get("drawStreakDailyRewardAmount"),
+        "5",
+      ),
+      topUpStarterRewardAmount: toNumberString(
+        formData.get("topUpStarterRewardAmount"),
+        "10",
+      ),
+      blackjackMinStake: toNumberString(formData.get("blackjackMinStake"), "1"),
+      blackjackMaxStake: toNumberString(formData.get("blackjackMaxStake"), "100"),
+      blackjackWinPayoutMultiplier: toNumberString(
+        formData.get("blackjackWinPayoutMultiplier"),
+        "2",
+      ),
+      blackjackPushPayoutMultiplier: toNumberString(
+        formData.get("blackjackPushPayoutMultiplier"),
+        "1",
+      ),
+      blackjackNaturalPayoutMultiplier: toNumberString(
+        formData.get("blackjackNaturalPayoutMultiplier"),
+        "2.5",
+      ),
+      blackjackDealerHitsSoft17:
+        formData.get("blackjackDealerHitsSoft17") === "on",
+      blackjackDoubleDownAllowed:
+        formData.get("blackjackDoubleDownAllowed") === "on",
+      blackjackSplitAcesAllowed:
+        formData.get("blackjackSplitAcesAllowed") === "on",
+      blackjackHitSplitAcesAllowed:
+        formData.get("blackjackHitSplitAcesAllowed") === "on",
+      blackjackResplitAllowed: formData.get("blackjackResplitAllowed") === "on",
+      blackjackMaxSplitHands:
+        parseOptionalNumber(formData.get("blackjackMaxSplitHands")) ?? 4,
+      blackjackSplitTenValueCardsAllowed:
+        formData.get("blackjackSplitTenValueCardsAllowed") === "on",
       reason: parseOptionalString(formData.get("changeReason")),
     }
 

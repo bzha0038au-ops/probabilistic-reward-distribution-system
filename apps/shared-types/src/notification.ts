@@ -1,12 +1,13 @@
 import { z } from 'zod';
 
-import { OptionalStringSchema } from './common.js';
+import { OptionalStringSchema } from './common';
 
 export const authNotificationKindValues = [
   'password_reset',
   'email_verification',
   'phone_verification',
   'security_alert',
+  'saas_tenant_invite',
 ] as const;
 export const AuthNotificationKindSchema = z.enum(authNotificationKindValues);
 export type AuthNotificationKind = z.infer<typeof AuthNotificationKindSchema>;

@@ -3,10 +3,73 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "files": [
+    "dist",
+    "src",
+    "package.json",
+    "tsconfig.build.json",
+    "tsconfig.json"
+  ],
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./admin": "./src/admin.ts",
+    "./api": "./src/api.ts",
+    "./auth": "./src/auth.ts",
+    "./blackjack": "./src/blackjack.ts",
+    "./common": "./src/common.ts",
+    "./draw": "./src/draw.ts",
+    "./fairness": "./src/fairness.ts",
+    "./finance": "./src/finance.ts",
+    "./gamification": "./src/gamification.ts",
+    "./notification": "./src/notification.ts",
+    "./quick-eight": "./src/quick-eight.ts",
+    "./saas": "./src/saas.ts",
+    "./user": "./src/user.ts"
   },
   "types": "./src/index.ts",
+  "typesVersions": {
+    "*": {
+      "admin": [
+        "src/admin.ts"
+      ],
+      "api": [
+        "src/api.ts"
+      ],
+      "auth": [
+        "src/auth.ts"
+      ],
+      "blackjack": [
+        "src/blackjack.ts"
+      ],
+      "common": [
+        "src/common.ts"
+      ],
+      "draw": [
+        "src/draw.ts"
+      ],
+      "fairness": [
+        "src/fairness.ts"
+      ],
+      "finance": [
+        "src/finance.ts"
+      ],
+      "gamification": [
+        "src/gamification.ts"
+      ],
+      "notification": [
+        "src/notification.ts"
+      ],
+      "quick-eight": [
+        "src/quick-eight.ts"
+      ],
+      "saas": [
+        "src/saas.ts"
+      ],
+      "user": [
+        "src/user.ts"
+      ]
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "check": "tsc -p tsconfig.json --noEmit",

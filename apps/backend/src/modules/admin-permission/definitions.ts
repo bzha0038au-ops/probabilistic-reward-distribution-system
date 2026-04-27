@@ -26,55 +26,51 @@ export const ADMIN_PERMISSION_KEYS = {
 export type AdminPermissionKey =
   (typeof ADMIN_PERMISSION_KEYS)[keyof typeof ADMIN_PERMISSION_KEYS];
 
-export const LEGACY_ADMIN_PERMISSION_GRANTS = {
-  'config.manage': [
-    ADMIN_PERMISSION_KEYS.ANALYTICS_READ,
-    ADMIN_PERMISSION_KEYS.CONFIG_READ,
-    ADMIN_PERMISSION_KEYS.CONFIG_RELEASE_BONUS,
-    ADMIN_PERMISSION_KEYS.CONFIG_UPDATE,
-  ],
-  'finance.manage': [
-    ADMIN_PERMISSION_KEYS.FINANCE_READ,
-    ADMIN_PERMISSION_KEYS.FINANCE_APPROVE_DEPOSIT,
-    ADMIN_PERMISSION_KEYS.FINANCE_FAIL_DEPOSIT,
-    ADMIN_PERMISSION_KEYS.FINANCE_APPROVE_WITHDRAWAL,
-    ADMIN_PERMISSION_KEYS.FINANCE_REJECT_WITHDRAWAL,
-    ADMIN_PERMISSION_KEYS.FINANCE_PAY_WITHDRAWAL,
-    ADMIN_PERMISSION_KEYS.FINANCE_RECONCILE,
-  ],
-  'prizes.manage': [
-    ADMIN_PERMISSION_KEYS.ANALYTICS_READ,
-    ADMIN_PERMISSION_KEYS.PRIZES_READ,
-    ADMIN_PERMISSION_KEYS.PRIZES_CREATE,
-    ADMIN_PERMISSION_KEYS.PRIZES_UPDATE,
-    ADMIN_PERMISSION_KEYS.PRIZES_TOGGLE,
-    ADMIN_PERMISSION_KEYS.PRIZES_DELETE,
-  ],
-  'security.manage': [
-    ADMIN_PERMISSION_KEYS.AUDIT_READ,
-    ADMIN_PERMISSION_KEYS.AUDIT_EXPORT,
-    ADMIN_PERMISSION_KEYS.AUDIT_RETRY_NOTIFICATION,
-    ADMIN_PERMISSION_KEYS.RISK_READ,
-    ADMIN_PERMISSION_KEYS.RISK_FREEZE_USER,
-    ADMIN_PERMISSION_KEYS.RISK_RELEASE_USER,
-  ],
-} as const satisfies Record<string, readonly AdminPermissionKey[]>;
-
-export const STEP_UP_ADMIN_PERMISSIONS = new Set<AdminPermissionKey>([
-  ADMIN_PERMISSION_KEYS.AUDIT_RETRY_NOTIFICATION,
+export const CONFIG_ADMIN_PERMISSION_KEYS = [
+  ADMIN_PERMISSION_KEYS.ANALYTICS_READ,
+  ADMIN_PERMISSION_KEYS.CONFIG_READ,
   ADMIN_PERMISSION_KEYS.CONFIG_RELEASE_BONUS,
   ADMIN_PERMISSION_KEYS.CONFIG_UPDATE,
+] as const satisfies readonly AdminPermissionKey[];
+
+export const FINANCE_ADMIN_PERMISSION_KEYS = [
+  ADMIN_PERMISSION_KEYS.FINANCE_READ,
   ADMIN_PERMISSION_KEYS.FINANCE_APPROVE_DEPOSIT,
-  ADMIN_PERMISSION_KEYS.FINANCE_APPROVE_WITHDRAWAL,
   ADMIN_PERMISSION_KEYS.FINANCE_FAIL_DEPOSIT,
+  ADMIN_PERMISSION_KEYS.FINANCE_APPROVE_WITHDRAWAL,
+  ADMIN_PERMISSION_KEYS.FINANCE_REJECT_WITHDRAWAL,
   ADMIN_PERMISSION_KEYS.FINANCE_PAY_WITHDRAWAL,
   ADMIN_PERMISSION_KEYS.FINANCE_RECONCILE,
-  ADMIN_PERMISSION_KEYS.FINANCE_REJECT_WITHDRAWAL,
+] as const satisfies readonly AdminPermissionKey[];
+
+export const PRIZES_ADMIN_PERMISSION_KEYS = [
+  ADMIN_PERMISSION_KEYS.ANALYTICS_READ,
+  ADMIN_PERMISSION_KEYS.PRIZES_READ,
+  ADMIN_PERMISSION_KEYS.PRIZES_CREATE,
+  ADMIN_PERMISSION_KEYS.PRIZES_UPDATE,
+  ADMIN_PERMISSION_KEYS.PRIZES_TOGGLE,
+  ADMIN_PERMISSION_KEYS.PRIZES_DELETE,
+] as const satisfies readonly AdminPermissionKey[];
+
+export const SECURITY_ADMIN_PERMISSION_KEYS = [
+  ADMIN_PERMISSION_KEYS.AUDIT_READ,
+  ADMIN_PERMISSION_KEYS.AUDIT_EXPORT,
+  ADMIN_PERMISSION_KEYS.AUDIT_RETRY_NOTIFICATION,
+  ADMIN_PERMISSION_KEYS.RISK_READ,
   ADMIN_PERMISSION_KEYS.RISK_FREEZE_USER,
   ADMIN_PERMISSION_KEYS.RISK_RELEASE_USER,
-]);
+] as const satisfies readonly AdminPermissionKey[];
 
-export const MFA_SENSITIVE_ADMIN_PERMISSIONS = new Set<AdminPermissionKey>([
+export const DEFAULT_ADMIN_PERMISSION_KEYS = [
+  ...new Set<AdminPermissionKey>([
+    ...PRIZES_ADMIN_PERMISSION_KEYS,
+    ...FINANCE_ADMIN_PERMISSION_KEYS,
+    ...SECURITY_ADMIN_PERMISSION_KEYS,
+    ...CONFIG_ADMIN_PERMISSION_KEYS,
+  ]),
+] as const satisfies readonly AdminPermissionKey[];
+
+const MFA_SENSITIVE_ADMIN_PERMISSION_KEYS = [
   ADMIN_PERMISSION_KEYS.AUDIT_RETRY_NOTIFICATION,
   ADMIN_PERMISSION_KEYS.CONFIG_RELEASE_BONUS,
   ADMIN_PERMISSION_KEYS.CONFIG_UPDATE,
@@ -84,35 +80,32 @@ export const MFA_SENSITIVE_ADMIN_PERMISSIONS = new Set<AdminPermissionKey>([
   ADMIN_PERMISSION_KEYS.FINANCE_PAY_WITHDRAWAL,
   ADMIN_PERMISSION_KEYS.FINANCE_RECONCILE,
   ADMIN_PERMISSION_KEYS.FINANCE_REJECT_WITHDRAWAL,
+] as const satisfies readonly AdminPermissionKey[];
+
+const STEP_UP_ONLY_ADMIN_PERMISSION_KEYS = [
+  ADMIN_PERMISSION_KEYS.RISK_FREEZE_USER,
+  ADMIN_PERMISSION_KEYS.RISK_RELEASE_USER,
+] as const satisfies readonly AdminPermissionKey[];
+
+export const MFA_SENSITIVE_ADMIN_PERMISSIONS = new Set<AdminPermissionKey>(
+  MFA_SENSITIVE_ADMIN_PERMISSION_KEYS
+);
+
+export const STEP_UP_ADMIN_PERMISSIONS = new Set<AdminPermissionKey>([
+  ...MFA_SENSITIVE_ADMIN_PERMISSION_KEYS,
+  ...STEP_UP_ONLY_ADMIN_PERMISSION_KEYS,
 ]);
-
-export const expandAdminPermissions = (permissionKeys: Iterable<string>) => {
-  const expanded = new Set<string>();
-
-  for (const permissionKey of permissionKeys) {
-    expanded.add(permissionKey);
-
-    const mapped = LEGACY_ADMIN_PERMISSION_GRANTS[
-      permissionKey as keyof typeof LEGACY_ADMIN_PERMISSION_GRANTS
-    ];
-    if (!mapped) continue;
-
-    for (const granted of mapped) {
-      expanded.add(granted);
-    }
-  }
-
-  return [...expanded];
-};
 
 export const hasAdminPermission = (
   permissionKeys: Iterable<string>,
   requiredPermission: AdminPermissionKey
-) => expandAdminPermissions(permissionKeys).includes(requiredPermission);
+) => new Set(permissionKeys).has(requiredPermission);
 
 export const adminPermissionsRequireMfa = (permissionKeys: Iterable<string>) => {
-  for (const permissionKey of expandAdminPermissions(permissionKeys)) {
-    if (MFA_SENSITIVE_ADMIN_PERMISSIONS.has(permissionKey as AdminPermissionKey)) {
+  const grantedPermissions = new Set(permissionKeys);
+
+  for (const permissionKey of MFA_SENSITIVE_ADMIN_PERMISSIONS) {
+    if (grantedPermissions.has(permissionKey)) {
       return true;
     }
   }

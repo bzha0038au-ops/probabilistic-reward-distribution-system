@@ -20,20 +20,46 @@ export type AdminSessionPayload = {
   sessionId: string;
 };
 
-const getSessionSecret = () => {
-  const secret = env.ADMIN_JWT_SECRET || '';
+const resolveAdminJwtSecret = () => {
+  const secret = env.ADMIN_JWT_SECRET?.trim() ?? '';
   if (!secret) {
     throw new Error('ADMIN_JWT_SECRET is not set');
   }
 
-  return encoder.encode(secret);
+  return secret;
+};
+
+const getSessionVerificationSecrets = () => {
+  const currentSecret = resolveAdminJwtSecret();
+  const previousSecret = env.ADMIN_JWT_SECRET_PREVIOUS?.trim() ?? '';
+  const secrets = [currentSecret];
+
+  if (previousSecret && previousSecret !== currentSecret) {
+    secrets.push(previousSecret);
+  }
+
+  return secrets.map((secret) => encoder.encode(secret));
+};
+
+const verifySessionJwt = async (token: string) => {
+  let lastError: unknown;
+
+  for (const secret of getSessionVerificationSecrets()) {
+    try {
+      return await jwtVerify(token, secret);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError ?? new Error('Unable to verify admin session token');
 };
 
 export async function verifyAdminSessionToken(token?: string | null) {
   if (!token) return null;
 
   try {
-    const { payload } = await jwtVerify(token, getSessionSecret());
+    const { payload } = await verifySessionJwt(token);
     if (payload.role !== 'admin') return null;
 
     const adminId = Number(payload.adminId ?? 0);
