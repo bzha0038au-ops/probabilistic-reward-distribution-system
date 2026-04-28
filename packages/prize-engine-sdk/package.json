@@ -16,7 +16,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json --outDir dist",
     "check": "tsc -p tsconfig.json --noEmit",
-    "lint": "tsc -p tsconfig.json --noEmit"
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test test/**/*.test.ts"
   },
   "dependencies": {
     "@reward/shared-types": "workspace:*"

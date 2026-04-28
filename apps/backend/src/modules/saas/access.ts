@@ -14,11 +14,13 @@ import { forbiddenError, notFoundError } from "../../shared/errors";
 export type SaasAdminActor = {
   adminId: number;
   permissions?: string[];
+  accessScope?: "global" | "membership";
 } | null;
 
 export type SaasTenantCapability =
   | "tenant:read"
   | "tenant:members:write"
+  | "agent:control:write"
   | "project:write"
   | "prize:write"
   | "key:write"
@@ -32,15 +34,23 @@ const ROLE_CAPABILITIES: Record<
   tenant_owner: [
     "tenant:read",
     "tenant:members:write",
+    "agent:control:write",
     "project:write",
     "prize:write",
     "key:write",
     "billing:write",
     "billing:settle",
   ],
-  tenant_operator: ["tenant:read", "project:write", "prize:write", "key:write"],
+  tenant_operator: [
+    "tenant:read",
+    "agent:control:write",
+    "project:write",
+    "prize:write",
+    "key:write",
+  ],
   agent_manager: [
     "tenant:read",
+    "agent:control:write",
     "prize:write",
     "key:write",
     "billing:write",
@@ -98,9 +108,15 @@ export async function listAdminTenantMemberships(actor: SaasAdminActor) {
 }
 
 export async function resolveAccessibleTenantIds(actor: SaasAdminActor) {
+  if (!actor?.adminId) {
+    return null;
+  }
+
   const memberships = await listAdminTenantMemberships(actor);
   if (memberships.length === 0) {
-    return null;
+    return actor.accessScope === "membership"
+      ? []
+      : null;
   }
 
   return [...new Set(memberships.map((membership) => membership.tenantId))];
@@ -115,8 +131,11 @@ export async function resolveAccessibleProjectIds(
   }
 
   const accessibleTenantIds = await resolveAccessibleTenantIds(actor);
-  if (!accessibleTenantIds || accessibleTenantIds.length === 0) {
+  if (accessibleTenantIds === null) {
     return projectIds;
+  }
+  if (accessibleTenantIds.length === 0) {
+    return [];
   }
 
   const rows = await db
@@ -139,8 +158,18 @@ export async function assertTenantCapability(
   tenantId: number,
   capability: SaasTenantCapability,
 ) {
+  if (!actor?.adminId) {
+    return null;
+  }
+
   const memberships = await listAdminTenantMemberships(actor);
   if (memberships.length === 0) {
+    if (actor.accessScope === "membership") {
+      throw forbiddenError("You do not have access to this SaaS tenant.", {
+        code: API_ERROR_CODES.SAAS_TENANT_ACCESS_FORBIDDEN,
+      });
+    }
+
     return null;
   }
 
@@ -167,7 +196,10 @@ export async function assertTenantCapability(
 export async function assertProjectCapability(
   actor: SaasAdminActor,
   projectId: number,
-  capability: Exclude<SaasTenantCapability, "tenant:members:write">,
+  capability: Exclude<
+    SaasTenantCapability,
+    "tenant:members:write" | "agent:control:write"
+  >,
 ) {
   const [project] = await db
     .select({

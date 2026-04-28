@@ -1,3 +1,4 @@
+import '@fastify/cookie';
 import type { FastifyRequest } from 'fastify';
 
 import { context } from './context';

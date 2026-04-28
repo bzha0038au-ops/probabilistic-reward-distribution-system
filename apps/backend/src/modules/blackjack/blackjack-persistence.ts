@@ -10,6 +10,8 @@ import { blackjackGames, userWallets, users } from "@reward/database";
 import { db, type DbTransaction } from "../../db";
 import { persistenceError } from "../../shared/errors";
 import { toDecimal, toMoneyString } from "../../shared/money";
+import { appendRoundEvents } from "../hand-history/service";
+import { BLACKJACK_ROUND_TYPE } from "../hand-history/round-id";
 import {
   applyTransactionalGamePayoutCredit,
   applyTransactionalGameStakeDebit,
@@ -19,6 +21,7 @@ import {
 import {
   BLACKJACK_REFERENCE_TYPE,
   BlackjackGameRowsSchema,
+  buildBlackjackTable,
   LockedBlackjackUserRowsSchema,
   MAX_RECENT_GAMES,
   parseSqlRows,
@@ -28,12 +31,12 @@ import {
   type LockedBlackjackUserRow,
 } from "./game";
 import {
-  appendActionHistory,
   playDealerHand,
   resolveAggregateSettledStatus,
   resolveSettledHandOutcomes,
   resolveSettledStatusPayoutAmount,
   summarizePlayerTotals,
+  syncBlackjackTableTurnState,
   syncLegacyPlayerCards,
   toGameState,
 } from "./blackjack-state";
@@ -85,6 +88,7 @@ export const loadBlackjackGameRows = async (
            deck,
            next_card_index AS "nextCardIndex",
            status,
+           turn_deadline_at AS "turnDeadlineAt",
            metadata,
            settled_at AS "settledAt",
            created_at AS "createdAt",
@@ -121,7 +125,17 @@ export const persistGameState = async (
 ) => {
   const now = new Date();
   syncLegacyPlayerCards(game);
+  syncBlackjackTableTurnState(game);
   game.updatedAt = now;
+  const metadata = {
+    config: game.metadata.config,
+    fairness: game.metadata.fairness,
+    table: game.metadata.table,
+    actionHistory: game.metadata.actionHistory,
+    playMode: game.metadata.playMode,
+    playerHands: game.metadata.playerHands,
+    activeHandIndex: game.metadata.activeHandIndex,
+  };
 
   await tx.execute(sql`
     UPDATE ${blackjackGames}
@@ -133,7 +147,10 @@ export const persistGameState = async (
         deck = ${toJsonbLiteral(game.deck)},
         next_card_index = ${game.nextCardIndex},
         status = ${game.status},
-        metadata = ${toJsonbLiteral(game.metadata)},
+        turn_deadline_at = ${
+          game.turnDeadlineAt ? new Date(game.turnDeadlineAt) : null
+        },
+        metadata = ${toJsonbLiteral(metadata)},
         settled_at = ${game.settledAt ? new Date(game.settledAt) : null},
         updated_at = ${now}
     WHERE id = ${game.id}
@@ -214,13 +231,29 @@ export const settleGameByStatus = async (params: {
   );
   game.status = status;
   game.payoutAmount = toMoneyString(payoutAmount);
+  game.turnDeadlineAt = null;
   game.settledAt = new Date();
   game.metadata.activeHandIndex = null;
-  appendActionHistory(game, {
-    action: "settle",
-    actor: "system",
-    total: summarizePlayerTotals(game).primaryTotal,
-    status,
+  const playerTotals = summarizePlayerTotals(game);
+
+  await appendRoundEvents(tx, {
+    roundType: BLACKJACK_ROUND_TYPE,
+    roundEntityId: game.id,
+    userId: game.userId,
+    events: [
+      {
+        type: "round_settled",
+        actor: "system",
+        payload: {
+          status,
+          payoutAmount: toMoneyString(payoutAmount),
+          totalStake: toMoneyString(game.totalStake),
+          playerTotal: playerTotals.primaryTotal,
+          playerTotals: playerTotals.totals,
+          dealerCards: game.dealerCards,
+        },
+      },
+    ],
   });
 
   await persistGameState(tx, game);
@@ -232,6 +265,26 @@ export const settleGameByStatus = async (params: {
     payoutAmount,
     status,
   });
+
+  if (payoutAmount.gt(0)) {
+    await appendRoundEvents(tx, {
+      roundType: BLACKJACK_ROUND_TYPE,
+      roundEntityId: game.id,
+      userId: game.userId,
+      events: [
+        {
+          type: "payout_credited",
+          actor: "system",
+          payload: {
+            amount: toMoneyString(payoutAmount),
+            balanceBefore: toMoneyString(walletBalance),
+            balanceAfter: toMoneyString(nextWalletBalance),
+            entryType: "blackjack_payout",
+          },
+        },
+      ],
+    });
+  }
 
   return {
     balance: nextWalletBalance,
@@ -245,7 +298,7 @@ export const settleResolvedHands = async (params: {
   walletBalance: ReturnType<typeof toDecimal>;
 }) => {
   const { tx, game, walletBalance } = params;
-  const dealerScore = playDealerHand(game);
+  const { dealerScore, events: dealerEvents } = playDealerHand(game);
   const { outcomes } = resolveSettledHandOutcomes(game);
   const payoutAmount = outcomes.reduce(
     (sum, outcome) => sum.plus(outcome.payoutAmount),
@@ -255,13 +308,36 @@ export const settleResolvedHands = async (params: {
 
   game.status = status;
   game.payoutAmount = toMoneyString(payoutAmount);
+  game.turnDeadlineAt = null;
   game.settledAt = new Date();
   game.metadata.activeHandIndex = null;
-  appendActionHistory(game, {
-    action: "settle",
-    actor: "system",
-    total: summarizePlayerTotals(game).primaryTotal,
-    status,
+  const playerTotals = summarizePlayerTotals(game);
+
+  await appendRoundEvents(tx, {
+    roundType: BLACKJACK_ROUND_TYPE,
+    roundEntityId: game.id,
+    userId: game.userId,
+    events: [
+      ...dealerEvents,
+      {
+        type: "round_settled",
+        actor: "system",
+        payload: {
+          status,
+          payoutAmount: toMoneyString(payoutAmount),
+          totalStake: toMoneyString(game.totalStake),
+          playerTotal: playerTotals.primaryTotal,
+          playerTotals: playerTotals.totals,
+          dealerTotal: dealerScore.total,
+          dealerCards: game.dealerCards,
+          handOutcomes: outcomes.map((outcome, index) => ({
+            handIndex: index,
+            state: outcome.state,
+            payoutAmount: toMoneyString(outcome.payoutAmount),
+          })),
+        },
+      },
+    ],
   });
 
   await persistGameState(tx, game);
@@ -273,6 +349,26 @@ export const settleResolvedHands = async (params: {
     payoutAmount,
     status,
   });
+
+  if (payoutAmount.gt(0)) {
+    await appendRoundEvents(tx, {
+      roundType: BLACKJACK_ROUND_TYPE,
+      roundEntityId: game.id,
+      userId: game.userId,
+      events: [
+        {
+          type: "payout_credited",
+          actor: "system",
+          payload: {
+            amount: toMoneyString(payoutAmount),
+            balanceBefore: toMoneyString(walletBalance),
+            balanceAfter: toMoneyString(nextWalletBalance),
+            entryType: "blackjack_payout",
+          },
+        },
+      ],
+    });
+  }
 
   return {
     balance: nextWalletBalance,
@@ -291,6 +387,7 @@ export const insertInitialGame = async (params: {
   nextCardIndex: number;
   config: BlackjackConfig;
   fairness: BlackjackFairness;
+  playMode: import("@reward/shared-types/play-mode").PlayModeSnapshot;
 }) => {
   await params.tx.execute(sql`
     INSERT INTO ${blackjackGames} (
@@ -303,6 +400,7 @@ export const insertInitialGame = async (params: {
       deck,
       next_card_index,
       status,
+      turn_deadline_at,
       metadata
     )
     VALUES (
@@ -315,10 +413,15 @@ export const insertInitialGame = async (params: {
       ${toJsonbLiteral(params.deck)},
       ${params.nextCardIndex},
       ${"active"},
+      ${null},
       ${toJsonbLiteral({
         config: params.config,
         fairness: params.fairness,
-        actionHistory: [{ action: "start", actor: "player" }],
+        table: buildBlackjackTable({
+          userId: params.userId,
+          fairness: params.fairness,
+        }),
+        playMode: params.playMode,
         playerHands: [
           {
             cards: params.playerCards,

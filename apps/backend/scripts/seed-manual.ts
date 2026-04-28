@@ -560,7 +560,8 @@ const seedAuditAndRisk = async (params: {
 
   await ensureUserFreeze({
     userId: params.frozenId,
-    reason: 'manual_test_freeze',
+    reason: 'manual_admin',
+    scope: 'account',
   });
 };
 

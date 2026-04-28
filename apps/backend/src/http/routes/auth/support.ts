@@ -302,6 +302,8 @@ export const handleLoginAnomaly = async (payload: {
   await recordSuspiciousActivity({
     userId: payload.userId,
     reason: "anomalous_login",
+    freezeReason: "aml_review",
+    freezeScope: "account_lock",
     metadata: {
       ...metadata,
       loginType: payload.anomalyEventType,

@@ -56,6 +56,8 @@ describe('verifyAdminSessionToken', () => {
       mfaEnabled: true,
       mfaRecoveryMode: 'none',
       sessionId: 'admin-session-9',
+      permissions: [],
+      requiresMfa: false,
     });
   });
 });

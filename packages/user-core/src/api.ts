@@ -14,6 +14,13 @@ import type {
   RegisterResponse,
   SessionBulkRevocationResponse,
   SessionRevocationResponse,
+  UserRealtimeTokenResponse,
+  UserMfaDisableRequest,
+  UserMfaDisableResponse,
+  UserMfaEnrollmentResponse,
+  UserMfaStatusResponse,
+  UserMfaVerifyRequest,
+  UserMfaVerifyResponse,
   UserSessionResponse,
   UserSessionsResponse,
   VerificationTokenConfirmRequest,
@@ -25,6 +32,13 @@ import type {
   BlackjackOverviewResponse,
   BlackjackStartRequest,
 } from "@reward/shared-types/blackjack";
+import type {
+  CommunityThreadDetailResponse,
+  CommunityThreadListResponse,
+  CommunityThreadMutationResponse,
+  CreateCommunityPostRequest,
+  CreateCommunityThreadRequest,
+} from "@reward/shared-types/community";
 import type {
   DrawCatalogResponse,
   DrawPlayRequest,
@@ -38,6 +52,26 @@ import type {
   FairnessReveal,
 } from "@reward/shared-types/fairness";
 import type {
+  HandHistory,
+  HoldemSignedEvidenceBundle,
+} from "@reward/shared-types/hand-history";
+import type {
+  HoldemCreateTableRequest,
+  HoldemJoinTableRequest,
+  HoldemPresenceResponse,
+  HoldemSeatModeRequest,
+  HoldemTableMessage,
+  HoldemTableMessageRequest,
+  HoldemTableMessagesResponse,
+  HoldemTableActionRequest,
+  HoldemTableResponse,
+  HoldemTablesResponse,
+} from "@reward/shared-types/holdem";
+import type {
+  KycUserProfile,
+  KycSubmitRequest,
+} from "@reward/shared-types/kyc";
+import type {
   QuickEightRequest,
   QuickEightRound,
 } from "@reward/shared-types/quick-eight";
@@ -47,6 +81,15 @@ import type {
   RewardMissionId,
 } from "@reward/shared-types/gamification";
 import type {
+  PredictionMarketDetail,
+  PredictionMarketHistoryResponse,
+  PredictionMarketPortfolioFilter,
+  PredictionMarketPortfolioResponse,
+  PredictionMarketPositionMutationResponse,
+  PredictionMarketPositionRequest,
+  PredictionMarketSummary,
+} from "@reward/shared-types/prediction-market";
+import type {
   BankCardRecord,
   CryptoDepositChannelRecord,
   CryptoWithdrawAddressViewRecord,
@@ -54,16 +97,28 @@ import type {
   LedgerEntryRecord,
   WithdrawalRecord,
 } from "@reward/shared-types/finance";
+import type {
+  AcceptCurrentLegalDocumentsRequest,
+  CurrentLegalAcceptanceState,
+  CurrentLegalDocumentsResponse,
+} from "@reward/shared-types/legal";
 import type { WalletBalanceResponse } from "@reward/shared-types/user";
 
 export type ApiResult<T> = ApiResponse<T>;
+
+export const USER_REALTIME_ROUTE = '/realtime';
 
 export const USER_API_ROUTES = {
   auth: {
     register: "/auth/register",
     session: "/auth/user/session",
+    realtimeToken: "/auth/user/realtime-token",
     sessions: "/auth/user/sessions",
     sessionsRevokeAll: "/auth/user/sessions/revoke-all",
+    mfaStatus: "/auth/user/mfa/status",
+    mfaEnrollment: "/auth/user/mfa/enrollment",
+    mfaVerify: "/auth/user/mfa/verify",
+    mfaDisable: "/auth/user/mfa/disable",
     passwordResetRequest: "/auth/password-reset/request",
     passwordResetConfirm: "/auth/password-reset/confirm",
     emailVerificationRequest: "/auth/email-verification/request",
@@ -71,12 +126,23 @@ export const USER_API_ROUTES = {
     phoneVerificationRequest: "/auth/phone-verification/request",
     phoneVerificationConfirm: "/auth/phone-verification/confirm",
   },
+  legal: {
+    current: "/legal/current",
+    acceptances: "/legal/acceptances",
+  },
+  communityThreads: "/community/threads",
   wallet: "/wallet",
   transactions: "/transactions",
+  kycProfile: "/kyc/profile",
   rewardCenter: "/rewards/center",
   rewardClaim: "/rewards/claim",
+  markets: "/markets",
+  marketPortfolio: "/markets/portfolio",
+  marketHistory: "/markets/history",
   fairnessCommit: "/fairness/commit",
   fairnessReveal: "/fairness/reveal",
+  handHistory: "/hand-history",
+  holdemTables: "/holdem/tables",
   blackjack: "/blackjack",
   blackjackStart: "/blackjack/start",
   draw: "/draw",
@@ -91,6 +157,7 @@ export const USER_API_ROUTES = {
   topUps: "/top-ups",
   withdrawals: "/withdrawals",
   cryptoWithdrawals: "/crypto-withdrawals",
+  realtime: USER_REALTIME_ROUTE,
 } as const;
 
 export type SupportedUserPlatform = "web" | "ios" | "android";
@@ -104,6 +171,8 @@ export const LOCAL_API_BASE_URLS: Record<SupportedUserPlatform, string> = {
 const fallbackError: ApiError = { message: "Request failed." };
 
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
+const resolveRealtimeProtocol = (protocol: string) =>
+  protocol === 'https:' ? 'wss:' : 'ws:';
 
 const toSearch = (params: Record<string, string | number | undefined>) => {
   const search = new URLSearchParams();
@@ -117,6 +186,29 @@ const toSearch = (params: Record<string, string | number | undefined>) => {
 
 export const resolveLocalApiBaseUrl = (platform: SupportedUserPlatform) =>
   LOCAL_API_BASE_URLS[platform];
+
+export const resolveUserRealtimeUrl = (payload: {
+  baseUrl: string;
+  authToken?: string | null;
+  query?: Record<string, string | number | boolean | undefined>;
+}) => {
+  const url = new URL(USER_REALTIME_ROUTE, `${trimTrailingSlash(payload.baseUrl)}/`);
+  url.protocol = resolveRealtimeProtocol(url.protocol);
+
+  if (payload.authToken) {
+    url.searchParams.set('token', payload.authToken);
+  }
+
+  for (const [key, value] of Object.entries(payload.query ?? {})) {
+    if (value === undefined || value === null || value === '') {
+      continue;
+    }
+
+    url.searchParams.set(key, String(value));
+  }
+
+  return url.toString();
+};
 
 export const parseApiResponse = async <T>(
   response: Response,
@@ -226,6 +318,7 @@ export type WithdrawalCreateRequest = {
   amount: string;
   payoutMethodId?: number | null;
   bankCardId?: number | null;
+  totpCode?: string | null;
   metadata?: Record<string, unknown> | null;
 };
 
@@ -277,6 +370,31 @@ export function createUserApiClient(runtime: UserApiRuntime) {
         { auth: false },
       );
     },
+    getCurrentLegalDocuments(overrides: UserApiOverrides = {}) {
+      return request<CurrentLegalDocumentsResponse>(
+        USER_API_ROUTES.legal.current,
+        { cache: "no-store" },
+        {
+          ...overrides,
+          auth: false,
+        },
+      );
+    },
+    acceptCurrentLegalDocuments(
+      payload: AcceptCurrentLegalDocumentsRequest,
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<CurrentLegalAcceptanceState>(
+        USER_API_ROUTES.legal.acceptances,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          cache: "no-store",
+        },
+        overrides,
+      );
+    },
     createSession(payload: AuthCredentials) {
       return request<UserSessionResponse>(
         USER_API_ROUTES.auth.session,
@@ -292,6 +410,13 @@ export function createUserApiClient(runtime: UserApiRuntime) {
     getCurrentSession(overrides: UserApiOverrides = {}) {
       return request<CurrentUserSessionResponse>(
         USER_API_ROUTES.auth.session,
+        { cache: "no-store" },
+        overrides,
+      );
+    },
+    getUserRealtimeToken(overrides: UserApiOverrides = {}) {
+      return request<UserRealtimeTokenResponse>(
+        USER_API_ROUTES.auth.realtimeToken,
         { cache: "no-store" },
         overrides,
       );
@@ -328,6 +453,53 @@ export function createUserApiClient(runtime: UserApiRuntime) {
         USER_API_ROUTES.auth.sessionsRevokeAll,
         {
           method: "POST",
+          cache: "no-store",
+        },
+        overrides,
+      );
+    },
+    getUserMfaStatus(overrides: UserApiOverrides = {}) {
+      return request<UserMfaStatusResponse>(
+        USER_API_ROUTES.auth.mfaStatus,
+        { cache: "no-store" },
+        overrides,
+      );
+    },
+    createUserMfaEnrollment(overrides: UserApiOverrides = {}) {
+      return request<UserMfaEnrollmentResponse>(
+        USER_API_ROUTES.auth.mfaEnrollment,
+        {
+          method: "POST",
+          cache: "no-store",
+        },
+        overrides,
+      );
+    },
+    verifyUserMfa(
+      payload: UserMfaVerifyRequest,
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<UserMfaVerifyResponse>(
+        USER_API_ROUTES.auth.mfaVerify,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          cache: "no-store",
+        },
+        overrides,
+      );
+    },
+    disableUserMfa(
+      payload: UserMfaDisableRequest,
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<UserMfaDisableResponse>(
+        USER_API_ROUTES.auth.mfaDisable,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
           cache: "no-store",
         },
         overrides,
@@ -432,6 +604,63 @@ export function createUserApiClient(runtime: UserApiRuntime) {
         overrides,
       );
     },
+    listCommunityThreads(
+      page?: number,
+      limit?: number,
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<CommunityThreadListResponse>(
+        `${USER_API_ROUTES.communityThreads}${toSearch({ page, limit })}`,
+        { cache: "no-store" },
+        overrides,
+      );
+    },
+    getCommunityThread(
+      threadId: number,
+      page?: number,
+      limit?: number,
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<CommunityThreadDetailResponse>(
+        `${USER_API_ROUTES.communityThreads}/${threadId}${toSearch({
+          page,
+          limit,
+        })}`,
+        { cache: "no-store" },
+        overrides,
+      );
+    },
+    createCommunityThread(
+      payload: CreateCommunityThreadRequest,
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<CommunityThreadMutationResponse>(
+        USER_API_ROUTES.communityThreads,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          cache: "no-store",
+        },
+        overrides,
+      );
+    },
+    createCommunityPost(
+      threadId: number,
+      payload: CreateCommunityPostRequest,
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<CommunityThreadMutationResponse>(
+        `${USER_API_ROUTES.communityThreads}/${threadId}/posts`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          cache: "no-store",
+        },
+        overrides,
+      );
+    },
     getWalletBalance(overrides: UserApiOverrides = {}) {
       return request<WalletBalanceResponse>(
         USER_API_ROUTES.wallet,
@@ -443,6 +672,28 @@ export function createUserApiClient(runtime: UserApiRuntime) {
       return request<LedgerEntryRecord[]>(
         `${USER_API_ROUTES.transactions}${toSearch({ limit })}`,
         { cache: "no-store" },
+        overrides,
+      );
+    },
+    getKycProfile(overrides: UserApiOverrides = {}) {
+      return request<KycUserProfile>(
+        USER_API_ROUTES.kycProfile,
+        { cache: "no-store" },
+        overrides,
+      );
+    },
+    submitKycProfile(
+      payload: KycSubmitRequest,
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<KycUserProfile>(
+        USER_API_ROUTES.kycProfile,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          cache: "no-store",
+        },
         overrides,
       );
     },
@@ -604,6 +855,159 @@ export function createUserApiClient(runtime: UserApiRuntime) {
         overrides,
       );
     },
+    getHoldemTables(overrides: UserApiOverrides = {}) {
+      return request<HoldemTablesResponse>(
+        USER_API_ROUTES.holdemTables,
+        { cache: "no-store" },
+        overrides,
+      );
+    },
+    getHoldemTable(tableId: number, overrides: UserApiOverrides = {}) {
+      return request<HoldemTableResponse>(
+        `${USER_API_ROUTES.holdemTables}/${tableId}`,
+        { cache: "no-store" },
+        overrides,
+      );
+    },
+    getHoldemTableMessages(
+      tableId: number,
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<HoldemTableMessagesResponse>(
+        `${USER_API_ROUTES.holdemTables}/${tableId}/messages`,
+        { cache: "no-store" },
+        overrides,
+      );
+    },
+    touchHoldemTablePresence(
+      tableId: number,
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<HoldemPresenceResponse>(
+        `${USER_API_ROUTES.holdemTables}/${tableId}/presence`,
+        {
+          method: "POST",
+          cache: "no-store",
+        },
+        overrides,
+      );
+    },
+    setHoldemSeatMode(
+      tableId: number,
+      payload: HoldemSeatModeRequest,
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<HoldemTableResponse>(
+        `${USER_API_ROUTES.holdemTables}/${tableId}/seat-mode`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          cache: "no-store",
+        },
+        overrides,
+      );
+    },
+    postHoldemTableMessage(
+      tableId: number,
+      payload: HoldemTableMessageRequest,
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<HoldemTableMessage>(
+        `${USER_API_ROUTES.holdemTables}/${tableId}/messages`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          cache: "no-store",
+        },
+        overrides,
+      );
+    },
+    createHoldemTable(
+      payload: HoldemCreateTableRequest,
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<HoldemTableResponse>(
+        USER_API_ROUTES.holdemTables,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          cache: "no-store",
+        },
+        overrides,
+      );
+    },
+    joinHoldemTable(
+      tableId: number,
+      payload: HoldemJoinTableRequest,
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<HoldemTableResponse>(
+        `${USER_API_ROUTES.holdemTables}/${tableId}/join`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          cache: "no-store",
+        },
+        overrides,
+      );
+    },
+    leaveHoldemTable(tableId: number, overrides: UserApiOverrides = {}) {
+      return request<HoldemTableResponse>(
+        `${USER_API_ROUTES.holdemTables}/${tableId}/leave`,
+        {
+          method: "POST",
+          cache: "no-store",
+        },
+        overrides,
+      );
+    },
+    startHoldemTable(tableId: number, overrides: UserApiOverrides = {}) {
+      return request<HoldemTableResponse>(
+        `${USER_API_ROUTES.holdemTables}/${tableId}/start`,
+        {
+          method: "POST",
+          cache: "no-store",
+        },
+        overrides,
+      );
+    },
+    actOnHoldemTable(
+      tableId: number,
+      payload: HoldemTableActionRequest,
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<HoldemTableResponse>(
+        `${USER_API_ROUTES.holdemTables}/${tableId}/action`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          cache: "no-store",
+        },
+        overrides,
+      );
+    },
+    getHandHistory(roundId: string, overrides: UserApiOverrides = {}) {
+      return request<HandHistory>(
+        `${USER_API_ROUTES.handHistory}/${encodeURIComponent(roundId)}`,
+        { cache: "no-store" },
+        overrides,
+      );
+    },
+    getHandHistoryEvidenceBundle(
+      roundId: string,
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<HoldemSignedEvidenceBundle>(
+        `${USER_API_ROUTES.handHistory}/${encodeURIComponent(roundId)}/evidence-bundle`,
+        { cache: "no-store" },
+        overrides,
+      );
+    },
     startBlackjack(
       payload: BlackjackStartRequest,
       overrides: UserApiOverrides = {},
@@ -672,6 +1076,67 @@ export function createUserApiClient(runtime: UserApiRuntime) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ missionId }),
+          cache: "no-store",
+        },
+        overrides,
+      );
+    },
+    listPredictionMarkets(overrides: UserApiOverrides = {}) {
+      return request<PredictionMarketSummary[]>(
+        USER_API_ROUTES.markets,
+        { cache: "no-store" },
+        overrides,
+      );
+    },
+    getPredictionMarketPortfolio(
+      status?: PredictionMarketPortfolioFilter,
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<PredictionMarketPortfolioResponse>(
+        `${USER_API_ROUTES.marketPortfolio}${toSearch({ status })}`,
+        { cache: "no-store" },
+        overrides,
+      );
+    },
+    getPredictionMarketHistory(
+      params: {
+        status?: PredictionMarketPortfolioFilter;
+        page?: number;
+        limit?: number;
+      } = {},
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<PredictionMarketHistoryResponse>(
+        `${USER_API_ROUTES.marketHistory}${toSearch({
+          status: params.status,
+          page: params.page,
+          limit: params.limit,
+        })}`,
+        { cache: "no-store" },
+        overrides,
+      );
+    },
+    getPredictionMarket(
+      marketId: number,
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<PredictionMarketDetail>(
+        `${USER_API_ROUTES.markets}/${marketId}`,
+        { cache: "no-store" },
+        overrides,
+      );
+    },
+    placePredictionPosition(
+      marketId: number,
+      payload: PredictionMarketPositionRequest,
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<PredictionMarketPositionMutationResponse>(
+        `${USER_API_ROUTES.markets}/${marketId}/positions`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
           cache: "no-store",
         },
         overrides,

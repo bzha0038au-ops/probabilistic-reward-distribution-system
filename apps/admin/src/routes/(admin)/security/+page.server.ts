@@ -1,25 +1,49 @@
 import { fail } from "@sveltejs/kit"
 import type { Actions, PageServerLoad } from "./$types"
 import {
-  CursorAdminActionPageSchema,
   CursorAuthEventPageSchema,
   FreezeRecordPageSchema,
 } from "@reward/shared-types/admin"
 
+import { createTranslator, getMessages } from "$lib/i18n"
+import { captureAdminServerException } from "$lib/observability/server"
 import { apiRequest } from "$lib/server/api"
+import {
+  parseAdminStepUpPayload,
+  validateAdminStepUpPayload,
+} from "$lib/server/admin-step-up"
+import { securityActionPolicies } from "./action-policies"
+
+const getActionT = (locale?: Parameters<typeof getMessages>[0]) =>
+  createTranslator(getMessages(locale ?? "en"))
+
+const buildStepUpMessages = (t: ReturnType<typeof createTranslator>) => ({
+  totpRequired: t("saas.confirmDialog.mfaRequired"),
+  breakGlassRequired: t("saas.confirmDialog.breakGlassRequired"),
+})
+
+const securityActionFail = (
+  status: number,
+  t: ReturnType<typeof createTranslator>,
+  errorKey: string,
+) =>
+  fail(status, {
+    error: t(errorKey),
+  })
+
+const securityResponseFail = (
+  response: {
+    status: number
+    error?: { message?: string } | null
+  },
+  t: ReturnType<typeof createTranslator>,
+  errorKey: string,
+) =>
+  fail(response.status, {
+    error: response.error?.message ?? t(errorKey),
+  })
 
 const fallbackAuthEvents = {
-  items: [],
-  limit: 50,
-  hasNext: false,
-  hasPrevious: false,
-  nextCursor: null,
-  prevCursor: null,
-  direction: "next" as const,
-  sort: "desc" as const,
-}
-
-const fallbackAdminActions = {
   items: [],
   limit: 50,
   hasNext: false,
@@ -37,10 +61,8 @@ const fallbackFreezeRecords = {
   hasNext: false,
 }
 
-const parseTotpCode = (value: FormDataEntryValue | null) =>
-  typeof value === "string" && value.trim() !== "" ? value.trim() : null
-
-export const load: PageServerLoad = async ({ fetch, cookies, url }) => {
+export const load: PageServerLoad = async ({ fetch, cookies, locals, url }) => {
+  const t = createTranslator(getMessages(locals.locale))
   const params = new URLSearchParams()
   const email = url.searchParams.get("email")
   const eventType = url.searchParams.get("eventType")
@@ -62,29 +84,6 @@ export const load: PageServerLoad = async ({ fetch, cookies, url }) => {
   if (sort === "asc" || sort === "desc") params.set("sort", sort)
 
   try {
-    const adminParams = new URLSearchParams()
-    const adminId = url.searchParams.get("adminId")
-    const adminAction = url.searchParams.get("adminAction")
-    const adminFrom = url.searchParams.get("adminFrom")
-    const adminTo = url.searchParams.get("adminTo")
-    const adminLimit = url.searchParams.get("adminLimit")
-    const adminCursor = url.searchParams.get("adminCursor")
-    const adminDirection = url.searchParams.get("adminDirection")
-    const adminSort = url.searchParams.get("adminSort")
-
-    if (adminId) adminParams.set("adminId", adminId)
-    if (adminAction) adminParams.set("action", adminAction)
-    if (adminFrom) adminParams.set("from", adminFrom)
-    if (adminTo) adminParams.set("to", adminTo)
-    if (adminLimit) adminParams.set("limit", adminLimit)
-    if (adminCursor) adminParams.set("cursor", adminCursor)
-    if (adminDirection === "next" || adminDirection === "prev") {
-      adminParams.set("direction", adminDirection)
-    }
-    if (adminSort === "asc" || adminSort === "desc") {
-      adminParams.set("sort", adminSort)
-    }
-
     const freezeParams = new URLSearchParams()
     const freezeLimit = url.searchParams.get("freezeLimit")
     const freezePage = url.searchParams.get("freezePage")
@@ -94,109 +93,137 @@ export const load: PageServerLoad = async ({ fetch, cookies, url }) => {
     if (freezeSort === "asc" || freezeSort === "desc") {
       freezeParams.set("sort", freezeSort)
     }
-
-    const [eventsRes, freezeRes, actionsRes] = await Promise.all([
+    const [eventsRes, freezeRes] = await Promise.all([
       apiRequest(fetch, cookies, `/admin/auth-events?${params.toString()}`),
       apiRequest(
         fetch,
         cookies,
         `/admin/freeze-records?${freezeParams.toString()}`,
       ),
-      apiRequest(
-        fetch,
-        cookies,
-        `/admin/admin-actions?${adminParams.toString()}`,
-      ),
     ])
 
-    if (!eventsRes.ok || !freezeRes.ok || !actionsRes.ok) {
+    if (!eventsRes.ok || !freezeRes.ok) {
       const errorMessage = !eventsRes.ok
         ? eventsRes.error?.message
         : !freezeRes.ok
           ? freezeRes.error?.message
-          : !actionsRes.ok
-            ? actionsRes.error?.message
-            : "Failed to load security data."
+          : t("security.errors.loadData")
+
+      captureAdminServerException(new Error(errorMessage), {
+        tags: {
+          kind: "admin_security_load_failure",
+        },
+        extra: {
+          authEventsStatus: eventsRes.status,
+          freezeRecordsStatus: freezeRes.status,
+        },
+      })
 
       return {
         authEvents: fallbackAuthEvents,
         freezeRecords: fallbackFreezeRecords,
-        adminActions: fallbackAdminActions,
-        error: errorMessage ?? "Failed to load security data.",
+        error: errorMessage ?? t("security.errors.loadData"),
       }
     }
 
     const authEvents = CursorAuthEventPageSchema.safeParse(eventsRes.data)
     const freezeRecords = FreezeRecordPageSchema.safeParse(freezeRes.data)
-    const adminActions = CursorAdminActionPageSchema.safeParse(actionsRes.data)
+
+    if (!authEvents.success || !freezeRecords.success) {
+      captureAdminServerException(
+        new Error(t("security.errors.unexpectedResponse")),
+        {
+          tags: {
+            kind: "admin_security_load_unexpected_response",
+          },
+          extra: {
+            authEventsSchemaValid: authEvents.success,
+            freezeRecordsSchemaValid: freezeRecords.success,
+          },
+        },
+      )
+    }
 
     return {
       authEvents: authEvents.success ? authEvents.data : fallbackAuthEvents,
       freezeRecords: freezeRecords.success
         ? freezeRecords.data
         : fallbackFreezeRecords,
-      adminActions: adminActions.success
-        ? adminActions.data
-        : fallbackAdminActions,
       error:
-        authEvents.success && freezeRecords.success && adminActions.success
+        authEvents.success && freezeRecords.success
           ? null
-          : "Security API returned an unexpected response.",
+          : t("security.errors.unexpectedResponse"),
     }
   } catch (error) {
+    captureAdminServerException(error, {
+      tags: {
+        kind: "admin_security_load_exception",
+      },
+    })
+
     return {
       authEvents: fallbackAuthEvents,
       freezeRecords: fallbackFreezeRecords,
-      adminActions: fallbackAdminActions,
-      error:
-        error instanceof Error ? error.message : "Failed to load auth events.",
+      error: t("security.errors.loadData"),
     }
   }
 }
 
 export const actions: Actions = {
-  releaseFreeze: async ({ request, fetch, cookies }) => {
+  releaseFreeze: async ({ request, fetch, cookies, locals }) => {
+    const t = getActionT(locals?.locale)
     const formData = await request.formData()
-    const userId = formData.get("userId")?.toString().trim()
-    const totpCode = parseTotpCode(formData.get("totpCode"))
+    const freezeRecordId = formData.get("freezeRecordId")?.toString().trim()
+    const stepUpPayload = parseAdminStepUpPayload(formData)
 
-    if (!userId) {
-      return fail(400, { error: "Missing user id." })
+    if (!freezeRecordId) {
+      return securityActionFail(
+        400,
+        t,
+        "security.errors.missingFreezeRecordId",
+      )
     }
-    if (!totpCode) {
-      return fail(400, { error: "Admin MFA code is required." })
+    const validationError = validateAdminStepUpPayload(stepUpPayload, {
+      messages: buildStepUpMessages(t),
+    })
+    if (validationError) {
+      return fail(400, { error: validationError })
     }
 
     const response = await apiRequest(
       fetch,
       cookies,
-      `/admin/freeze-records/${userId}/release`,
+      `/admin/freeze-records/${freezeRecordId}/release`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ totpCode }),
+        body: JSON.stringify(stepUpPayload),
       },
     )
 
     if (!response.ok) {
-      return fail(response.status, {
-        error: response.error?.message ?? "Failed to release freeze.",
-      })
+      return securityResponseFail(response, t, "security.errors.releaseFreeze")
     }
 
     return { success: true }
   },
-  createFreeze: async ({ request, fetch, cookies }) => {
+  createFreeze: async ({ request, fetch, cookies, locals }) => {
+    const t = getActionT(locals?.locale)
     const formData = await request.formData()
     const userId = formData.get("userId")?.toString().trim()
-    const reason = formData.get("reason")?.toString().trim()
-    const totpCode = parseTotpCode(formData.get("totpCode"))
+    const reason = formData.get("reason")?.toString().trim() || "manual_admin"
+    const scope = formData.get("scope")?.toString().trim() || "account_lock"
+    const stepUpPayload = parseAdminStepUpPayload(formData)
 
     if (!userId) {
-      return fail(400, { error: "Missing user id." })
+      return securityActionFail(400, t, "security.errors.missingUserId")
     }
-    if (!totpCode) {
-      return fail(400, { error: "Admin MFA code is required." })
+    const validationError = validateAdminStepUpPayload(stepUpPayload, {
+      requireBreakGlass: securityActionPolicies.createFreeze.requireBreakGlass,
+      messages: buildStepUpMessages(t),
+    })
+    if (validationError) {
+      return fail(400, { error: validationError })
     }
 
     const response = await apiRequest(fetch, cookies, "/admin/freeze-records", {
@@ -204,15 +231,14 @@ export const actions: Actions = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         userId: Number(userId),
-        reason: reason || undefined,
-        totpCode,
+        reason,
+        scope,
+        ...stepUpPayload,
       }),
     })
 
     if (!response.ok) {
-      return fail(response.status, {
-        error: response.error?.message ?? "Failed to freeze account.",
-      })
+      return securityResponseFail(response, t, "security.errors.freezeAccount")
     }
 
     return { success: true }

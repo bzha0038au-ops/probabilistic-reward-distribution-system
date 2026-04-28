@@ -283,3 +283,31 @@ export const paymentReconciliationIssues = pgTable(
     ),
   })
 );
+
+export const walletReconciliationRuns = pgTable(
+  'wallet_reconciliation_runs',
+  {
+    id: serial('id').primaryKey(),
+    trigger: varchar('trigger', { length: 32 }).notNull(),
+    status: varchar('status', { length: 32 }).notNull().default('running'),
+    scannedUsers: integer('scanned_users').notNull().default(0),
+    mismatchedUsers: integer('mismatched_users').notNull().default(0),
+    summary: jsonb('summary'),
+    startedAt: timestamp('started_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    statusCreatedIdx: index('wallet_reconciliation_runs_status_created_idx').on(
+      table.status,
+      table.createdAt
+    ),
+  })
+);

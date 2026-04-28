@@ -4,6 +4,8 @@ import {
   SaasApiKeyCreateSchema,
   SaasApiKeyRevokeSchema,
   SaasApiKeyRotateSchema,
+  SaasOutboundWebhookCreateSchema,
+  SaasOutboundWebhookPatchSchema,
   SaasProjectCreateSchema,
   SaasProjectPatchSchema,
   SaasProjectPrizeCreateSchema,
@@ -15,11 +17,14 @@ import { recordAdminAction } from "../../../../modules/admin/audit";
 import {
   createProjectApiKey,
   createProjectPrize,
+  createSaasOutboundWebhook,
   createSaasProject,
+  deleteSaasOutboundWebhook,
   deleteProjectPrize,
   listProjectPrizes,
   rotateProjectApiKey,
   revokeProjectApiKey,
+  updateSaasOutboundWebhook,
   updateProjectPrize,
   updateSaasProject,
 } from "../../../../modules/saas/service";
@@ -135,6 +140,191 @@ export async function registerAdminSaasProjectRoutes(
         return sendSuccess(reply, project);
       } catch (error) {
         return sendErrorForException(reply, error, "Failed to update project.");
+      }
+    },
+  );
+
+  protectedRoutes.post(
+    "/admin/saas/projects/:projectId/outbound-webhooks",
+    {
+      config: { rateLimit: adminRateLimit },
+      preHandler: [
+        requireAdminPermission(ADMIN_PERMISSION_KEYS.CONFIG_UPDATE),
+        enforceAdminLimit,
+      ],
+    },
+    async (request, reply) => {
+      const projectId = parseIdParam(request.params, "projectId");
+      if (!projectId) {
+        return sendError(
+          reply,
+          400,
+          "Invalid project id.",
+          undefined,
+          API_ERROR_CODES.INVALID_PROJECT_ID,
+        );
+      }
+
+      const parsed = parseSchema(
+        SaasOutboundWebhookCreateSchema,
+        toObject(request.body),
+      );
+      if (!parsed.isValid) {
+        return sendError(
+          reply,
+          400,
+          "Invalid request.",
+          parsed.errors,
+          API_ERROR_CODES.INVALID_REQUEST,
+        );
+      }
+
+      try {
+        const webhook = await createSaasOutboundWebhook(projectId, parsed.data, {
+          adminId: request.admin!.adminId,
+          permissions: request.admin!.permissions,
+        });
+        await recordAdminAction({
+          adminId: request.admin?.adminId ?? null,
+          action: "saas_outbound_webhook_create",
+          targetType: "saas_outbound_webhook",
+          targetId: webhook.id,
+          metadata: {
+            projectId,
+            url: webhook.url,
+            events: webhook.events,
+            isActive: webhook.isActive,
+          },
+          ip: request.ip,
+        });
+        return sendSuccess(reply, webhook, 201);
+      } catch (error) {
+        return sendErrorForException(
+          reply,
+          error,
+          "Failed to create outbound webhook.",
+        );
+      }
+    },
+  );
+
+  protectedRoutes.patch(
+    "/admin/saas/projects/:projectId/outbound-webhooks/:webhookId",
+    {
+      config: { rateLimit: adminRateLimit },
+      preHandler: [
+        requireAdminPermission(ADMIN_PERMISSION_KEYS.CONFIG_UPDATE),
+        enforceAdminLimit,
+      ],
+    },
+    async (request, reply) => {
+      const projectId = parseIdParam(request.params, "projectId");
+      const webhookId = parseIdParam(request.params, "webhookId");
+      if (!projectId || !webhookId) {
+        return sendError(
+          reply,
+          400,
+          "Invalid project or webhook id.",
+          undefined,
+          API_ERROR_CODES.INVALID_PROJECT_ID,
+        );
+      }
+
+      const parsed = parseSchema(
+        SaasOutboundWebhookPatchSchema,
+        toObject(request.body),
+      );
+      if (!parsed.isValid) {
+        return sendError(
+          reply,
+          400,
+          "Invalid request.",
+          parsed.errors,
+          API_ERROR_CODES.INVALID_REQUEST,
+        );
+      }
+
+      try {
+        const webhook = await updateSaasOutboundWebhook(
+          projectId,
+          webhookId,
+          parsed.data,
+          {
+            adminId: request.admin!.adminId,
+            permissions: request.admin!.permissions,
+          },
+        );
+        await recordAdminAction({
+          adminId: request.admin?.adminId ?? null,
+          action: "saas_outbound_webhook_update",
+          targetType: "saas_outbound_webhook",
+          targetId: webhook.id,
+          metadata: {
+            projectId,
+            url: webhook.url,
+            events: webhook.events,
+            isActive: webhook.isActive,
+            secretRotated: parsed.data.secret !== undefined,
+          },
+          ip: request.ip,
+        });
+        return sendSuccess(reply, webhook);
+      } catch (error) {
+        return sendErrorForException(
+          reply,
+          error,
+          "Failed to update outbound webhook.",
+        );
+      }
+    },
+  );
+
+  protectedRoutes.delete(
+    "/admin/saas/projects/:projectId/outbound-webhooks/:webhookId",
+    {
+      config: { rateLimit: adminRateLimit },
+      preHandler: [
+        requireAdminPermission(ADMIN_PERMISSION_KEYS.CONFIG_UPDATE),
+        enforceAdminLimit,
+      ],
+    },
+    async (request, reply) => {
+      const projectId = parseIdParam(request.params, "projectId");
+      const webhookId = parseIdParam(request.params, "webhookId");
+      if (!projectId || !webhookId) {
+        return sendError(
+          reply,
+          400,
+          "Invalid project or webhook id.",
+          undefined,
+          API_ERROR_CODES.INVALID_PROJECT_ID,
+        );
+      }
+
+      try {
+        const webhook = await deleteSaasOutboundWebhook(projectId, webhookId, {
+          adminId: request.admin!.adminId,
+          permissions: request.admin!.permissions,
+        });
+        await recordAdminAction({
+          adminId: request.admin?.adminId ?? null,
+          action: "saas_outbound_webhook_delete",
+          targetType: "saas_outbound_webhook",
+          targetId: webhook.id,
+          metadata: {
+            projectId,
+            url: webhook.url,
+            events: webhook.events,
+          },
+          ip: request.ip,
+        });
+        return sendSuccess(reply, webhook);
+      } catch (error) {
+        return sendErrorForException(
+          reply,
+          error,
+          "Failed to delete outbound webhook.",
+        );
       }
     },
   );

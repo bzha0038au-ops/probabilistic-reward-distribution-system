@@ -1,8 +1,10 @@
 import type { ApiError, ApiResponse } from "@reward/shared-types/api";
 import type {
   AuthCredentials,
+  CurrentUserSessionResponse,
   RegisterRequest,
   RegisterResponse,
+  UserRealtimeTokenResponse,
   UserSessionResponse,
 } from "@reward/shared-types/auth";
 import type {
@@ -20,6 +22,27 @@ import type {
   DrawResult,
 } from "@reward/shared-types/draw";
 import type {
+  HandHistory,
+  HoldemSignedEvidenceBundle,
+} from "@reward/shared-types/hand-history";
+import type {
+  HoldemCreateTableRequest,
+  HoldemJoinTableRequest,
+  HoldemPresenceResponse,
+  HoldemSeatModeRequest,
+  HoldemTableMessage,
+  HoldemTableMessageRequest,
+  HoldemTableMessagesResponse,
+  HoldemTableActionRequest,
+  HoldemTableResponse,
+  HoldemTablesResponse,
+} from "@reward/shared-types/holdem";
+import type {
+  AcceptCurrentLegalDocumentsRequest,
+  CurrentLegalAcceptanceState,
+  CurrentLegalDocumentsResponse,
+} from "@reward/shared-types/legal";
+import type {
   QuickEightRequest,
   QuickEightRound,
 } from "@reward/shared-types/quick-eight";
@@ -31,8 +54,15 @@ export const USER_API_ROUTES = {
   auth: {
     register: "/auth/register",
     session: "/auth/user/session",
+    realtimeToken: "/auth/user/realtime-token",
+  },
+  legal: {
+    current: "/legal/current",
+    acceptances: "/legal/acceptances",
   },
   wallet: "/wallet",
+  handHistory: "/hand-history",
+  holdemTables: "/holdem/tables",
   blackjack: "/blackjack",
   blackjackStart: "/blackjack/start",
   draw: "/draw",
@@ -201,6 +231,31 @@ export function createUserApiClient(runtime: UserApiRuntime) {
         { auth: false },
       );
     },
+    getCurrentLegalDocuments(overrides: UserApiOverrides = {}) {
+      return request<CurrentLegalDocumentsResponse>(
+        USER_API_ROUTES.legal.current,
+        { cache: "no-store" },
+        {
+          ...overrides,
+          auth: false,
+        },
+      );
+    },
+    acceptCurrentLegalDocuments(
+      payload: AcceptCurrentLegalDocumentsRequest,
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<CurrentLegalAcceptanceState>(
+        USER_API_ROUTES.legal.acceptances,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          cache: "no-store",
+        },
+        overrides,
+      );
+    },
     createSession(payload: AuthCredentials) {
       return request<UserSessionResponse>(
         USER_API_ROUTES.auth.session,
@@ -216,10 +271,143 @@ export function createUserApiClient(runtime: UserApiRuntime) {
     getWalletBalance() {
       return request<WalletBalanceResponse>(USER_API_ROUTES.wallet);
     },
+    getCurrentSession(overrides: UserApiOverrides = {}) {
+      return request<CurrentUserSessionResponse>(
+        USER_API_ROUTES.auth.session,
+        { cache: "no-store" },
+        overrides,
+      );
+    },
+    getUserRealtimeToken(overrides: UserApiOverrides = {}) {
+      return request<UserRealtimeTokenResponse>(
+        USER_API_ROUTES.auth.realtimeToken,
+        { cache: "no-store" },
+        overrides,
+      );
+    },
+    getHandHistory(roundId: string) {
+      return request<HandHistory>(
+        `${USER_API_ROUTES.handHistory}/${encodeURIComponent(roundId)}`,
+        {
+          cache: "no-store",
+        }
+      );
+    },
+    getHandHistoryEvidenceBundle(roundId: string) {
+      return request<HoldemSignedEvidenceBundle>(
+        `${USER_API_ROUTES.handHistory}/${encodeURIComponent(roundId)}/evidence-bundle`,
+        {
+          cache: "no-store",
+        },
+      );
+    },
     getBlackjackOverview() {
       return request<BlackjackOverviewResponse>(USER_API_ROUTES.blackjack, {
         cache: "no-store",
       });
+    },
+    getHoldemTables() {
+      return request<HoldemTablesResponse>(USER_API_ROUTES.holdemTables, {
+        cache: "no-store",
+      });
+    },
+    getHoldemTable(tableId: number) {
+      return request<HoldemTableResponse>(
+        `${USER_API_ROUTES.holdemTables}/${tableId}`,
+        {
+          cache: "no-store",
+        },
+      );
+    },
+    getHoldemTableMessages(tableId: number) {
+      return request<HoldemTableMessagesResponse>(
+        `${USER_API_ROUTES.holdemTables}/${tableId}/messages`,
+        {
+          cache: "no-store",
+        },
+      );
+    },
+    touchHoldemTablePresence(tableId: number) {
+      return request<HoldemPresenceResponse>(
+        `${USER_API_ROUTES.holdemTables}/${tableId}/presence`,
+        {
+          method: "POST",
+          cache: "no-store",
+        },
+      );
+    },
+    setHoldemSeatMode(tableId: number, payload: HoldemSeatModeRequest) {
+      return request<HoldemTableResponse>(
+        `${USER_API_ROUTES.holdemTables}/${tableId}/seat-mode`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          cache: "no-store",
+        },
+      );
+    },
+    postHoldemTableMessage(
+      tableId: number,
+      payload: HoldemTableMessageRequest,
+    ) {
+      return request<HoldemTableMessage>(
+        `${USER_API_ROUTES.holdemTables}/${tableId}/messages`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          cache: "no-store",
+        },
+      );
+    },
+    createHoldemTable(payload: HoldemCreateTableRequest) {
+      return request<HoldemTableResponse>(USER_API_ROUTES.holdemTables, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        cache: "no-store",
+      });
+    },
+    joinHoldemTable(tableId: number, payload: HoldemJoinTableRequest) {
+      return request<HoldemTableResponse>(
+        `${USER_API_ROUTES.holdemTables}/${tableId}/join`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          cache: "no-store",
+        },
+      );
+    },
+    leaveHoldemTable(tableId: number) {
+      return request<HoldemTableResponse>(
+        `${USER_API_ROUTES.holdemTables}/${tableId}/leave`,
+        {
+          method: "POST",
+          cache: "no-store",
+        },
+      );
+    },
+    startHoldemTable(tableId: number) {
+      return request<HoldemTableResponse>(
+        `${USER_API_ROUTES.holdemTables}/${tableId}/start`,
+        {
+          method: "POST",
+          cache: "no-store",
+        },
+      );
+    },
+    actOnHoldemTable(tableId: number, payload: HoldemTableActionRequest) {
+      return request<HoldemTableResponse>(
+        `${USER_API_ROUTES.holdemTables}/${tableId}/action`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          cache: "no-store",
+        },
+      );
     },
     startBlackjack(payload: BlackjackStartRequest) {
       return request<BlackjackMutationResponse>(

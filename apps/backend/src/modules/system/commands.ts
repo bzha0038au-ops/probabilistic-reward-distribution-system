@@ -24,6 +24,9 @@ import {
   REWARD_FIRST_DRAW_AMOUNT_KEY,
   REWARD_PROFILE_SECURITY_AMOUNT_KEY,
   REWARD_TOP_UP_STARTER_AMOUNT_KEY,
+  SAAS_USAGE_ALERT_MAX_ANTI_EXPLOIT_RATE_PCT_KEY,
+  SAAS_USAGE_ALERT_MAX_MINUTE_QPS_KEY,
+  SAAS_USAGE_ALERT_MAX_SINGLE_PAYOUT_AMOUNT_KEY,
 } from './keys';
 import { type DbExecutor, setConfigDecimal } from './store';
 
@@ -182,6 +185,52 @@ export async function setGamificationRewardConfig(
         REWARD_TOP_UP_STARTER_AMOUNT_KEY,
         config.topUpStarterRewardAmount,
         'Top-up starter reward amount'
+      )
+    );
+  }
+
+  await Promise.all(updates);
+}
+
+export async function setSaasUsageAlertConfig(
+  db: DbExecutor,
+  config: {
+    maxMinuteQps?: Decimal.Value;
+    maxSinglePayoutAmount?: Decimal.Value;
+    maxAntiExploitRatePct?: Decimal.Value;
+  }
+) {
+  const updates: Promise<void>[] = [];
+
+  if (config.maxMinuteQps !== undefined) {
+    updates.push(
+      setConfigDecimal(
+        db,
+        SAAS_USAGE_ALERT_MAX_MINUTE_QPS_KEY,
+        config.maxMinuteQps,
+        'SaaS usage alert maximum minute QPS'
+      )
+    );
+  }
+
+  if (config.maxSinglePayoutAmount !== undefined) {
+    updates.push(
+      setConfigDecimal(
+        db,
+        SAAS_USAGE_ALERT_MAX_SINGLE_PAYOUT_AMOUNT_KEY,
+        config.maxSinglePayoutAmount,
+        'SaaS usage alert maximum single payout amount'
+      )
+    );
+  }
+
+  if (config.maxAntiExploitRatePct !== undefined) {
+    updates.push(
+      setConfigDecimal(
+        db,
+        SAAS_USAGE_ALERT_MAX_ANTI_EXPLOIT_RATE_PCT_KEY,
+        config.maxAntiExploitRatePct,
+        'SaaS usage alert maximum anti-exploit hit rate percentage'
       )
     );
   }

@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import {
+  PlayModeRequestSchema,
+  PlayModeSnapshotSchema,
+} from "./play-mode";
 
 export const drawStatusValues = [
   'miss',
@@ -17,6 +21,7 @@ export type DrawRequest = z.infer<typeof DrawRequestSchema>;
 export const DrawPlayRequestSchema = z.object({
   count: z.number().int().min(1).max(100),
   clientNonce: z.string().min(1).max(128).nullable().optional(),
+  playMode: PlayModeRequestSchema.optional(),
 });
 
 export type DrawPlayRequest = z.infer<typeof DrawPlayRequestSchema>;
@@ -95,6 +100,7 @@ export const DrawCatalogResponseSchema = z.object({
   maxBatchCount: z.number().int().positive(),
   recommendedBatchCount: z.number().int().positive(),
   pity: DrawPityStateSchema,
+  playMode: PlayModeSnapshotSchema,
   fairness: z.object({
     epoch: z.number().int(),
     epochSeconds: z.number().int(),
@@ -107,6 +113,7 @@ export const DrawCatalogResponseSchema = z.object({
 export type DrawCatalogResponse = z.infer<typeof DrawCatalogResponseSchema>;
 
 export const DrawPlayResponseSchema = z.object({
+  requestedCount: z.number().int().positive(),
   count: z.number().int().positive(),
   totalCost: z.string(),
   totalReward: z.string(),
@@ -114,6 +121,7 @@ export const DrawPlayResponseSchema = z.object({
   endingBalance: z.string(),
   highestRarity: DrawPrizeRaritySchema.nullable(),
   pity: DrawPityStateSchema,
+  playMode: PlayModeSnapshotSchema,
   results: z.array(DrawResultSchema),
 });
 

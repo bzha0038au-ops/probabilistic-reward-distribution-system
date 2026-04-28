@@ -146,6 +146,7 @@ pnpm dev:user
 
 ```bash
 pnpm db:seed:manual
+pnpm db:seed:saas-portal-demo
 pnpm test
 pnpm test:integration
 pnpm test:e2e
@@ -177,6 +178,19 @@ pnpm db:seed:manual
 - 用户：`bob.manual@example.com` / `User123!`
 - 用户：`carol.manual@example.com` / `User123!`
 - 用户：`frozen.manual@example.com` / `User123!`
+
+如果你还想把 B 端 SaaS portal 的浏览器联调用 demo 租户也一起补齐，在
+manual seed 之后再执行：
+
+```bash
+pnpm db:seed:saas-portal-demo
+```
+
+这会保证：
+
+- `admin.manual@example.com` 绑定 2 个 portal demo 租户
+- 每个租户都有带 starter 计费资料的 sandbox project
+- `Portal Demo Alpha` 额外带一个 `Agent Staging` project，方便测试 project 切换
 
 ## 项目总览
 

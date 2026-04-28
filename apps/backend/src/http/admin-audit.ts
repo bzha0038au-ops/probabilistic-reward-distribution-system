@@ -33,6 +33,8 @@ export const mergeAdminAuditMetadata = (
     nextMetadata.stepUpVerifiedAt = request.adminStepUp.verifiedAt;
     nextMetadata.stepUpRecoveryCodesRemaining =
       request.adminStepUp.recoveryCodesRemaining;
+    nextMetadata.stepUpBreakGlassVerified =
+      request.adminStepUp.breakGlassVerified === true;
   }
 
   return Object.keys(nextMetadata).length > 0 ? nextMetadata : null;

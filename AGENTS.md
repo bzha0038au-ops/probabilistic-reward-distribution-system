@@ -44,6 +44,8 @@ Backend operator scripts: `pnpm --dir apps/backend admin:promote <email>` and `u
 
 **Three user surfaces, one backend.** `apps/frontend` (web) and `apps/mobile` (Expo) are the public product, sharing routes/contracts/request helpers via `packages/user-core`. `apps/admin` is the internal SvelteKit console for higher-risk operations and is intentionally isolated. All three call the Fastify backend in `apps/backend`. The backend is the only thing that touches Postgres or Redis.
 
+**Product boundary: C-side vs B-side.** Keep the end-user product and the SaaS prize-engine product conceptually separate even when they reuse the same backend primitives. The C-side is the consumer product: wallet, deposits/withdrawals, rewards, draw/games, future multiplayer play, prediction markets, compliance, and community features for human users on `frontend` and `mobile`. The B-side is the agent-facing SaaS reward engine: a cross-platform API for AI agents or multi-agent systems that sends behavior/score/context into the engine and receives budget/risk/variance-constrained stochastic rewards back through `@reward/prize-engine-sdk` and `/v1/engine/*`. They may share ledger, randomness, risk controls, fairness, budget policy, and observability internals, but they do not share product semantics, UX, customer type, or API framing. Do not collapse B-side work into "just another user feature", and do not model C-side roadmap items as SaaS agent primitives unless the task is explicitly about shared engine infrastructure.
+
 **Auth is split, deliberately.** Three secrets that must not be reused:
 - `USER_JWT_SECRET` — backend only (issues user session tokens).
 - `ADMIN_JWT_SECRET` — backend + admin console (must match between them).
@@ -95,7 +97,7 @@ When touching draw or wallet code, preserve the transaction boundary, the lock o
 
 ## Repo Hygiene Warning
 
-The working tree currently contains many duplicate files with `" 2"` in the filename (e.g. `Dockerfile 2`, `playwright.config 2.ts`, `apps/backend/src/modules/payment/service 2.ts`, `tests/e2e/critical-flows.spec 2.ts`, etc.) — these are sync-conflict copies, not real sources. They are visible in `git status` as untracked. Do not edit, build against, or import from `* 2.*` files; use the canonical name. If asked to clean them up, confirm scope with the user first since they are unstaged and would be lost.
+Most historical sync-conflict copies with `" 2"` in the filename have been cleaned up. Source files under `apps/*` and `packages/*` should use the canonical filename only. If a new `* 2.*` file appears in source, treat it as a conflict artifact, do not import from it, and confirm scope before deleting it if it is unstaged user work.
 
 ## Deeper References
 

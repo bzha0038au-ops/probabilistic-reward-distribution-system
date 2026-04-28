@@ -13,17 +13,16 @@ import {
 } from "@reward/database";
 import { db, type DbClient, type DbTransaction } from "../../db";
 import { grantBonus } from "../bonus/service";
-import {
-  consumeMarketingBudget,
-  getRewardCenterConfig,
-} from "../system/service";
+import { consumeMarketingBudget } from "../system/service";
+import { assertWalletLedgerInvariant } from "../wallet/invariant-service";
 import {
   conflictError,
   notFoundError,
   unprocessableEntityError,
 } from "../../shared/errors";
-import { toMoneyString } from "../../shared/money";
 import { readSqlRows } from "../../shared/sql-result";
+import { jsonbTextPathSql } from "../../shared/jsonb";
+import { listMissionDefinitions } from "./catalog";
 import { evaluateRewardCenter } from "./evaluation";
 
 type DbExecutor = DbClient | DbTransaction;
@@ -31,7 +30,6 @@ type DbExecutor = DbClient | DbTransaction;
 const DAILY_BONUS_ENTRY_TYPE = "daily_bonus";
 const GAMIFICATION_REWARD_ENTRY_TYPE = "gamification_reward";
 const DAILY_CLAIM_LIMIT = 30;
-const MISSION_CLAIM_LIMIT = 50;
 
 type RewardCenterActorWalletRow = {
   emailVerifiedAt: Date | string | null;
@@ -46,9 +44,12 @@ type RewardCenterCountsRow = {
 };
 
 type RewardCenterLedgerRow = {
-  entryType: string;
   createdAt: Date | string | null;
-  metadata: unknown;
+};
+
+type RewardCenterMissionClaimRow = {
+  createdAt: Date | string | null;
+  missionId: string | null;
 };
 
 const startOfDay = (value = new Date()) => {
@@ -66,28 +67,23 @@ const toValidDate = (value: Date | string | null | undefined) => {
   return Number.isNaN(next.getTime()) ? null : next;
 };
 
-const readMissionId = (value: unknown): RewardMissionId | null => {
-  if (
-    value === "daily_checkin" ||
-    value === "profile_security" ||
-    value === "first_draw" ||
-    value === "draw_streak_daily" ||
-    value === "top_up_starter"
-  ) {
-    return value;
-  }
-
-  return null;
-};
+const readMissionId = (value: unknown): RewardMissionId | null =>
+  typeof value === "string" && value.trim() !== "" ? value.trim() : null;
 
 async function readRewardCenterSnapshot(executor: DbExecutor, userId: number) {
   const now = new Date();
   const dayStart = startOfDay(now);
+  const missionDefinitions = await listMissionDefinitions(executor);
+  const claimableMissionIds = missionDefinitions
+    .filter((mission) => mission.type === "metric_threshold")
+    .map((mission) => mission.id);
+  const missionIdSql = jsonbTextPathSql(ledgerEntries.metadata, "missionId");
+
   const [
     actorWalletResult,
     countsResult,
-    rewardCenterConfig,
-    ledgerResult,
+    dailyLedgerResult,
+    missionLedgerResult,
   ] = await Promise.all([
     executor.execute(sql`
       WITH ensured_wallet AS (
@@ -124,35 +120,42 @@ async function readRewardCenterSnapshot(executor: DbExecutor, userId: number) {
           WHERE ${deposits.userId} = ${userId}
         ) AS "depositCount"
     `),
-    getRewardCenterConfig(executor),
     executor.execute(sql`
       WITH ranked_entries AS (
         SELECT
-          ${ledgerEntries.entryType} AS "entryType",
           ${ledgerEntries.createdAt} AS "createdAt",
           ${ledgerEntries.metadata} AS "metadata",
           row_number() OVER (
-            PARTITION BY ${ledgerEntries.entryType}
             ORDER BY ${ledgerEntries.createdAt} DESC
           ) AS "rowNumber"
         FROM ${ledgerEntries}
         WHERE ${ledgerEntries.userId} = ${userId}
-          AND ${ledgerEntries.entryType} IN (
-            ${DAILY_BONUS_ENTRY_TYPE},
-            ${GAMIFICATION_REWARD_ENTRY_TYPE}
-          )
+          AND ${ledgerEntries.entryType} = ${DAILY_BONUS_ENTRY_TYPE}
       )
-      SELECT "entryType", "createdAt", "metadata"
+      SELECT "createdAt", "metadata"
       FROM ranked_entries
-      WHERE (
-        "entryType" = ${DAILY_BONUS_ENTRY_TYPE}
-        AND "rowNumber" <= ${DAILY_CLAIM_LIMIT}
-      ) OR (
-        "entryType" = ${GAMIFICATION_REWARD_ENTRY_TYPE}
-        AND "rowNumber" <= ${MISSION_CLAIM_LIMIT}
-      )
-      ORDER BY "entryType" ASC, "createdAt" DESC
+      WHERE "rowNumber" <= ${DAILY_CLAIM_LIMIT}
+      ORDER BY "createdAt" DESC
     `),
+    claimableMissionIds.length === 0
+      ? Promise.resolve(null)
+      : executor.execute(sql`
+          SELECT
+            ${ledgerEntries.createdAt} AS "createdAt",
+            ${missionIdSql} AS "missionId"
+          FROM ${ledgerEntries}
+          WHERE ${ledgerEntries.userId} = ${userId}
+            AND ${ledgerEntries.entryType} = ${GAMIFICATION_REWARD_ENTRY_TYPE}
+            AND (
+              ${sql.join(
+                claimableMissionIds.map(
+                  (missionId) => sql`${missionIdSql} = ${missionId}`,
+                ),
+                sql` OR `,
+              )}
+            )
+          ORDER BY ${ledgerEntries.createdAt} DESC
+        `),
   ]);
 
   const actor = readSqlRows<RewardCenterActorWalletRow>(actorWalletResult)[0];
@@ -161,13 +164,10 @@ async function readRewardCenterSnapshot(executor: DbExecutor, userId: number) {
   }
 
   const counts = readSqlRows<RewardCenterCountsRow>(countsResult)[0];
-  const ledgerRows = readSqlRows<RewardCenterLedgerRow>(ledgerResult);
-  const dailyClaimRows = ledgerRows.filter(
-    (entry) => entry.entryType === DAILY_BONUS_ENTRY_TYPE,
-  );
-  const missionClaimRows = ledgerRows.filter(
-    (entry) => entry.entryType === GAMIFICATION_REWARD_ENTRY_TYPE,
-  );
+  const dailyClaimRows = readSqlRows<RewardCenterLedgerRow>(dailyLedgerResult);
+  const missionClaimRows = missionLedgerResult
+    ? readSqlRows<RewardCenterMissionClaimRow>(missionLedgerResult)
+    : [];
 
   return {
     bonusBalance: actor.bonusBalance ?? "0",
@@ -184,20 +184,12 @@ async function readRewardCenterSnapshot(executor: DbExecutor, userId: number) {
       ),
     missionClaims: missionClaimRows
       .map((entry) => {
-        const metadata =
-          entry.metadata &&
-          typeof entry.metadata === "object" &&
-          !Array.isArray(entry.metadata)
-            ? entry.metadata
-            : null;
         const createdAt = toValidDate(entry.createdAt);
         if (!createdAt) {
           return null;
         }
         return {
-          missionId: readMissionId(
-            metadata ? Reflect.get(metadata, "missionId") : null,
-          ),
+          missionId: readMissionId(entry.missionId),
           createdAt,
         };
       })
@@ -209,21 +201,7 @@ async function readRewardCenterSnapshot(executor: DbExecutor, userId: number) {
           createdAt: Date;
         } => entry !== null,
       ),
-    dailyEnabled:
-      rewardCenterConfig.dailyEnabled && rewardCenterConfig.dailyAmount.gt(0),
-    dailyAmount: toMoneyString(rewardCenterConfig.dailyAmount),
-    profileSecurityRewardAmount: toMoneyString(
-      rewardCenterConfig.profileSecurityRewardAmount,
-    ),
-    firstDrawRewardAmount: toMoneyString(
-      rewardCenterConfig.firstDrawRewardAmount,
-    ),
-    drawStreakDailyRewardAmount: toMoneyString(
-      rewardCenterConfig.drawStreakDailyRewardAmount,
-    ),
-    topUpStarterRewardAmount: toMoneyString(
-      rewardCenterConfig.topUpStarterRewardAmount,
-    ),
+    missions: missionDefinitions,
   };
 }
 
@@ -284,7 +262,7 @@ export async function claimRewardMission(
       {
         userId,
         amount: mission.rewardAmount,
-        entryType: "gamification_reward",
+        entryType: GAMIFICATION_REWARD_ENTRY_TYPE,
         referenceType: "reward_mission",
         metadata: {
           reason: "reward_mission",
@@ -295,9 +273,67 @@ export async function claimRewardMission(
       tx,
     );
 
-    return {
+    const result = {
       missionId: mission.id,
       grantedAmount: mission.rewardAmount,
+    };
+
+    await assertWalletLedgerInvariant(tx, userId, {
+      service: "gamification",
+      operation: "claimRewardMission",
+    });
+
+    return result;
+  });
+}
+
+export async function grantDailyCheckInRewardOnLogin(userId: number) {
+  return db.transaction(async (tx) => {
+    const dailyMission = (await listMissionDefinitions(tx)).find(
+      (mission) =>
+        mission.type === "daily_checkin" &&
+        mission.isActive &&
+        Number(mission.reward) > 0,
+    );
+    if (!dailyMission) {
+      return null;
+    }
+
+    const dayStart = startOfDay();
+    const claimResult = await tx.execute(sql`
+      SELECT count(*) AS "total"
+      FROM ${ledgerEntries}
+      WHERE ${ledgerEntries.userId} = ${userId}
+        AND ${ledgerEntries.entryType} = ${DAILY_BONUS_ENTRY_TYPE}
+        AND ${ledgerEntries.createdAt} >= ${dayStart}
+    `);
+    const [{ total = 0 }] = readSqlRows<{ total: string | number }>(claimResult);
+    if (Number(total ?? 0) > 0) {
+      return null;
+    }
+
+    const budget = await consumeMarketingBudget(tx, dailyMission.reward);
+    if (!budget.allowed) {
+      return null;
+    }
+
+    await grantBonus(
+      {
+        userId,
+        amount: dailyMission.reward,
+        entryType: DAILY_BONUS_ENTRY_TYPE,
+        referenceType: "reward_mission",
+        metadata: {
+          reason: "daily_bonus",
+          missionId: dailyMission.id,
+        },
+      },
+      tx,
+    );
+
+    return {
+      missionId: dailyMission.id,
+      grantedAmount: dailyMission.reward,
     };
   });
 }

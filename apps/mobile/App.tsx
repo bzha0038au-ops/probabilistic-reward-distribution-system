@@ -7,6 +7,7 @@ import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, ScrollView, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import type { CurrentLegalDocument } from "@reward/shared-types/legal";
 import { QUICK_EIGHT_CONFIG } from "@reward/shared-types/quick-eight";
 import { createUserApiClient } from "@reward/user-core";
 import {
@@ -41,10 +42,16 @@ import {
 import { useBlackjack } from "./src/hooks/use-blackjack";
 import { useDraw } from "./src/hooks/use-draw";
 import { useFairness } from "./src/hooks/use-fairness";
+import { useHoldem } from "./src/hooks/use-holdem";
+import { usePredictionMarket } from "./src/hooks/use-prediction-market";
 import { useQuickEight } from "./src/hooks/use-quick-eight";
 import { useRewardCenter } from "./src/hooks/use-reward-center";
 import { useUserSession } from "./src/hooks/use-user-session";
 import { useWallet } from "./src/hooks/use-wallet";
+import {
+  buildLegalDocumentKey,
+  MobileLegalAcceptanceCard,
+} from "./src/legal/legal-acceptance-card";
 import { getMobileAppCopy } from "./src/mobile-copy";
 import { mobileStyles as styles } from "./src/mobile-styles";
 import { getMobileRouteCopy } from "./src/route-copy";
@@ -53,7 +60,9 @@ import {
   BlackjackRouteContainer,
   FairnessRouteContainer,
   GachaRouteContainer,
+  HoldemRouteContainer,
   HomeRouteContainer,
+  PredictionMarketRouteContainer,
   QuickEightRouteContainer,
   RewardsRouteContainer,
   SecurityRouteContainer,
@@ -90,6 +99,14 @@ function NativeApp() {
     }),
   );
   const api = apiRef.current;
+  const [legalDocuments, setLegalDocuments] = useState<CurrentLegalDocument[]>(
+    [],
+  );
+  const [loadingLegalDocuments, setLoadingLegalDocuments] = useState(false);
+  const [selectedLegalDocumentKeys, setSelectedLegalDocumentKeys] = useState<
+    string[]
+  >([]);
+  const [acceptingLegal, setAcceptingLegal] = useState(false);
 
   const resetFeedback = useCallback(() => {
     setError(null);
@@ -126,6 +143,32 @@ function NativeApp() {
   const appContent = getMobileAppCopy(fairnessLocale);
   const fairnessContent = getMobileFairnessCopy(fairnessLocale);
   const routeContent = getMobileRouteCopy(fairnessLocale);
+  const refreshLegalDocuments = useCallback(async () => {
+    setLoadingLegalDocuments(true);
+    const response = await api.getCurrentLegalDocuments();
+    setLoadingLegalDocuments(false);
+
+    if (!response.ok) {
+      setError(response.error?.message ?? "Failed to load legal documents.");
+      return false;
+    }
+
+    setLegalDocuments(response.data.items);
+    setSelectedLegalDocumentKeys((current) => {
+      const nextKeys = new Set(
+        response.data.items.map((document) => buildLegalDocumentKey(document)),
+      );
+      return current.filter((key) => nextKeys.has(key));
+    });
+    return true;
+  }, [api, setError]);
+  const toggleLegalDocument = useCallback((key: string) => {
+    setSelectedLegalDocumentKeys((current) =>
+      current.includes(key)
+        ? current.filter((entry) => entry !== key)
+        : [...current, key],
+    );
+  }, []);
 
   const {
     balance,
@@ -226,6 +269,86 @@ function NativeApp() {
   });
 
   const {
+    actingHoldem,
+    actOnHoldemTable,
+    closeHoldemReplay,
+    createHoldemTable,
+    getHoldemEvidenceBundle,
+    holdemActionAmount,
+    holdemBuyInAmount,
+    holdemReplayError,
+    holdemRealtimeStatus,
+    holdemTableName,
+    holdemTableMessages,
+    holdemTables,
+    joinHoldemTable,
+    leaveHoldemTable,
+    loadingHoldemMessages,
+    loadingHoldemReplay,
+    loadingHoldemLobby,
+    loadingHoldemTable,
+    openHoldemReplay,
+    refreshHoldemLobby,
+    refreshHoldemTable,
+    resetHoldem,
+    sendHoldemTableMessage,
+    sendingHoldemMessage,
+    selectedHoldemReplay,
+    selectedHoldemReplayRoundId,
+    selectedHoldemTable,
+    setHoldemActionAmount,
+    setHoldemBuyInAmount,
+    setHoldemSeatMode,
+    setHoldemTableName,
+    setSelectedHoldemTableId,
+    startHoldemTable,
+  } = useHoldem({
+    api,
+    authTokenRef,
+    handleUnauthorizedRef,
+    enabled: screen === "app" && appRoute === "holdem",
+    realtimeBaseUrl: configuredApiBaseUrl,
+    refreshBalance,
+    resetFeedback,
+    setError,
+  });
+
+  const {
+    loadingPredictionMarket,
+    loadingPredictionMarketHistory,
+    loadingPredictionMarkets,
+    placingPredictionPosition,
+    goToNextPredictionMarketHistoryPage,
+    goToPreviousPredictionMarketHistoryPage,
+    placePredictionPosition,
+    predictionMarketHistory,
+    predictionMarketHistoryPage,
+    predictionMarketHistoryStatus,
+    predictionMarketPositionCount,
+    predictionMarketStakeAmount,
+    predictionMarkets,
+    refreshPredictionMarketHistory,
+    refreshPredictionMarkets,
+    resetPredictionMarket,
+    selectPredictionMarket,
+    selectPredictionMarketHistoryStatus,
+    selectedPredictionMarket,
+    selectedPredictionMarketId,
+    selectedPredictionOutcomeKey,
+    setPredictionMarketStakeAmount,
+    setSelectedPredictionOutcomeKey,
+  } = usePredictionMarket({
+    api,
+    authTokenRef,
+    handleUnauthorizedRef,
+    enabled: screen === "app" && appRoute === "predictionMarket",
+    refreshBalance,
+    resetFeedback,
+    setError,
+    setMessage,
+  });
+
+  const {
     fairnessCommit,
     fairnessReveal,
     fairnessRevealEpoch,
@@ -248,7 +371,9 @@ function NativeApp() {
     resetWallet();
     resetDraw();
     resetQuickEight();
+    resetPredictionMarket();
     resetBlackjack();
+    resetHoldem();
     resetRewardCenter();
     resetFairness();
     setAppRoute("home");
@@ -256,6 +381,8 @@ function NativeApp() {
     resetBlackjack,
     resetDraw,
     resetFairness,
+    resetHoldem,
+    resetPredictionMarket,
     resetQuickEight,
     resetRewardCenter,
     resetWallet,
@@ -391,10 +518,103 @@ function NativeApp() {
     void hydrateAuthenticatedState(session);
   }, [session?.token]);
 
+  const legalAcceptanceRequired = Boolean(session?.legal?.requiresAcceptance);
+  const pendingLegalDocumentKeys =
+    session?.legal?.items
+      .filter((item) => item.accepted === false)
+      .map((item) => buildLegalDocumentKey(item)) ?? [];
+  const pendingLegalDocuments = legalDocuments.filter((document) =>
+    pendingLegalDocumentKeys.includes(buildLegalDocumentKey(document)),
+  );
+
+  useEffect(() => {
+    if (screen !== "register" && !legalAcceptanceRequired) {
+      return;
+    }
+
+    void refreshLegalDocuments();
+  }, [legalAcceptanceRequired, refreshLegalDocuments, screen]);
+
   const emailVerified = Boolean(session?.user.emailVerifiedAt);
+  const handleRegisterWithLegal = useCallback(async () => {
+    resetFeedback();
+
+    if (
+      legalDocuments.length > 0 &&
+      legalDocuments.some(
+        (document) =>
+          !selectedLegalDocumentKeys.includes(buildLegalDocumentKey(document)),
+      )
+    ) {
+      setError(appContent.auth.legal.required);
+      return;
+    }
+
+    await handleRegister(
+      legalDocuments.map((document) => ({
+        slug: document.slug,
+        version: document.version,
+      })),
+    );
+  }, [
+    appContent.auth.legal.required,
+    handleRegister,
+    legalDocuments,
+    resetFeedback,
+    selectedLegalDocumentKeys,
+    setError,
+  ]);
+  const handleAcceptUpdatedLegalDocuments = useCallback(async () => {
+    if (!session) {
+      return;
+    }
+
+    resetFeedback();
+
+    if (
+      pendingLegalDocuments.some(
+        (document) =>
+          !selectedLegalDocumentKeys.includes(buildLegalDocumentKey(document)),
+      )
+    ) {
+      setError(appContent.legalGate.required);
+      return;
+    }
+
+    setAcceptingLegal(true);
+    const response = await api.acceptCurrentLegalDocuments({
+      acceptances: pendingLegalDocuments.map((document) => ({
+        slug: document.slug,
+        version: document.version,
+      })),
+    });
+    setAcceptingLegal(false);
+
+    if (!response.ok) {
+      setError(response.error?.message ?? "Failed to accept legal documents.");
+      return;
+    }
+
+    await reconcileSession(session, { legal: response.data });
+    setSelectedLegalDocumentKeys([]);
+    setMessage(appContent.legalGate.success);
+  }, [
+    api,
+    appContent.legalGate.required,
+    appContent.legalGate.success,
+    pendingLegalDocuments,
+    reconcileSession,
+    resetFeedback,
+    selectedLegalDocumentKeys,
+    session,
+    setError,
+    setMessage,
+  ]);
   const routeNavigationLocked =
     playingDrawCount !== null ||
     playingQuickEight ||
+    actingHoldem !== null ||
+    placingPredictionPosition ||
     actingBlackjack !== null ||
     loadingBlackjack ||
     loadingFairnessCommit ||
@@ -464,6 +684,14 @@ function NativeApp() {
       await refreshSessions();
     }
 
+    if (nextRoute === "holdem" && session?.token) {
+      await refreshHoldemLobby();
+    }
+
+    if (nextRoute === "predictionMarket" && session?.token) {
+      await refreshPredictionMarkets();
+    }
+
     if (nextRoute === "blackjack" && session?.token) {
       await refreshBlackjackOverview();
     }
@@ -489,6 +717,9 @@ function NativeApp() {
     <MobileAuthCard
       screen={screen}
       copy={appContent.auth}
+      legalDocuments={legalDocuments}
+      loadingLegalDocuments={loadingLegalDocuments}
+      selectedLegalDocumentKeys={selectedLegalDocumentKeys}
       email={email}
       password={password}
       resetTokenInput={resetTokenInput}
@@ -504,6 +735,7 @@ function NativeApp() {
       onChangeResetTokenInput={setResetTokenInput}
       onChangeNewPassword={setNewPassword}
       onChangeVerificationTokenInput={setVerificationTokenInput}
+      onToggleLegalDocument={toggleLegalDocument}
       onShowLogin={() => {
         resetFeedback();
         setScreen("login");
@@ -517,7 +749,7 @@ function NativeApp() {
       onShowVerifyEmail={() => setScreen("verifyEmail")}
       onReturn={() => setScreen(session?.token ? "app" : "login")}
       onLogin={() => void handleLogin()}
-      onRegister={() => void handleRegister()}
+      onRegister={() => void handleRegisterWithLegal()}
       onSeededLogin={() => void handleSeededLogin()}
       onRequestPasswordReset={() => void handleRequestPasswordReset()}
       onConfirmPasswordReset={() => void handleConfirmPasswordReset()}
@@ -743,6 +975,128 @@ function NativeApp() {
           )}
         </AppStack.Screen>
         <AppStack.Screen
+          name="predictionMarket"
+          options={{ title: routeContent.labels.predictionMarket }}
+        >
+          {() => (
+            <PredictionMarketRouteContainer
+              styles={styles}
+              hero={routeContent.heroes.predictionMarket}
+              apiBaseUrl={configuredApiBaseUrl}
+              message={message}
+              error={error}
+              currentRoute={appRoute}
+              routeLabels={routeContent.labels}
+              routeNavigationLocked={routeNavigationLocked}
+              onOpenRoute={(route) => void openAppRoute(route)}
+              verificationCallout={verificationCallout}
+              screenCopy={routeContent.screens.predictionMarket}
+              balance={balance}
+              formatAmount={formatAmount}
+              formatOptionalTimestamp={formatOptionalTimestamp}
+              emailVerified={emailVerified}
+              predictionMarkets={predictionMarkets}
+              selectedPredictionMarket={selectedPredictionMarket}
+              selectedPredictionMarketId={selectedPredictionMarketId}
+              selectedPredictionOutcomeKey={selectedPredictionOutcomeKey}
+              predictionMarketStakeAmount={predictionMarketStakeAmount}
+              predictionMarketHistory={predictionMarketHistory}
+              predictionMarketHistoryPage={predictionMarketHistoryPage}
+              predictionMarketHistoryStatus={predictionMarketHistoryStatus}
+              predictionMarketPositionCount={predictionMarketPositionCount}
+              loadingPredictionMarkets={loadingPredictionMarkets}
+              loadingPredictionMarket={loadingPredictionMarket}
+              loadingPredictionMarketHistory={loadingPredictionMarketHistory}
+              placingPredictionPosition={placingPredictionPosition}
+              onRefreshPredictionMarkets={() => void refreshPredictionMarkets()}
+              onRefreshPredictionMarketHistory={() =>
+                void refreshPredictionMarketHistory()
+              }
+              onSelectPredictionMarket={selectPredictionMarket}
+              onSelectPredictionMarketHistoryStatus={
+                selectPredictionMarketHistoryStatus
+              }
+              onSelectPredictionOutcome={setSelectedPredictionOutcomeKey}
+              onChangePredictionMarketStake={setPredictionMarketStakeAmount}
+              onPreviousPredictionMarketHistoryPage={
+                goToPreviousPredictionMarketHistoryPage
+              }
+              onNextPredictionMarketHistoryPage={goToNextPredictionMarketHistoryPage}
+              onPlacePredictionPosition={() => void placePredictionPosition()}
+            />
+          )}
+        </AppStack.Screen>
+        <AppStack.Screen
+          name="holdem"
+          options={{ title: routeContent.labels.holdem }}
+        >
+          {() => (
+            <HoldemRouteContainer
+              styles={styles}
+              hero={routeContent.heroes.holdem}
+              apiBaseUrl={configuredApiBaseUrl}
+              message={message}
+              error={error}
+              currentRoute={appRoute}
+              routeLabels={routeContent.labels}
+              routeNavigationLocked={routeNavigationLocked}
+              onOpenRoute={(route) => void openAppRoute(route)}
+              verificationCallout={verificationCallout}
+              screenCopy={routeContent.screens.holdem}
+              balance={balance}
+              formatAmount={formatAmount}
+              emailVerified={emailVerified}
+              holdemTables={holdemTables}
+              selectedHoldemTable={selectedHoldemTable}
+              selectedHoldemReplayRoundId={selectedHoldemReplayRoundId}
+              selectedHoldemReplay={selectedHoldemReplay}
+              loadingHoldemLobby={loadingHoldemLobby}
+              loadingHoldemTable={loadingHoldemTable}
+              loadingHoldemReplay={loadingHoldemReplay}
+              holdemReplayError={holdemReplayError}
+              actingHoldem={actingHoldem}
+              holdemTableName={holdemTableName}
+              holdemBuyInAmount={holdemBuyInAmount}
+              holdemRealtimeStatus={holdemRealtimeStatus}
+              holdemActionAmount={holdemActionAmount}
+              holdemTableMessages={holdemTableMessages}
+              loadingHoldemMessages={loadingHoldemMessages}
+              sendingHoldemMessage={sendingHoldemMessage}
+              onChangeHoldemTableName={setHoldemTableName}
+              onChangeHoldemBuyInAmount={setHoldemBuyInAmount}
+              onChangeHoldemActionAmount={setHoldemActionAmount}
+              onSelectHoldemTable={setSelectedHoldemTableId}
+              onCreateHoldemTable={() => void createHoldemTable()}
+              onJoinHoldemTable={(tableId) => void joinHoldemTable(tableId)}
+              onLeaveHoldemTable={(tableId) => void leaveHoldemTable(tableId)}
+              onSetHoldemSeatMode={(tableId, sittingOut) =>
+                void setHoldemSeatMode(tableId, sittingOut)
+              }
+              onStartHoldemTable={(tableId) => void startHoldemTable(tableId)}
+              onRefreshHoldemLobby={() => void refreshHoldemLobby()}
+              onRefreshHoldemTable={(tableId) => void refreshHoldemTable(tableId)}
+              onActOnHoldemTable={(tableId, action) =>
+                void actOnHoldemTable(tableId, action)
+              }
+              onSendHoldemChatMessage={(tableId, text) =>
+                sendHoldemTableMessage(tableId, {
+                  kind: "chat",
+                  text,
+                })
+              }
+              onSendHoldemEmoji={(tableId, emoji) =>
+                sendHoldemTableMessage(tableId, {
+                  kind: "emoji",
+                  emoji,
+                })
+              }
+              onOpenHoldemReplay={(roundId) => void openHoldemReplay(roundId)}
+              onCloseHoldemReplay={closeHoldemReplay}
+              loadHoldemEvidenceBundle={getHoldemEvidenceBundle}
+            />
+          )}
+        </AppStack.Screen>
+        <AppStack.Screen
           name="blackjack"
           options={{ title: routeContent.labels.blackjack }}
         >
@@ -833,6 +1187,39 @@ function NativeApp() {
   }
 
   if (screen === "app" && session) {
+    if (legalAcceptanceRequired) {
+      return (
+        <SafeAreaView style={styles.safeArea}>
+          <StatusBar style="light" />
+          <ScrollView contentContainerStyle={styles.container}>
+            <View style={styles.hero}>
+              <Text style={styles.kicker}>{appContent.appHero.kicker}</Text>
+              <Text style={styles.title}>{appContent.legalGate.title}</Text>
+              <Text style={styles.subtitle}>
+                {appContent.legalGate.subtitle}
+              </Text>
+              <Text style={styles.endpoint}>
+                {appContent.appHero.endpointLabel}: {configuredApiBaseUrl}
+              </Text>
+            </View>
+
+            <MobileLegalAcceptanceCard
+              copy={appContent.legalGate}
+              documents={legalDocuments}
+              pendingDocumentKeys={pendingLegalDocumentKeys}
+              selectedDocumentKeys={selectedLegalDocumentKeys}
+              loading={loadingLegalDocuments}
+              submitting={acceptingLegal}
+              onToggleDocument={toggleLegalDocument}
+              onRefresh={() => void refreshLegalDocuments()}
+              onSubmit={() => void handleAcceptUpdatedLegalDocuments()}
+            />
+          </ScrollView>
+          {toastOverlay}
+        </SafeAreaView>
+      );
+    }
+
     return (
       <View style={styles.safeArea}>
         {renderAppNavigator()}

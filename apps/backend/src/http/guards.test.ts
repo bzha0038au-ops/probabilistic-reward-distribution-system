@@ -1,26 +1,37 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import Decimal from 'decimal.js';
 
 const {
   canAdminAccess,
   getUserById,
   getAdminAccessProfileByUserId,
   getSystemFlags,
+  getWithdrawalRiskConfig,
+  isUserMfaEnabled,
   isUserFrozen,
   sendError,
   store,
+  verifyAdminMfaBreakGlassCode,
   verifyAdminMfaChallenge,
+  verifyScopedAdminAccessToken,
+  verifyUserMfaChallenge,
   verifyAdminSessionToken,
   verifyUserSessionToken,
 } = vi.hoisted(() => ({
   store: {} as { userId?: number; role?: 'user' | 'admin' },
   verifyUserSessionToken: vi.fn(),
   verifyAdminSessionToken: vi.fn(),
+  verifyScopedAdminAccessToken: vi.fn(),
   getUserById: vi.fn(),
   getAdminAccessProfileByUserId: vi.fn(),
   canAdminAccess: vi.fn(),
+  verifyAdminMfaBreakGlassCode: vi.fn(),
   verifyAdminMfaChallenge: vi.fn(),
+  verifyUserMfaChallenge: vi.fn(),
+  isUserMfaEnabled: vi.fn(),
   isUserFrozen: vi.fn(),
   getSystemFlags: vi.fn(),
+  getWithdrawalRiskConfig: vi.fn(),
   sendError: vi.fn(
     (
       _reply,
@@ -48,8 +59,12 @@ vi.mock('../shared/user-session', () => ({
 }));
 
 vi.mock('../shared/admin-session', () => ({
+  ADMIN_ACCESS_TOKEN_SCOPES: {
+    TABLE_MONITORING_WS: 'table_monitoring_ws',
+  },
   ADMIN_SESSION_COOKIE: 'reward_admin_session',
   verifyAdminSessionToken,
+  verifyScopedAdminAccessToken,
 }));
 
 vi.mock('../modules/risk/service', () => ({
@@ -58,6 +73,7 @@ vi.mock('../modules/risk/service', () => ({
 
 vi.mock('../modules/system/service', () => ({
   getSystemFlags,
+  getWithdrawalRiskConfig,
 }));
 
 vi.mock('../modules/user/service', () => ({
@@ -70,7 +86,13 @@ vi.mock('../modules/admin-permission/service', () => ({
 }));
 
 vi.mock('../modules/admin-mfa/service', () => ({
+  verifyAdminMfaBreakGlassCode,
   verifyAdminMfaChallenge,
+}));
+
+vi.mock('../modules/user-mfa/service', () => ({
+  isUserMfaEnabled,
+  verifyUserMfaChallenge,
 }));
 
 vi.mock('./respond', () => ({
@@ -85,9 +107,11 @@ import {
   requireAdmin,
   requireAdminGuard,
   requireAdminPermission,
+  requireUserFreezeScope,
   requireVerifiedUser,
   requireUser,
   requireUserGuard,
+  requireUserMfaStepUp,
 } from './guards';
 import { ADMIN_PERMISSION_KEYS } from '../modules/admin-permission/definitions';
 
@@ -98,6 +122,8 @@ describe('auth guards', () => {
     delete store.role;
     getSystemFlags.mockResolvedValue({ maintenanceMode: false });
     isUserFrozen.mockResolvedValue(false);
+    verifyAdminMfaBreakGlassCode.mockReturnValue(true);
+    verifyScopedAdminAccessToken.mockResolvedValue(null);
     getUserById.mockResolvedValue({
       id: 11,
       email: 'user@example.com',
@@ -121,6 +147,14 @@ describe('auth guards', () => {
       valid: false,
       method: null,
       recoveryCodesRemaining: 0,
+    });
+    verifyUserMfaChallenge.mockResolvedValue({
+      valid: false,
+      method: null,
+    });
+    isUserMfaEnabled.mockResolvedValue(false);
+    getWithdrawalRiskConfig.mockResolvedValue({
+      largeAmountSecondApprovalThreshold: new Decimal(500),
     });
   });
 
@@ -193,7 +227,31 @@ describe('auth guards', () => {
     await requireUserGuard(request as never, reply as never);
 
     expect(sendError).not.toHaveBeenCalled();
+    expect(isUserFrozen).toHaveBeenCalledWith(9, { scope: 'account_lock' });
     expect((request as { user?: unknown }).user).toEqual(user);
+  });
+
+  it('blocks scoped user actions when the matching freeze is active', async () => {
+    const reply = {};
+    const request = {
+      user: {
+        userId: 9,
+        email: 'user@example.com',
+        role: 'user' as const,
+        sessionId: 'user-session-9',
+      },
+    };
+    isUserFrozen.mockResolvedValue(true);
+
+    const guard = requireUserFreezeScope('withdrawal_lock');
+    const result = await guard(request as never, reply as never);
+
+    expect(isUserFrozen).toHaveBeenCalledWith(9, { scope: 'withdrawal_lock' });
+    expect(sendError).toHaveBeenCalledWith(reply, 423, 'Withdrawals locked.');
+    expect(result).toEqual({
+      status: 423,
+      message: 'Withdrawals locked.',
+    });
   });
 
   it('blocks high-risk user actions when email verification is missing', async () => {
@@ -296,9 +354,159 @@ describe('auth guards', () => {
     });
     expect(verifyAdminSessionToken).toHaveBeenCalledWith('admin-token');
     expect(getAdminAccessProfileByUserId).toHaveBeenCalledWith(11);
+    expect(isUserFrozen).toHaveBeenCalledWith(11, { scope: 'account_lock' });
     expect(sendError).toHaveBeenCalledWith(reply, 423, 'Account locked.');
     expect(result).toEqual({ status: 423, message: 'Account locked.' });
     expect(store).toEqual({ userId: 11, role: 'admin' });
+  });
+
+  it('accepts a scoped admin access token for the table-monitoring websocket route', async () => {
+    const request = {
+      url: '/admin/ws/table-monitoring?accessToken=ws-scope-token',
+      query: { accessToken: 'ws-scope-token' },
+      headers: {},
+      cookies: {},
+    };
+    const reply = {};
+
+    verifyAdminSessionToken.mockResolvedValue(null);
+    verifyScopedAdminAccessToken.mockResolvedValue({
+      adminId: 101,
+      userId: 11,
+      email: 'admin@example.com',
+      role: 'admin',
+      mfaEnabled: false,
+      mfaRecoveryMode: 'none',
+      sessionId: 'admin-session-11',
+    });
+
+    await requireAdminGuard(request as never, reply as never);
+
+    expect(verifyScopedAdminAccessToken).toHaveBeenCalledWith(
+      'ws-scope-token',
+      { scope: 'table_monitoring_ws' }
+    );
+    expect((request as { admin?: unknown }).admin).toMatchObject({
+      adminId: 101,
+      userId: 11,
+      permissions: [],
+      requiresMfa: false,
+    });
+  });
+
+  it('rejects scoped admin access tokens outside the websocket route', async () => {
+    const request = {
+      url: '/admin/mfa/status?accessToken=ws-scope-token',
+      query: { accessToken: 'ws-scope-token' },
+      headers: {},
+      cookies: {},
+    };
+    const reply = {};
+
+    verifyAdminSessionToken.mockResolvedValue(null);
+
+    const result = await requireAdminGuard(request as never, reply as never);
+
+    expect(verifyScopedAdminAccessToken).not.toHaveBeenCalled();
+    expect(sendError).toHaveBeenCalledWith(reply, 401, 'Unauthorized');
+    expect(result).toEqual({ status: 401, message: 'Unauthorized' });
+  });
+
+  it('requires MFA to be enabled for high-value user withdrawals', async () => {
+    const reply = {};
+    const request = {
+      user: {
+        userId: 9,
+        email: 'user@example.com',
+        role: 'user' as const,
+        sessionId: 'user-session-9',
+      },
+      headers: {},
+      body: { amount: '600' },
+    };
+
+    const guard = requireUserMfaStepUp();
+    const result = await guard(request as never, reply as never);
+
+    expect(isUserMfaEnabled).toHaveBeenCalledWith(9);
+    expect(sendError).toHaveBeenCalledWith(
+      reply,
+      403,
+      'User MFA must be enabled for high-value withdrawals.',
+      undefined,
+      'USER_MFA_REQUIRED'
+    );
+    expect(result).toEqual({
+      status: 403,
+      message: 'User MFA must be enabled for high-value withdrawals.',
+      code: 'USER_MFA_REQUIRED',
+    });
+  });
+
+  it('requires a step-up code once user MFA is enabled for high-value withdrawals', async () => {
+    const reply = {};
+    const request = {
+      user: {
+        userId: 9,
+        email: 'user@example.com',
+        role: 'user' as const,
+        sessionId: 'user-session-9',
+      },
+      headers: {},
+      body: { amount: '600' },
+    };
+    isUserMfaEnabled.mockResolvedValue(true);
+
+    const guard = requireUserMfaStepUp();
+    const result = await guard(request as never, reply as never);
+
+    expect(sendError).toHaveBeenCalledWith(
+      reply,
+      401,
+      'User step-up code required.',
+      undefined,
+      'USER_STEP_UP_REQUIRED'
+    );
+    expect(result).toEqual({
+      status: 401,
+      message: 'User step-up code required.',
+      code: 'USER_STEP_UP_REQUIRED',
+    });
+  });
+
+  it('allows a high-value user withdrawal with a valid step-up code', async () => {
+    const reply = {};
+    const request = {
+      user: {
+        userId: 9,
+        email: 'user@example.com',
+        role: 'user' as const,
+        sessionId: 'user-session-9',
+      },
+      headers: {},
+      body: { amount: '600', totpCode: '123456' },
+    };
+    isUserMfaEnabled.mockResolvedValue(true);
+    verifyUserMfaChallenge.mockResolvedValue({
+      valid: true,
+      method: 'totp',
+    });
+
+    const guard = requireUserMfaStepUp();
+    const result = await guard(request as never, reply as never);
+
+    expect(verifyUserMfaChallenge).toHaveBeenCalledWith({
+      userId: 9,
+      code: '123456',
+    });
+    expect(sendError).not.toHaveBeenCalled();
+    expect(result).toBeUndefined();
+    expect((request as { userStepUp?: unknown }).userStepUp).toEqual({
+      verified: true,
+      method: 'totp',
+      verifiedAt: expect.any(String),
+      amountThreshold: '500.00',
+    });
   });
 
   it('blocks admin actions when the permission is missing', async () => {
@@ -410,5 +618,136 @@ describe('auth guards', () => {
     });
     expect(sendError).not.toHaveBeenCalled();
     expect(result).toBeUndefined();
+  });
+
+  it('requires a break-glass code when the permission opts into it', async () => {
+    const reply = {};
+    const request = {
+      admin: {
+        adminId: 101,
+        userId: 11,
+        email: 'admin@example.com',
+        role: 'admin' as const,
+        mfaEnabled: true,
+        mfaRecoveryMode: 'none' as const,
+        sessionId: 'admin-session-11',
+        permissions: [ADMIN_PERMISSION_KEYS.FINANCE_APPROVE_WITHDRAWAL],
+        requiresMfa: true,
+      },
+      headers: {},
+      body: { totpCode: '123456' },
+    };
+    canAdminAccess.mockReturnValue(true);
+    verifyAdminMfaChallenge.mockResolvedValue({
+      valid: true,
+      method: 'totp',
+      recoveryCodesRemaining: 0,
+    });
+
+    const guard = requireAdminPermission(
+      ADMIN_PERMISSION_KEYS.FINANCE_APPROVE_WITHDRAWAL,
+      { requireBreakGlass: true }
+    );
+    const result = await guard(request as never, reply as never);
+
+    expect(sendError).toHaveBeenCalledWith(
+      reply,
+      401,
+      'Admin break-glass code required.',
+      undefined,
+      'ADMIN_BREAK_GLASS_REQUIRED'
+    );
+    expect(result).toEqual({
+      status: 401,
+      message: 'Admin break-glass code required.',
+      code: 'ADMIN_BREAK_GLASS_REQUIRED',
+    });
+  });
+
+  it('rejects an invalid break-glass code', async () => {
+    const reply = {};
+    const request = {
+      admin: {
+        adminId: 101,
+        userId: 11,
+        email: 'admin@example.com',
+        role: 'admin' as const,
+        mfaEnabled: true,
+        mfaRecoveryMode: 'none' as const,
+        sessionId: 'admin-session-11',
+        permissions: [ADMIN_PERMISSION_KEYS.FINANCE_APPROVE_WITHDRAWAL],
+        requiresMfa: true,
+      },
+      headers: {},
+      body: { totpCode: '123456', breakGlassCode: 'wrong-secret' },
+    };
+    canAdminAccess.mockReturnValue(true);
+    verifyAdminMfaChallenge.mockResolvedValue({
+      valid: true,
+      method: 'totp',
+      recoveryCodesRemaining: 0,
+    });
+    verifyAdminMfaBreakGlassCode.mockReturnValue(false);
+
+    const guard = requireAdminPermission(
+      ADMIN_PERMISSION_KEYS.FINANCE_APPROVE_WITHDRAWAL,
+      { requireBreakGlass: true }
+    );
+    const result = await guard(request as never, reply as never);
+
+    expect(sendError).toHaveBeenCalledWith(
+      reply,
+      401,
+      'Invalid admin break-glass code.',
+      undefined,
+      'ADMIN_BREAK_GLASS_INVALID'
+    );
+    expect(result).toEqual({
+      status: 401,
+      message: 'Invalid admin break-glass code.',
+      code: 'ADMIN_BREAK_GLASS_INVALID',
+    });
+  });
+
+  it('allows a high-risk action with MFA and break-glass', async () => {
+    const reply = {};
+    const request = {
+      admin: {
+        adminId: 101,
+        userId: 11,
+        email: 'admin@example.com',
+        role: 'admin' as const,
+        mfaEnabled: true,
+        mfaRecoveryMode: 'none' as const,
+        sessionId: 'admin-session-11',
+        permissions: [ADMIN_PERMISSION_KEYS.FINANCE_APPROVE_WITHDRAWAL],
+        requiresMfa: true,
+      },
+      headers: {},
+      body: { totpCode: '123456', breakGlassCode: 'break-glass-secret' },
+    };
+    canAdminAccess.mockReturnValue(true);
+    verifyAdminMfaChallenge.mockResolvedValue({
+      valid: true,
+      method: 'totp',
+      recoveryCodesRemaining: 0,
+    });
+
+    const guard = requireAdminPermission(
+      ADMIN_PERMISSION_KEYS.FINANCE_APPROVE_WITHDRAWAL,
+      { requireBreakGlass: true }
+    );
+    const result = await guard(request as never, reply as never);
+
+    expect(verifyAdminMfaBreakGlassCode).toHaveBeenCalledWith(
+      'break-glass-secret'
+    );
+    expect(sendError).not.toHaveBeenCalled();
+    expect(result).toBeUndefined();
+    expect((request as { adminStepUp?: unknown }).adminStepUp).toMatchObject({
+      verified: true,
+      method: 'totp',
+      breakGlassVerified: true,
+    });
   });
 });

@@ -103,6 +103,46 @@ export async function readStoredUserSession() {
           ? parsed.user.phoneVerifiedAt
           : null,
     } satisfies UserSessionResponse["user"];
+    const storedLegal =
+      parsed.legal &&
+      typeof parsed.legal === "object" &&
+      typeof parsed.legal.requiresAcceptance === "boolean" &&
+      Array.isArray(parsed.legal.items)
+        ? {
+            requiresAcceptance: parsed.legal.requiresAcceptance,
+            items: parsed.legal.items
+              .map((item) => {
+                if (
+                  typeof item !== "object" ||
+                  item === null ||
+                  typeof item.id !== "number" ||
+                  typeof item.slug !== "string" ||
+                  typeof item.version !== "string" ||
+                  typeof item.effectiveAt !== "string" ||
+                  typeof item.accepted !== "boolean"
+                ) {
+                  return null;
+                }
+
+                return {
+                  id: item.id,
+                  slug: item.slug,
+                  version: item.version,
+                  effectiveAt: item.effectiveAt,
+                  accepted: item.accepted,
+                  acceptedAt:
+                    typeof item.acceptedAt === "string" ? item.acceptedAt : null,
+                };
+              })
+              .filter(
+                (
+                  item,
+                ): item is NonNullable<
+                  UserSessionResponse["legal"]
+                >["items"][number] => item !== null,
+              ),
+          }
+        : undefined;
 
     return {
       token: parsed.token,
@@ -110,6 +150,7 @@ export async function readStoredUserSession() {
       sessionId:
         typeof parsed.sessionId === "string" ? parsed.sessionId : undefined,
       user: storedUser,
+      legal: storedLegal,
     } satisfies UserSessionResponse;
   } catch {
     await clearStoredValue();

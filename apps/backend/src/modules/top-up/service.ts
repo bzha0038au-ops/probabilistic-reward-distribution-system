@@ -38,6 +38,8 @@ import {
   withPaymentProcessingMetadata,
 } from '../payment/service';
 import { preparePaymentOutboundRequest } from '../payment/outbound';
+import { assertWalletLedgerInvariant } from '../wallet/invariant-service';
+import { screenUserFirstDeposit } from '../aml';
 import { getPaymentConfig } from '../system/service';
 
 type DepositRecord = typeof deposits.$inferSelect;
@@ -480,6 +482,8 @@ export async function createTopUp(payload: {
   referenceId?: string | null;
   metadata?: Record<string, unknown> | null;
 }) {
+  await screenUserFirstDeposit(payload.userId, payload.metadata ?? null);
+
   return db.transaction(async (tx) => {
     const paymentConfig = await getPaymentConfig(tx);
     if (!paymentConfig.depositEnabled) {
@@ -716,7 +720,15 @@ export async function creditDeposit(depositId: number, review: DepositReview = {
     const deposit = await lockDepositById(tx, depositId);
     if (!deposit) return null;
 
-    return creditDepositRecord(tx, deposit, review);
+    const result = await creditDepositRecord(tx, deposit, review);
+    if (result) {
+      await assertWalletLedgerInvariant(tx, deposit.userId, {
+        service: 'top_up',
+        operation: 'creditDeposit',
+      });
+    }
+
+    return result;
   });
 }
 
@@ -912,6 +924,11 @@ export async function reverseDeposit(depositId: number, review: DepositReview = 
           settlementReference,
           processingChannel: reviewState.effectiveReview.processingChannel,
         },
+      });
+
+      await assertWalletLedgerInvariant(tx, deposit.userId, {
+        service: 'top_up',
+        operation: 'reverseDeposit',
       });
 
       return updated;

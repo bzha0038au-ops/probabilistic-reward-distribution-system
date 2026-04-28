@@ -12,6 +12,7 @@ export * from './payment/service';
 export * from './quick-eight/service';
 export * from './saas/service';
 export * from './system/service';
+export * from './table-engine/service';
 export * from './top-up';
 export * from './user/service';
 export * from './withdraw/service';

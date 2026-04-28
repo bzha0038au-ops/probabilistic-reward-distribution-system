@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { HandHistoryRoundIdSchema } from './hand-history';
 
 export const quickEightRoundStatusValues = ['lost', 'won'] as const;
 
@@ -90,6 +91,7 @@ export const QUICK_EIGHT_CONFIG: QuickEightConfig = {
 
 export const QuickEightRoundSchema = z.object({
   id: z.number().int(),
+  roundId: HandHistoryRoundIdSchema,
   userId: z.number().int(),
   selectedNumbers: z.array(QuickEightNumberSchema).length(QUICK_EIGHT_PICK_COUNT),
   drawnNumbers: z.array(QuickEightNumberSchema).length(QUICK_EIGHT_DRAW_COUNT),

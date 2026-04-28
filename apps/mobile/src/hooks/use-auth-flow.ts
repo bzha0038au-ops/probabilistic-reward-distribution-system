@@ -1,5 +1,8 @@
 import { useCallback, useState, type MutableRefObject } from "react";
-import type { UserSessionResponse } from "@reward/shared-types/auth";
+import type {
+  RegisterRequest,
+  UserSessionResponse,
+} from "@reward/shared-types/auth";
 import { createUserApiClient } from "@reward/user-core";
 
 import { parseAuthLink, resolveAuthTokenInput } from "../auth-links";
@@ -30,6 +33,7 @@ export type AuthFlowSessionBridge = {
       sessionId?: string;
       emailVerifiedAt?: string | null;
       phoneVerifiedAt?: string | null;
+      legal?: UserSessionResponse["legal"];
     },
   ) => Promise<UserSessionResponse>;
   refreshCurrentSession: (
@@ -231,39 +235,43 @@ export function useAuthFlow(options: UseAuthFlowOptions) {
     setSubmitting,
   ]);
 
-  const handleRegister = useCallback(async () => {
-    resetFeedback();
+  const handleRegister = useCallback(
+    async (legalAcceptances: RegisterRequest["legalAcceptances"] = []) => {
+      resetFeedback();
 
-    if (!normalizedEmail || !password) {
-      setError("Email and password are required.");
-      return;
-    }
+      if (!normalizedEmail || !password) {
+        setError("Email and password are required.");
+        return;
+      }
 
-    setSubmitting(true);
-    const response = await api.register({
-      email: normalizedEmail,
-      password,
-    });
+      setSubmitting(true);
+      const response = await api.register({
+        email: normalizedEmail,
+        password,
+        legalAcceptances,
+      });
 
-    if (!response.ok) {
-      setError(response.error?.message ?? "Registration failed.");
+      if (!response.ok) {
+        setError(response.error?.message ?? "Registration failed.");
+        setSubmitting(false);
+        return;
+      }
+
+      setMessage("Account created. Check your inbox for the verification link.");
+      setScreen("login");
       setSubmitting(false);
-      return;
-    }
-
-    setMessage("Account created. Check your inbox for the verification link.");
-    setScreen("login");
-    setSubmitting(false);
-  }, [
-    api,
-    normalizedEmail,
-    password,
-    resetFeedback,
-    setError,
-    setMessage,
-    setScreen,
-    setSubmitting,
-  ]);
+    },
+    [
+      api,
+      normalizedEmail,
+      password,
+      resetFeedback,
+      setError,
+      setMessage,
+      setScreen,
+      setSubmitting,
+    ],
+  );
 
   const handleRequestPasswordReset = useCallback(async () => {
     resetFeedback();

@@ -35,6 +35,7 @@ import {
   parseIdParam,
   toObject,
 } from "../common";
+import { withAdminAuditContext } from "../../../admin-audit";
 
 const config = getConfigView();
 
@@ -46,7 +47,9 @@ export async function registerAdminSaasBillingRoutes(
     {
       config: { rateLimit: adminRateLimit },
       preHandler: [
-        requireAdminPermission(ADMIN_PERMISSION_KEYS.CONFIG_UPDATE),
+        requireAdminPermission(ADMIN_PERMISSION_KEYS.CONFIG_UPDATE, {
+          requireBreakGlass: true,
+        }),
         enforceAdminLimit,
       ],
     },
@@ -81,14 +84,13 @@ export async function registerAdminSaasBillingRoutes(
           adminId: request.admin!.adminId,
           permissions: request.admin!.permissions,
         });
-        await recordAdminAction({
+        await recordAdminAction(withAdminAuditContext(request, {
           adminId: request.admin?.adminId ?? null,
           action: "saas_billing_upsert",
           targetType: "saas_tenant",
           targetId: tenantId,
           metadata: parsed.data,
-          ip: request.ip,
-        });
+        }));
         return sendSuccess(reply, billing);
       } catch (error) {
         return sendErrorForException(
@@ -414,7 +416,9 @@ export async function registerAdminSaasBillingRoutes(
     {
       config: { rateLimit: adminRateLimit },
       preHandler: [
-        requireAdminPermission(ADMIN_PERMISSION_KEYS.FINANCE_RECONCILE),
+        requireAdminPermission(ADMIN_PERMISSION_KEYS.FINANCE_RECONCILE, {
+          requireBreakGlass: true,
+        }),
         enforceAdminLimit,
       ],
     },
@@ -450,14 +454,13 @@ export async function registerAdminSaasBillingRoutes(
           request.admin?.adminId ?? null,
           request.admin?.permissions ?? [],
         );
-        await recordAdminAction({
+        await recordAdminAction(withAdminAuditContext(request, {
           adminId: request.admin?.adminId ?? null,
           action: "saas_billing_top_up_create",
           targetType: "saas_billing_top_up",
           targetId: topUp.id,
           metadata: parsed.data,
-          ip: request.ip,
-        });
+        }));
         return sendSuccess(reply, topUp, 201);
       } catch (error) {
         return sendErrorForException(

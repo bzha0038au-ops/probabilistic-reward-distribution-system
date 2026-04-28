@@ -7,6 +7,7 @@ export const authNotificationKindValues = [
   'email_verification',
   'phone_verification',
   'security_alert',
+  'aml_review',
   'saas_tenant_invite',
 ] as const;
 export const AuthNotificationKindSchema = z.enum(authNotificationKindValues);

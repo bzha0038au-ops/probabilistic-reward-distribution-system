@@ -27,6 +27,8 @@ const ADMIN_SESSION_COOKIE = 'reward_admin_session';
 const CSRF_COOKIE = 'reward_csrf';
 const CSRF_HEADER = 'x-csrf-token';
 const CSRF_TOKEN = 'playwright-admin-csrf-token';
+const ADMIN_BREAK_GLASS_CODE =
+  'integration-break-glass-secret-1234567890-abcdefghijklmnopqrstuvwxyz';
 const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 
 type ApiEnvelope<T> =
@@ -182,6 +184,49 @@ const waitForRecord = async <T>(
   throw new Error(`Timed out waiting for ${label}.`);
 };
 
+const seedApprovedKycTier = async (
+  userId: number,
+  tier: 'tier_1' | 'tier_2',
+) => {
+  const [existing] = await sql<Array<{ id: number; current_tier: string | null }>>`
+    select id, current_tier
+    from kyc_profiles
+    where user_id = ${userId}
+    limit 1
+  `;
+
+  if (!existing) {
+    await sql`
+      insert into kyc_profiles (
+        user_id,
+        current_tier,
+        status,
+        submitted_at,
+        reviewed_at,
+        updated_at
+      )
+      values (${userId}, ${tier}, 'approved', now(), now(), now())
+    `;
+    return;
+  }
+
+  const currentTier = existing.current_tier === 'tier_2' ? 'tier_2' : tier;
+
+  await sql`
+    update kyc_profiles
+    set
+      current_tier = ${currentTier},
+      requested_tier = null,
+      status = 'approved',
+      rejection_reason = null,
+      freeze_record_id = null,
+      reviewed_by_admin_id = null,
+      reviewed_at = now(),
+      updated_at = now()
+    where id = ${existing.id}
+  `;
+};
+
 const setConfigNumber = async (key: string, value: string) => {
   await sql`
     insert into system_config (config_key, config_number, description)
@@ -270,6 +315,7 @@ const adminRequest = async <T>(payload: {
   method?: string;
   body?: Record<string, unknown>;
   totpCode?: string;
+  breakGlassCode?: string;
 }) => {
   const headers = new Headers({
     cookie: `${ADMIN_SESSION_COOKIE}=${encodeURIComponent(payload.token)}; ${CSRF_COOKIE}=${CSRF_TOKEN}`,
@@ -279,6 +325,9 @@ const adminRequest = async <T>(payload: {
 
   if (payload.totpCode) {
     headers.set('x-admin-totp-code', payload.totpCode);
+  }
+  if (payload.breakGlassCode) {
+    headers.set('x-admin-break-glass-code', payload.breakGlassCode);
   }
 
   let body: string | undefined;
@@ -470,6 +519,8 @@ test('user main flow covers deposit approval, draw, phone verification, and with
     throw new Error(`Missing user for ${email}.`);
   }
 
+  await seedApprovedKycTier(user.id, 'tier_1');
+
   await page.goto('/app/wallet');
   await page.getByLabel('Top-up amount').fill('100.00');
   await page.getByLabel('Reference ID').fill('deposit-ref-001');
@@ -559,6 +610,8 @@ test('user main flow covers deposit approval, draw, phone verification, and with
     'Phone verified. Withdrawal tools are now available.',
   );
 
+  await seedApprovedKycTier(user.id, 'tier_2');
+
   await page.goto('/app/payments');
   await page.getByLabel('Cardholder name').fill('Reward User');
   await page.getByLabel('Bank name').fill('Playwright Bank');
@@ -596,6 +649,7 @@ test('user main flow covers deposit approval, draw, phone verification, and with
     token: adminMakerSession.token,
     method: 'PATCH',
     totpCode: generateTotpCode(adminMakerSession.secret),
+    breakGlassCode: ADMIN_BREAK_GLASS_CODE,
     body: {
       operatorNote: 'kyc passed',
     },
@@ -810,14 +864,14 @@ test('admin critical actions cover notification retry, freeze release, and syste
     last_error: null,
   });
 
-  await adminRequest({
+  const freezeRecord = await adminRequest<{ id: number }>({
     path: '/admin/freeze-records',
     token: approverSession.token,
     method: 'POST',
     totpCode: generateTotpCode(approverSession.secret),
     body: {
       userId: user.id,
-      reason: 'manual_review',
+      reason: 'manual_admin',
     },
   });
 
@@ -841,7 +895,7 @@ test('admin critical actions cover notification retry, freeze release, and syste
   expect(frozenLogin.response.status).toBe(423);
 
   await adminRequest({
-    path: `/admin/freeze-records/${user.id}/release`,
+    path: `/admin/freeze-records/${freezeRecord.id}/release`,
     token: approverSession.token,
     method: 'POST',
     totpCode: generateTotpCode(approverSession.secret),

@@ -43,6 +43,7 @@ type ReconcileSessionOverrides = {
   sessionId?: string;
   emailVerifiedAt?: string | null;
   phoneVerifiedAt?: string | null;
+  legal?: UserSessionResponse["legal"];
 };
 
 export function useUserSession(options: UseUserSessionOptions) {
@@ -129,6 +130,7 @@ export function useUserSession(options: UseUserSessionOptions) {
       const nextSession: UserSessionResponse = {
         ...baseSession,
         sessionId: overrides.sessionId ?? baseSession.sessionId,
+        legal: overrides.legal ?? baseSession.legal,
         user: {
           ...baseSession.user,
           emailVerifiedAt:
@@ -174,6 +176,7 @@ export function useUserSession(options: UseUserSessionOptions) {
         sessionId: response.data.session.sessionId,
         emailVerifiedAt: response.data.user.emailVerifiedAt,
         phoneVerifiedAt: response.data.user.phoneVerifiedAt,
+        legal: response.data.legal,
       });
       setCurrentSession(response.data.session);
 
@@ -408,6 +411,7 @@ export function useUserSession(options: UseUserSessionOptions) {
       const restoredSession: UserSessionResponse = {
         ...storedSession,
         sessionId: response.data.session.sessionId,
+        legal: response.data.legal,
         user: response.data.user,
       };
 

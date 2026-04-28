@@ -256,6 +256,75 @@ async function main() {
     const sql = createSqlClient(database.databaseUrl);
 
     try {
+      const seedApprovedTierOneKyc = async (userId: number) => {
+        const now = new Date();
+        await sql`
+          with updated as (
+            update kyc_profiles
+            set current_tier = 'tier_1',
+                requested_tier = null,
+                status = 'approved',
+                rejection_reason = null,
+                freeze_record_id = null,
+                reviewed_by_admin_id = null,
+                submitted_at = ${now},
+                reviewed_at = ${now},
+                updated_at = ${now}
+            where user_id = ${userId}
+            returning id
+          )
+          insert into kyc_profiles (
+            user_id,
+            current_tier,
+            status,
+            submitted_at,
+            reviewed_at,
+            updated_at
+          )
+          select
+            ${userId},
+            'tier_1',
+            'approved',
+            ${now},
+            ${now},
+            ${now}
+          where not exists (select 1 from updated)
+        `;
+      };
+
+      const seedWithdrawableFunding = async (userId: number, amount: string) => {
+        await sql`
+          update user_wallets
+          set withdrawable_balance = ${amount},
+              locked_balance = '0.00',
+              bonus_balance = '0.00',
+              wagered_amount = '0.00',
+              updated_at = now()
+          where user_id = ${userId}
+        `;
+
+        await sql`
+          insert into ledger_entries (
+            user_id,
+            type,
+            amount,
+            balance_before,
+            balance_after,
+            reference_type,
+            metadata
+          )
+          values (
+            ${userId},
+            'deposit_credit',
+            ${amount},
+            '0.00',
+            ${amount},
+            'load_test_seed',
+            jsonb_build_object('reason', 'load_test_seed')
+          )
+        `;
+      };
+
       await sql`
         insert into prizes (
           name,
@@ -307,15 +376,8 @@ async function main() {
       );
 
       await runWithConcurrency(sessions, setupConcurrency, async (session) => {
-        await sql`
-          update user_wallets
-          set withdrawable_balance = '100000.00',
-              locked_balance = '0.00',
-              bonus_balance = '0.00',
-              wagered_amount = '0.00',
-              updated_at = now()
-          where user_id = ${session.user.id}
-        `;
+        await seedApprovedTierOneKyc(session.user.id);
+        await seedWithdrawableFunding(session.user.id, '100000.00');
       });
 
       const drawRequests = Array.from({ length: drawsPerUser }, (_, drawIndex) =>

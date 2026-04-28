@@ -1,20 +1,14 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 process.env.DATABASE_URL ||= 'postgresql://postgres:postgres@127.0.0.1:5432/reward_test';
 process.env.POSTGRES_URL ||= process.env.DATABASE_URL;
 
-let derivePaymentWebhookTransition: typeof import('./webhook').derivePaymentWebhookTransition;
-let readPaymentWebhookEventId: typeof import('./webhook').readPaymentWebhookEventId;
-let readPaymentWebhookEventIdFromHeaders: typeof import('./webhook').readPaymentWebhookEventIdFromHeaders;
-let readPaymentWebhookSignatureFromHeaders: typeof import('./webhook').readPaymentWebhookSignatureFromHeaders;
-
-beforeAll(async () => {
-  const mod = await import('./webhook');
-  derivePaymentWebhookTransition = mod.derivePaymentWebhookTransition;
-  readPaymentWebhookEventId = mod.readPaymentWebhookEventId;
-  readPaymentWebhookEventIdFromHeaders = mod.readPaymentWebhookEventIdFromHeaders;
-  readPaymentWebhookSignatureFromHeaders = mod.readPaymentWebhookSignatureFromHeaders;
-});
+const {
+  derivePaymentWebhookTransition,
+  readPaymentWebhookEventId,
+  readPaymentWebhookEventIdFromHeaders,
+  readPaymentWebhookSignatureFromHeaders,
+} = await import('./webhook/service');
 
 describe('payment webhook helpers', () => {
   it('extracts event ids from nested payloads and headers', () => {

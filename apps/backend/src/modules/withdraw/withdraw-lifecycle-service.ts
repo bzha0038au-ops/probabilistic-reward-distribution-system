@@ -27,6 +27,7 @@ import {
 import { applyLedgerMutation } from '../payment/ledger-mutation';
 import { preparePaymentOutboundRequest } from '../payment/outbound';
 import { assertWithdrawalLedgerMutationStatus } from '../payment/state-machine';
+import { assertWalletLedgerInvariant } from '../wallet/invariant-service';
 import {
   buildWithdrawalBusinessEventId,
   isManualChannel,
@@ -536,12 +537,19 @@ export async function rejectWithdrawal(
       return persistWithdrawalMetadata(tx, row, reviewMetadata);
     }
 
-    return refundWithdrawal(tx, row, {
+    const result = await refundWithdrawal(tx, row, {
       review,
       reviewState,
       reviewMetadata,
       nextStatus: 'rejected',
     });
+
+    await assertWalletLedgerInvariant(tx, row.user_id, {
+      service: 'withdraw',
+      operation: 'rejectWithdrawal',
+    });
+
+    return result;
   });
 }
 
@@ -722,7 +730,14 @@ export async function payWithdrawal(
       },
     });
 
-    return serializeWithdrawal(updated ?? row);
+    const result = serializeWithdrawal(updated ?? row);
+
+    await assertWalletLedgerInvariant(tx, row.user_id, {
+      service: 'withdraw',
+      operation: 'payWithdrawal',
+    });
+
+    return result;
   });
 }
 
@@ -764,12 +779,19 @@ export async function reverseWithdrawal(
       return persistWithdrawalMetadata(tx, row, reviewMetadata);
     }
 
-    return refundWithdrawal(tx, row, {
+    const result = await refundWithdrawal(tx, row, {
       review,
       reviewState,
       reviewMetadata,
       nextStatus: 'reversed',
     });
+
+    await assertWalletLedgerInvariant(tx, row.user_id, {
+      service: 'withdraw',
+      operation: 'reverseWithdrawal',
+    });
+
+    return result;
   });
 }
 

@@ -11,7 +11,7 @@
         {$page?.error?.message ?? "The admin console hit an unexpected error."}
       </p>
       <div>
-        <a href="/admin" class="btn btn-primary btn-wide">Back to console</a>
+        <a href="/config" class="btn btn-primary btn-wide">Back to console</a>
       </div>
     </div>
   </div>

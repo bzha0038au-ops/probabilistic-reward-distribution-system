@@ -391,3 +391,62 @@ export const PaymentCapabilityOverviewSchema =
 export type PaymentCapabilityOverview = z.infer<
   typeof PaymentCapabilityOverviewSchema
 >;
+
+export const reconciliationAlertStatusValues = [
+  'open',
+  'acknowledged',
+  'require_engineering',
+  'resolved',
+] as const;
+export const ReconciliationAlertStatusSchema = z.enum(
+  reconciliationAlertStatusValues
+);
+export type ReconciliationAlertStatus = z.infer<
+  typeof ReconciliationAlertStatusSchema
+>;
+
+export const ReconciliationBalanceSnapshotSchema = z.object({
+  withdrawableBalance: z.string().nullable().optional(),
+  bonusBalance: z.string().nullable().optional(),
+  lockedBalance: z.string().nullable().optional(),
+  wageredAmount: z.string().nullable().optional(),
+  totalBalance: z.string().nullable().optional(),
+  latestLedgerEntryId: z.number().int().nullable().optional(),
+  capturedAt: DateLikeSchema.nullable().optional(),
+  metadata: MetadataSchema,
+});
+export type ReconciliationBalanceSnapshot = z.infer<
+  typeof ReconciliationBalanceSnapshotSchema
+>;
+
+export const ReconciliationAlertRecordSchema = z.object({
+  id: z.number().int(),
+  userId: z.number().int().nullable(),
+  userEmail: z.string().nullable().optional(),
+  dedupeKey: z.string().nullable().optional(),
+  status: ReconciliationAlertStatusSchema,
+  deltaAmount: z.string(),
+  ledgerSnapshot: ReconciliationBalanceSnapshotSchema,
+  walletSnapshot: ReconciliationBalanceSnapshotSchema,
+  statusNote: z.string().nullable().optional(),
+  statusUpdatedByAdminId: z.number().int().nullable().optional(),
+  statusUpdatedAt: DateLikeSchema.nullable().optional(),
+  lastDetectedAt: DateLikeSchema.nullable().optional(),
+  resolvedAt: DateLikeSchema.nullable().optional(),
+  createdAt: DateLikeSchema.nullable().optional(),
+  updatedAt: DateLikeSchema.nullable().optional(),
+});
+export type ReconciliationAlertRecord = z.infer<
+  typeof ReconciliationAlertRecordSchema
+>;
+
+export const ReconciliationAlertSummarySchema = z.object({
+  openCount: z.number().int().nonnegative(),
+  acknowledgedCount: z.number().int().nonnegative(),
+  requireEngineeringCount: z.number().int().nonnegative(),
+  resolvedCount: z.number().int().nonnegative(),
+  unresolvedCount: z.number().int().nonnegative(),
+});
+export type ReconciliationAlertSummary = z.infer<
+  typeof ReconciliationAlertSummarySchema
+>;

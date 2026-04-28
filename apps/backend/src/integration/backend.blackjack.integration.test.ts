@@ -9,18 +9,23 @@ import {
   setConfigNumber,
   verifyUserContacts,
 } from './integration-test-support';
-import { asc, eq } from '@reward/database/orm';
+import { and, asc, eq } from '@reward/database/orm';
 import { expect } from 'vitest';
 import {
   blackjackGames,
   houseAccount,
   ledgerEntries,
+  roundEvents,
+  userPlayModes,
   userWallets,
 } from '@reward/database';
+
+const TEN_VALUE_RANKS = new Set(['10', 'J', 'Q', 'K']);
 
 describeIntegrationSuite('backend blackjack integration', () => {
   it(
     'POST /blackjack/start and /blackjack/:gameId/action settle a hand for authenticated users',
+    { timeout: 30000 },
     async () => {
       const user = await seedBlackjackScenario();
       await verifyUserContacts(user.id, { email: true });
@@ -67,12 +72,31 @@ describeIntegrationSuite('backend blackjack integration', () => {
           totalStake: '10.00',
           payoutAmount: '0.00',
           status: 'active',
+          table: {
+            capacity: 2,
+            sharedDeck: true,
+            seats: [
+              {
+                seatIndex: 0,
+                role: 'dealer',
+                participantType: 'ai_robot',
+                isSelf: false,
+              },
+              {
+                seatIndex: 1,
+                role: 'player',
+                participantType: 'human_user',
+                isSelf: true,
+              },
+            ],
+          },
           fairness: {
             clientNonce,
             commitHash: fairnessSeed.commitHash,
           },
         },
       });
+      expect(startPayload.data.game.table.tableId).toContain(`bj-${fairnessSeed.epoch}-${user.id}-`);
       expect(startPayload.data.game.availableActions).toEqual(
         expect.arrayContaining(['hit', 'stand'])
       );
@@ -136,11 +160,53 @@ describeIntegrationSuite('backend blackjack integration', () => {
         payoutAmount: actionPayload.data.game.payoutAmount,
         status: actionPayload.data.game.status,
       });
+
+      const storedEvents = await getDb()
+        .select({
+          eventType: roundEvents.eventType,
+        })
+        .from(roundEvents)
+        .where(
+          and(
+            eq(roundEvents.roundType, 'blackjack'),
+            eq(roundEvents.roundEntityId, gameId)
+          )
+        )
+        .orderBy(asc(roundEvents.eventIndex));
+
+      expect(storedEvents.map((event) => event.eventType)).toContain('round_started');
+      expect(storedEvents.map((event) => event.eventType)).toContain('stake_debited');
+      expect(storedEvents.map((event) => event.eventType)).toContain('player_stand');
+      expect(storedEvents.map((event) => event.eventType)).toContain('round_settled');
+
+      const historyResponse = await getApp().inject({
+        method: 'GET',
+        url: `/hand-history/${encodeURIComponent(startPayload.data.game.roundId)}`,
+        headers: {
+          authorization: `Bearer ${token}`,
+        },
+      });
+
+      expect(historyResponse.statusCode).toBe(200);
+      const historyPayload = historyResponse.json();
+      expect(historyPayload.ok).toBe(true);
+      expect(historyPayload.data).toMatchObject({
+        roundId: startPayload.data.game.roundId,
+        roundType: 'blackjack',
+        stakeAmount: '10.00',
+        totalStake: '10.00',
+        payoutAmount: actionPayload.data.game.payoutAmount,
+        status: actionPayload.data.game.status,
+      });
+      expect(
+        historyPayload.data.events.map((event: { type: string }) => event.type)
+      ).toContain('player_stand');
     }
   );
 
   it(
     'POST /blackjack/:gameId/action supports split hands and tracks the extra stake',
+    { timeout: 15000 },
     async () => {
       const user = await seedBlackjackScenario({
         email: 'blackjack-split-user@example.com',
@@ -314,109 +380,234 @@ describeIntegrationSuite('backend blackjack integration', () => {
     }
   );
 
-  it('GET /blackjack reflects runtime config and disables double when configured off', async () => {
-    const user = await seedBlackjackScenario({
-      email: 'blackjack-config-user@example.com',
-    });
-    await verifyUserContacts(user.id, { email: true });
-    await setConfigNumber('blackjack.min_stake', '5.00');
-    await setConfigNumber('blackjack.max_stake', '50.00');
-    await setConfigNumber('blackjack.win_payout_multiplier', '2.10');
-    await setConfigNumber('blackjack.push_payout_multiplier', '1.00');
-    await setConfigNumber('blackjack.natural_payout_multiplier', '2.75');
-    await setConfigNumber('blackjack.dealer_hits_soft_17', '1');
-    await setConfigNumber('blackjack.double_down_allowed', '0');
-    await setConfigNumber('blackjack.split_aces_allowed', '1');
-    await setConfigNumber('blackjack.hit_split_aces_allowed', '0');
-    await setConfigNumber('blackjack.resplit_allowed', '1');
-    await setConfigNumber('blackjack.max_split_hands', '4');
-    await setConfigNumber('blackjack.split_ten_value_cards_allowed', '1');
+  it(
+    'POST /blackjack/:gameId/action returns BLACKJACK_TURN_EXPIRED after the timeout action is committed',
+    { timeout: 15000 },
+    async () => {
+      const user = await seedBlackjackScenario({
+        email: 'blackjack-timeout-user@example.com',
+      });
+      await verifyUserContacts(user.id, { email: true });
+      const clientNonce = await findBlackjackClientNonce({
+        userId: user.id,
+        prefix: 'integration-blackjack-timeout',
+        attempts: 5000,
+        predicate: (preview, { scoreBlackjackCards }) => {
+          const playerScore = scoreBlackjackCards([preview.deck[0], preview.deck[2]]);
+          const dealerScore = scoreBlackjackCards([preview.deck[1], preview.deck[3]]);
+          return !playerScore.blackjack && !dealerScore.blackjack;
+        },
+      });
 
-    const { token } = await getCreateUserSessionToken()({
-      userId: user.id,
-      email: user.email,
-      role: 'user',
-    });
+      const { token } = await getCreateUserSessionToken()({
+        userId: user.id,
+        email: user.email,
+        role: 'user',
+      });
 
-    const overviewResponse = await getApp().inject({
-      method: 'GET',
-      url: '/blackjack',
-      headers: {
-        authorization: `Bearer ${token}`,
-      },
-    });
+      const startResponse = await getApp().inject({
+        method: 'POST',
+        url: '/blackjack/start',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        payload: {
+          stakeAmount: '10.00',
+          clientNonce,
+        },
+      });
 
-    expect(overviewResponse.statusCode).toBe(200);
-    const overviewPayload = overviewResponse.json();
-    expect(overviewPayload.ok).toBe(true);
-    expect(overviewPayload.data.config).toEqual({
-      minStake: '5.00',
-      maxStake: '50.00',
-      winPayoutMultiplier: '2.10',
-      pushPayoutMultiplier: '1.00',
-      naturalPayoutMultiplier: '2.75',
-      dealerHitsSoft17: true,
-      doubleDownAllowed: false,
-      splitAcesAllowed: true,
-      hitSplitAcesAllowed: false,
-      resplitAllowed: true,
-      maxSplitHands: 4,
-      splitTenValueCardsAllowed: true,
-    });
+      expect(startResponse.statusCode).toBe(200);
+      const startPayload = startResponse.json();
+      expect(startPayload.ok).toBe(true);
+      const gameId = Number(startPayload.data.game.id);
 
-    const belowMinStartResponse = await getApp().inject({
-      method: 'POST',
-      url: '/blackjack/start',
-      headers: {
-        authorization: `Bearer ${token}`,
-        'content-type': 'application/json',
-      },
-      payload: {
-        stakeAmount: '2.00',
-      },
-    });
+      await getDb()
+        .update(blackjackGames)
+        .set({
+          turnDeadlineAt: new Date(Date.now() - 1_000),
+        })
+        .where(eq(blackjackGames.id, gameId));
 
-    expect(belowMinStartResponse.statusCode).toBe(409);
+      const actionResponse = await getApp().inject({
+        method: 'POST',
+        url: `/blackjack/${gameId}/action`,
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        payload: {
+          action: 'stand',
+        },
+      });
 
-    const clientNonce = await findBlackjackClientNonce({
-      userId: user.id,
-      prefix: 'integration-blackjack-config',
-      attempts: 5000,
-      predicate: (preview, { scoreBlackjackCards }) => {
-        const playerScore = scoreBlackjackCards([preview.deck[0], preview.deck[2]]);
-        const dealerScore = scoreBlackjackCards([preview.deck[1], preview.deck[3]]);
-        return Boolean(
-          !playerScore.blackjack &&
-            !dealerScore.blackjack &&
-            preview.deck[0]?.rank !== preview.deck[2]?.rank
-        );
-      },
-    });
+      expect(actionResponse.statusCode).toBe(409);
+      expect(actionResponse.json()).toMatchObject({
+        ok: false,
+        error: {
+          code: 'BLACKJACK_TURN_EXPIRED',
+        },
+      });
 
-    const startResponse = await getApp().inject({
-      method: 'POST',
-      url: '/blackjack/start',
-      headers: {
-        authorization: `Bearer ${token}`,
-        'content-type': 'application/json',
-      },
-      payload: {
-        stakeAmount: '10.00',
-        clientNonce,
-      },
-    });
+      const [storedGame] = await getDb()
+        .select({
+          status: blackjackGames.status,
+          settledAt: blackjackGames.settledAt,
+        })
+        .from(blackjackGames)
+        .where(eq(blackjackGames.id, gameId))
+        .limit(1);
 
-    expect(startResponse.statusCode).toBe(200);
-    const startPayload = startResponse.json();
-    expect(startPayload.ok).toBe(true);
-    expect(startPayload.data.game.availableActions).toEqual(['hit', 'stand']);
-    expect(startPayload.data.game.fairness.algorithm).toContain(
-      'dealer hits soft 17s'
-    );
-    expect(startPayload.data.game.fairness.algorithm).toContain(
-      'double down disabled'
-    );
-  });
+      expect(storedGame?.status).not.toBe('active');
+      expect(storedGame?.settledAt).not.toBeNull();
+
+      const storedEvents = await getDb()
+        .select({
+          eventType: roundEvents.eventType,
+        })
+        .from(roundEvents)
+        .where(
+          and(
+            eq(roundEvents.roundType, 'blackjack'),
+            eq(roundEvents.roundEntityId, gameId)
+          )
+        )
+        .orderBy(asc(roundEvents.eventIndex));
+
+      expect(storedEvents.map((event) => event.eventType)).toEqual(
+        expect.arrayContaining(['turn_timeout', 'player_stand', 'round_settled'])
+      );
+
+      const overviewResponse = await getApp().inject({
+        method: 'GET',
+        url: '/blackjack',
+        headers: {
+          authorization: `Bearer ${token}`,
+        },
+      });
+
+      expect(overviewResponse.statusCode).toBe(200);
+      expect(overviewResponse.json().data.activeGame).toBeNull();
+    }
+  );
+
+  it(
+    'GET /blackjack reflects runtime config and disables double when configured off',
+    { timeout: 15000 },
+    async () => {
+      const user = await seedBlackjackScenario({
+        email: 'blackjack-config-user@example.com',
+      });
+      await verifyUserContacts(user.id, { email: true });
+      await setConfigNumber('blackjack.min_stake', '5.00');
+      await setConfigNumber('blackjack.max_stake', '50.00');
+      await setConfigNumber('blackjack.win_payout_multiplier', '2.10');
+      await setConfigNumber('blackjack.push_payout_multiplier', '1.00');
+      await setConfigNumber('blackjack.natural_payout_multiplier', '2.75');
+      await setConfigNumber('blackjack.dealer_hits_soft_17', '1');
+      await setConfigNumber('blackjack.double_down_allowed', '0');
+      await setConfigNumber('blackjack.split_aces_allowed', '1');
+      await setConfigNumber('blackjack.hit_split_aces_allowed', '0');
+      await setConfigNumber('blackjack.resplit_allowed', '1');
+      await setConfigNumber('blackjack.max_split_hands', '4');
+      await setConfigNumber('blackjack.split_ten_value_cards_allowed', '1');
+
+      const { token } = await getCreateUserSessionToken()({
+        userId: user.id,
+        email: user.email,
+        role: 'user',
+      });
+
+      const overviewResponse = await getApp().inject({
+        method: 'GET',
+        url: '/blackjack',
+        headers: {
+          authorization: `Bearer ${token}`,
+        },
+      });
+
+      expect(overviewResponse.statusCode).toBe(200);
+      const overviewPayload = overviewResponse.json();
+      expect(overviewPayload.ok).toBe(true);
+      expect(overviewPayload.data.config).toEqual({
+        minStake: '5.00',
+        maxStake: '50.00',
+        winPayoutMultiplier: '2.10',
+        pushPayoutMultiplier: '1.00',
+        naturalPayoutMultiplier: '2.75',
+        dealerHitsSoft17: true,
+        doubleDownAllowed: false,
+        splitAcesAllowed: true,
+        hitSplitAcesAllowed: false,
+        resplitAllowed: true,
+        maxSplitHands: 4,
+        splitTenValueCardsAllowed: true,
+      });
+
+      const belowMinStartResponse = await getApp().inject({
+        method: 'POST',
+        url: '/blackjack/start',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        payload: {
+          stakeAmount: '2.00',
+        },
+      });
+
+      expect(belowMinStartResponse.statusCode).toBe(409);
+
+      const clientNonce = await findBlackjackClientNonce({
+        userId: user.id,
+        prefix: 'integration-blackjack-config',
+        attempts: 5000,
+        predicate: (preview, { scoreBlackjackCards }) => {
+          const firstOpeningRank = preview.deck[0]?.rank;
+          const secondOpeningRank = preview.deck[2]?.rank;
+          const playerScore = scoreBlackjackCards([preview.deck[0], preview.deck[2]]);
+          const dealerScore = scoreBlackjackCards([preview.deck[1], preview.deck[3]]);
+          const splitEligibleOpening =
+            firstOpeningRank === secondOpeningRank ||
+            (firstOpeningRank !== undefined &&
+              secondOpeningRank !== undefined &&
+              TEN_VALUE_RANKS.has(firstOpeningRank) &&
+              TEN_VALUE_RANKS.has(secondOpeningRank));
+
+          return Boolean(
+            !playerScore.blackjack &&
+              !dealerScore.blackjack &&
+              !splitEligibleOpening
+          );
+        },
+      });
+
+      const startResponse = await getApp().inject({
+        method: 'POST',
+        url: '/blackjack/start',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        payload: {
+          stakeAmount: '10.00',
+          clientNonce,
+        },
+      });
+
+      expect(startResponse.statusCode).toBe(200);
+      const startPayload = startResponse.json();
+      expect(startPayload.ok).toBe(true);
+      expect(startPayload.data.game.availableActions).toEqual(['hit', 'stand']);
+      expect(startPayload.data.game.fairness.algorithm).toContain(
+        'dealer hits soft 17s'
+      );
+      expect(startPayload.data.game.fairness.algorithm).toContain(
+        'double down disabled'
+      );
+    }
+  );
 
   it(
     'POST /blackjack/:gameId/action allows mixed 10-value split and re-split when configured',
@@ -604,6 +795,507 @@ describeIntegrationSuite('backend blackjack integration', () => {
           ['win', 'lose', 'push', 'bust'].includes(hand.state)
         )
       ).toBe(true);
+    }
+  );
+
+  it(
+    'POST /blackjack/start applies dual_bet as a product wrapper without changing blackjack actions',
+    { timeout: 30000 },
+    async () => {
+      const user = await seedBlackjackScenario({
+        email: 'blackjack-dual-bet@example.com',
+      });
+      await verifyUserContacts(user.id, { email: true });
+
+      const clientNonce = await findBlackjackClientNonce({
+        userId: user.id,
+        prefix: 'integration-blackjack-dual-bet',
+        predicate: (preview, { scoreBlackjackCards }) => {
+          const playerScore = scoreBlackjackCards([preview.deck[0], preview.deck[2]]);
+          const dealerScore = scoreBlackjackCards([preview.deck[1], preview.deck[3]]);
+          return !playerScore.blackjack && !dealerScore.blackjack;
+        },
+      });
+
+      const { token } = await getCreateUserSessionToken()({
+        userId: user.id,
+        email: user.email,
+        role: 'user',
+      });
+
+      const startResponse = await getApp().inject({
+        method: 'POST',
+        url: '/blackjack/start',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        payload: {
+          stakeAmount: '10.00',
+          clientNonce,
+          playMode: {
+            type: 'dual_bet',
+          },
+        },
+      });
+
+      expect(startResponse.statusCode).toBe(200);
+      const startPayload = startResponse.json();
+      expect(startPayload.ok).toBe(true);
+      expect(startPayload.data).toMatchObject({
+        balance: '80.00',
+        playMode: {
+          type: 'dual_bet',
+          appliedMultiplier: 2,
+          nextMultiplier: 2,
+        },
+        game: {
+          stakeAmount: '20.00',
+          totalStake: '20.00',
+          status: 'active',
+          playMode: {
+            type: 'dual_bet',
+            appliedMultiplier: 2,
+            nextMultiplier: 2,
+          },
+        },
+      });
+
+      const gameId = Number(startPayload.data.game.id);
+      const settleResponse = await getApp().inject({
+        method: 'POST',
+        url: `/blackjack/${gameId}/action`,
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        payload: {
+          action: 'stand',
+        },
+      });
+
+      expect(settleResponse.statusCode).toBe(200);
+      const settlePayload = settleResponse.json();
+      expect(settlePayload.ok).toBe(true);
+      expect(settlePayload.data).toMatchObject({
+        playMode: {
+          type: 'dual_bet',
+          appliedMultiplier: 2,
+          nextMultiplier: 2,
+        },
+        game: {
+          id: gameId,
+          totalStake: '20.00',
+          playMode: {
+            type: 'dual_bet',
+            appliedMultiplier: 2,
+            nextMultiplier: 2,
+          },
+        },
+      });
+      expect(settlePayload.data.game.status).not.toBe('active');
+      expect(settlePayload.data.playMode.lastOutcome).not.toBeNull();
+
+      const [storedMode] = await getDb()
+        .select({
+          mode: userPlayModes.mode,
+          state: userPlayModes.state,
+        })
+        .from(userPlayModes)
+        .where(eq(userPlayModes.userId, user.id))
+        .limit(1);
+      expect(storedMode).toMatchObject({
+        mode: 'dual_bet',
+        state: expect.objectContaining({
+          type: 'dual_bet',
+          nextMultiplier: 2,
+        }),
+      });
+    }
+  );
+
+  it(
+    'POST /blackjack/start snowballs consecutive wins across hands without changing blackjack engine rules',
+    { timeout: 30000 },
+    async () => {
+      const user = await seedBlackjackScenario({
+        email: 'blackjack-snowball@example.com',
+      });
+      await verifyUserContacts(user.id, { email: true });
+
+      const firstWinningNonce = await findBlackjackClientNonce({
+        userId: user.id,
+        prefix: 'integration-blackjack-snowball-win-one',
+        predicate: (preview, { scoreBlackjackCards }) => {
+          const playerScore = scoreBlackjackCards([preview.deck[0], preview.deck[2]]);
+          const dealerScore = scoreBlackjackCards([preview.deck[1], preview.deck[3]]);
+          return Boolean(
+            !playerScore.blackjack &&
+              !dealerScore.blackjack &&
+              !playerScore.bust &&
+              dealerScore.total >= 17 &&
+              playerScore.total > dealerScore.total
+          );
+        },
+      });
+
+      const secondWinningNonce = await findBlackjackClientNonce({
+        userId: user.id,
+        prefix: 'integration-blackjack-snowball-win-two',
+        predicate: (preview, { scoreBlackjackCards }) => {
+          const playerScore = scoreBlackjackCards([preview.deck[0], preview.deck[2]]);
+          const dealerScore = scoreBlackjackCards([preview.deck[1], preview.deck[3]]);
+          return Boolean(
+            !playerScore.blackjack &&
+              !dealerScore.blackjack &&
+              !playerScore.bust &&
+              dealerScore.total >= 17 &&
+              playerScore.total > dealerScore.total
+          );
+        },
+      });
+
+      const { token } = await getCreateUserSessionToken()({
+        userId: user.id,
+        email: user.email,
+        role: 'user',
+      });
+
+      const firstStartResponse = await getApp().inject({
+        method: 'POST',
+        url: '/blackjack/start',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        payload: {
+          stakeAmount: '10.00',
+          clientNonce: firstWinningNonce,
+          playMode: {
+            type: 'snowball',
+          },
+        },
+      });
+
+      expect(firstStartResponse.statusCode).toBe(200);
+      const firstStartPayload = firstStartResponse.json();
+      expect(firstStartPayload.ok).toBe(true);
+      expect(firstStartPayload.data).toMatchObject({
+        playMode: {
+          type: 'snowball',
+          appliedMultiplier: 1,
+          nextMultiplier: 1,
+        },
+        game: {
+          stakeAmount: '10.00',
+          totalStake: '10.00',
+          playMode: {
+            type: 'snowball',
+            appliedMultiplier: 1,
+            nextMultiplier: 1,
+          },
+        },
+      });
+
+      const firstGameId = Number(firstStartPayload.data.game.id);
+      const firstSettleResponse = await getApp().inject({
+        method: 'POST',
+        url: `/blackjack/${firstGameId}/action`,
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        payload: {
+          action: 'stand',
+        },
+      });
+
+      expect(firstSettleResponse.statusCode).toBe(200);
+      const firstSettlePayload = firstSettleResponse.json();
+      expect(firstSettlePayload.ok).toBe(true);
+      expect(firstSettlePayload.data).toMatchObject({
+        playMode: {
+          type: 'snowball',
+          appliedMultiplier: 1,
+          nextMultiplier: 2,
+          streak: 1,
+          lastOutcome: 'win',
+          carryActive: true,
+        },
+        game: {
+          status: 'player_win',
+          playMode: {
+            type: 'snowball',
+            appliedMultiplier: 1,
+            nextMultiplier: 2,
+          },
+        },
+      });
+
+      const secondStartResponse = await getApp().inject({
+        method: 'POST',
+        url: '/blackjack/start',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        payload: {
+          stakeAmount: '10.00',
+          clientNonce: secondWinningNonce,
+          playMode: {
+            type: 'snowball',
+          },
+        },
+      });
+
+      expect(secondStartResponse.statusCode).toBe(200);
+      const secondStartPayload = secondStartResponse.json();
+      expect(secondStartPayload.ok).toBe(true);
+      expect(secondStartPayload.data).toMatchObject({
+        playMode: {
+          type: 'snowball',
+          appliedMultiplier: 2,
+          nextMultiplier: 2,
+          carryActive: true,
+        },
+        game: {
+          status: 'active',
+          stakeAmount: '20.00',
+          totalStake: '20.00',
+          playMode: {
+            type: 'snowball',
+            appliedMultiplier: 2,
+            nextMultiplier: 2,
+          },
+        },
+      });
+
+      const secondGameId = Number(secondStartPayload.data.game.id);
+      const secondSettleResponse = await getApp().inject({
+        method: 'POST',
+        url: `/blackjack/${secondGameId}/action`,
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        payload: {
+          action: 'stand',
+        },
+      });
+
+      expect(secondSettleResponse.statusCode).toBe(200);
+      const secondSettlePayload = secondSettleResponse.json();
+      expect(secondSettlePayload.ok).toBe(true);
+      expect(secondSettlePayload.data).toMatchObject({
+        playMode: {
+          type: 'snowball',
+          appliedMultiplier: 2,
+          nextMultiplier: 3,
+          streak: 2,
+          lastOutcome: 'win',
+          carryActive: true,
+        },
+        game: {
+          status: 'player_win',
+          playMode: {
+            type: 'snowball',
+            appliedMultiplier: 2,
+            nextMultiplier: 3,
+          },
+        },
+      });
+
+      const overviewResponse = await getApp().inject({
+        method: 'GET',
+        url: '/blackjack',
+        headers: {
+          authorization: `Bearer ${token}`,
+        },
+      });
+
+      expect(overviewResponse.statusCode).toBe(200);
+      expect(overviewResponse.json()).toMatchObject({
+        ok: true,
+        data: {
+          playMode: {
+            type: 'snowball',
+            nextMultiplier: 3,
+            streak: 2,
+            lastOutcome: 'win',
+            carryActive: true,
+          },
+          activeGame: null,
+        },
+      });
+    }
+  );
+
+  it(
+    'POST /blackjack/start carries deferred_double state across hands without changing blackjack engine rules',
+    async () => {
+      const user = await seedBlackjackScenario({
+        email: 'blackjack-deferred-double@example.com',
+      });
+      await verifyUserContacts(user.id, { email: true });
+
+      const losingNonce = await findBlackjackClientNonce({
+        userId: user.id,
+        prefix: 'integration-blackjack-deferred-double-loss',
+        predicate: (preview, { scoreBlackjackCards }) => {
+          const playerScore = scoreBlackjackCards([preview.deck[0], preview.deck[2]]);
+          const dealerScore = scoreBlackjackCards([preview.deck[1], preview.deck[3]]);
+          return Boolean(
+            !playerScore.blackjack &&
+              !dealerScore.blackjack &&
+              !playerScore.bust &&
+              dealerScore.total >= 17 &&
+              dealerScore.total > playerScore.total
+          );
+        },
+      });
+
+      const followUpNonce = await findBlackjackClientNonce({
+        userId: user.id,
+        prefix: 'integration-blackjack-deferred-double-followup',
+        predicate: (preview, { scoreBlackjackCards }) => {
+          const playerScore = scoreBlackjackCards([preview.deck[0], preview.deck[2]]);
+          const dealerScore = scoreBlackjackCards([preview.deck[1], preview.deck[3]]);
+          return !playerScore.blackjack && !dealerScore.blackjack;
+        },
+      });
+
+      const { token } = await getCreateUserSessionToken()({
+        userId: user.id,
+        email: user.email,
+        role: 'user',
+      });
+
+      const firstStartResponse = await getApp().inject({
+        method: 'POST',
+        url: '/blackjack/start',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        payload: {
+          stakeAmount: '10.00',
+          clientNonce: losingNonce,
+          playMode: {
+            type: 'deferred_double',
+          },
+        },
+      });
+
+      expect(firstStartResponse.statusCode).toBe(200);
+      const firstStartPayload = firstStartResponse.json();
+      expect(firstStartPayload.ok).toBe(true);
+      expect(firstStartPayload.data).toMatchObject({
+        balance: '90.00',
+        playMode: {
+          type: 'deferred_double',
+          appliedMultiplier: 1,
+        },
+        game: {
+          stakeAmount: '10.00',
+          totalStake: '10.00',
+          playMode: {
+            type: 'deferred_double',
+            appliedMultiplier: 1,
+          },
+        },
+      });
+
+      const gameId = Number(firstStartPayload.data.game.id);
+      const settleResponse = await getApp().inject({
+        method: 'POST',
+        url: `/blackjack/${gameId}/action`,
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        payload: {
+          action: 'stand',
+        },
+      });
+
+      expect(settleResponse.statusCode).toBe(200);
+      const settlePayload = settleResponse.json();
+      expect(settlePayload.ok).toBe(true);
+      expect(settlePayload.data).toMatchObject({
+        balance: '90.00',
+        playMode: {
+          type: 'deferred_double',
+          appliedMultiplier: 1,
+          nextMultiplier: 2,
+          lastOutcome: 'lose',
+          carryActive: true,
+        },
+        game: {
+          id: gameId,
+          status: 'dealer_win',
+          playMode: {
+            type: 'deferred_double',
+            appliedMultiplier: 1,
+            nextMultiplier: 2,
+          },
+        },
+      });
+
+      const [storedMode] = await getDb()
+        .select({
+          mode: userPlayModes.mode,
+          state: userPlayModes.state,
+        })
+        .from(userPlayModes)
+        .where(eq(userPlayModes.userId, user.id))
+        .limit(1);
+      expect(storedMode).toMatchObject({
+        mode: 'deferred_double',
+        state: expect.objectContaining({
+          type: 'deferred_double',
+          nextMultiplier: 2,
+          lastOutcome: 'lose',
+        }),
+      });
+
+      const secondStartResponse = await getApp().inject({
+        method: 'POST',
+        url: '/blackjack/start',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        payload: {
+          stakeAmount: '10.00',
+          clientNonce: followUpNonce,
+          playMode: {
+            type: 'deferred_double',
+          },
+        },
+      });
+
+      expect(secondStartResponse.statusCode).toBe(200);
+      const secondStartPayload = secondStartResponse.json();
+      expect(secondStartPayload.ok).toBe(true);
+      expect(secondStartPayload.data).toMatchObject({
+        balance: '70.00',
+        playMode: {
+          type: 'deferred_double',
+          appliedMultiplier: 2,
+          nextMultiplier: 2,
+          carryActive: true,
+        },
+        game: {
+          status: 'active',
+          stakeAmount: '20.00',
+          totalStake: '20.00',
+          playMode: {
+            type: 'deferred_double',
+            appliedMultiplier: 2,
+            nextMultiplier: 2,
+          },
+        },
+      });
     }
   );
 });

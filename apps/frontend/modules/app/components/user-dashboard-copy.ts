@@ -27,9 +27,13 @@ export const userDashboardCopy = {
     quickEightDescription:
       'Pick 8 numbers and settle against the shared prize pool on `/app/quick-eight`.',
     quickEightOpen: 'Open Quick Eight',
+    holdemTitle: "Texas Hold'em",
+    holdemDescription:
+      'Create or join a multiplayer cash table, buy in with locked funds, and play streets on `/app/holdem`.',
+    holdemOpen: "Open Hold'em",
     blackjackTitle: 'Blackjack',
     blackjackDescription:
-      'Classic player-vs-dealer blackjack now runs on its own route at `/app/blackjack`.',
+      'Blackjack with an AI dealer seated at the same table now runs on its own route at `/app/blackjack`.',
     blackjackOpen: 'Open blackjack',
     fairnessTitle: 'Fairness verifier',
     fairnessDescription:
@@ -56,6 +60,11 @@ export const userDashboardCopy = {
       'Keep email and phone verification plus session revocation on a separate security route.',
     securityRouteOpen: 'Open security center',
     securityRouteStatus: 'Access control',
+    verificationRouteTitle: 'KYC verification',
+    verificationRouteDescription:
+      'Upload identity documents, track review state, and see which tier unlocks gameplay or withdrawals.',
+    verificationRouteOpen: 'Open KYC verification',
+    verificationRouteStatus: 'Identity tier',
     financeUnlocked: 'Payout tools enabled',
     financeLocked:
       'Bank cards and withdrawals unlock after both email and phone verification.',
@@ -201,8 +210,12 @@ export const userDashboardCopy = {
     quickEightTitle: '快八',
     quickEightDescription: '8 选号码、即时开奖和派奖流程统一放到 `/app/quick-eight`。',
     quickEightOpen: '打开快八页面',
+    holdemTitle: '德州扑克',
+    holdemDescription:
+      '在 `/app/holdem` 创建或加入多人现金桌，买入后按 preflop / flop / turn / river 顺序推进。',
+    holdemOpen: '打开德州牌桌',
     blackjackTitle: '二十一点',
-    blackjackDescription: '经典庄闲二十一点已拆到独立页面 `/app/blackjack`。',
+    blackjackDescription: '接入同桌 AI 智能荷官的二十一点已拆到独立页面 `/app/blackjack`。',
     blackjackOpen: '打开二十一点页面',
     fairnessTitle: '公平性验证器',
     fairnessDescription:
@@ -229,6 +242,11 @@ export const userDashboardCopy = {
       '把邮箱/手机号验证和会话撤销拆到单独安全页。',
     securityRouteOpen: '打开安全中心',
     securityRouteStatus: '访问控制',
+    verificationRouteTitle: 'KYC 认证',
+    verificationRouteDescription:
+      '上传实名材料、跟踪审核状态，并查看当前等级解锁了哪些玩法与提现能力。',
+    verificationRouteOpen: '打开 KYC 页面',
+    verificationRouteStatus: '身份等级',
     financeUnlocked: '出款工具已解锁',
     financeLocked: '银行卡和提现都需要邮箱、手机号双验证后才能使用。',
     sendEmail: '发送验证邮件',

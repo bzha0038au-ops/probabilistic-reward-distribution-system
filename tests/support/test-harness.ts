@@ -30,6 +30,10 @@ type ServiceOptions = CommandOptions & {
   startupTimeoutMs?: number;
 };
 
+type BackgroundProcessOptions = CommandOptions & {
+  startupDelayMs?: number;
+};
+
 export type TestDatabase = {
   databaseUrl: string;
   safeDatabaseUrl: string;
@@ -106,6 +110,39 @@ const redactDatabaseUrl = (databaseUrl: string) => {
 const quoteDatabaseIdentifier = (databaseName: string) =>
   `"${databaseName.replace(/"/g, '""')}"`;
 
+const applyLegacyTestSchemaShims = async (databaseUrl: string) => {
+  const sql = createSqlClient(databaseUrl);
+
+  try {
+    await sql`
+      do $$
+      begin
+        create type freeze_scope as enum ('account', 'withdraw', 'game', 'topup');
+      exception
+        when duplicate_object then null;
+      end
+      $$;
+    `;
+
+    await sql`
+      alter table freeze_records
+      add column if not exists scope freeze_scope not null default 'account'
+    `;
+
+    await sql`
+      create index if not exists freeze_records_user_scope_status_idx
+      on freeze_records (user_id, scope, status)
+    `;
+
+    await sql`
+      create index if not exists freeze_records_scope_idx
+      on freeze_records (scope)
+    `;
+  } finally {
+    await sql.end({ timeout: 5 }).catch(() => undefined);
+  }
+};
+
 const shouldUseExternalTestDatabase = () => {
   const mode = process.env.TEST_DATABASE_MODE?.trim().toLowerCase();
   return mode ? EXTERNAL_TEST_DATABASE_MODES.has(mode) : false;
@@ -155,6 +192,7 @@ export const createBackendEnv = (payload: {
   NODE_ENV: 'test',
   DATABASE_URL: payload.databaseUrl,
   POSTGRES_URL: payload.databaseUrl,
+  REDIS_URL: '',
   PORT: String(payload.port),
   WEB_BASE_URL: payload.webBaseUrl,
   ADMIN_BASE_URL: payload.adminBaseUrl ?? 'http://127.0.0.1:5173',
@@ -169,6 +207,7 @@ export const createFrontendEnv = (payload: {
   port: number;
   apiBaseUrl: string;
   appBaseUrl: string;
+  nextDistDir?: string;
 }) => ({
   NODE_ENV: 'development',
   PORT: String(payload.port),
@@ -179,6 +218,19 @@ export const createFrontendEnv = (payload: {
   AUTH_TRUST_HOST: 'true',
   AUTH_URL: payload.appBaseUrl,
   NEXTAUTH_URL: payload.appBaseUrl,
+  ...(payload.nextDistDir ? { NEXT_DIST_DIR: payload.nextDistDir } : {}),
+});
+
+export const createAdminEnv = (payload: {
+  apiBaseUrl: string;
+  adminBaseUrl: string;
+}) => ({
+  NODE_ENV: 'development',
+  API_BASE_URL: payload.apiBaseUrl,
+  PUBLIC_API_BASE_URL: payload.apiBaseUrl,
+  ADMIN_BASE_URL: payload.adminBaseUrl,
+  PUBLIC_ADMIN_BASE_URL: payload.adminBaseUrl,
+  ADMIN_JWT_SECRET: backendTestSecrets.adminJwtSecret,
 });
 
 export async function runCommand(
@@ -237,15 +289,22 @@ export async function findFreePort() {
 
 export async function waitForHttp(
   url: string,
-  options: { timeoutMs?: number } = {},
+  options: { timeoutMs?: number; requestTimeoutMs?: number } = {},
 ) {
   const timeoutMs = options.timeoutMs ?? 30_000;
+  const requestTimeoutMs = Math.max(
+    1_000,
+    Math.min(options.requestTimeoutMs ?? 5_000, timeoutMs),
+  );
   const deadline = Date.now() + timeoutMs;
   let lastError: unknown = null;
 
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(url, { redirect: 'manual' });
+      const response = await fetch(url, {
+        redirect: 'manual',
+        signal: AbortSignal.timeout(requestTimeoutMs),
+      });
       if (response.ok || (response.status >= 300 && response.status < 400)) {
         return;
       }
@@ -320,6 +379,42 @@ export async function startService(
   };
 }
 
+export async function startBackgroundProcess(
+  command: string,
+  args: string[],
+  options: BackgroundProcessOptions = {},
+): Promise<ServiceHandle> {
+  const child = spawn(command, args, {
+    cwd: options.cwd ?? repoRoot,
+    env: makeChildEnv(options.env),
+    stdio: options.stdio ?? 'inherit',
+  });
+
+  let startupError: unknown = null;
+  child.once('error', (error) => {
+    startupError = error;
+  });
+
+  await delay(options.startupDelayMs ?? 750);
+
+  if (startupError) {
+    await stopChildProcess(child).catch(() => undefined);
+    throw startupError;
+  }
+
+  if (child.exitCode !== null || child.signalCode !== null) {
+    throw new Error(
+      `${toCommandLabel(command, args)} exited before startup completed.`,
+    );
+  }
+
+  return {
+    stop: async () => {
+      await stopChildProcess(child);
+    },
+  };
+}
+
 export async function startTestDatabase(profile: string): Promise<TestDatabase> {
   const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const runDir = path.join(sharedArtifactsDir, profile, runId);
@@ -356,6 +451,7 @@ export async function startTestDatabase(profile: string): Promise<TestDatabase> 
           },
         },
       );
+      await applyLegacyTestSchemaShims(databaseUrl);
     } catch (error) {
       await dropExternalTestDatabase(adminDatabaseUrl, databaseName).catch(() => undefined);
       await rm(runDir, { recursive: true, force: true });
@@ -415,6 +511,7 @@ export async function startTestDatabase(profile: string): Promise<TestDatabase> 
         },
       },
     );
+    await applyLegacyTestSchemaShims(databaseUrl);
   } catch (error) {
     await instance.stop().catch(() => undefined);
     await instance.cleanup().catch(() => undefined);

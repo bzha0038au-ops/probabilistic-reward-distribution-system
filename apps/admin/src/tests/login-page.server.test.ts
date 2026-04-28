@@ -50,7 +50,7 @@ describe("login page server", () => {
         cookies,
         fetch: vi.fn(),
       } as never),
-    ).rejects.toMatchObject({ status: 303, location: "/admin" })
+    ).rejects.toMatchObject({ status: 303, location: "/" })
 
     expect(apiRequest).toHaveBeenCalledWith(
       expect.any(Function),

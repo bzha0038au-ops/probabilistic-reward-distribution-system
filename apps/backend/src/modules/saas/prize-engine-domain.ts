@@ -1,6 +1,12 @@
 import { createHash } from "node:crypto";
 import type { DrawPrizePresentation } from "@reward/shared-types/draw";
-import type { PrizeEngineApiKeyScope } from "@reward/shared-types/saas";
+import {
+  saasProjectStrategyValues,
+  type PrizeEngineApiKeyScope,
+  type SaaSAgentControlMode,
+  type SaasBillingDecisionPricing,
+  type SaasProjectStrategy,
+} from "@reward/shared-types/saas";
 import { toDecimal, toMoneyString } from "../../shared/money";
 
 const FEATURED_PRIZE_COUNT = 4;
@@ -8,16 +14,39 @@ export const DEFAULT_FAIRNESS_EPOCH_SECONDS = 3600;
 export const DEFAULT_PROJECT_API_RATE_LIMIT_BURST = 120;
 export const DEFAULT_PROJECT_API_RATE_LIMIT_HOURLY = 3600;
 export const DEFAULT_PROJECT_API_RATE_LIMIT_DAILY = 86400;
+export const DEFAULT_PROJECT_SELECTION_STRATEGY: SaasProjectStrategy =
+  "weighted_gacha";
+export const DEFAULT_PROJECT_RISK_WEIGHT_DECAY_ALPHA = 0;
+export const DEFAULT_PROJECT_RISK_STATE_HALF_LIFE_SECONDS = 6 * 60 * 60;
 export const PRIZE_ENGINE_API_RATE_LIMIT_BURST_WINDOW_MS = 60 * 1000;
 export const PRIZE_ENGINE_API_RATE_LIMIT_HOURLY_WINDOW_MS = 60 * 60 * 1000;
 export const PRIZE_ENGINE_API_RATE_LIMIT_DAILY_WINDOW_MS = 24 * 60 * 60 * 1000;
+export const PRIZE_ENGINE_REWARD_WRITE_SCOPE: PrizeEngineApiKeyScope =
+  "reward:write";
+export const PRIZE_ENGINE_LEGACY_DRAW_WRITE_SCOPE: PrizeEngineApiKeyScope =
+  "draw:write";
+export const PRIZE_ENGINE_WRITE_SCOPE_ALIASES: PrizeEngineApiKeyScope[] = [
+  PRIZE_ENGINE_REWARD_WRITE_SCOPE,
+  PRIZE_ENGINE_LEGACY_DRAW_WRITE_SCOPE,
+];
 
 export const DEFAULT_API_KEY_SCOPES: PrizeEngineApiKeyScope[] = [
   "catalog:read",
   "fairness:read",
-  "draw:write",
+  PRIZE_ENGINE_REWARD_WRITE_SCOPE,
   "ledger:read",
 ];
+
+const PROJECT_SELECTION_STRATEGIES = new Set(saasProjectStrategyValues);
+
+export type ProjectStrategyParams = Record<string, unknown>;
+
+export type ProjectAgentPolicy = {
+  agentId: string;
+  mode: SaaSAgentControlMode;
+  reason: string;
+  budgetMultiplier: number | null;
+};
 
 export type ProjectApiAuth = {
   tenantId: number;
@@ -30,10 +59,13 @@ export type ProjectApiAuth = {
   apiKeyId: number;
   scopes: PrizeEngineApiKeyScope[];
   drawFee: string;
+  decisionPricing: SaasBillingDecisionPricing;
   billingCurrency: string;
   apiRateLimitBurst: number;
   apiRateLimitHourly: number;
   apiRateLimitDaily: number;
+  agentId: string | null;
+  agentPolicy: ProjectAgentPolicy | null;
 };
 
 export type LockedProjectRow = {
@@ -46,12 +78,15 @@ export type LockedProjectRow = {
   currency: string;
   drawCost: string;
   prizePoolBalance: string;
+  strategy: SaasProjectStrategy;
+  strategyParams: ProjectStrategyParams;
   fairnessEpochSeconds: number;
   maxDrawCount: number;
   missWeight: number;
   apiRateLimitBurst: number;
   apiRateLimitHourly: number;
   apiRateLimitDaily: number;
+  metadata: Record<string, unknown> | null;
 };
 
 export type LockedPlayerRow = {
@@ -62,6 +97,17 @@ export type LockedPlayerRow = {
   balance: string;
   pityStreak: number;
   metadata: Record<string, unknown> | null;
+};
+
+export type LockedAgentRow = {
+  id: number;
+  projectId: number;
+  agentId: string;
+  groupId: string | null;
+  ownerMetadata: Record<string, unknown> | null;
+  fingerprint: string | null;
+  status: "active" | "suspended" | "archived";
+  createdAt: Date;
 };
 
 export type LockedPrizeRow = {
@@ -102,6 +148,79 @@ export const resolveEpochSeconds = (value: number | null | undefined) => {
   return Number.isFinite(parsed) && parsed > 0
     ? parsed
     : DEFAULT_FAIRNESS_EPOCH_SECONDS;
+};
+
+export const resolveProjectSelectionStrategy = (
+  value: unknown,
+): SaasProjectStrategy =>
+  typeof value === "string" &&
+  PROJECT_SELECTION_STRATEGIES.has(value as SaasProjectStrategy)
+    ? (value as SaasProjectStrategy)
+    : DEFAULT_PROJECT_SELECTION_STRATEGY;
+
+export const normalizeProjectStrategyParams = (
+  value: unknown,
+): ProjectStrategyParams => {
+  if (typeof value === "string" && value.trim() !== "") {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      return normalizeProjectStrategyParams(parsed);
+    } catch {
+      return {};
+    }
+  }
+
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (Object.fromEntries(Object.entries(value)) as ProjectStrategyParams)
+    : {};
+};
+
+const resolveStrategyNumber = (
+  params: ProjectStrategyParams,
+  keys: string[],
+) => {
+  for (const key of keys) {
+    const value = params[key];
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+    if (typeof value === "string" && value.trim() !== "") {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+  }
+
+  return null;
+};
+
+export const resolveProjectRiskWeightDecayAlpha = (
+  params: ProjectStrategyParams,
+) => {
+  const parsed = resolveStrategyNumber(params, [
+    "riskWeightDecayAlpha",
+    "riskDecayAlpha",
+  ]);
+
+  return parsed !== null && parsed >= 0
+    ? parsed
+    : DEFAULT_PROJECT_RISK_WEIGHT_DECAY_ALPHA;
+};
+
+export const resolveProjectRiskStateHalfLifeSeconds = (
+  params: ProjectStrategyParams,
+) => {
+  const parsed = resolveStrategyNumber(params, [
+    "riskStateHalfLifeSeconds",
+    "riskDecayHalfLifeSeconds",
+    "riskHalfLifeSeconds",
+  ]);
+  const normalized = Math.floor(parsed ?? 0);
+
+  return Number.isFinite(normalized) && normalized > 0
+    ? normalized
+    : DEFAULT_PROJECT_RISK_STATE_HALF_LIFE_SECONDS;
 };
 
 const resolvePositiveRateLimit = (

@@ -30,6 +30,13 @@ const fairnessCopy = {
     commitLive: "Commit live",
     currentEpoch: "Current epoch",
     revealAfter: "Reveal after",
+    verifiedDays: "Continuous auto-audit days",
+    lastAutoAudit: "Last auto-audit",
+    autoAuditHealthy: "Passing",
+    autoAuditIssue: "Issue detected",
+    noAuditYet: "No closed epoch has been auto-audited yet.",
+    auditedThrough: (epoch: number, auditedAt: string) =>
+      `Auto-reveal verified through epoch ${epoch} at ${auditedAt}.`,
     revealStatus: "Reveal status",
     revealLocked: "Locked until the active epoch closes",
     revealReady: "Closed epochs can now be revealed",
@@ -83,6 +90,13 @@ const fairnessCopy = {
     commitLive: "当前 Commit",
     currentEpoch: "当前 Epoch",
     revealAfter: "可 Reveal 时间",
+    verifiedDays: "连续自动校验天数",
+    lastAutoAudit: "最近自动校验",
+    autoAuditHealthy: "校验通过",
+    autoAuditIssue: "发现异常",
+    noAuditYet: "当前还没有已结束 epoch 的自动校验记录。",
+    auditedThrough: (epoch: number, auditedAt: string) =>
+      `后台自动 reveal 已经校验到 epoch ${epoch}，最近一次时间是 ${auditedAt}。`,
     revealStatus: "Reveal 状态",
     revealLocked: "当前活跃 Epoch 结束前不可 Reveal",
     revealReady: "已结束的 Epoch 现在可以 Reveal",
@@ -180,10 +194,7 @@ function formatCountdown(ms: number) {
 
 type MobileFairnessCompactSummaryProps = {
   locale: MobileFairnessLocale;
-  fairness:
-    | Pick<FairnessCommit, "commitHash" | "epoch" | "epochSeconds">
-    | null
-    | undefined;
+  fairness: FairnessCommit | null | undefined;
   clientNonce?: string | null;
   eyebrow?: string;
   body?: string;
@@ -198,6 +209,20 @@ export function MobileFairnessCompactSummary(
   const revealAfter = formatLocaleTimestamp(revealAt, props.locale);
   const remainingMs = revealAt ? Math.max(revealAt.getTime() - nowMs, 0) : null;
   const revealReady = remainingMs !== null ? remainingMs === 0 : false;
+  const audit = props.fairness?.audit;
+  const auditStatus =
+    audit?.lastAuditPassed == null
+      ? "--"
+      : audit?.lastAuditPassed
+        ? c.autoAuditHealthy
+        : c.autoAuditIssue;
+  const auditDetail =
+    audit?.latestAuditedEpoch === null || audit?.latestAuditedEpoch === undefined
+      ? c.noAuditYet
+      : c.auditedThrough(
+          audit.latestAuditedEpoch,
+          formatLocaleTimestamp(audit.lastAuditedAt, props.locale),
+        );
 
   useEffect(() => {
     if (!revealAt) {
@@ -241,6 +266,12 @@ export function MobileFairnessCompactSummary(
           <Text style={styles.metricLabel}>{c.revealAfter}</Text>
           <Text style={styles.metricValue}>{revealAfter}</Text>
         </View>
+        <View style={styles.metricCard}>
+          <Text style={styles.metricLabel}>{c.verifiedDays}</Text>
+          <Text style={styles.metricValue}>
+            {audit?.consecutiveVerifiedDays ?? 0}
+          </Text>
+        </View>
       </View>
 
       {props.clientNonce ? (
@@ -278,6 +309,10 @@ export function MobileFairnessCompactSummary(
             ? `${c.opensIn} ${formatCountdown(remainingMs)}`
             : revealAfter}
         </Text>
+        <Text style={styles.revealStatusMeta}>
+          {c.lastAutoAudit}: {auditStatus}
+        </Text>
+        <Text style={styles.revealStatusMeta}>{auditDetail}</Text>
       </View>
     </View>
   );
@@ -535,6 +570,11 @@ const styles = StyleSheet.create({
     color: mobilePalette.text,
     fontSize: 14,
     fontWeight: "700",
+  },
+  revealStatusMeta: {
+    color: mobilePalette.textMuted,
+    fontSize: 13,
+    lineHeight: 18,
   },
   stepsCard: {
     gap: 8,

@@ -6,7 +6,10 @@ import {
 import { API_ERROR_CODES } from "@reward/shared-types/api";
 
 import { ADMIN_PERMISSION_KEYS } from "../../../modules/admin-permission/definitions";
-import { listAdminActions } from "../../../modules/admin/audit";
+import {
+  listAdminActions,
+  summarizeAdminActions,
+} from "../../../modules/admin/audit";
 import { listAuthEvents } from "../../../modules/audit/service";
 import { parseSchema } from "../../../shared/validation";
 import { requireAdminPermission } from "../../guards";
@@ -138,6 +141,7 @@ export async function registerAdminAuditRoutes(protectedRoutes: AppInstance) {
         direction,
         order: sort,
         adminId: query.adminId ?? null,
+        userId: query.userId ?? null,
         action: query.action ?? null,
         from: parseDateFilter(query.from),
         to: parseDateFilter(query.to),
@@ -157,6 +161,37 @@ export async function registerAdminAuditRoutes(protectedRoutes: AppInstance) {
   );
 
   protectedRoutes.get(
+    "/admin/admin-actions/summary",
+    { preHandler: [requireAdminPermission(ADMIN_PERMISSION_KEYS.AUDIT_READ)] },
+    async (request, reply) => {
+      const parsed = parseSchema(
+        AdminAuditQuerySchema,
+        toObject(request.query),
+      );
+      if (!parsed.isValid) {
+        return sendError(
+          reply,
+          400,
+          "Invalid request.",
+          parsed.errors,
+          API_ERROR_CODES.INVALID_REQUEST,
+        );
+      }
+
+      const query = parsed.data;
+      const summary = await summarizeAdminActions({
+        adminId: query.adminId ?? null,
+        userId: query.userId ?? null,
+        action: query.action ?? null,
+        from: parseDateFilter(query.from),
+        to: parseDateFilter(query.to),
+      });
+
+      return sendSuccess(reply, summary);
+    },
+  );
+
+  protectedRoutes.get(
     "/admin/admin-actions/export",
     {
       preHandler: [requireAdminPermission(ADMIN_PERMISSION_KEYS.AUDIT_EXPORT)],
@@ -169,6 +204,11 @@ export async function registerAdminAuditRoutes(protectedRoutes: AppInstance) {
         limit: parseExportLimit(query),
         adminId:
           Number.isFinite(adminIdRaw) && adminIdRaw > 0 ? adminIdRaw : null,
+        userId:
+          Number.isFinite(Number(readStringValue(query, "userId"))) &&
+          Number(readStringValue(query, "userId")) > 0
+            ? Number(readStringValue(query, "userId"))
+            : null,
         action: readStringValue(query, "action") ?? null,
         from: parseDateFilter(readStringValue(query, "from")),
         to: parseDateFilter(readStringValue(query, "to")),
@@ -178,9 +218,12 @@ export async function registerAdminAuditRoutes(protectedRoutes: AppInstance) {
       const header = [
         "id",
         "admin_id",
+        "admin_email",
         "action",
         "target_type",
         "target_id",
+        "subject_user_id",
+        "subject_user_email",
         "ip",
         "session_id",
         "user_agent",
@@ -190,9 +233,12 @@ export async function registerAdminAuditRoutes(protectedRoutes: AppInstance) {
       const rows = actions.map((item) => [
         String(item.id),
         item.adminId ? String(item.adminId) : "",
+        escapeCsv(item.adminEmail ?? ""),
         escapeCsv(item.action ?? ""),
         escapeCsv(item.targetType ?? ""),
         item.targetId ? String(item.targetId) : "",
+        item.subjectUserId ? String(item.subjectUserId) : "",
+        escapeCsv(item.subjectUserEmail ?? ""),
         escapeCsv(item.ip ?? ""),
         escapeCsv(item.sessionId ?? ""),
         escapeCsv(item.userAgent ?? ""),

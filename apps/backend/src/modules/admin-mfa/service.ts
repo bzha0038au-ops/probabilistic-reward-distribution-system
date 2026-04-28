@@ -25,19 +25,21 @@ import {
 } from "../../shared/admin-session";
 import { getSessionSecret } from "../../shared/session-secret";
 import { readSqlRows } from "../../shared/sql-result";
+import {
+  buildTotpOtpAuthUrl,
+  createTotpSecret,
+  generateTotpCode,
+  normalizeTotpCode,
+  verifyTotpCode,
+} from "../mfa/totp";
 import { revokeAuthSessions } from "../session/service";
 
-const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 const RECOVERY_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const RECOVERY_CODE_SEGMENT_LENGTH = 4;
 const RECOVERY_CODE_SEGMENT_COUNT = 3;
 const RECOVERY_CODE_LENGTH =
   RECOVERY_CODE_SEGMENT_LENGTH * RECOVERY_CODE_SEGMENT_COUNT;
 const RECOVERY_CODE_COUNT = 8;
-const TOTP_DIGITS = 6;
-const TOTP_PERIOD_SECONDS = 30;
-const TOTP_PERIOD_MS = TOTP_PERIOD_SECONDS * 1000;
-const TOTP_ALLOWED_WINDOW = 1;
 const ENROLLMENT_TTL_SECONDS = 60 * 10;
 const ENROLLMENT_PURPOSE = "admin-mfa-enrollment";
 
@@ -81,70 +83,6 @@ const getMfaEncryptionKey = () => {
 
   return createHash("sha256").update(rawSecret, "utf8").digest();
 };
-
-const encodeBase32 = (value: Uint8Array) => {
-  let bits = 0;
-  let accumulator = 0;
-  let encoded = "";
-
-  for (const byte of value) {
-    accumulator = (accumulator << 8) | byte;
-    bits += 8;
-
-    while (bits >= 5) {
-      encoded += BASE32_ALPHABET[(accumulator >> (bits - 5)) & 31];
-      bits -= 5;
-    }
-  }
-
-  if (bits > 0) {
-    encoded += BASE32_ALPHABET[(accumulator << (5 - bits)) & 31];
-  }
-
-  return encoded;
-};
-
-const decodeBase32 = (value: string) => {
-  const normalized = value.toUpperCase().replace(/[^A-Z2-7]/g, "");
-  let bits = 0;
-  let accumulator = 0;
-  const bytes: number[] = [];
-
-  for (const char of normalized) {
-    const index = BASE32_ALPHABET.indexOf(char);
-    if (index < 0) {
-      throw internalInvariantError("Invalid base32 secret.");
-    }
-
-    accumulator = (accumulator << 5) | index;
-    bits += 5;
-
-    if (bits >= 8) {
-      bytes.push((accumulator >> (bits - 8)) & 255);
-      bits -= 8;
-    }
-  }
-
-  return Buffer.from(bytes);
-};
-
-const generateHotpCode = (secret: string, counter: bigint) => {
-  const counterBuffer = Buffer.alloc(8);
-  counterBuffer.writeBigUInt64BE(counter);
-
-  const digest = createHmac("sha1", decodeBase32(secret))
-    .update(counterBuffer)
-    .digest();
-  const offset = digest[digest.length - 1] & 0xf;
-  const binary =
-    ((digest[offset] & 0x7f) << 24) |
-    ((digest[offset + 1] & 0xff) << 16) |
-    ((digest[offset + 2] & 0xff) << 8) |
-    (digest[offset + 3] & 0xff);
-
-  return String(binary % 10 ** TOTP_DIGITS).padStart(TOTP_DIGITS, "0");
-};
-
 const encryptSecret = (secret: string) => {
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", getMfaEncryptionKey(), iv);
@@ -197,16 +135,11 @@ const buildOtpAuthUrl = (payload: { email: string; secret: string }) => {
     issuer = "Reward Admin";
   }
 
-  const label = `${issuer}:${payload.email}`;
-  const params = new URLSearchParams({
-    secret: payload.secret,
+  return buildTotpOtpAuthUrl({
     issuer,
-    algorithm: "SHA1",
-    digits: String(TOTP_DIGITS),
-    period: String(TOTP_PERIOD_SECONDS),
+    accountName: payload.email,
+    secret: payload.secret,
   });
-
-  return `otpauth://totp/${encodeURIComponent(label)}?${params.toString()}`;
 };
 
 const formatRecoveryCode = (value: string) => {
@@ -347,43 +280,6 @@ export const verifyAdminMfaBreakGlassCode = (
   return timingSafeEqual(expectedBuffer, providedBuffer);
 };
 
-export const normalizeTotpCode = (value: string | null | undefined) => {
-  const normalized = value?.replace(/\s+/g, "").trim() ?? "";
-  return /^\d{6}$/.test(normalized) ? normalized : null;
-};
-
-export const generateTotpCode = (secret: string, now = Date.now()) => {
-  const counter = BigInt(Math.floor(now / TOTP_PERIOD_MS));
-  return generateHotpCode(secret, counter);
-};
-
-export const verifyTotpCode = (
-  secret: string,
-  code: string,
-  now = Date.now(),
-) => {
-  const normalizedCode = normalizeTotpCode(code);
-  if (!normalizedCode) {
-    return false;
-  }
-
-  const counter = BigInt(Math.floor(now / TOTP_PERIOD_MS));
-  for (
-    let offset = -TOTP_ALLOWED_WINDOW;
-    offset <= TOTP_ALLOWED_WINDOW;
-    offset += 1
-  ) {
-    const currentCounter = counter + BigInt(offset);
-    if (currentCounter < 0) continue;
-
-    if (generateHotpCode(secret, currentCounter) === normalizedCode) {
-      return true;
-    }
-  }
-
-  return false;
-};
-
 const createEnrollmentToken = async (payload: {
   adminId: number;
   email: string;
@@ -452,7 +348,7 @@ export async function createAdminMfaEnrollment(payload: {
     });
   }
 
-  const secret = encodeBase32(randomBytes(20));
+  const secret = createTotpSecret();
   const enrollmentToken = await createEnrollmentToken({
     adminId: payload.adminId,
     email: payload.email,
@@ -777,3 +673,5 @@ export async function disableAdminMfa(payload: {
     method: verifiedMethod,
   };
 }
+
+export { generateTotpCode, normalizeTotpCode, verifyTotpCode };

@@ -1,12 +1,35 @@
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import type { CurrentLegalDocument } from "@reward/shared-types/legal";
 
 import type { ScreenMode } from '../app-support';
 import type { MobileAuthCopy } from '../mobile-copy';
 import { ActionButton, Field, SectionCard, TextLink } from '../ui';
 
+const formatLegalSlug = (slug: string) =>
+  slug
+    .split(/[-_]/g)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+
+const stripHtml = (html: string) =>
+  html
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const buildLegalDocumentKey = (document: Pick<CurrentLegalDocument, "slug" | "version">) =>
+  `${document.slug}::${document.version}`;
+
 type MobileAuthCardProps = {
   screen: ScreenMode;
   copy: MobileAuthCopy;
+  legalDocuments: CurrentLegalDocument[];
+  loadingLegalDocuments: boolean;
+  selectedLegalDocumentKeys: string[];
   email: string;
   password: string;
   resetTokenInput: string;
@@ -22,6 +45,7 @@ type MobileAuthCardProps = {
   onChangeResetTokenInput: (value: string) => void;
   onChangeNewPassword: (value: string) => void;
   onChangeVerificationTokenInput: (value: string) => void;
+  onToggleLegalDocument: (key: string) => void;
   onShowLogin: () => void;
   onShowRegister: () => void;
   onShowForgotPassword: () => void;
@@ -236,10 +260,63 @@ function RegisterCard(props: MobileAuthCardProps) {
         secureTextEntry
       />
 
+      <View style={styles.legalSection}>
+        <Text style={styles.legalSectionTitle}>{props.copy.legal.title}</Text>
+        <Text style={styles.legalSectionSubtitle}>
+          {props.copy.legal.subtitle}
+        </Text>
+        {props.loadingLegalDocuments ? (
+          <Text style={styles.legalHelpText}>{props.copy.legal.loading}</Text>
+        ) : props.legalDocuments.length === 0 ? (
+          <Text style={styles.legalHelpText}>{props.copy.legal.empty}</Text>
+        ) : (
+          props.legalDocuments.map((document) => {
+            const key = buildLegalDocumentKey(document);
+            const selected = props.selectedLegalDocumentKeys.includes(key);
+
+            return (
+              <Pressable
+                key={document.id}
+                onPress={() => props.onToggleLegalDocument(key)}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: selected }}
+                style={styles.legalItem}
+              >
+                <View
+                  style={[
+                    styles.legalCheckbox,
+                    selected ? styles.legalCheckboxSelected : null,
+                  ]}
+                >
+                  {selected ? <Text style={styles.legalCheckboxMark}>✓</Text> : null}
+                </View>
+                <View style={styles.legalItemBody}>
+                  <Text style={styles.legalItemTitle}>
+                    {formatLegalSlug(document.slug)}
+                  </Text>
+                  <Text style={styles.legalItemVersion}>
+                    {props.copy.legal.versionLabel(document.version)}
+                  </Text>
+                  <Text style={styles.legalItemBodyText} numberOfLines={5}>
+                    {stripHtml(document.html)}
+                  </Text>
+                  <Text style={styles.legalItemHint}>
+                    {props.copy.legal.checkboxLabel(
+                      formatLegalSlug(document.slug),
+                      document.version,
+                    )}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })
+        )}
+      </View>
+
       <ActionButton
         label={props.submitting ? props.copy.submit.busy : props.copy.submit.register}
         onPress={props.onRegister}
-        disabled={props.submitting}
+        disabled={props.submitting || props.loadingLegalDocuments}
       />
 
       <View style={styles.linkRow}>
@@ -280,5 +357,80 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 12,
     justifyContent: 'space-between',
+  },
+  legalSection: {
+    gap: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.28)",
+    padding: 14,
+  },
+  legalSectionTitle: {
+    color: "#E2E8F0",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  legalSectionSubtitle: {
+    color: "#94A3B8",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  legalHelpText: {
+    color: "#94A3B8",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  legalItem: {
+    flexDirection: "row",
+    gap: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.18)",
+    backgroundColor: "rgba(15, 23, 42, 0.24)",
+    padding: 12,
+  },
+  legalCheckbox: {
+    width: 22,
+    height: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#64748B",
+    backgroundColor: "transparent",
+    marginTop: 2,
+  },
+  legalCheckboxSelected: {
+    borderColor: "#22C55E",
+    backgroundColor: "#22C55E",
+  },
+  legalCheckboxMark: {
+    color: "#020617",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  legalItemBody: {
+    flex: 1,
+    gap: 4,
+  },
+  legalItemTitle: {
+    color: "#F8FAFC",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  legalItemVersion: {
+    color: "#94A3B8",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  legalItemBodyText: {
+    color: "#CBD5E1",
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  legalItemHint: {
+    color: "#7DD3FC",
+    fontSize: 12,
+    lineHeight: 18,
   },
 });

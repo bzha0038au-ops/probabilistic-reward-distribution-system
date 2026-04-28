@@ -20,6 +20,7 @@ const fileRuleConfigs: FileRuleConfig[] = [
       saasProjects: [
         /eq\s*\(\s*saasProjects\.id\s*,/s,
         /eq\s*\(\s*saasProjects\.tenantId\s*,/s,
+        /inArray\s*\(\s*saasProjects\.id\s*,/s,
       ],
       saasTenants: [/eq\s*\(\s*saasTenants\.id\s*,/s],
       saasApiKeys: [
@@ -28,6 +29,10 @@ const fileRuleConfigs: FileRuleConfig[] = [
         /eq\s*\(\s*saasApiKeys\.keyHash\s*,/s,
         /eq\s*\(\s*saasApiKeys\.projectId\s*,/s,
       ],
+      saasAgents: [
+        /eq\s*\(\s*saasAgents\.projectId\s*,/s,
+        /\$\{saasAgents\.projectId\}\s*=\s*\$\{[^}]*projectId[^}]*\}/s,
+      ],
       saasPlayers: [
         /eq\s*\(\s*saasPlayers\.projectId\s*,/s,
         /\$\{saasPlayers\.projectId\}\s*=\s*\$\{[^}]*projectId[^}]*\}/s,
@@ -35,12 +40,14 @@ const fileRuleConfigs: FileRuleConfig[] = [
       saasProjectPrizes: [
         /eq\s*\(\s*saasProjectPrizes\.projectId\s*,/s,
         /\$\{saasProjectPrizes\.projectId\}\s*=\s*\$\{[^}]*projectId[^}]*\}/s,
+        /inArray\s*\(\s*saasProjectPrizes\.projectId\s*,/s,
       ],
       saasLedgerEntries: [/eq\s*\(\s*saasLedgerEntries\.projectId\s*,/s],
       saasFairnessSeeds: [/eq\s*\(\s*saasFairnessSeeds\.projectId\s*,/s],
       saasUsageEvents: [/eq\s*\(\s*saasUsageEvents\.projectId\s*,/s],
     },
     rawSqlPatterns: [
+      /pg_advisory_xact_lock\s*\(/s,
       /\$\{[^}]+\.projectId\}\s*=\s*\$\{[^}]*projectId[^}]*\}/s,
       /\$\{[^}]+\.tenantId\}\s*=\s*\$\{[^}]*tenantId[^}]*\}/s,
       /FROM\s+\$\{saasProjects\}[\s\S]*WHERE[\s\S]*\$\{saasProjects\.id\}\s*=\s*\$\{[^}]*projectId[^}]*\}/s,

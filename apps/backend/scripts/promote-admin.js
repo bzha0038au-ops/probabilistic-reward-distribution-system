@@ -25,9 +25,13 @@ const SECURITY_ADMIN_PERMISSIONS = [
   'audit.read',
   'audit.export',
   'audit.retry_notification',
+  'kyc.read',
+  'kyc.review',
   'risk.read',
   'risk.freeze_user',
   'risk.release_user',
+  'tables.read',
+  'tables.manage',
 ];
 const CONFIG_ADMIN_PERMISSIONS = [
   'analytics.read',

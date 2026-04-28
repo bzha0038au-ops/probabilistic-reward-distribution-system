@@ -184,8 +184,10 @@ export const buildFinanceAuditMetadata = (
   const withdrawalControl = toRecord(Reflect.get(metadata, 'withdrawalControl'));
   const financeReviewLatest = toRecord(Reflect.get(metadata, 'financeReviewLatest'));
   const stepUp = toRecord(request.adminStepUp);
+  const subjectUserIdValue = recordValue ? Reflect.get(recordValue, 'userId') : null;
 
   return {
+    subjectUserId: typeof subjectUserIdValue === 'number' ? subjectUserIdValue : null,
     operatorNote: review.operatorNote,
     settlementReference: review.settlementReference,
     processingChannel: review.processingChannel,
@@ -241,5 +243,6 @@ export const buildFinanceAuditMetadata = (
     stepUpMethod: typeof stepUp.method === 'string' ? stepUp.method : null,
     stepUpVerifiedAt:
       typeof stepUp.verifiedAt === 'string' ? stepUp.verifiedAt : null,
+    breakGlassVerified: stepUp.breakGlassVerified === true,
   };
 };

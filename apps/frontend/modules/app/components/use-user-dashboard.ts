@@ -133,93 +133,97 @@ export function useUserDashboard(options: UseUserDashboardOptions) {
     }
     setError(null);
 
-    const [
-      currentSessionResponse,
-      walletResponse,
-      transactionsResponse,
-      bankCardsResponse,
-      cryptoChannelsResponse,
-      cryptoAddressesResponse,
-      topUpsResponse,
-      withdrawalsResponse,
-      rewardCenterResponse,
-      sessionsResponse,
-    ] = await Promise.all([
-      browserUserApiClient.getCurrentSession(),
-      browserUserApiClient.getWalletBalance(),
-      browserUserApiClient.getTransactionHistory(8),
-      browserUserApiClient.listBankCards(),
-      browserUserApiClient.listCryptoDepositChannels(),
-      browserUserApiClient.listCryptoWithdrawAddresses(),
-      browserUserApiClient.listTopUps(5),
-      browserUserApiClient.listWithdrawals(5),
-      browserUserApiClient.getRewardCenter(),
-      browserUserApiClient.listSessions(),
-    ]);
+    try {
+      const [
+        currentSessionResponse,
+        walletResponse,
+        transactionsResponse,
+        bankCardsResponse,
+        cryptoChannelsResponse,
+        cryptoAddressesResponse,
+        topUpsResponse,
+        withdrawalsResponse,
+        rewardCenterResponse,
+        sessionsResponse,
+      ] = await Promise.all([
+        browserUserApiClient.getCurrentSession(),
+        browserUserApiClient.getWalletBalance(),
+        browserUserApiClient.getTransactionHistory(8),
+        browserUserApiClient.listBankCards(),
+        browserUserApiClient.listCryptoDepositChannels(),
+        browserUserApiClient.listCryptoWithdrawAddresses(),
+        browserUserApiClient.listTopUps(5),
+        browserUserApiClient.listWithdrawals(5),
+        browserUserApiClient.getRewardCenter(),
+        browserUserApiClient.listSessions(),
+      ]);
 
-    const failures = [
-      currentSessionResponse,
-      walletResponse,
-      transactionsResponse,
-      bankCardsResponse,
-      cryptoChannelsResponse,
-      cryptoAddressesResponse,
-      topUpsResponse,
-      withdrawalsResponse,
-      rewardCenterResponse,
-      sessionsResponse,
-    ].filter((response) => !response.ok);
+      const failures = [
+        currentSessionResponse,
+        walletResponse,
+        transactionsResponse,
+        bankCardsResponse,
+        cryptoChannelsResponse,
+        cryptoAddressesResponse,
+        topUpsResponse,
+        withdrawalsResponse,
+        rewardCenterResponse,
+        sessionsResponse,
+      ].filter((response) => !response.ok);
 
-    if (currentSessionResponse.ok) {
-      setCurrentUser(currentSessionResponse.data.user);
-      setCurrentSession(currentSessionResponse.data.session);
+      if (currentSessionResponse.ok) {
+        setCurrentUser(currentSessionResponse.data.user);
+        setCurrentSession(currentSessionResponse.data.session);
+      }
+
+      if (walletResponse.ok) {
+        setWalletBalance(walletResponse.data.balance ?? "0");
+      }
+
+      if (transactionsResponse.ok) {
+        setTransactions(transactionsResponse.data);
+      }
+
+      if (bankCardsResponse.ok) {
+        syncBankCardSelection(bankCardsResponse.data);
+        setBankCards(bankCardsResponse.data);
+      }
+
+      if (cryptoChannelsResponse.ok) {
+        syncCryptoChannelSelection(cryptoChannelsResponse.data);
+        setCryptoDepositChannels(cryptoChannelsResponse.data);
+      }
+
+      if (cryptoAddressesResponse.ok) {
+        syncCryptoWithdrawSelection(cryptoAddressesResponse.data);
+        setCryptoWithdrawAddresses(cryptoAddressesResponse.data);
+      }
+
+      if (topUpsResponse.ok) {
+        setTopUps(topUpsResponse.data);
+      }
+
+      if (withdrawalsResponse.ok) {
+        setWithdrawals(withdrawalsResponse.data);
+      }
+
+      if (rewardCenterResponse.ok) {
+        setRewardCenter(rewardCenterResponse.data);
+      }
+
+      if (sessionsResponse.ok) {
+        setSessions(sessionsResponse.data.items);
+      }
+
+      if (failures.length > 0) {
+        setError(failures[0].error?.message ?? c.loadFailed);
+      }
+    } catch {
+      setError(c.loadFailed);
+    } finally {
+      setDashboardLoading(false);
+      setRefreshing(false);
     }
-
-    if (walletResponse.ok) {
-      setWalletBalance(walletResponse.data.balance ?? "0");
-    }
-
-    if (transactionsResponse.ok) {
-      setTransactions(transactionsResponse.data);
-    }
-
-    if (bankCardsResponse.ok) {
-      syncBankCardSelection(bankCardsResponse.data);
-      setBankCards(bankCardsResponse.data);
-    }
-
-    if (cryptoChannelsResponse.ok) {
-      syncCryptoChannelSelection(cryptoChannelsResponse.data);
-      setCryptoDepositChannels(cryptoChannelsResponse.data);
-    }
-
-    if (cryptoAddressesResponse.ok) {
-      syncCryptoWithdrawSelection(cryptoAddressesResponse.data);
-      setCryptoWithdrawAddresses(cryptoAddressesResponse.data);
-    }
-
-    if (topUpsResponse.ok) {
-      setTopUps(topUpsResponse.data);
-    }
-
-    if (withdrawalsResponse.ok) {
-      setWithdrawals(withdrawalsResponse.data);
-    }
-
-    if (rewardCenterResponse.ok) {
-      setRewardCenter(rewardCenterResponse.data);
-    }
-
-    if (sessionsResponse.ok) {
-      setSessions(sessionsResponse.data.items);
-    }
-
-    if (failures.length > 0) {
-      setError(failures[0].error?.message ?? c.loadFailed);
-    }
-
-    setDashboardLoading(false);
-    setRefreshing(false);
   }
 
   function syncBankCardSelection(cards: BankCard[]) {

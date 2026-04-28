@@ -29,6 +29,13 @@ const copy = {
       "The backend publishes this hash before the epoch resolves. Results in the same epoch must derive from the unrevealed seed behind this hash.",
     currentEpoch: "Current epoch",
     revealAfter: "Reveal after",
+    verifiedDays: "Continuous auto-audit days",
+    lastAutoAudit: "Last auto-audit",
+    autoAuditHealthy: "Passing",
+    autoAuditIssue: "Issue detected",
+    noAuditYet: "No closed epoch has been auto-audited yet.",
+    auditedThrough: (epoch: number, auditedAt: string) =>
+      `Auto-reveal verified through epoch ${epoch} at ${auditedAt}.`,
     refresh: "Refresh commit",
     refreshing: "Refreshing...",
     revealCard: "Reveal closed epoch",
@@ -70,6 +77,13 @@ const copy = {
       "后端会在 epoch 开始时先公开这条哈希；同一 epoch 内的结果都必须来自这条哈希背后的未公开 seed。",
     currentEpoch: "当前 Epoch",
     revealAfter: "可 Reveal 时间",
+    verifiedDays: "连续自动校验天数",
+    lastAutoAudit: "最近自动校验",
+    autoAuditHealthy: "校验通过",
+    autoAuditIssue: "发现异常",
+    noAuditYet: "当前还没有已结束 epoch 的自动校验记录。",
+    auditedThrough: (epoch: number, auditedAt: string) =>
+      `后台自动 reveal 已经校验到 epoch ${epoch}，最近一次时间是 ${auditedAt}。`,
     refresh: "刷新 Commit",
     refreshing: "刷新中...",
     revealCard: "Reveal 已结束 Epoch",
@@ -190,6 +204,20 @@ export function FairnessDemoPanel() {
   }, [commit, revealEpoch]);
 
   const revealAt = formatTimestamp(getFairnessRevealDate(commit));
+  const audit = commit?.audit;
+  const auditStatus =
+    audit?.lastAuditPassed == null
+      ? "--"
+      : audit.lastAuditPassed
+        ? c.autoAuditHealthy
+        : c.autoAuditIssue;
+  const auditDetail =
+    audit?.latestAuditedEpoch === null || audit?.latestAuditedEpoch === undefined
+      ? c.noAuditYet
+      : c.auditedThrough(
+          audit.latestAuditedEpoch,
+          formatTimestamp(audit.lastAuditedAt),
+        );
 
   return (
     <div className="grid gap-6 xl:grid-cols-[0.95fr,1.05fr]">
@@ -219,7 +247,7 @@ export function FairnessDemoPanel() {
               </Button>
             </div>
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
               <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
                 <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
                   {c.currentEpoch}
@@ -244,7 +272,25 @@ export function FairnessDemoPanel() {
                   {commit ? shortenHash(commit.commitHash) : "--"}
                 </p>
               </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                  {c.verifiedDays}
+                </p>
+                <p className="mt-2 text-lg font-semibold text-slate-100">
+                  {audit?.consecutiveVerifiedDays ?? 0}
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                  {c.lastAutoAudit}
+                </p>
+                <p className="mt-2 text-sm font-medium text-slate-100">
+                  {auditStatus}
+                </p>
+              </div>
             </div>
+
+            <p className="mt-4 text-xs text-slate-400">{auditDetail}</p>
           </div>
 
           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">

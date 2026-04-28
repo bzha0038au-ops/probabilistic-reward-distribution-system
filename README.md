@@ -163,6 +163,7 @@ pnpm --dir apps/backend dev:worker:payment-operations
 
 ```bash
 pnpm db:seed:manual
+pnpm db:seed:saas-portal-demo
 pnpm check
 pnpm lint
 pnpm test
@@ -201,6 +202,19 @@ Default local accounts:
 - User: `bob.manual@example.com` / `User123!`
 - User: `carol.manual@example.com` / `User123!`
 - User: `frozen.manual@example.com` / `User123!`
+
+If you also want B-side SaaS portal demo tenants for browser QA, run this after
+the manual seed:
+
+```bash
+pnpm db:seed:saas-portal-demo
+```
+
+This ensures:
+
+- 2 portal demo tenants bound to `admin.manual@example.com`
+- bootstrap sandbox projects with starter billing profiles
+- an extra `Agent Staging` project under `Portal Demo Alpha` for project-switch QA
 
 ## Project At A Glance
 
@@ -241,8 +255,9 @@ flowchart LR
 ## What This Project Does
 
 - Lets users register, log in, manage sessions, top up, withdraw, draw rewards, inspect wallet history, and play additional user-facing games such as blackjack and quick-eight
-- Gives operators a separate admin console to manage prizes, review finance flows, inspect risk and audit events, issue SaaS API keys, and change runtime config safely
+- Gives operators a separate admin console to manage prizes, review finance flows, inspect risk and audit events, issue SaaS API keys, and change runtime config safely through draft and approval flows
 - Exposes a separate SaaS prize-engine surface under `/v1/engine/*` for trusted project-to-project integrations through `@reward/prize-engine-sdk`
+- Persists auth sessions for both users and admins so clients can list, revoke, and reconcile active sessions instead of treating JWTs as fully stateless
 - Keeps draw execution, wallet mutation, finance review, notification delivery, and background reconciliation inside the backend with explicit ledger writes and worker boundaries
 - Keeps schema, migrations, shared contracts, and client packages inside the same workspace so product and platform changes evolve together
 
@@ -253,8 +268,10 @@ The highest-risk path is `executeDraw(userId)`: debit the draw cost, evaluate pr
 - Weighted draw execution with fairness metadata, prize eligibility checks, and house-account updates
 - Wallet ledger, house transactions, and transaction boundaries for financial correctness
 - Manual-review payment flows plus dedicated webhook, reconciliation, outbound, and operations worker paths
+- Runtime config and payment provider changes go through a control-center draft / submit / approve / reject workflow instead of direct mutation
 - Shared first-party user API client (`@reward/user-core`) and separate external SaaS SDK (`@reward/prize-engine-sdk`)
 - Admin audit, risk, MFA, finance, and configuration surfaces separated from the public apps
+- Persisted user/admin session inventories support current-session restore, session listing, single-session revoke, and revoke-all flows
 - Workspace-level tests plus backend integration tests against a self-bootstrapped real Postgres instance
 
 ## Workspace Map
@@ -283,6 +300,21 @@ their own workers and are available locally too:
 - `pnpm dev:saas-billing`: runs SaaS billing and webhook automation loops
 - `pnpm --dir apps/backend dev:worker:payment-outbound`: submits queued provider orders
 - `pnpm --dir apps/backend dev:worker:payment-operations`: handles timeout cleanup and compensation cycles
+
+Webhook entrypoints feed those workers rather than collapsing everything into the
+API request thread:
+
+- `POST /payments/webhooks/:provider`: accepts provider callbacks, verifies/records signature status, and queues payment webhook events
+- `POST /v1/engine/billing/webhooks/stripe`: accepts SaaS billing Stripe callbacks for tenant billing sync
+
+## Control And Governance
+
+The admin surface is not just CRUD:
+
+- Runtime config changes are drafted first, then submitted, approved, rejected, and audited through the control center
+- Payment provider changes follow the same draft workflow, including gray rollout rules, execution mode, adapter selection, and governance checks
+- Direct config mutation is intentionally blocked; the primary path is change-request based
+- Provider circuit breakers are first-class operational controls rather than ad hoc flags
 
 ## Tech Stack
 
@@ -352,6 +384,10 @@ pnpm test:load
 pnpm ops:health
 pnpm ops:tail-errors
 pnpm ops:check-finance
+pnpm ops:freeze-deploys
+pnpm ops:rotate-jwt
+pnpm ops:ai-diagnose
+pnpm ops:postmortem
 
 pnpm db:generate
 pnpm db:migrate
@@ -387,6 +423,16 @@ Full details live in [`docs/environment.md`](./docs/environment.md).
 - The Expo app calls the same user-facing backend endpoints through `@reward/user-core` and stores the backend token in secure native storage
 - Admin login uses `POST /auth/admin/login` and stores the admin session in `reward_admin_session`
 - Admin MFA is its own backend domain and uses separate production secrets from the user and web auth layers
+- User and admin sessions are also stored in `auth_sessions`, which is why the system can expose current-session lookup, session inventory, single-session revoke, and revoke-all operations
+
+## Operational Endpoints
+
+- Health probes: `/health`, `/health/live`, `/health/ready`
+- Metrics: `/metrics`
+- Payment webhook intake: `/payments/webhooks/:provider`
+- SaaS billing webhook intake: `/v1/engine/billing/webhooks/stripe`
+- Internal alert relay: `/internal/alert-relay`
+- Internal billing anomaly relay: `/internal/billing-anomaly`
 
 ## Testing
 

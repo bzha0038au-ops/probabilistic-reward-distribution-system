@@ -19,12 +19,15 @@ import {
   resolvePaymentProcessingContext,
   withPaymentProcessingMetadata,
 } from "../payment/service";
+import { screenUserWithdrawal } from "../aml";
+import { assertKycWithdrawalAllowed } from "../kyc/service";
 import { recordSuspiciousActivity } from "../risk/service";
 import {
   getAntiAbuseConfig,
   getConfigDecimal,
   getPaymentConfig,
 } from "../system/service";
+import { assertWalletLedgerInvariant } from "../wallet/invariant-service";
 import {
   MAX_WITHDRAW_PER_DAY_KEY,
   buildWithdrawalBusinessEventId,
@@ -80,6 +83,8 @@ export async function createWithdrawal(payload: {
   metadata?: Record<string, unknown> | null;
   requestContext?: WithdrawalRequestContext;
 }) {
+  await screenUserWithdrawal(payload.userId, payload.metadata ?? null);
+
   return db.transaction(async (tx) => {
     const paymentConfig = await getPaymentConfig(tx);
     if (!paymentConfig.withdrawEnabled) {
@@ -120,6 +125,7 @@ export async function createWithdrawal(payload: {
         {
           userId: payload.userId,
           reason: "withdraw_below_min",
+          freezeScope: "withdrawal_lock",
           metadata: {
             amount: toMoneyString(amount),
             min: toMoneyString(minAllowed),
@@ -134,6 +140,7 @@ export async function createWithdrawal(payload: {
         {
           userId: payload.userId,
           reason: "withdraw_above_max",
+          freezeScope: "withdrawal_lock",
           metadata: {
             amount: toMoneyString(amount),
             max: toMoneyString(maxAllowed),
@@ -144,26 +151,33 @@ export async function createWithdrawal(payload: {
       throw unprocessableEntityError("Amount exceeds maximum withdrawal.");
     }
 
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const [{ total = 0 }] = await tx
+      .select({
+        total: sql<number>`coalesce(sum(${withdrawals.amount}), 0)`,
+      })
+      .from(withdrawals)
+      .where(
+        sql`${withdrawals.userId} = ${payload.userId} AND ${withdrawals.createdAt} >= ${startOfDay}`,
+      );
+
+    const totalToday = toDecimal(total ?? 0);
+    await assertKycWithdrawalAllowed(
+      payload.userId,
+      toMoneyString(amount),
+      toMoneyString(totalToday),
+      tx,
+    );
+
     const maxPerDay = await getConfigDecimal(tx, MAX_WITHDRAW_PER_DAY_KEY, 0);
     if (maxPerDay.gt(0)) {
-      const startOfDay = new Date();
-      startOfDay.setHours(0, 0, 0, 0);
-
-      const [{ total = 0 }] = await tx
-        .select({
-          total: sql<number>`coalesce(sum(${withdrawals.amount}), 0)`,
-        })
-        .from(withdrawals)
-        .where(
-          sql`${withdrawals.userId} = ${payload.userId} AND ${withdrawals.createdAt} >= ${startOfDay}`,
-        );
-
-      const totalToday = toDecimal(total ?? 0);
       if (totalToday.plus(amount).gt(maxPerDay)) {
         await recordSuspiciousActivity(
           {
             userId: payload.userId,
             reason: "withdraw_daily_limit",
+            freezeScope: "withdrawal_lock",
             metadata: {
               amount: toMoneyString(amount),
               totalToday: toMoneyString(totalToday),
@@ -185,6 +199,7 @@ export async function createWithdrawal(payload: {
           {
             userId: payload.userId,
             reason: "withdraw_min_wager",
+            freezeScope: "withdrawal_lock",
             metadata: {
               wagered: toMoneyString(wageredBefore),
               required: toMoneyString(antiAbuse.minWagerBeforeWithdraw),
@@ -204,6 +219,7 @@ export async function createWithdrawal(payload: {
         {
           userId: payload.userId,
           reason: "withdraw_insufficient_funds",
+          freezeScope: "withdrawal_lock",
           metadata: {
             amount: toMoneyString(amount),
             withdrawable: toMoneyString(withdrawableBefore),
@@ -328,6 +344,7 @@ export async function createWithdrawal(payload: {
         {
           userId: payload.userId,
           reason: "withdraw_risk_cluster",
+          freezeScope: "withdrawal_lock",
           metadata: {
             signals: controls.suspiciousSignals,
             sharedIpUserCount: controls.metadata.sharedIpUserCount,
@@ -341,6 +358,13 @@ export async function createWithdrawal(payload: {
       );
     }
 
-    return serializeWithdrawal(created ?? null);
+    const result = serializeWithdrawal(created ?? null);
+
+    await assertWalletLedgerInvariant(tx, payload.userId, {
+      service: "withdraw",
+      operation: "createWithdrawal",
+    });
+
+    return result;
   });
 }

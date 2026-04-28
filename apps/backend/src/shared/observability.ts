@@ -8,6 +8,7 @@ import {
 } from 'prom-client';
 
 import { client } from '../db';
+import { getPendingAmlMetrics } from '../modules/aml/service';
 import {
   assertNotificationChannelAvailable,
   getNotificationDeliverySummary,
@@ -17,6 +18,10 @@ import {
   assertAutomatedPaymentModeSupported,
   getPaymentCapabilitySummary,
 } from '../modules/payment/service';
+import {
+  refreshSaasDistributionSnapshots,
+  saasDistributionMetricBuckets,
+} from '../modules/saas/distribution-monitoring';
 import { getConfig } from './config';
 import { internalInvariantError } from './errors';
 import { logger } from './logger';
@@ -64,6 +69,8 @@ type ObservabilityState = {
   dependencyStatusMetric: Gauge<'dependency' | 'required' | 'status'>;
   notificationDeliveriesGauge: Gauge<'status'>;
   notificationOldestPendingAgeSeconds: Gauge;
+  amlReviewHitsGauge: Gauge<'state'>;
+  amlReviewOldestPendingAgeSeconds: Gauge;
   drawRequestsTotal: Counter<'outcome'>;
   stuckWithdrawalsGauge: Gauge<'status'>;
   oldestStuckWithdrawalAgeSeconds: Gauge<'status'>;
@@ -89,6 +96,39 @@ type ObservabilityState = {
   saasWebhookEventsGauge: Gauge<'status'>;
   saasWebhookOldestReadyAgeSeconds: Gauge;
   saasWebhookRetryExhaustedTotal: Gauge;
+  saasDistributionDrawsGauge: Gauge<
+    'project_id' | 'project_slug' | 'environment' | 'window'
+  >;
+  saasDistributionTrackedDrawsGauge: Gauge<
+    'project_id' | 'project_slug' | 'environment' | 'window'
+  >;
+  saasDistributionTrackingCoverageRatioGauge: Gauge<
+    'project_id' | 'project_slug' | 'environment' | 'window'
+  >;
+  saasDistributionActualPayoutSumGauge: Gauge<
+    'project_id' | 'project_slug' | 'environment' | 'window'
+  >;
+  saasDistributionExpectedPayoutSumGauge: Gauge<
+    'project_id' | 'project_slug' | 'environment' | 'window'
+  >;
+  saasDistributionPayoutDeviationAmountGauge: Gauge<
+    'project_id' | 'project_slug' | 'environment' | 'window'
+  >;
+  saasDistributionPayoutDeviationRatioGauge: Gauge<
+    'project_id' | 'project_slug' | 'environment' | 'window'
+  >;
+  saasDistributionMaxBucketDeviationRatioGauge: Gauge<
+    'project_id' | 'project_slug' | 'environment' | 'window'
+  >;
+  saasDistributionActualBucketGauge: Gauge<
+    'project_id' | 'project_slug' | 'environment' | 'window' | 'bucket'
+  >;
+  saasDistributionExpectedBucketGauge: Gauge<
+    'project_id' | 'project_slug' | 'environment' | 'window' | 'bucket'
+  >;
+  saasDistributionBreachGauge: Gauge<
+    'project_id' | 'project_slug' | 'environment' | 'window' | 'reason'
+  >;
   stripeApiRequestsTotal: Counter<
     'surface' | 'operation' | 'outcome' | 'status_family'
   >;
@@ -131,6 +171,10 @@ const stripeApiStatusFamilies = [
   '429',
   'transport',
   'unknown',
+] as const;
+const saasDistributionBreachReasons = [
+  'ev_deviation',
+  'bucket_share_deviation',
 ] as const;
 const noMetricValue = 'none';
 
@@ -197,6 +241,17 @@ const getObservabilityState = () => {
     notificationOldestPendingAgeSeconds: new Gauge({
       name: 'reward_backend_auth_notification_oldest_pending_age_seconds',
       help: 'Age in seconds of the oldest pending auth notification delivery.',
+      registers: [registry],
+    }),
+    amlReviewHitsGauge: new Gauge({
+      name: 'reward_backend_aml_review_hits_total',
+      help: 'Count of AML hit cases pending review, grouped by review queue state.',
+      labelNames: ['state'] as const,
+      registers: [registry],
+    }),
+    amlReviewOldestPendingAgeSeconds: new Gauge({
+      name: 'reward_backend_aml_review_oldest_pending_age_seconds',
+      help: 'Age in seconds of the oldest AML hit case still waiting for operator review.',
       registers: [registry],
     }),
     drawRequestsTotal: new Counter({
@@ -286,6 +341,72 @@ const getObservabilityState = () => {
     saasWebhookRetryExhaustedTotal: new Gauge({
       name: 'reward_backend_saas_webhook_retry_exhausted_total',
       help: 'Count of failed SaaS Stripe webhook events that have reached the retry exhaustion alert threshold.',
+      registers: [registry],
+    }),
+    saasDistributionDrawsGauge: new Gauge({
+      name: 'reward_backend_saas_distribution_snapshot_draws_total',
+      help: 'Count of draws captured in the current rolling payout-distribution snapshot for each project and window.',
+      labelNames: ['project_id', 'project_slug', 'environment', 'window'] as const,
+      registers: [registry],
+    }),
+    saasDistributionTrackedDrawsGauge: new Gauge({
+      name: 'reward_backend_saas_distribution_snapshot_tracked_draws_total',
+      help: 'Count of draws in the snapshot window that include payout-distribution telemetry.',
+      labelNames: ['project_id', 'project_slug', 'environment', 'window'] as const,
+      registers: [registry],
+    }),
+    saasDistributionTrackingCoverageRatioGauge: new Gauge({
+      name: 'reward_backend_saas_distribution_snapshot_tracking_coverage_ratio',
+      help: 'Fraction of draws in the window that include payout-distribution telemetry.',
+      labelNames: ['project_id', 'project_slug', 'environment', 'window'] as const,
+      registers: [registry],
+    }),
+    saasDistributionActualPayoutSumGauge: new Gauge({
+      name: 'reward_backend_saas_distribution_snapshot_actual_payout_sum',
+      help: 'Actual payout sum for tracked draws in the current rolling snapshot window.',
+      labelNames: ['project_id', 'project_slug', 'environment', 'window'] as const,
+      registers: [registry],
+    }),
+    saasDistributionExpectedPayoutSumGauge: new Gauge({
+      name: 'reward_backend_saas_distribution_snapshot_expected_payout_sum',
+      help: 'Expected payout sum for tracked draws in the current rolling snapshot window.',
+      labelNames: ['project_id', 'project_slug', 'environment', 'window'] as const,
+      registers: [registry],
+    }),
+    saasDistributionPayoutDeviationAmountGauge: new Gauge({
+      name: 'reward_backend_saas_distribution_snapshot_payout_deviation_amount',
+      help: 'Actual minus expected payout amount for the tracked draws in the current rolling snapshot window.',
+      labelNames: ['project_id', 'project_slug', 'environment', 'window'] as const,
+      registers: [registry],
+    }),
+    saasDistributionPayoutDeviationRatioGauge: new Gauge({
+      name: 'reward_backend_saas_distribution_snapshot_payout_deviation_ratio',
+      help: 'Relative payout deviation ratio, computed as (actual minus expected) divided by expected, for the tracked draws in the current rolling snapshot window.',
+      labelNames: ['project_id', 'project_slug', 'environment', 'window'] as const,
+      registers: [registry],
+    }),
+    saasDistributionMaxBucketDeviationRatioGauge: new Gauge({
+      name: 'reward_backend_saas_distribution_snapshot_max_bucket_deviation_ratio',
+      help: 'Largest absolute deviation between actual and expected payout bucket share for the tracked draws in the current rolling snapshot window.',
+      labelNames: ['project_id', 'project_slug', 'environment', 'window'] as const,
+      registers: [registry],
+    }),
+    saasDistributionActualBucketGauge: new Gauge({
+      name: 'reward_backend_saas_distribution_snapshot_actual_bucket_total',
+      help: 'Actual tracked draw counts grouped by payout bucket for the current rolling snapshot window.',
+      labelNames: ['project_id', 'project_slug', 'environment', 'window', 'bucket'] as const,
+      registers: [registry],
+    }),
+    saasDistributionExpectedBucketGauge: new Gauge({
+      name: 'reward_backend_saas_distribution_snapshot_expected_bucket_total',
+      help: 'Expected tracked draw counts grouped by payout bucket for the current rolling snapshot window.',
+      labelNames: ['project_id', 'project_slug', 'environment', 'window', 'bucket'] as const,
+      registers: [registry],
+    }),
+    saasDistributionBreachGauge: new Gauge({
+      name: 'reward_backend_saas_distribution_snapshot_breach',
+      help: 'Binary payout-distribution breach indicator for each project, rolling window, and breach reason.',
+      labelNames: ['project_id', 'project_slug', 'environment', 'window', 'reason'] as const,
       registers: [registry],
     }),
     stripeApiRequestsTotal: new Counter({
@@ -442,6 +563,23 @@ const refreshWithdrawalStuckMetrics = async () => {
     );
     oldestStuckWithdrawalAgeSeconds.set({ status }, ageSeconds);
   }
+};
+
+const refreshAmlReviewMetrics = async () => {
+  const { amlReviewHitsGauge, amlReviewOldestPendingAgeSeconds } =
+    getObservabilityState();
+  const summary = await getPendingAmlMetrics();
+  amlReviewHitsGauge.set({ state: 'pending' }, summary.pendingCount);
+  amlReviewHitsGauge.set({ state: 'overdue' }, summary.overdueCount);
+
+  if (!summary.oldestPendingAt) {
+    amlReviewOldestPendingAgeSeconds.set(0);
+    return;
+  }
+
+  amlReviewOldestPendingAgeSeconds.set(
+    Math.max(0, (Date.now() - summary.oldestPendingAt.getTime()) / 1000)
+  );
 };
 
 const refreshPaymentWebhookMetrics = async () => {
@@ -710,6 +848,98 @@ const refreshSaasBillingMetrics = async () => {
   saasWebhookRetryExhaustedTotal.set(Number(retryExhaustedRow?.count ?? 0));
 };
 
+const refreshSaasDistributionMetrics = async () => {
+  const {
+    saasDistributionDrawsGauge,
+    saasDistributionTrackedDrawsGauge,
+    saasDistributionTrackingCoverageRatioGauge,
+    saasDistributionActualPayoutSumGauge,
+    saasDistributionExpectedPayoutSumGauge,
+    saasDistributionPayoutDeviationAmountGauge,
+    saasDistributionPayoutDeviationRatioGauge,
+    saasDistributionMaxBucketDeviationRatioGauge,
+    saasDistributionActualBucketGauge,
+    saasDistributionExpectedBucketGauge,
+    saasDistributionBreachGauge,
+  } = getObservabilityState();
+
+  saasDistributionDrawsGauge.reset();
+  saasDistributionTrackedDrawsGauge.reset();
+  saasDistributionTrackingCoverageRatioGauge.reset();
+  saasDistributionActualPayoutSumGauge.reset();
+  saasDistributionExpectedPayoutSumGauge.reset();
+  saasDistributionPayoutDeviationAmountGauge.reset();
+  saasDistributionPayoutDeviationRatioGauge.reset();
+  saasDistributionMaxBucketDeviationRatioGauge.reset();
+  saasDistributionActualBucketGauge.reset();
+  saasDistributionExpectedBucketGauge.reset();
+  saasDistributionBreachGauge.reset();
+
+  const snapshots = await refreshSaasDistributionSnapshots();
+  for (const snapshot of snapshots) {
+    const labels = {
+      project_id: String(snapshot.projectId),
+      project_slug: readMetricValue(snapshot.projectSlug, 'unknown'),
+      environment: readMetricValue(snapshot.environment, 'unknown'),
+      window: snapshot.windowKey,
+    };
+
+    saasDistributionDrawsGauge.set(labels, snapshot.drawCount);
+    saasDistributionTrackedDrawsGauge.set(labels, snapshot.trackedDrawCount);
+    saasDistributionTrackingCoverageRatioGauge.set(
+      labels,
+      snapshot.trackingCoverageRatio
+    );
+    saasDistributionActualPayoutSumGauge.set(
+      labels,
+      Number(snapshot.actualPayoutSum)
+    );
+    saasDistributionExpectedPayoutSumGauge.set(
+      labels,
+      Number(snapshot.expectedPayoutSum)
+    );
+    saasDistributionPayoutDeviationAmountGauge.set(
+      labels,
+      Number(snapshot.payoutDeviationAmount)
+    );
+    saasDistributionPayoutDeviationRatioGauge.set(
+      labels,
+      snapshot.payoutDeviationRatio
+    );
+    saasDistributionMaxBucketDeviationRatioGauge.set(
+      labels,
+      snapshot.maxBucketDeviationRatio
+    );
+
+    for (const bucket of saasDistributionMetricBuckets) {
+      saasDistributionActualBucketGauge.set(
+        {
+          ...labels,
+          bucket,
+        },
+        snapshot.actualBucketHistogram[bucket] ?? 0
+      );
+      saasDistributionExpectedBucketGauge.set(
+        {
+          ...labels,
+          bucket,
+        },
+        snapshot.expectedBucketHistogram[bucket] ?? 0
+      );
+    }
+
+    for (const reason of saasDistributionBreachReasons) {
+      saasDistributionBreachGauge.set(
+        {
+          ...labels,
+          reason,
+        },
+        snapshot.breachReasons.includes(reason) ? 1 : 0
+      );
+    }
+  }
+};
+
 const checkDatabase = () =>
   runDependencyCheck({
     name: 'postgres',
@@ -882,11 +1112,13 @@ export const refreshOperationalMetrics = async () => {
       notificationOldestPendingAgeSeconds.set(0);
     }
 
+    await refreshAmlReviewMetrics();
     await refreshWithdrawalStuckMetrics();
     await refreshPaymentWebhookMetrics();
     await refreshPaymentReconciliationMetrics();
     await refreshPaymentOutboundMetrics();
     await refreshSaasBillingMetrics();
+    await refreshSaasDistributionMetrics();
   } catch (error) {
     logger.warning('failed to refresh observability operational metrics', {
       err: error,

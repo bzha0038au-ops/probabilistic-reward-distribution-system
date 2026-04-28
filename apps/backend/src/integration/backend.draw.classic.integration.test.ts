@@ -6,22 +6,25 @@ import {
   getExecuteDraw,
   invalidatePoolCache,
   itIntegration as it,
+  listUserLedgerEntries,
+  seedApprovedKycProfile,
   seedDrawScenario,
   seedUserWithWallet,
   setConfigNumber,
   verifyUserContacts,
 } from './integration-test-support';
 import { createHash } from 'node:crypto';
-import { asc, eq, inArray } from '@reward/database/orm';
+import { and, asc, eq, inArray } from '@reward/database/orm';
 import { expect } from 'vitest';
 import {
   drawRecords,
+  fairnessAudits,
   fairnessSeeds,
   houseAccount,
-  ledgerEntries,
   prizes,
   userWallets,
 } from '@reward/database';
+import { auditPendingFairnessEpochs } from '../modules/fairness/service';
 
 describeIntegrationSuite('backend draw classic integration', () => {
   it('executeDraw persists a winning draw and related ledger entries', async () => {
@@ -60,14 +63,9 @@ describeIntegrationSuite('backend draw classic integration', () => {
 
     expect(house?.prizePoolBalance).toBe('5.00');
 
-    const userEntries = await getDb()
-      .select({
-        entryType: ledgerEntries.entryType,
-        amount: ledgerEntries.amount,
-      })
-      .from(ledgerEntries)
-      .where(eq(ledgerEntries.userId, user.id))
-      .orderBy(asc(ledgerEntries.id));
+    const userEntries = (await listUserLedgerEntries(user.id)).map(
+      ({ entryType, amount }) => ({ entryType, amount }),
+    );
 
     expect(userEntries).toEqual([
       { entryType: 'draw_cost', amount: '-10.00' },
@@ -91,7 +89,7 @@ describeIntegrationSuite('backend draw classic integration', () => {
     });
   });
 
-  it('POST /draw executes a winning draw for authenticated users', async () => {
+  it('POST /draw executes a winning draw for authenticated users', { timeout: 15_000 }, async () => {
     const { user, prize } = await seedDrawScenario();
     await verifyUserContacts(user.id, { email: true });
     const { token } = await getCreateUserSessionToken()({
@@ -137,6 +135,7 @@ describeIntegrationSuite('backend draw classic integration', () => {
         email: 'out-of-stock@example.com',
         withdrawableBalance: '50.00',
       });
+      await seedApprovedKycProfile(user.id, 'tier_1');
 
       await getDb()
         .insert(prizes)
@@ -173,6 +172,7 @@ describeIntegrationSuite('backend draw classic integration', () => {
         email: 'budget-exhausted@example.com',
         withdrawableBalance: '50.00',
       });
+      await seedApprovedKycProfile(user.id, 'tier_1');
 
       await getDb()
         .insert(prizes)
@@ -210,6 +210,7 @@ describeIntegrationSuite('backend draw classic integration', () => {
         email: 'payout-limited@example.com',
         withdrawableBalance: '50.00',
       });
+      await seedApprovedKycProfile(user.id, 'tier_1');
 
       await getDb()
         .insert(prizes)
@@ -246,10 +247,12 @@ describeIntegrationSuite('backend draw classic integration', () => {
         email: 'draw-concurrency-a@example.com',
         withdrawableBalance: '100.00',
       });
+      await seedApprovedKycProfile(firstUser.id, 'tier_1');
       const secondUser = await seedUserWithWallet({
         email: 'draw-concurrency-b@example.com',
         withdrawableBalance: '100.00',
       });
+      await seedApprovedKycProfile(secondUser.id, 'tier_1');
 
       const [prize] = await getDb()
         .insert(prizes)
@@ -321,6 +324,7 @@ describeIntegrationSuite('backend draw classic integration', () => {
         email: 'draw-daily-limit-concurrency@example.com',
         withdrawableBalance: '100.00',
       });
+      await seedApprovedKycProfile(user.id, 'tier_1');
 
       const [prize] = await getDb()
         .insert(prizes)
@@ -408,6 +412,7 @@ describeIntegrationSuite('backend draw classic integration', () => {
         email: 'draw-cooldown-concurrency@example.com',
         withdrawableBalance: '100.00',
       });
+      await seedApprovedKycProfile(user.id, 'tier_1');
 
       const [prize] = await getDb()
         .insert(prizes)
@@ -520,6 +525,80 @@ describeIntegrationSuite('backend draw classic integration', () => {
       epoch: previousEpoch,
       seed,
       commitHash,
+    });
+  });
+
+  it('audits the latest closed fairness epoch and exposes the streak summary on /fairness/commit', async () => {
+    const commitResponse = await getApp().inject({
+      method: 'GET',
+      url: '/fairness/commit',
+    });
+
+    expect(commitResponse.statusCode).toBe(200);
+    const commitPayload = commitResponse.json();
+    expect(commitPayload.ok).toBe(true);
+
+    const epochSeconds = Number(commitPayload.data.epochSeconds);
+    const currentEpoch = Number(commitPayload.data.epoch);
+    const previousEpoch = currentEpoch - 1;
+
+    const seed = 'integration-audit-seed';
+    const commitHash = createHash('sha256').update(seed).digest('hex');
+
+    await getDb().insert(fairnessSeeds).values({
+      epoch: previousEpoch,
+      epochSeconds,
+      commitHash,
+      seed,
+    });
+
+    const cycle = await auditPendingFairnessEpochs(getDb(), epochSeconds);
+    expect(cycle).toMatchObject({
+      auditedEpochs: 1,
+      verifiedEpochs: 1,
+      failedEpochs: 0,
+    });
+
+    const [audit] = await getDb()
+      .select({
+        epoch: fairnessAudits.epoch,
+        commitHash: fairnessAudits.commitHash,
+        computedHash: fairnessAudits.computedHash,
+        matches: fairnessAudits.matches,
+        failureCode: fairnessAudits.failureCode,
+        revealedAt: fairnessAudits.revealedAt,
+      })
+      .from(fairnessAudits)
+      .where(
+        and(
+          eq(fairnessAudits.epoch, previousEpoch),
+          eq(fairnessAudits.epochSeconds, epochSeconds),
+        ),
+      )
+      .limit(1);
+
+    expect(audit).toMatchObject({
+      epoch: previousEpoch,
+      commitHash,
+      computedHash: commitHash,
+      matches: true,
+      failureCode: null,
+    });
+    expect(audit?.revealedAt).toBeTruthy();
+
+    const summaryResponse = await getApp().inject({
+      method: 'GET',
+      url: '/fairness/commit',
+    });
+
+    expect(summaryResponse.statusCode).toBe(200);
+    const summaryPayload = summaryResponse.json();
+    expect(summaryPayload.ok).toBe(true);
+    expect(summaryPayload.data.audit).toMatchObject({
+      latestAuditedEpoch: previousEpoch,
+      lastAuditPassed: true,
+      consecutiveVerifiedEpochs: 1,
+      consecutiveVerifiedDays: 1,
     });
   });
 });

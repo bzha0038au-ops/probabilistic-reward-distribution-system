@@ -247,7 +247,7 @@ const resolveLimiter = (kind: AuthNotificationKind) => {
       limiter: getSmsLimiter(),
     };
   }
-  if (kind === "security_alert") {
+  if (kind === "security_alert" || kind === "aml_review") {
     return {
       enabled: config.authNotificationAlertThrottleMax > 0,
       limiter: getAlertLimiter(),
@@ -375,6 +375,28 @@ const renderEmailBody = (delivery: NotificationDeliveryLike) => {
         "If this was not you, reset your password and review active sessions immediately.",
       ].join("\n");
     }
+    case "aml_review": {
+      const occurredAt = readIsoDate(delivery.payload, "occurredAt");
+      const checkpoint = readString(delivery.payload, "checkpoint");
+      const riskLevel = readString(delivery.payload, "riskLevel");
+      const providerKey = readString(delivery.payload, "providerKey");
+      const userId = readString(delivery.payload, "userId");
+      const userEmail = readOptionalString(delivery.payload, "userEmail");
+      const userPhone = readOptionalString(delivery.payload, "userPhone");
+      const summary = readOptionalString(delivery.payload, "summary");
+      return [
+        `AML review required for user #${userId}.`,
+        "",
+        `Checkpoint: ${checkpoint}`,
+        `Risk level: ${riskLevel}`,
+        `Provider: ${providerKey}`,
+        `Occurred at: ${occurredAt.toISOString()}`,
+        `User email: ${userEmail ?? "unknown"}`,
+        `User phone: ${userPhone ?? "unknown"}`,
+        "",
+        summary ?? "Mock AML screening reported a potential sanctions/watchlist match.",
+      ].join("\n");
+    }
     case "saas_tenant_invite": {
       const inviteUrl = readString(delivery.payload, "inviteUrl");
       const tenantName = readString(delivery.payload, "tenantName");
@@ -440,6 +462,17 @@ export const redactNotificationPayload = (
         previousIp: readOptionalString(payload, "previousIp"),
         currentUserAgent: readOptionalString(payload, "currentUserAgent"),
         previousUserAgent: readOptionalString(payload, "previousUserAgent"),
+      };
+    case "aml_review":
+      return {
+        userId: readOptionalString(payload, "userId"),
+        userEmail: readOptionalString(payload, "userEmail"),
+        userPhone: readOptionalString(payload, "userPhone"),
+        checkpoint: readOptionalString(payload, "checkpoint"),
+        riskLevel: readOptionalString(payload, "riskLevel"),
+        providerKey: readOptionalString(payload, "providerKey"),
+        summary: readOptionalString(payload, "summary"),
+        occurredAt: readOptionalString(payload, "occurredAt"),
       };
     case "saas_tenant_invite":
       return {
@@ -1087,6 +1120,41 @@ export async function sendAnomalousLoginAlert(
         previousIp: payload.previousIp ?? null,
         currentUserAgent: payload.currentUserAgent ?? null,
         previousUserAgent: payload.previousUserAgent ?? null,
+      },
+    },
+    database,
+  );
+}
+
+export async function sendAmlReviewNotification(
+  payload: {
+    email: string;
+    userId: number;
+    userEmail: string;
+    userPhone?: string | null;
+    checkpoint: string;
+    riskLevel: string;
+    providerKey: string;
+    summary?: string | null;
+    occurredAt: Date;
+  },
+  database?: NotificationDb,
+) {
+  return queueAuthNotification(
+    {
+      kind: "aml_review",
+      channel: "email",
+      recipient: normalizeEmail(payload.email),
+      subject: `AML review required for user #${payload.userId}`,
+      metadata: {
+        userId: String(payload.userId),
+        userEmail: payload.userEmail,
+        userPhone: payload.userPhone ?? null,
+        checkpoint: payload.checkpoint,
+        riskLevel: payload.riskLevel,
+        providerKey: payload.providerKey,
+        summary: payload.summary ?? null,
+        occurredAt: payload.occurredAt.toISOString(),
       },
     },
     database,

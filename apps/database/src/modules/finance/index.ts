@@ -5,3 +5,4 @@ export * from './payout-methods.js';
 export * from './deposits.js';
 export * from './withdrawals.js';
 export * from './operations.js';
+export * from './reconciliation-alerts.js';

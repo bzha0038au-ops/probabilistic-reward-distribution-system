@@ -1,6 +1,6 @@
 import 'dotenv/config';
 
-import { and, asc, desc, eq, inArray } from '@reward/database/orm';
+import { and, asc, desc, eq, inArray, sql } from '@reward/database/orm';
 import { createHash, createHmac } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
@@ -22,7 +22,13 @@ import {
   fairnessSeeds,
   freezeRecords,
   houseAccount,
+  kycDocuments,
+  kycProfiles,
+  kycReviewEvents,
   ledgerEntries,
+  legalDocumentAcceptances,
+  legalDocumentPublications,
+  legalDocuments,
   paymentProviders,
   paymentWebhookEvents,
   prizes,
@@ -39,10 +45,23 @@ import {
   SECURITY_ADMIN_PERMISSION_KEYS,
   type AdminPermissionKey,
 } from '../modules/admin-permission/definitions';
+import type { KycTier } from '@reward/shared-types/kyc';
+import { getConfig } from '../shared/config';
+import { toDecimal, toMoneyString } from '../shared/money';
+import { resetInMemoryRateLimiters } from '../shared/rate-limit';
+import { getRedis } from '../shared/redis';
 
 process.env.NODE_ENV ||= 'test';
 process.env.ADMIN_JWT_SECRET ||= 'integration-admin-secret-1234567890';
 process.env.USER_JWT_SECRET ||= 'integration-user-secret-1234567890';
+process.env.ADMIN_MFA_BREAK_GLASS_SECRET ||=
+  'integration-break-glass-secret-1234567890';
+
+const KYC_TIER_RANK: Record<KycTier, number> = {
+  tier_0: 0,
+  tier_1: 1,
+  tier_2: 2,
+};
 
 const authNotificationCaptures = vi.hoisted(() => ({
   passwordReset: [] as Array<{
@@ -61,6 +80,8 @@ const authNotificationCaptures = vi.hoisted(() => ({
     expiresAt: Date;
   }>,
   anomalousLogin: [] as Array<Record<string, unknown>>,
+  amlReview: [] as Array<Record<string, unknown>>,
+  saasTenantInvite: [] as Array<Record<string, unknown>>,
 }));
 
 vi.mock('../modules/auth/notification-service', () => {
@@ -126,6 +147,14 @@ vi.mock('../modules/auth/notification-service', () => {
       authNotificationCaptures.anomalousLogin.push(payload);
       return true;
     }),
+    sendAmlReviewNotification: vi.fn(async (payload) => {
+      authNotificationCaptures.amlReview.push(payload);
+      return true;
+    }),
+    sendSaasTenantInviteNotification: vi.fn(async (payload) => {
+      authNotificationCaptures.saasTenantInvite.push(payload);
+      return true;
+    }),
   };
 });
 
@@ -152,6 +181,7 @@ const ADMIN_ORIGIN = new URL(
   process.env.ADMIN_BASE_URL ?? 'http://127.0.0.1:5173'
 ).origin;
 const TEST_CSRF_TOKEN = 'integration-csrf-token';
+const TEST_ADMIN_BREAK_GLASS_CODE = process.env.ADMIN_MFA_BREAK_GLASS_SECRET!;
 
 type DbModule = typeof import('../db');
 type AppModule = typeof import('../app');
@@ -165,6 +195,8 @@ type AppInjectOptions = import('light-my-request').InjectOptions;
 let db: DbModule['db'] | null = null;
 let client: DbModule['client'] | null = null;
 let app: Awaited<ReturnType<AppModule['buildApp']>> | null = null;
+let appPromise: Promise<Awaited<ReturnType<AppModule['buildApp']>>> | null = null;
+let appModulePromise: Promise<AppModule> | null = null;
 let executeDraw: DrawModule['executeDraw'] | null = null;
 let topUpModule: TopUpModule | null = null;
 let withdrawModule: WithdrawModule | null = null;
@@ -192,14 +224,30 @@ const getClient = () => {
   return client;
 };
 
-const getApp = () => {
-  const appInstance = app;
-  if (!appInstance) {
-    throw new Error('Integration app not initialized.');
+const ensureApp = async () => {
+  if (app) {
+    return app;
   }
+
+  if (!appPromise) {
+    const modulePromise = appModulePromise ?? import('../app');
+    appModulePromise = modulePromise;
+
+    appPromise = modulePromise
+      .then(({ buildApp }) => buildApp())
+      .then((instance) => {
+        app = instance;
+        return instance;
+      });
+  }
+
+  return appPromise;
+};
+
+const getApp = () => {
   return {
-    inject: (options: AppInjectOptions) =>
-      appInstance.inject({
+    inject: async (options: AppInjectOptions) =>
+      (await ensureApp()).inject({
         remoteAddress: nextRequestIp(),
         ...options,
       }),
@@ -269,29 +317,139 @@ const resetDatabase = async () => {
   await getClient().unsafe(`TRUNCATE TABLE ${tableList} RESTART IDENTITY CASCADE`);
 };
 
+const clearRedisKeysByPatterns = async (patterns: string[]) => {
+  const redis = getRedis();
+  if (!redis) {
+    return;
+  }
+
+  for (const pattern of patterns) {
+    let cursor = '0';
+
+    do {
+      const [nextCursor, keys] = await redis.scan(
+        cursor,
+        'MATCH',
+        pattern,
+        'COUNT',
+        100,
+      );
+      cursor = nextCursor;
+
+      if (keys.length > 0) {
+        await redis.del(...keys);
+      }
+    } while (cursor !== '0');
+  }
+};
+
+const resetSharedCaches = async () => {
+  const { rateLimitRedisPrefix } = getConfig();
+  await clearRedisKeysByPatterns([
+    `${rateLimitRedisPrefix}:*`,
+    'saas:reward-envelope:*',
+    'reward:draw:probability_pool:v1',
+  ]);
+
+  const { invalidateProbabilityPool } = await import(
+    '../modules/draw/pool-cache'
+  );
+  await invalidateProbabilityPool();
+};
+
 const signPaymentWebhookPayload = (secret: string, payload: string) =>
   `sha256=${createHmac('sha256', secret).update(payload).digest('hex')}`;
 
-const seedDrawScenario = async () => {
+const seedWalletLedger = async (params: {
+  userId: number;
+  withdrawableBalance: string;
+  bonusBalance: string;
+  lockedBalance: string;
+  wageredAmount: string;
+}) => {
+  const database = getDb();
+  const withdrawableBalance = toDecimal(params.withdrawableBalance);
+  const bonusBalance = toDecimal(params.bonusBalance);
+  const lockedBalance = toDecimal(params.lockedBalance);
+  const wageredAmount = toDecimal(params.wageredAmount);
+
+  if (
+    withdrawableBalance.lt(0) ||
+    bonusBalance.lt(0) ||
+    lockedBalance.lt(0) ||
+    wageredAmount.lt(0)
+  ) {
+    throw new Error('seedUserWithWallet only supports non-negative balances.');
+  }
+
+  let withdrawableCursor = toDecimal(0);
+
+  const fundingAmount = withdrawableBalance.plus(lockedBalance).plus(wageredAmount);
+  if (fundingAmount.gt(0)) {
+    await database.insert(ledgerEntries).values({
+      userId: params.userId,
+      entryType: 'deposit_credit',
+      amount: toMoneyString(fundingAmount),
+      balanceBefore: toMoneyString(withdrawableCursor),
+      balanceAfter: toMoneyString(withdrawableCursor.plus(fundingAmount)),
+      referenceType: 'integration_seed',
+      metadata: { reason: 'integration_seed', seedBalanceType: 'withdrawable' },
+    });
+    withdrawableCursor = withdrawableCursor.plus(fundingAmount);
+  }
+
+  if (lockedBalance.gt(0)) {
+    await database.insert(ledgerEntries).values({
+      userId: params.userId,
+      entryType: 'withdraw_request',
+      amount: toMoneyString(lockedBalance.negated()),
+      balanceBefore: toMoneyString(withdrawableCursor),
+      balanceAfter: toMoneyString(withdrawableCursor.minus(lockedBalance)),
+      referenceType: 'integration_seed',
+      metadata: { reason: 'integration_seed', seedBalanceType: 'locked' },
+    });
+    withdrawableCursor = withdrawableCursor.minus(lockedBalance);
+  }
+
+  if (wageredAmount.gt(0)) {
+    await database.insert(ledgerEntries).values({
+      userId: params.userId,
+      entryType: 'draw_cost',
+      amount: toMoneyString(wageredAmount.negated()),
+      balanceBefore: toMoneyString(withdrawableCursor),
+      balanceAfter: toMoneyString(withdrawableCursor.minus(wageredAmount)),
+      referenceType: 'integration_seed',
+      metadata: { reason: 'integration_seed', seedBalanceType: 'wagered' },
+    });
+    withdrawableCursor = withdrawableCursor.minus(wageredAmount);
+  }
+
+  if (bonusBalance.gt(0)) {
+    await database.insert(ledgerEntries).values({
+      userId: params.userId,
+      entryType: 'gamification_reward',
+      amount: toMoneyString(bonusBalance),
+      balanceBefore: '0.00',
+      balanceAfter: toMoneyString(bonusBalance),
+      referenceType: 'integration_seed',
+      metadata: { reason: 'integration_seed', seedBalanceType: 'bonus' },
+    });
+  }
+};
+
+async function seedDrawScenario(params?: {
+  email?: string;
+}): Promise<{
+  user: typeof users.$inferSelect;
+  prize: typeof prizes.$inferSelect;
+}> {
   const database = getDb();
   await setConfigNumber('payout_control.max_big_prize_per_hour', '1');
-  const [user] = await database
-    .insert(users)
-    .values({
-      email: 'draw-user@example.com',
-      passwordHash: 'hashed-password',
-      role: 'user',
-      userPoolBalance: '0.00',
-    })
-    .returning();
-
-  await database.insert(userWallets).values({
-    userId: user.id,
+  const user = await seedUserWithWallet({
+    email: params?.email ?? 'draw-user@example.com',
     withdrawableBalance: '100.00',
-    bonusBalance: '0.00',
-    lockedBalance: '0.00',
-    wageredAmount: '0.00',
   });
+  await seedApprovedKycProfile(user.id, 'tier_1');
 
   const [prize] = await database
     .insert(prizes)
@@ -315,7 +473,7 @@ const seedDrawScenario = async () => {
   await invalidateProbabilityPool();
 
   return { user, prize };
-};
+}
 
 const seedUserWithWallet = async (params: {
   email: string;
@@ -343,8 +501,40 @@ const seedUserWithWallet = async (params: {
     wageredAmount: params.wageredAmount ?? '0.00',
   });
 
+  await seedWalletLedger({
+    userId: user.id,
+    withdrawableBalance: params.withdrawableBalance ?? '0.00',
+    bonusBalance: params.bonusBalance ?? '0.00',
+    lockedBalance: params.lockedBalance ?? '0.00',
+    wageredAmount: params.wageredAmount ?? '0.00',
+  });
+
   return user;
 };
+
+const listUserLedgerEntries = async (
+  userId: number,
+  options?: { includeIntegrationSeed?: boolean }
+) =>
+  getDb()
+    .select({
+      id: ledgerEntries.id,
+      entryType: ledgerEntries.entryType,
+      amount: ledgerEntries.amount,
+      referenceType: ledgerEntries.referenceType,
+      referenceId: ledgerEntries.referenceId,
+      metadata: ledgerEntries.metadata,
+    })
+    .from(ledgerEntries)
+    .where(
+      and(
+        eq(ledgerEntries.userId, userId),
+        options?.includeIntegrationSeed
+          ? sql`true`
+          : sql`${ledgerEntries.referenceType} IS DISTINCT FROM 'integration_seed'`
+      )
+    )
+    .orderBy(asc(ledgerEntries.id));
 
 const seedQuickEightScenario = async (params?: {
   email?: string;
@@ -355,6 +545,7 @@ const seedQuickEightScenario = async (params?: {
     email: params?.email ?? 'quick-eight-user@example.com',
     withdrawableBalance: params?.withdrawableBalance ?? '100.00',
   });
+  await seedApprovedKycProfile(user.id, 'tier_1');
 
   await getDb()
     .insert(houseAccount)
@@ -384,6 +575,49 @@ const seedBlackjackScenario = async (params?: {
     prizePoolBalance: params?.prizePoolBalance ?? '1000.00',
   });
 
+const seedApprovedKycProfile = async (userId: number, targetTier: KycTier) => {
+  const now = new Date();
+  const [existing] = await getDb()
+    .select({
+      id: kycProfiles.id,
+      currentTier: kycProfiles.currentTier,
+    })
+    .from(kycProfiles)
+    .where(eq(kycProfiles.userId, userId))
+    .limit(1);
+
+  if (!existing) {
+    await getDb().insert(kycProfiles).values({
+      userId,
+      currentTier: targetTier,
+      status: 'approved',
+      submittedAt: now,
+      reviewedAt: now,
+      updatedAt: now,
+    });
+    return;
+  }
+
+  const currentTier =
+    KYC_TIER_RANK[existing.currentTier as KycTier] >= KYC_TIER_RANK[targetTier]
+      ? (existing.currentTier as KycTier)
+      : targetTier;
+
+  await getDb()
+    .update(kycProfiles)
+    .set({
+      currentTier,
+      requestedTier: null,
+      status: 'approved',
+      rejectionReason: null,
+      freezeRecordId: null,
+      reviewedByAdminId: null,
+      reviewedAt: now,
+      updatedAt: now,
+    })
+    .where(eq(kycProfiles.id, existing.id));
+};
+
 const verifyUserContacts = async (
   userId: number,
   requirements: { email?: boolean; phone?: boolean }
@@ -403,6 +637,15 @@ const verifyUserContacts = async (
     })
     .where(eq(users.id, userId))
     .returning();
+
+  const targetTier = requirements.phone
+    ? 'tier_2'
+    : requirements.email
+      ? 'tier_1'
+      : null;
+  if (user && targetTier) {
+    await seedApprovedKycProfile(user.id, targetTier);
+  }
 
   return user ?? null;
 };
@@ -473,6 +716,7 @@ const resetAuthNotificationCaptures = () => {
   authNotificationCaptures.emailVerification.length = 0;
   authNotificationCaptures.phoneVerification.length = 0;
   authNotificationCaptures.anomalousLogin.length = 0;
+  authNotificationCaptures.amlReview.length = 0;
 };
 
 const extractTokenFromUrl = (url: string) => {
@@ -490,7 +734,27 @@ const buildAdminCookieHeaders = (token: string) => ({
   'content-type': 'application/json',
 });
 
+const buildAdminBreakGlassHeaders = (token: string) => ({
+  ...buildAdminCookieHeaders(token),
+  'x-admin-break-glass-code': TEST_ADMIN_BREAK_GLASS_CODE,
+});
+
+const buildUserAuthHeaders = (token: string) => ({
+  authorization: `Bearer ${token}`,
+  'content-type': 'application/json',
+});
+
 const registerUser = async (email: string, password = 'secret-123') => {
+  const legalDocumentsResponse = await getApp().inject({
+    method: 'GET',
+    url: '/legal/current',
+  });
+
+  expect(legalDocumentsResponse.statusCode).toBe(200);
+  const legalPayload = legalDocumentsResponse.json().data as {
+    items: Array<{ slug: string; version: string }>;
+  };
+
   const response = await getApp().inject({
     method: 'POST',
     url: '/auth/register',
@@ -500,6 +764,10 @@ const registerUser = async (email: string, password = 'secret-123') => {
     payload: {
       email,
       password,
+      legalAcceptances: legalPayload.items.map((document) => ({
+        slug: document.slug,
+        version: document.version,
+      })),
     },
   });
 
@@ -607,12 +875,57 @@ const loginAdmin = async (email: string, password: string, totpCode?: string) =>
 };
 
 const enrollAdminMfa = async (params: { email: string; password: string }) => {
-  const initialSession = await loginAdmin(params.email, params.password);
+  const { verifyAdminCredentials } = await import('../modules/auth/service');
+  const {
+    confirmAdminMfaEnrollment,
+    createAdminMfaEnrollment,
+    generateTotpCode,
+  } = await import('../modules/admin-mfa/service');
+  const { createAdminSessionToken } = await import('../shared/admin-session');
 
+  const verified = await verifyAdminCredentials(params.email, params.password);
+  expect(verified).toBeTruthy();
+  if (!verified) {
+    throw new Error(`Unable to verify admin credentials for ${params.email}.`);
+  }
+
+  const initialSession = await createAdminSessionToken({
+    adminId: verified.admin.id,
+    userId: verified.user.id,
+    email: verified.user.email,
+    role: 'admin',
+    mfaEnabled: false,
+    mfaRecoveryMode: 'none',
+  });
+
+  const enrollment = await createAdminMfaEnrollment({
+    adminId: verified.admin.id,
+    email: verified.user.email,
+    mfaEnabled: verified.admin.mfaEnabled,
+  });
+  const totpCode = generateTotpCode(enrollment.secret);
+  const confirmed = await confirmAdminMfaEnrollment({
+    currentAdmin: {
+      adminId: verified.admin.id,
+      userId: verified.user.id,
+      email: verified.user.email,
+      sessionId: initialSession.sessionId,
+    },
+    enrollmentToken: enrollment.enrollmentToken,
+    totpCode,
+  });
+
+  return {
+    token: confirmed.token,
+    totpCode,
+  };
+};
+
+const enrollUserMfa = async (params: { token: string }) => {
   const enrollmentResponse = await getApp().inject({
     method: 'POST',
-    url: '/admin/mfa/enrollment',
-    headers: buildAdminCookieHeaders(initialSession.token),
+    url: '/auth/user/mfa/enrollment',
+    headers: buildUserAuthHeaders(params.token),
     payload: {},
   });
 
@@ -622,25 +935,23 @@ const enrollAdminMfa = async (params: { email: string; password: string }) => {
     enrollmentToken: string;
   };
 
-  const { generateTotpCode } = await import('../modules/admin-mfa/service');
+  const { generateTotpCode } = await import('../modules/mfa/totp');
+  const totpCode = generateTotpCode(enrollmentPayload.secret);
   const verifyResponse = await getApp().inject({
     method: 'POST',
-    url: '/admin/mfa/verify',
-    headers: buildAdminCookieHeaders(initialSession.token),
+    url: '/auth/user/mfa/verify',
+    headers: buildUserAuthHeaders(params.token),
     payload: {
       enrollmentToken: enrollmentPayload.enrollmentToken,
-      totpCode: generateTotpCode(enrollmentPayload.secret),
+      totpCode,
     },
   });
 
   expect(verifyResponse.statusCode).toBe(200);
-  const verifyPayload = verifyResponse.json().data as {
-    token: string;
-  };
 
   return {
-    token: verifyPayload.token,
-    totpCode: generateTotpCode(enrollmentPayload.secret),
+    secret: enrollmentPayload.secret,
+    totpCode,
   };
 };
 
@@ -670,11 +981,11 @@ const normalizeIntegrationTags = (
 const shouldRunIntegrationTest = (tags: IntegrationTestTag[]) =>
   activeIntegrationTags.size === 0 || tags.some((tag) => activeIntegrationTags.has(tag));
 
+const INTEGRATION_TEST_TIMEOUT_MS = 15_000;
 const INTEGRATION_HOOK_TIMEOUT_MS = 60_000;
 
 const initializeRuntime = async () => {
   const dbModule = await import('../db');
-  const appModule = await import('../app');
   const drawModule = await import('../modules/draw/service');
   const topUpServiceModule = await import('../modules/top-up');
   const withdrawServiceModule = await import('../modules/withdraw/service');
@@ -684,12 +995,12 @@ const initializeRuntime = async () => {
   db = dbModule.db;
   client = dbModule.client;
   await ensureMigrationsApplied();
+  appModulePromise = null;
   executeDraw = drawModule.executeDraw;
   topUpModule = topUpServiceModule;
   withdrawModule = withdrawServiceModule;
   riskModule = riskServiceModule;
   createUserSessionToken = userSessionModule.createUserSessionToken;
-  app = await appModule.buildApp();
 };
 
 const teardownRuntime = async () => {
@@ -697,6 +1008,9 @@ const teardownRuntime = async () => {
     await app.close();
     app = null;
   }
+
+  appPromise = null;
+  appModulePromise = null;
 
   if (client) {
     await client.end();
@@ -720,6 +1034,8 @@ export const describeIntegrationSuite = (name: string, register: () => void) => 
     beforeEach(async () => {
       await resetDatabase();
       resetAuthNotificationCaptures();
+      await resetSharedCaches();
+      resetInMemoryRateLimiters();
     }, INTEGRATION_HOOK_TIMEOUT_MS);
 
     afterAll(async () => {
@@ -736,7 +1052,14 @@ export const itIntegration = (
   maybeFn?: IntegrationTestFn
 ) => {
   const hasOptions = typeof optionsOrFn !== 'function';
-  const options = hasOptions ? optionsOrFn : undefined;
+  const options = hasOptions
+    ? {
+        timeout: INTEGRATION_TEST_TIMEOUT_MS,
+        ...optionsOrFn,
+      }
+    : {
+        timeout: INTEGRATION_TEST_TIMEOUT_MS,
+      };
   const fn = (hasOptions ? maybeFn : optionsOrFn) as IntegrationTestFn | undefined;
 
   if (!fn) {
@@ -749,7 +1072,7 @@ export const itIntegration = (
   void tag;
 
   if (shouldRun) {
-    return options ? it(name, testOptions, fn) : it(name, fn);
+    return it(name, testOptions, fn);
   }
 
   return it(name, { ...testOptions, skip: true }, fn);
@@ -763,6 +1086,7 @@ export {
   CSRF_HEADER,
   FINANCE_ADMIN_PERMISSION_KEYS,
   SECURITY_ADMIN_PERMISSION_KEYS,
+  TEST_ADMIN_BREAK_GLASS_CODE,
   TEST_CSRF_TOKEN,
   adminActions,
   adminPermissions,
@@ -775,7 +1099,9 @@ export {
   authTokens,
   bankCards,
   blackjackGames,
+  buildAdminBreakGlassHeaders,
   buildAdminCookieHeaders,
+  buildUserAuthHeaders,
   createHash,
   createHmac,
   cryptoChainTransactions,
@@ -785,6 +1111,7 @@ export {
   desc,
   drawRecords,
   enrollAdminMfa,
+  enrollUserMfa,
   eq,
   expect,
   expectPresent,
@@ -803,9 +1130,16 @@ export {
   houseAccount,
   inArray,
   invalidatePoolCache,
+  kycDocuments,
+  kycProfiles,
+  kycReviewEvents,
   ledgerEntries,
+  legalDocumentAcceptances,
+  legalDocumentPublications,
+  legalDocuments,
   loginAdmin,
   loginUser,
+  listUserLedgerEntries,
   paymentProviders,
   paymentWebhookEvents,
   prizes,
@@ -813,6 +1147,7 @@ export {
   registerUser,
   seedAdminAccount,
   seedBlackjackScenario,
+  seedApprovedKycProfile,
   seedDrawScenario,
   seedQuickEightScenario,
   seedUserWithWallet,

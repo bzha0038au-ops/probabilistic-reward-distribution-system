@@ -1,21 +1,40 @@
 import { createHash } from "node:crypto";
+import Decimal from "decimal.js";
 import { API_ERROR_CODES } from "@reward/shared-types/api";
 import {
   saasBillingAccountVersions,
   saasBillingRuns,
   saasBillingTopUps,
 } from "@reward/database";
+import { saasDecisionTypeValues } from "@reward/shared-types/saas";
 import type {
   PrizeEngineApiKeyScope,
+  SaasBillingDecisionBreakdown,
+  SaasBillingDecisionPricing,
+  SaasBillingDecisionPricingInput,
   SaasBillingRun,
   SaasBillingRunCreate,
+  SaaSEnvironment,
+  SaasDecisionType,
 } from "@reward/shared-types/saas";
 
 import { badRequestError } from "../../shared/errors";
 import { toMoneyString } from "../../shared/money";
 import type { StripeEvent, StripeInvoice } from "./stripe";
 
-export const BILLING_DRAW_EVENT_TYPE: PrizeEngineApiKeyScope = "draw:write";
+export const BILLING_REWARD_EVENT_TYPE: PrizeEngineApiKeyScope = "reward:write";
+export const BILLING_LEGACY_DRAW_EVENT_TYPE: PrizeEngineApiKeyScope =
+  "draw:write";
+export const BILLING_LIVE_ENVIRONMENT: SaaSEnvironment = "live";
+export const BILLING_REWARD_EVENT_TYPES: PrizeEngineApiKeyScope[] = [
+  BILLING_REWARD_EVENT_TYPE,
+  BILLING_LEGACY_DRAW_EVENT_TYPE,
+];
+export const DEFAULT_BILLING_DECISION_TYPE: SaasDecisionType = "mute";
+
+const BILLING_DECISION_PRICING_METADATA_KEY = "decisionPricing";
+const BILLING_DECISION_BREAKDOWN_METADATA_KEY = "decisionBreakdown";
+const saasDecisionTypeSet = new Set<SaasDecisionType>(saasDecisionTypeValues);
 
 export const BILLING_RUN_TERMINAL_STATUSES = new Set<SaasBillingRun["status"]>([
   "paid",
@@ -183,6 +202,205 @@ export const selectBillingAccountVersionForPeriod = (
   return latestAtOrBeforeStart ?? earliestWithinPeriod;
 };
 
+const toDecisionPriceString = (value: Decimal.Value) =>
+  new Decimal(value ?? 0).toFixed(4);
+
+const readDecimalValue = (value: unknown, fallback: Decimal.Value) =>
+  typeof value === "string" || typeof value === "number" ? value : fallback;
+
+const parseDecisionType = (value: unknown): SaasDecisionType | null =>
+  typeof value === "string" && saasDecisionTypeSet.has(value as SaasDecisionType)
+    ? (value as SaasDecisionType)
+    : null;
+
+export const buildLegacyDecisionPricing = (
+  drawFee: Decimal.Value,
+): SaasBillingDecisionPricing => {
+  const normalized = toDecisionPriceString(drawFee);
+  return {
+    reject: normalized,
+    mute: normalized,
+    payout: normalized,
+  };
+};
+
+export const resolveBillingDecisionPricing = (
+  metadata: unknown,
+  drawFee: Decimal.Value,
+): SaasBillingDecisionPricing => {
+  const fallback = buildLegacyDecisionPricing(drawFee);
+  const source = isRecord(metadata)
+    ? Reflect.get(metadata, BILLING_DECISION_PRICING_METADATA_KEY)
+    : null;
+  const pricing = isRecord(source) ? source : null;
+
+  return {
+    reject: toDecisionPriceString(
+      readDecimalValue(pricing?.reject, fallback.reject),
+    ),
+    mute: toDecisionPriceString(readDecimalValue(pricing?.mute, fallback.mute)),
+    payout: toDecisionPriceString(
+      readDecimalValue(pricing?.payout, fallback.payout),
+    ),
+  };
+};
+
+export const attachBillingDecisionPricingMetadata = (
+  metadata: Record<string, unknown> | null,
+  decisionPricing?: SaasBillingDecisionPricingInput | null,
+) => {
+  if (!decisionPricing) {
+    return metadata;
+  }
+
+  return {
+    ...(metadata ?? {}),
+    [BILLING_DECISION_PRICING_METADATA_KEY]: {
+      reject: toDecisionPriceString(decisionPricing.reject),
+      mute: toDecisionPriceString(decisionPricing.mute),
+      payout: toDecisionPriceString(decisionPricing.payout),
+    },
+  };
+};
+
+export const isBillingRewardEventType = (eventType: PrizeEngineApiKeyScope) =>
+  BILLING_REWARD_EVENT_TYPES.includes(eventType);
+
+export const resolveUsageEventDecisionType = (payload: {
+  eventType: PrizeEngineApiKeyScope;
+  decisionType?: string | null;
+  metadata?: Record<string, unknown> | null;
+}): SaasDecisionType | null => {
+  if (!isBillingRewardEventType(payload.eventType)) {
+    return null;
+  }
+
+  const explicitDecisionType = parseDecisionType(payload.decisionType);
+  if (explicitDecisionType) {
+    return explicitDecisionType;
+  }
+
+  const metadataDecisionType = parseDecisionType(
+    Reflect.get(payload.metadata ?? {}, "decisionType"),
+  );
+  if (metadataDecisionType) {
+    return metadataDecisionType;
+  }
+
+  const status = isRecord(payload.metadata)
+    ? readStringField(payload.metadata, "status")
+    : null;
+  if (status === "won") {
+    return "payout";
+  }
+  if (status === "miss") {
+    return "mute";
+  }
+
+  return DEFAULT_BILLING_DECISION_TYPE;
+};
+
+export const readBillingRunDecisionBreakdown = (
+  metadata: unknown,
+): SaasBillingDecisionBreakdown[] => {
+  const source = isRecord(metadata)
+    ? Reflect.get(metadata, BILLING_DECISION_BREAKDOWN_METADATA_KEY)
+    : null;
+  if (!Array.isArray(source)) {
+    return [];
+  }
+
+  return source.flatMap((item) => {
+    if (!isRecord(item)) {
+      return [];
+    }
+
+    const decisionType = parseDecisionType(item.decisionType);
+    const units = Number(item.units ?? 0);
+    if (!decisionType || !Number.isFinite(units) || units < 0) {
+      return [];
+    }
+
+    return [
+      {
+        decisionType,
+        units,
+        unitAmount: toDecisionPriceString(readDecimalValue(item.unitAmount, 0)),
+        totalAmount: toMoneyString(readDecimalValue(item.totalAmount, 0)),
+      },
+    ];
+  });
+};
+
+export const summarizeUsageEventsForBilling = (
+  usageEvents: Array<{
+    eventType: PrizeEngineApiKeyScope;
+    decisionType?: string | null;
+    units: number;
+    amount: string;
+    metadata?: Record<string, unknown> | null;
+  }>,
+  decisionPricing: SaasBillingDecisionPricing,
+) => {
+  let usageFeeAmount = new Decimal(0);
+  let drawCount = 0;
+  const breakdown = new Map<
+    SaasDecisionType,
+    { units: number; totalAmount: Decimal }
+  >();
+
+  for (const usageEvent of usageEvents) {
+    const units = Number.isFinite(Number(usageEvent.units))
+      ? Math.max(Number(usageEvent.units), 0)
+      : 0;
+
+    if (isBillingRewardEventType(usageEvent.eventType)) {
+      const decisionType =
+        resolveUsageEventDecisionType(usageEvent) ??
+        DEFAULT_BILLING_DECISION_TYPE;
+      const unitAmount = new Decimal(decisionPricing[decisionType]);
+      const totalAmount = unitAmount.mul(units);
+
+      drawCount += units;
+      usageFeeAmount = usageFeeAmount.plus(totalAmount);
+
+      const current = breakdown.get(decisionType) ?? {
+        units: 0,
+        totalAmount: new Decimal(0),
+      };
+      breakdown.set(decisionType, {
+        units: current.units + units,
+        totalAmount: current.totalAmount.plus(totalAmount),
+      });
+      continue;
+    }
+
+    usageFeeAmount = usageFeeAmount.plus(usageEvent.amount ?? "0");
+  }
+
+  const decisionBreakdown = saasDecisionTypeValues.flatMap((decisionType) => {
+    const item = breakdown.get(decisionType);
+    if (!item || item.units <= 0) {
+      return [];
+    }
+
+    return [
+      {
+        decisionType,
+        units: item.units,
+        unitAmount: decisionPricing[decisionType],
+        totalAmount: item.totalAmount.toFixed(2),
+      } satisfies SaasBillingDecisionBreakdown,
+    ];
+  });
+
+  return {
+    usageFeeAmount: usageFeeAmount.toFixed(2),
+    drawCount,
+    decisionBreakdown,
+  };
+};
+
 const buildSaasStripeIdempotencyKey = (
   prefix: string,
   parts: Array<string | number | boolean | null | undefined>,
@@ -202,6 +420,7 @@ export const buildBillingRunStripeFingerprint = (
     | "baseFeeAmount"
     | "usageFeeAmount"
     | "stripeCustomerId"
+    | "metadata"
   >,
 ) =>
   createHash("sha256")
@@ -215,6 +434,12 @@ export const buildBillingRunStripeFingerprint = (
         toMoneyString(run.baseFeeAmount),
         toMoneyString(run.usageFeeAmount),
         run.stripeCustomerId ?? null,
+        readBillingRunDecisionBreakdown(run.metadata).map((item) => [
+          item.decisionType,
+          item.units,
+          item.unitAmount,
+          item.totalAmount,
+        ]),
       ]),
     )
     .digest("hex");
@@ -230,6 +455,7 @@ export const buildBillingRunInvoiceCreateIdempotencyKey = (
     | "baseFeeAmount"
     | "usageFeeAmount"
     | "stripeCustomerId"
+    | "metadata"
   >,
 ) =>
   buildSaasStripeIdempotencyKey("saas-billing-run-invoice-create", [
@@ -247,8 +473,9 @@ export const buildBillingRunInvoiceLineItemIdempotencyKey = (
     | "baseFeeAmount"
     | "usageFeeAmount"
     | "stripeCustomerId"
+    | "metadata"
   >,
-  lineType: "base_fee" | "usage_fee",
+  lineType: string,
 ) =>
   buildSaasStripeIdempotencyKey("saas-billing-run-invoice-line-item", [
     buildBillingRunStripeFingerprint(run),
@@ -266,6 +493,7 @@ export const buildBillingRunInvoiceActionIdempotencyKey = (
     | "baseFeeAmount"
     | "usageFeeAmount"
     | "stripeCustomerId"
+    | "metadata"
   >,
   action: "finalize" | "send" | "pay",
   extra?: string | number | boolean | null,

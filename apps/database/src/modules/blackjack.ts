@@ -34,6 +34,7 @@ export const blackjackGames = pgTable(
     })
       .notNull()
       .default("active"),
+    turnDeadlineAt: timestamp("turn_deadline_at", { withTimezone: true }),
     metadata: jsonb("metadata"),
     settledAt: timestamp("settled_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -56,6 +57,10 @@ export const blackjackGames = pgTable(
     statusCreatedIdx: index("blackjack_games_status_created_idx").on(
       table.status,
       table.createdAt,
+    ),
+    statusTurnDeadlineIdx: index("blackjack_games_status_turn_deadline_idx").on(
+      table.status,
+      table.turnDeadlineAt,
     ),
   }),
 );

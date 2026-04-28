@@ -49,8 +49,10 @@ It owns:
 - Typed access to `/v1/engine/*`.
 - Project API key auth wiring through `getApiKey` or request overrides.
 - Partner-specific header injection through `getHeaders`.
-- Prize-engine concepts such as overview, fairness commit/reveal, draws, and
-  player ledger queries.
+- Prize-engine concepts such as overview, fairness commit/reveal,
+  behavior-driven rewards, and player ledger queries.
+- The canonical reward route `POST /v1/engine/rewards`, with
+  `POST /v1/engine/draws` retained only as a legacy gacha transition surface.
 
 It does not own:
 

@@ -10,7 +10,12 @@ import { USER_API_ROUTES } from '@/lib/api/user';
 const browserRouteExpectations = [
   ['GET', USER_API_ROUTES.auth.session],
   ['DELETE', USER_API_ROUTES.auth.session],
+  ['GET', USER_API_ROUTES.auth.realtimeToken],
   ['GET', '/transactions'],
+  ['GET', '/kyc/profile'],
+  ['POST', '/kyc/profile'],
+  ['GET', '/hand-history/blackjack%3A12'],
+  ['GET', '/hand-history/holdem%3A12/evidence-bundle'],
   ['GET', '/bank-cards'],
   ['POST', '/bank-cards'],
   ['GET', '/crypto-deposit-channels'],
@@ -27,6 +32,22 @@ const browserRouteExpectations = [
   ['POST', '/auth/phone-verification/confirm'],
   ['GET', '/rewards/center'],
   ['POST', '/rewards/claim'],
+  ['GET', '/markets'],
+  ['GET', '/markets/portfolio'],
+  ['GET', '/markets/history'],
+  ['GET', '/markets/12'],
+  ['POST', '/markets/12/positions'],
+  ['GET', USER_API_ROUTES.holdemTables],
+  ['POST', USER_API_ROUTES.holdemTables],
+  ['GET', '/holdem/tables/12'],
+  ['GET', '/holdem/tables/12/messages'],
+  ['POST', '/holdem/tables/12/messages'],
+  ['POST', '/holdem/tables/12/join'],
+  ['POST', '/holdem/tables/12/leave'],
+  ['POST', '/holdem/tables/12/presence'],
+  ['POST', '/holdem/tables/12/start'],
+  ['POST', '/holdem/tables/12/seat-mode'],
+  ['POST', '/holdem/tables/12/action'],
   ['GET', USER_API_ROUTES.blackjack],
   ['POST', USER_API_ROUTES.blackjackStart],
   ['POST', '/blackjack/12/action'],
@@ -67,6 +88,139 @@ describe('api proxy helpers', () => {
       normalizedPath: '/rewards/claim',
       requiresAuth: true,
       methods: ['POST'],
+      methodAllowed: true,
+    });
+
+    expect(resolveBackendProxyRoute('GET', '/markets')).toEqual({
+      matched: true,
+      normalizedPath: '/markets',
+      requiresAuth: true,
+      methods: ['GET'],
+      methodAllowed: true,
+    });
+
+    expect(resolveBackendProxyRoute('GET', '/markets/portfolio')).toEqual({
+      matched: true,
+      normalizedPath: '/markets/portfolio',
+      requiresAuth: true,
+      methods: ['GET'],
+      methodAllowed: true,
+    });
+
+    expect(resolveBackendProxyRoute('GET', '/markets/history')).toEqual({
+      matched: true,
+      normalizedPath: '/markets/history',
+      requiresAuth: true,
+      methods: ['GET'],
+      methodAllowed: true,
+    });
+
+    expect(resolveBackendProxyRoute('GET', '/markets/12')).toEqual({
+      matched: true,
+      normalizedPath: '/markets/12',
+      requiresAuth: true,
+      methods: ['GET'],
+      methodAllowed: true,
+    });
+
+    expect(resolveBackendProxyRoute('POST', '/markets/12/positions')).toEqual({
+      matched: true,
+      normalizedPath: '/markets/12/positions',
+      requiresAuth: true,
+      methods: ['POST'],
+      methodAllowed: true,
+    });
+
+    expect(resolveBackendProxyRoute('GET', '/holdem/tables')).toEqual({
+      matched: true,
+      normalizedPath: '/holdem/tables',
+      requiresAuth: true,
+      methods: ['GET', 'POST'],
+      methodAllowed: true,
+    });
+
+    expect(resolveBackendProxyRoute('POST', '/holdem/tables')).toEqual({
+      matched: true,
+      normalizedPath: '/holdem/tables',
+      requiresAuth: true,
+      methods: ['GET', 'POST'],
+      methodAllowed: true,
+    });
+
+    expect(resolveBackendProxyRoute('GET', '/holdem/tables/12')).toEqual({
+      matched: true,
+      normalizedPath: '/holdem/tables/12',
+      requiresAuth: true,
+      methods: ['GET'],
+      methodAllowed: true,
+    });
+
+    expect(resolveBackendProxyRoute('GET', '/holdem/tables/12/messages')).toEqual({
+      matched: true,
+      normalizedPath: '/holdem/tables/12/messages',
+      requiresAuth: true,
+      methods: ['GET', 'POST'],
+      methodAllowed: true,
+    });
+
+    expect(resolveBackendProxyRoute('POST', '/holdem/tables/12/messages')).toEqual({
+      matched: true,
+      normalizedPath: '/holdem/tables/12/messages',
+      requiresAuth: true,
+      methods: ['GET', 'POST'],
+      methodAllowed: true,
+    });
+
+    expect(resolveBackendProxyRoute('POST', '/holdem/tables/12/join')).toEqual({
+      matched: true,
+      normalizedPath: '/holdem/tables/12/join',
+      requiresAuth: true,
+      methods: ['POST'],
+      methodAllowed: true,
+    });
+
+    expect(resolveBackendProxyRoute('POST', '/holdem/tables/12/presence')).toEqual({
+      matched: true,
+      normalizedPath: '/holdem/tables/12/presence',
+      requiresAuth: true,
+      methods: ['POST'],
+      methodAllowed: true,
+    });
+
+    expect(resolveBackendProxyRoute('POST', '/holdem/tables/12/seat-mode')).toEqual({
+      matched: true,
+      normalizedPath: '/holdem/tables/12/seat-mode',
+      requiresAuth: true,
+      methods: ['POST'],
+      methodAllowed: true,
+    });
+
+    expect(resolveBackendProxyRoute('POST', '/holdem/tables/12/action')).toEqual({
+      matched: true,
+      normalizedPath: '/holdem/tables/12/action',
+      requiresAuth: true,
+      methods: ['POST'],
+      methodAllowed: true,
+    });
+
+    expect(resolveBackendProxyRoute('GET', '/hand-history/blackjack%3A12')).toEqual({
+      matched: true,
+      normalizedPath: '/hand-history/blackjack%3A12',
+      requiresAuth: true,
+      methods: ['GET'],
+      methodAllowed: true,
+    });
+
+    expect(
+      resolveBackendProxyRoute(
+        'GET',
+        '/hand-history/holdem%3A12/evidence-bundle',
+      ),
+    ).toEqual({
+      matched: true,
+      normalizedPath: '/hand-history/holdem%3A12/evidence-bundle',
+      requiresAuth: true,
+      methods: ['GET'],
       methodAllowed: true,
     });
 
@@ -142,6 +296,14 @@ describe('api proxy helpers', () => {
       methodAllowed: true,
     });
 
+    expect(resolveBackendProxyRoute('GET', '/auth/user/realtime-token')).toEqual({
+      matched: true,
+      normalizedPath: '/auth/user/realtime-token',
+      requiresAuth: true,
+      methods: ['GET'],
+      methodAllowed: true,
+    });
+
     expect(
       resolveBackendProxyRoute('POST', '/auth/phone-verification/request')
     ).toEqual({
@@ -200,6 +362,11 @@ describe('api proxy helpers', () => {
     expect(resolveBackendProxyRoute('POST', '/blackjack/not-a-number/action')).toEqual({
       matched: false,
       normalizedPath: '/blackjack/not-a-number/action',
+    });
+
+    expect(resolveBackendProxyRoute('GET', '/holdem/tables/not-a-number')).toEqual({
+      matched: false,
+      normalizedPath: '/holdem/tables/not-a-number',
     });
 
     expect(resolveBackendProxyRoute('PATCH', '/bank-cards/abc/default')).toEqual({

@@ -26,12 +26,19 @@ import { toDecimal, toMoneyString } from "../../shared/money";
 import { parseSchema } from "../../shared/validation";
 import { readSqlRows } from "../../shared/sql-result";
 import { ensureFairnessSeed } from "../fairness/service";
+import { assertKycStakeAllowed } from "../kyc/service";
+import { appendRoundEvents } from "../hand-history/service";
+import {
+  buildRoundId,
+  QUICK_EIGHT_ROUND_TYPE,
+} from "../hand-history/round-id";
 import {
   applyTransactionalGamePayoutCredit,
   applyTransactionalGameStakeDebit,
   assertTransactionalGamePoolCoverage,
   loadTransactionalGamePoolSnapshot,
 } from "../shared/transactional-game-runner";
+import { assertWalletLedgerInvariant } from "../wallet/invariant-service";
 
 const QUICK_EIGHT_REFERENCE_TYPE = "quick_eight";
 
@@ -190,6 +197,7 @@ export async function playQuickEightInTransaction(
       code: API_ERROR_CODES.STAKE_AMOUNT_OUT_OF_RANGE,
     });
   }
+  await assertKycStakeAllowed(userId, toMoneyString(stakeAmount), tx);
 
   const selectedNumbers = normalizeNumbers(options.numbers);
   const { clientNonce, nonceSource } = resolveClientNonce(options.clientNonce);
@@ -286,8 +294,61 @@ export async function playQuickEightInTransaction(
       houseMetadata: { userId, hitCount },
     });
 
+  await appendRoundEvents(tx, {
+    roundType: QUICK_EIGHT_ROUND_TYPE,
+    roundEntityId: round.id,
+    userId,
+    events: [
+      {
+        type: "round_started",
+        actor: "system",
+        payload: {
+          stakeAmount: toMoneyString(stakeAmount),
+          totalStake: toMoneyString(stakeAmount),
+          selectedNumbers,
+          fairness,
+          payoutTable: QUICK_EIGHT_CONFIG.payoutTable,
+        },
+      },
+      {
+        type: "stake_debited",
+        actor: "system",
+        payload: {
+          amount: toMoneyString(stakeAmount),
+          balanceBefore: toMoneyString(walletBefore),
+          balanceAfter: toMoneyString(walletAfterStake),
+          totalStake: toMoneyString(stakeAmount),
+          entryType: "quick_eight_stake",
+        },
+      },
+      {
+        type: "numbers_drawn",
+        actor: "system",
+        payload: {
+          drawnNumbers,
+          matchedNumbers,
+          hitCount,
+          multiplier: toMoneyString(multiplier),
+        },
+      },
+      {
+        type: "round_settled",
+        actor: "system",
+        payload: {
+          status,
+          payoutAmount: toMoneyString(payoutAmount),
+          totalStake: toMoneyString(stakeAmount),
+          hitCount,
+          matchedNumbers,
+          poolBalanceBefore: toMoneyString(poolSnapshot.poolBalance),
+          poolBalanceAfter: toMoneyString(poolBalanceAfter),
+        },
+      },
+    ],
+  });
+
   if (payoutAmount.gt(0)) {
-    await applyTransactionalGamePayoutCredit({
+    const walletAfterPayout = await applyTransactionalGamePayoutCredit({
       tx,
       userId,
       reference: {
@@ -308,10 +369,32 @@ export async function playQuickEightInTransaction(
         multiplier: toMoneyString(multiplier),
       },
     });
+
+    await appendRoundEvents(tx, {
+      roundType: QUICK_EIGHT_ROUND_TYPE,
+      roundEntityId: round.id,
+      userId,
+      events: [
+        {
+          type: "payout_credited",
+          actor: "system",
+          payload: {
+            amount: toMoneyString(payoutAmount),
+            balanceBefore: toMoneyString(walletAfterStake),
+            balanceAfter: toMoneyString(walletAfterPayout),
+            entryType: "quick_eight_payout",
+          },
+        },
+      ],
+    });
   }
 
   return {
     id: round.id,
+    roundId: buildRoundId({
+      roundType: QUICK_EIGHT_ROUND_TYPE,
+      roundEntityId: round.id,
+    }),
     userId,
     selectedNumbers,
     drawnNumbers,
@@ -330,7 +413,12 @@ export async function playQuickEight(
   userId: number,
   options: PlayQuickEightOptions,
 ) {
-  return db.transaction((tx) =>
-    playQuickEightInTransaction(tx, userId, options),
-  );
+  return db.transaction(async (tx) => {
+    const result = await playQuickEightInTransaction(tx, userId, options);
+    await assertWalletLedgerInvariant(tx, userId, {
+      service: "quick_eight",
+      operation: "playQuickEight",
+    });
+    return result;
+  });
 }

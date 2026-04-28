@@ -5,6 +5,12 @@ import { userWallets, users } from '@reward/database';
 import { hashPassword } from '../auth/password';
 import { revokeAuthSessions } from '../session/service';
 
+type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+type CreateUserWithWalletOptions = {
+  afterCreate?: (tx: DbTransaction, user: typeof users.$inferSelect) => Promise<void>;
+};
+
 export async function getUserByEmail(email: string) {
   const [user] = await db
     .select()
@@ -35,7 +41,11 @@ export async function getUserByPhone(phone: string) {
   return user ?? null;
 }
 
-export async function createUserWithWallet(email: string, password: string) {
+export async function createUserWithWallet(
+  email: string,
+  password: string,
+  options: CreateUserWithWalletOptions = {},
+) {
   const passwordHash = hashPassword(password);
 
   return db.transaction(async (tx) => {
@@ -50,6 +60,9 @@ export async function createUserWithWallet(email: string, password: string) {
       .returning();
 
     await tx.insert(userWallets).values({ userId: user.id }).onConflictDoNothing();
+    if (options.afterCreate) {
+      await options.afterCreate(tx, user);
+    }
 
     return user;
   });

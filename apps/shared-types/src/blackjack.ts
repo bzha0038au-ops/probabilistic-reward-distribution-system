@@ -1,4 +1,9 @@
 import { z } from 'zod';
+import { HandHistoryRoundIdSchema } from './hand-history';
+import {
+  PlayModeRequestSchema,
+  PlayModeSnapshotSchema,
+} from "./play-mode";
 
 export const blackjackCardSuitValues = [
   'spades',
@@ -46,6 +51,13 @@ export const blackjackGameStatusValues = [
   'push',
 ] as const;
 
+export const blackjackTableSeatRoleValues = ['dealer', 'player'] as const;
+
+export const blackjackTableSeatParticipantTypeValues = [
+  'ai_robot',
+  'human_user',
+] as const;
+
 export const BLACKJACK_MIN_STAKE = '1.00';
 export const BLACKJACK_MAX_STAKE = '100.00';
 export const BLACKJACK_WIN_PAYOUT_MULTIPLIER = '2.00';
@@ -58,6 +70,7 @@ export const BLACKJACK_HIT_SPLIT_ACES_ALLOWED = true;
 export const BLACKJACK_RESPLIT_ALLOWED = false;
 export const BLACKJACK_MAX_SPLIT_HANDS = 4;
 export const BLACKJACK_SPLIT_TEN_VALUE_CARDS_ALLOWED = false;
+export const BLACKJACK_TURN_TIMEOUT_ACTION = 'stand';
 
 const DateLikeSchema = z.union([z.string(), z.date()]);
 
@@ -79,6 +92,20 @@ export type BlackjackPlayerHandState = z.infer<
 
 export const BlackjackGameStatusSchema = z.enum(blackjackGameStatusValues);
 export type BlackjackGameStatus = z.infer<typeof BlackjackGameStatusSchema>;
+
+export const BlackjackTableSeatRoleSchema = z.enum(
+  blackjackTableSeatRoleValues,
+);
+export type BlackjackTableSeatRole = z.infer<
+  typeof BlackjackTableSeatRoleSchema
+>;
+
+export const BlackjackTableSeatParticipantTypeSchema = z.enum(
+  blackjackTableSeatParticipantTypeValues,
+);
+export type BlackjackTableSeatParticipantType = z.infer<
+  typeof BlackjackTableSeatParticipantTypeSchema
+>;
 
 export const BlackjackCardSchema = z.object({
   rank: BlackjackCardRankSchema,
@@ -141,6 +168,26 @@ export const BlackjackConfigSchema = z.object({
 });
 export type BlackjackConfig = z.infer<typeof BlackjackConfigSchema>;
 
+export const BlackjackTableSeatSchema = z.object({
+  seatIndex: z.number().int().nonnegative(),
+  role: BlackjackTableSeatRoleSchema,
+  participantType: BlackjackTableSeatParticipantTypeSchema,
+  participantId: z.string().min(1),
+  isSelf: z.boolean(),
+  turnDeadlineAt: DateLikeSchema.nullable(),
+});
+export type BlackjackTableSeat = z.infer<typeof BlackjackTableSeatSchema>;
+
+export const BlackjackTableSchema = z.object({
+  tableId: z.string().min(1).max(128),
+  capacity: z.number().int().min(2).max(10),
+  sharedDeck: z.boolean(),
+  currentTurnSeatIndex: z.number().int().nonnegative().nullable(),
+  turnTimeoutAction: BlackjackActionSchema.nullable(),
+  seats: z.array(BlackjackTableSeatSchema).min(2).max(10),
+});
+export type BlackjackTable = z.infer<typeof BlackjackTableSchema>;
+
 export const BLACKJACK_CONFIG: BlackjackConfig = {
   minStake: BLACKJACK_MIN_STAKE,
   maxStake: BLACKJACK_MAX_STAKE,
@@ -158,6 +205,7 @@ export const BLACKJACK_CONFIG: BlackjackConfig = {
 
 export const BlackjackGameSummarySchema = z.object({
   id: z.number().int(),
+  roundId: HandHistoryRoundIdSchema,
   userId: z.number().int(),
   stakeAmount: z.string(),
   totalStake: z.string(),
@@ -173,17 +221,22 @@ export type BlackjackGameSummary = z.infer<typeof BlackjackGameSummarySchema>;
 
 export const BlackjackGameSchema = z.object({
   id: z.number().int(),
+  roundId: HandHistoryRoundIdSchema,
   userId: z.number().int(),
   stakeAmount: z.string(),
   totalStake: z.string(),
   payoutAmount: z.string(),
   status: BlackjackGameStatusSchema,
+  turnDeadlineAt: DateLikeSchema.nullable(),
+  turnTimeoutAction: BlackjackActionSchema.nullable(),
+  table: BlackjackTableSchema,
   playerHand: BlackjackHandViewSchema,
   playerHands: z.array(BlackjackPlayerHandViewSchema).min(1),
   activeHandIndex: z.number().int().nonnegative().nullable(),
   dealerHand: BlackjackHandViewSchema,
   availableActions: z.array(BlackjackActionSchema),
   fairness: BlackjackFairnessSchema,
+  playMode: PlayModeSnapshotSchema,
   createdAt: DateLikeSchema,
   settledAt: DateLikeSchema.nullable(),
 });
@@ -192,6 +245,7 @@ export type BlackjackGame = z.infer<typeof BlackjackGameSchema>;
 export const BlackjackOverviewResponseSchema = z.object({
   balance: z.string(),
   config: BlackjackConfigSchema,
+  playMode: PlayModeSnapshotSchema,
   fairness: z.object({
     epoch: z.number().int(),
     epochSeconds: z.number().int(),
@@ -207,6 +261,7 @@ export type BlackjackOverviewResponse = z.infer<
 export const BlackjackStartRequestSchema = z.object({
   stakeAmount: z.string().min(1).max(32),
   clientNonce: z.string().min(1).max(128).nullable().optional(),
+  playMode: PlayModeRequestSchema.optional(),
 });
 export type BlackjackStartRequest = z.infer<typeof BlackjackStartRequestSchema>;
 
@@ -219,6 +274,7 @@ export type BlackjackActionRequest = z.infer<
 
 export const BlackjackMutationResponseSchema = z.object({
   balance: z.string(),
+  playMode: PlayModeSnapshotSchema,
   game: BlackjackGameSchema,
 });
 export type BlackjackMutationResponse = z.infer<

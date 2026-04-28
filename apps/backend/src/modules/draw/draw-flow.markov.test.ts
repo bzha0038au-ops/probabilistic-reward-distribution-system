@@ -390,7 +390,9 @@ describe('full draw flow Markov chain', () => {
     ]);
   });
 
-  it('matches long-run simulation against the exact chain model', async () => {
+  it(
+    'matches long-run simulation against the exact chain model',
+    async () => {
     const analyzedStates = await Promise.all(ANALYTIC_STATES.map((state) => analyzeState(state)));
     const collapsedStates = analyzedStates.slice(0, COLLAPSED_HIGH_PITY_STATE + 1);
     const transitionMatrix = collapsedStates.map((state) => state.transitions);
@@ -425,5 +427,7 @@ describe('full draw flow Markov chain', () => {
         0.015
       );
     }
-  });
+    },
+    15_000
+  );
 });

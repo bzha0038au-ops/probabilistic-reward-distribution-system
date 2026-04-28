@@ -74,14 +74,34 @@ describe("validateSessionSecrets", () => {
     });
   });
 
-  it("allows local fallback when the dedicated admin MFA secret is unset outside production", () => {
+  it("allows local fallback when the dedicated MFA secrets are unset outside production", () => {
     process.env.NODE_ENV = "test";
     process.env.ADMIN_JWT_SECRET = "admin-secret-1234567890";
     process.env.USER_JWT_SECRET = "user-secret-1234567890";
     delete process.env.ADMIN_MFA_ENCRYPTION_SECRET;
+    delete process.env.USER_MFA_ENCRYPTION_SECRET;
     delete process.env.ADMIN_MFA_BREAK_GLASS_SECRET;
 
     expect(() => validateSessionSecrets()).not.toThrow();
+  });
+
+  it("requires a dedicated production hand-history evidence signing secret", () => {
+    process.env.NODE_ENV = "production";
+    process.env.ADMIN_JWT_SECRET = "a".repeat(32);
+    process.env.USER_JWT_SECRET = "b".repeat(32);
+    process.env.ADMIN_MFA_ENCRYPTION_SECRET = "c".repeat(32);
+    process.env.USER_MFA_ENCRYPTION_SECRET = "d".repeat(32);
+    process.env.ADMIN_MFA_BREAK_GLASS_SECRET = "e".repeat(32);
+    delete process.env.HAND_HISTORY_EVIDENCE_SIGNING_SECRET;
+
+    expect(() => validateSessionSecrets()).toThrow(
+      "HAND_HISTORY_EVIDENCE_SIGNING_SECRET must be set in production",
+    );
+
+    process.env.HAND_HISTORY_EVIDENCE_SIGNING_SECRET = process.env.USER_JWT_SECRET;
+    expect(() => validateSessionSecrets()).toThrow(
+      "HAND_HISTORY_EVIDENCE_SIGNING_SECRET must not match USER_JWT_SECRET.",
+    );
   });
 
   it("rejects a production config that reuses or omits the dedicated MFA secret", () => {
@@ -89,6 +109,7 @@ describe("validateSessionSecrets", () => {
     process.env.ADMIN_JWT_SECRET = "a".repeat(32);
     process.env.USER_JWT_SECRET = "b".repeat(32);
     process.env.ADMIN_MFA_ENCRYPTION_SECRET = "";
+    process.env.USER_MFA_ENCRYPTION_SECRET = "d".repeat(32);
     process.env.ADMIN_MFA_BREAK_GLASS_SECRET = "c".repeat(32);
 
     expect(() => validateSessionSecrets()).toThrow(
@@ -106,10 +127,29 @@ describe("validateSessionSecrets", () => {
     process.env.ADMIN_JWT_SECRET = "a".repeat(32);
     process.env.USER_JWT_SECRET = "b".repeat(32);
     process.env.ADMIN_MFA_ENCRYPTION_SECRET = "c".repeat(32);
+    process.env.USER_MFA_ENCRYPTION_SECRET = "d".repeat(32);
     delete process.env.ADMIN_MFA_BREAK_GLASS_SECRET;
 
     expect(() => validateSessionSecrets()).toThrow(
       "ADMIN_MFA_BREAK_GLASS_SECRET must be set in production.",
+    );
+  });
+
+  it("requires a dedicated production user MFA secret", () => {
+    process.env.NODE_ENV = "production";
+    process.env.ADMIN_JWT_SECRET = "a".repeat(32);
+    process.env.USER_JWT_SECRET = "b".repeat(32);
+    process.env.ADMIN_MFA_ENCRYPTION_SECRET = "c".repeat(32);
+    process.env.ADMIN_MFA_BREAK_GLASS_SECRET = "d".repeat(32);
+    delete process.env.USER_MFA_ENCRYPTION_SECRET;
+
+    expect(() => validateSessionSecrets()).toThrow(
+      "USER_MFA_ENCRYPTION_SECRET must be set in production",
+    );
+
+    process.env.USER_MFA_ENCRYPTION_SECRET = process.env.USER_JWT_SECRET;
+    expect(() => validateSessionSecrets()).toThrow(
+      "USER_MFA_ENCRYPTION_SECRET must not match USER_JWT_SECRET.",
     );
   });
 
@@ -120,7 +160,8 @@ describe("validateSessionSecrets", () => {
     process.env.USER_JWT_SECRET = "c".repeat(32);
     process.env.USER_JWT_SECRET_PREVIOUS = "a".repeat(32);
     process.env.ADMIN_MFA_ENCRYPTION_SECRET = "d".repeat(32);
-    process.env.ADMIN_MFA_BREAK_GLASS_SECRET = "e".repeat(32);
+    process.env.USER_MFA_ENCRYPTION_SECRET = "e".repeat(32);
+    process.env.ADMIN_MFA_BREAK_GLASS_SECRET = "f".repeat(32);
 
     expect(() => validateSessionSecrets()).toThrow(
       "ADMIN_JWT_SECRET must not match USER_JWT_SECRET_PREVIOUS.",

@@ -8,12 +8,22 @@ import type {
   DrawPrizeRarity,
   DrawResult,
 } from "@reward/shared-types/draw";
+import type { PlayModeOutcome } from "@reward/shared-types/play-mode";
 import Decimal from "decimal.js";
 
 import { db } from "../../db";
 import { conflictError } from "../../shared/errors";
 import { toDecimal, toMoneyString } from "../../shared/money";
 import { getFairnessCommit } from "../fairness/service";
+import { assertKycStakeAllowed } from "../kyc/service";
+import { assertWalletLedgerInvariant } from "../wallet/invariant-service";
+import {
+  loadUserPlayModeSnapshot,
+  lockUserPlayModeState,
+  resolveRequestedPlayMode,
+  resolveSettledPlayMode,
+  saveUserPlayModeState,
+} from "../play-mode/service";
 import {
   getDrawCost,
   getDrawSystemConfig,
@@ -54,6 +64,20 @@ const RARITY_PRIORITY: Record<DrawPrizeRarity, number> = {
 const normalizeMaxBatchCount = (value: unknown) => {
   const parsed = Math.floor(Number(value ?? 0));
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+};
+
+const getNormalizedDrawCost = (
+  drawCostBase: Decimal,
+  drawSystem: Awaited<ReturnType<typeof getDrawSystemConfig>>,
+) => {
+  let drawCost = drawCostBase;
+  if (drawSystem.minDrawCost.gt(0) && drawCost.lt(drawSystem.minDrawCost)) {
+    drawCost = drawSystem.minDrawCost;
+  }
+  if (drawSystem.maxDrawCost.gt(0) && drawCost.gt(drawSystem.maxDrawCost)) {
+    drawCost = drawSystem.maxDrawCost;
+  }
+  return drawCost;
 };
 
 const rankPrizeRows = (rows: PrizeCatalogRow[]) =>
@@ -184,6 +208,11 @@ const resolveBatchClientNonce = (
   return `${base.slice(0, maxBaseLength)}${suffix}`;
 };
 
+const classifyDrawPlayModeOutcome = (
+  records: DrawRecordSnapshot[],
+): PlayModeOutcome =>
+  records.some((record) => record.status === "won") ? "win" : "miss";
+
 const loadPrizeCatalogRows = () =>
   db
     .select({
@@ -225,6 +254,7 @@ export async function getDrawCatalog(userId: number) {
     probabilityControl,
     poolSystem,
     prizeRows,
+    playMode,
   ] = await Promise.all([
     db
       .select({ balance: userWallets.withdrawableBalance })
@@ -241,6 +271,7 @@ export async function getDrawCatalog(userId: number) {
     getProbabilityControlConfig(db),
     getPoolSystemConfig(db),
     loadPrizeCatalogRows(),
+    loadUserPlayModeSnapshot(db, userId, "draw"),
   ]);
 
   const fairness = await getFairnessCommit(
@@ -260,6 +291,7 @@ export async function getDrawCatalog(userId: number) {
       probabilityControl,
       Number(userRow[0]?.pityStreak ?? 0),
     ),
+    playMode,
     fairness,
     prizes: prizesView,
     featuredPrizes: prizesView.filter((prize) => prize.isFeatured),
@@ -275,31 +307,53 @@ export async function executeDrawPlay(
     throw conflictError("Invalid draw count.");
   }
 
-  const { records, endingBalance, pityState } = await db.transaction(
+  const { records, endingBalance, pityState, playMode } = await db.transaction(
     async (tx) => {
-      const [drawSystem, probabilityControl] = await Promise.all([
+      const [drawSystem, probabilityControl, storedPlayMode] = await Promise.all([
         getDrawSystemConfig(tx),
         getProbabilityControlConfig(tx),
+        lockUserPlayModeState(tx, userId, "draw"),
       ]);
+      if (!storedPlayMode) {
+        throw conflictError("Draw play mode state is unavailable.");
+      }
+
+      const activePlayMode = resolveRequestedPlayMode({
+        requestedMode: request.playMode ?? null,
+        storedMode: storedPlayMode.mode,
+        storedState: storedPlayMode.state,
+      });
+      const effectiveCount = requestedCount * activePlayMode.appliedMultiplier;
 
       const maxBatchCount = normalizeMaxBatchCount(
         drawSystem.maxDrawPerRequest,
       );
-      if (requestedCount > maxBatchCount) {
+      if (effectiveCount > maxBatchCount) {
         throw conflictError(
           "Requested batch size exceeds the configured maximum.",
         );
       }
 
+      const normalizedDrawCost = getNormalizedDrawCost(
+        await getDrawCost(tx),
+        drawSystem,
+      );
+      await assertKycStakeAllowed(
+        userId,
+        toMoneyString(normalizedDrawCost.mul(effectiveCount)),
+        tx,
+      );
+
       const results: DrawRecordSnapshot[] = [];
 
-      for (let index = 0; index < requestedCount; index += 1) {
+      for (let index = 0; index < effectiveCount; index += 1) {
         const record = await executeDrawInTransaction(tx, userId, {
           clientNonce: resolveBatchClientNonce(
             request.clientNonce,
             index,
-            requestedCount,
+            effectiveCount,
           ),
+          playMode: activePlayMode,
         });
 
         results.push({
@@ -314,6 +368,16 @@ export async function executeDrawPlay(
         });
       }
 
+      const settledPlayMode = resolveSettledPlayMode({
+        snapshot: activePlayMode,
+        outcome: classifyDrawPlayModeOutcome(results),
+      });
+      await saveUserPlayModeState({
+        tx,
+        rowId: storedPlayMode.id,
+        snapshot: settledPlayMode,
+      });
+
       const [walletRow, userRow] = await Promise.all([
         tx
           .select({ balance: userWallets.withdrawableBalance })
@@ -327,14 +391,22 @@ export async function executeDrawPlay(
           .limit(1),
       ]);
 
-      return {
+      const response = {
         records: results,
         endingBalance: walletRow[0]?.balance ?? "0.00",
         pityState: buildPityState(
           probabilityControl,
           Number(userRow[0]?.pityStreak ?? 0),
         ),
+        playMode: settledPlayMode,
       };
+
+      await assertWalletLedgerInvariant(tx, userId, {
+        service: "draw",
+        operation: "executeDrawPlay",
+      });
+
+      return response;
     },
   );
 
@@ -371,13 +443,15 @@ export async function executeDrawPlay(
   );
 
   return {
-    count: requestedCount,
+    requestedCount,
+    count: records.length,
     totalCost: toMoneyString(totalCost),
     totalReward: toMoneyString(totalReward),
     winCount: results.filter((record) => record.status === "won").length,
     endingBalance,
     highestRarity,
     pity: pityState,
+    playMode,
     results,
   };
 }

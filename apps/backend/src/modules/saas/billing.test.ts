@@ -9,7 +9,9 @@ import {
 import {
   buildBillingRunInvoiceCreateIdempotencyKey,
   buildBillingTopUpIdempotencyKey,
+  resolveBillingDecisionPricing,
   selectBillingAccountVersionForPeriod,
+  summarizeUsageEventsForBilling,
 } from './billing';
 
 const makeBillingAccountVersion = (
@@ -137,6 +139,74 @@ describe('saas billing helpers', () => {
     expect(selected?.id).toBe(3);
   });
 
+  it('resolves decision pricing from metadata and falls back to draw fee', () => {
+    expect(resolveBillingDecisionPricing(null, '1.5000')).toEqual({
+      reject: '1.5000',
+      mute: '1.5000',
+      payout: '1.5000',
+    });
+
+    expect(
+      resolveBillingDecisionPricing(
+        {
+          decisionPricing: {
+            reject: '0.1000',
+            mute: '0.4000',
+            payout: '1.9000',
+          },
+        },
+        '1.5000'
+      )
+    ).toEqual({
+      reject: '0.1000',
+      mute: '0.4000',
+      payout: '1.9000',
+    });
+  });
+
+  it('summarizes usage by decision type and infers legacy draw outcomes from metadata', () => {
+    const summary = summarizeUsageEventsForBilling(
+      [
+        {
+          eventType: 'draw:write',
+          decisionType: null,
+          units: 2,
+          amount: '1.5000',
+          metadata: { status: 'miss' },
+        },
+        {
+          eventType: 'reward:write',
+          decisionType: 'payout',
+          units: 1,
+          amount: '1.5000',
+          metadata: null,
+        },
+      ],
+      {
+        reject: '0.1000',
+        mute: '0.2500',
+        payout: '1.5000',
+      }
+    );
+
+    expect(summary.usageFeeAmount).toBe('2.00');
+    expect(summary.drawCount).toBe(3);
+    expect(summary.decisionBreakdown).toEqual([
+      {
+        decisionType: 'mute',
+        units: 2,
+        unitAmount: '0.2500',
+        totalAmount: '0.50',
+      },
+      {
+        decisionType: 'payout',
+        units: 1,
+        unitAmount: '1.5000',
+        totalAmount: '1.50',
+      },
+    ]);
+  });
+
   it('keeps invoice idempotency keys stable for identical billing runs', () => {
     const run = makeBillingRun();
 
@@ -156,6 +226,52 @@ describe('saas billing helpers', () => {
       buildBillingTopUpIdempotencyKey(makeBillingTopUp({ amount: '25.00' }))
     ).not.toBe(
       buildBillingTopUpIdempotencyKey(makeBillingTopUp({ amount: '30.00' }))
+    );
+  });
+
+  it('changes invoice idempotency keys when decision breakdown changes at the same total', () => {
+    expect(
+      buildBillingRunInvoiceCreateIdempotencyKey(
+        makeBillingRun({
+          metadata: {
+            decisionBreakdown: [
+              {
+                decisionType: 'mute',
+                units: 2,
+                unitAmount: '0.2500',
+                totalAmount: '0.50',
+              },
+              {
+                decisionType: 'payout',
+                units: 8,
+                unitAmount: '1.5000',
+                totalAmount: '12.00',
+              },
+            ],
+          },
+        })
+      )
+    ).not.toBe(
+      buildBillingRunInvoiceCreateIdempotencyKey(
+        makeBillingRun({
+          metadata: {
+            decisionBreakdown: [
+              {
+                decisionType: 'reject',
+                units: 5,
+                unitAmount: '0.1000',
+                totalAmount: '0.50',
+              },
+              {
+                decisionType: 'payout',
+                units: 8,
+                unitAmount: '1.5000',
+                totalAmount: '12.00',
+              },
+            ],
+          },
+        })
+      )
     );
   });
 });

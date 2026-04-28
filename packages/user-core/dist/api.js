@@ -1,9 +1,15 @@
+export const USER_REALTIME_ROUTE = '/realtime';
 export const USER_API_ROUTES = {
     auth: {
         register: "/auth/register",
         session: "/auth/user/session",
+        realtimeToken: "/auth/user/realtime-token",
         sessions: "/auth/user/sessions",
         sessionsRevokeAll: "/auth/user/sessions/revoke-all",
+        mfaStatus: "/auth/user/mfa/status",
+        mfaEnrollment: "/auth/user/mfa/enrollment",
+        mfaVerify: "/auth/user/mfa/verify",
+        mfaDisable: "/auth/user/mfa/disable",
         passwordResetRequest: "/auth/password-reset/request",
         passwordResetConfirm: "/auth/password-reset/confirm",
         emailVerificationRequest: "/auth/email-verification/request",
@@ -11,12 +17,23 @@ export const USER_API_ROUTES = {
         phoneVerificationRequest: "/auth/phone-verification/request",
         phoneVerificationConfirm: "/auth/phone-verification/confirm",
     },
+    legal: {
+        current: "/legal/current",
+        acceptances: "/legal/acceptances",
+    },
+    communityThreads: "/community/threads",
     wallet: "/wallet",
     transactions: "/transactions",
+    kycProfile: "/kyc/profile",
     rewardCenter: "/rewards/center",
     rewardClaim: "/rewards/claim",
+    markets: "/markets",
+    marketPortfolio: "/markets/portfolio",
+    marketHistory: "/markets/history",
     fairnessCommit: "/fairness/commit",
     fairnessReveal: "/fairness/reveal",
+    handHistory: "/hand-history",
+    holdemTables: "/holdem/tables",
     blackjack: "/blackjack",
     blackjackStart: "/blackjack/start",
     draw: "/draw",
@@ -31,6 +48,7 @@ export const USER_API_ROUTES = {
     topUps: "/top-ups",
     withdrawals: "/withdrawals",
     cryptoWithdrawals: "/crypto-withdrawals",
+    realtime: USER_REALTIME_ROUTE,
 };
 export const LOCAL_API_BASE_URLS = {
     web: "http://localhost:4000",
@@ -39,6 +57,7 @@ export const LOCAL_API_BASE_URLS = {
 };
 const fallbackError = { message: "Request failed." };
 const trimTrailingSlash = (value) => value.replace(/\/+$/, "");
+const resolveRealtimeProtocol = (protocol) => protocol === 'https:' ? 'wss:' : 'ws:';
 const toSearch = (params) => {
     const search = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) {
@@ -50,6 +69,20 @@ const toSearch = (params) => {
     return output ? `?${output}` : "";
 };
 export const resolveLocalApiBaseUrl = (platform) => LOCAL_API_BASE_URLS[platform];
+export const resolveUserRealtimeUrl = (payload) => {
+    const url = new URL(USER_REALTIME_ROUTE, `${trimTrailingSlash(payload.baseUrl)}/`);
+    url.protocol = resolveRealtimeProtocol(url.protocol);
+    if (payload.authToken) {
+        url.searchParams.set('token', payload.authToken);
+    }
+    for (const [key, value] of Object.entries(payload.query ?? {})) {
+        if (value === undefined || value === null || value === '') {
+            continue;
+        }
+        url.searchParams.set(key, String(value));
+    }
+    return url.toString();
+};
 export const parseApiResponse = async (response) => {
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || !payload?.ok) {
@@ -114,6 +147,20 @@ export function createUserApiClient(runtime) {
                 body: JSON.stringify(payload),
             }, { auth: false });
         },
+        getCurrentLegalDocuments(overrides = {}) {
+            return request(USER_API_ROUTES.legal.current, { cache: "no-store" }, {
+                ...overrides,
+                auth: false,
+            });
+        },
+        acceptCurrentLegalDocuments(payload, overrides = {}) {
+            return request(USER_API_ROUTES.legal.acceptances, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+                cache: "no-store",
+            }, overrides);
+        },
         createSession(payload) {
             return request(USER_API_ROUTES.auth.session, {
                 method: "POST",
@@ -124,6 +171,9 @@ export function createUserApiClient(runtime) {
         },
         getCurrentSession(overrides = {}) {
             return request(USER_API_ROUTES.auth.session, { cache: "no-store" }, overrides);
+        },
+        getUserRealtimeToken(overrides = {}) {
+            return request(USER_API_ROUTES.auth.realtimeToken, { cache: "no-store" }, overrides);
         },
         deleteCurrentSession(overrides = {}) {
             return request(USER_API_ROUTES.auth.session, {
@@ -143,6 +193,31 @@ export function createUserApiClient(runtime) {
         revokeAllSessions(overrides = {}) {
             return request(USER_API_ROUTES.auth.sessionsRevokeAll, {
                 method: "POST",
+                cache: "no-store",
+            }, overrides);
+        },
+        getUserMfaStatus(overrides = {}) {
+            return request(USER_API_ROUTES.auth.mfaStatus, { cache: "no-store" }, overrides);
+        },
+        createUserMfaEnrollment(overrides = {}) {
+            return request(USER_API_ROUTES.auth.mfaEnrollment, {
+                method: "POST",
+                cache: "no-store",
+            }, overrides);
+        },
+        verifyUserMfa(payload, overrides = {}) {
+            return request(USER_API_ROUTES.auth.mfaVerify, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+                cache: "no-store",
+            }, overrides);
+        },
+        disableUserMfa(payload, overrides = {}) {
+            return request(USER_API_ROUTES.auth.mfaDisable, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
                 cache: "no-store",
             }, overrides);
         },
@@ -203,11 +278,47 @@ export function createUserApiClient(runtime) {
                 cache: "no-store",
             }, overrides);
         },
+        listCommunityThreads(page, limit, overrides = {}) {
+            return request(`${USER_API_ROUTES.communityThreads}${toSearch({ page, limit })}`, { cache: "no-store" }, overrides);
+        },
+        getCommunityThread(threadId, page, limit, overrides = {}) {
+            return request(`${USER_API_ROUTES.communityThreads}/${threadId}${toSearch({
+                page,
+                limit,
+            })}`, { cache: "no-store" }, overrides);
+        },
+        createCommunityThread(payload, overrides = {}) {
+            return request(USER_API_ROUTES.communityThreads, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+                cache: "no-store",
+            }, overrides);
+        },
+        createCommunityPost(threadId, payload, overrides = {}) {
+            return request(`${USER_API_ROUTES.communityThreads}/${threadId}/posts`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+                cache: "no-store",
+            }, overrides);
+        },
         getWalletBalance(overrides = {}) {
             return request(USER_API_ROUTES.wallet, {}, overrides);
         },
         getTransactionHistory(limit, overrides = {}) {
             return request(`${USER_API_ROUTES.transactions}${toSearch({ limit })}`, { cache: "no-store" }, overrides);
+        },
+        getKycProfile(overrides = {}) {
+            return request(USER_API_ROUTES.kycProfile, { cache: "no-store" }, overrides);
+        },
+        submitKycProfile(payload, overrides = {}) {
+            return request(USER_API_ROUTES.kycProfile, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+                cache: "no-store",
+            }, overrides);
         },
         listBankCards(overrides = {}) {
             return request(USER_API_ROUTES.bankCards, { cache: "no-store" }, overrides);
@@ -287,6 +398,79 @@ export function createUserApiClient(runtime) {
         getBlackjackOverview(overrides = {}) {
             return request(USER_API_ROUTES.blackjack, { cache: "no-store" }, overrides);
         },
+        getHoldemTables(overrides = {}) {
+            return request(USER_API_ROUTES.holdemTables, { cache: "no-store" }, overrides);
+        },
+        getHoldemTable(tableId, overrides = {}) {
+            return request(`${USER_API_ROUTES.holdemTables}/${tableId}`, { cache: "no-store" }, overrides);
+        },
+        getHoldemTableMessages(tableId, overrides = {}) {
+            return request(`${USER_API_ROUTES.holdemTables}/${tableId}/messages`, { cache: "no-store" }, overrides);
+        },
+        touchHoldemTablePresence(tableId, overrides = {}) {
+            return request(`${USER_API_ROUTES.holdemTables}/${tableId}/presence`, {
+                method: "POST",
+                cache: "no-store",
+            }, overrides);
+        },
+        setHoldemSeatMode(tableId, payload, overrides = {}) {
+            return request(`${USER_API_ROUTES.holdemTables}/${tableId}/seat-mode`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+                cache: "no-store",
+            }, overrides);
+        },
+        postHoldemTableMessage(tableId, payload, overrides = {}) {
+            return request(`${USER_API_ROUTES.holdemTables}/${tableId}/messages`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+                cache: "no-store",
+            }, overrides);
+        },
+        createHoldemTable(payload, overrides = {}) {
+            return request(USER_API_ROUTES.holdemTables, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+                cache: "no-store",
+            }, overrides);
+        },
+        joinHoldemTable(tableId, payload, overrides = {}) {
+            return request(`${USER_API_ROUTES.holdemTables}/${tableId}/join`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+                cache: "no-store",
+            }, overrides);
+        },
+        leaveHoldemTable(tableId, overrides = {}) {
+            return request(`${USER_API_ROUTES.holdemTables}/${tableId}/leave`, {
+                method: "POST",
+                cache: "no-store",
+            }, overrides);
+        },
+        startHoldemTable(tableId, overrides = {}) {
+            return request(`${USER_API_ROUTES.holdemTables}/${tableId}/start`, {
+                method: "POST",
+                cache: "no-store",
+            }, overrides);
+        },
+        actOnHoldemTable(tableId, payload, overrides = {}) {
+            return request(`${USER_API_ROUTES.holdemTables}/${tableId}/action`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+                cache: "no-store",
+            }, overrides);
+        },
+        getHandHistory(roundId, overrides = {}) {
+            return request(`${USER_API_ROUTES.handHistory}/${encodeURIComponent(roundId)}`, { cache: "no-store" }, overrides);
+        },
+        getHandHistoryEvidenceBundle(roundId, overrides = {}) {
+            return request(`${USER_API_ROUTES.handHistory}/${encodeURIComponent(roundId)}/evidence-bundle`, { cache: "no-store" }, overrides);
+        },
         startBlackjack(payload, overrides = {}) {
             return request(USER_API_ROUTES.blackjackStart, {
                 method: "POST",
@@ -323,6 +507,30 @@ export function createUserApiClient(runtime) {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ missionId }),
+                cache: "no-store",
+            }, overrides);
+        },
+        listPredictionMarkets(overrides = {}) {
+            return request(USER_API_ROUTES.markets, { cache: "no-store" }, overrides);
+        },
+        getPredictionMarketPortfolio(status, overrides = {}) {
+            return request(`${USER_API_ROUTES.marketPortfolio}${toSearch({ status })}`, { cache: "no-store" }, overrides);
+        },
+        getPredictionMarketHistory(params = {}, overrides = {}) {
+            return request(`${USER_API_ROUTES.marketHistory}${toSearch({
+                status: params.status,
+                page: params.page,
+                limit: params.limit,
+            })}`, { cache: "no-store" }, overrides);
+        },
+        getPredictionMarket(marketId, overrides = {}) {
+            return request(`${USER_API_ROUTES.markets}/${marketId}`, { cache: "no-store" }, overrides);
+        },
+        placePredictionPosition(marketId, payload, overrides = {}) {
+            return request(`${USER_API_ROUTES.markets}/${marketId}/positions`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
                 cache: "no-store",
             }, overrides);
         },

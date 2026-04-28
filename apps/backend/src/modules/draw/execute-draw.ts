@@ -26,8 +26,10 @@ import {
   getRandomizationConfig,
 } from "../system/service";
 import { ensureFairnessSeed } from "../fairness/service";
+import { assertKycStakeAllowed } from "../kyc/service";
 import { logger } from "../../shared/logger";
 import { toDecimal, toMoneyString } from "../../shared/money";
+import { assertWalletLedgerInvariant } from "../wallet/invariant-service";
 import { resolveDrawOutcome } from "./outcome";
 import { loadLockedDrawUser } from "./queries";
 import {
@@ -83,6 +85,20 @@ const resolveClientNonce = (value?: string | null) => {
     clientNonce: rawNonce,
     nonceSource: "client" as const,
   };
+};
+
+const resolveEffectiveDrawCost = (
+  drawCostBase: Decimal,
+  drawSystem: DrawConfigBundle["drawSystem"],
+) => {
+  let drawCost = drawCostBase;
+  if (drawSystem.minDrawCost.gt(0) && drawCost.lt(drawSystem.minDrawCost)) {
+    drawCost = drawSystem.minDrawCost;
+  }
+  if (drawSystem.maxDrawCost.gt(0) && drawCost.gt(drawSystem.maxDrawCost)) {
+    drawCost = drawSystem.maxDrawCost;
+  }
+  return drawCost;
 };
 
 const enforceDrawGuards = async (
@@ -151,13 +167,7 @@ const debitDrawCost = async (
   now: Date,
 ): Promise<DebitedDrawState> => {
   const drawCostBase = await getDrawCost(tx);
-  let drawCost = drawCostBase;
-  if (drawSystem.minDrawCost.gt(0) && drawCost.lt(drawSystem.minDrawCost)) {
-    drawCost = drawSystem.minDrawCost;
-  }
-  if (drawSystem.maxDrawCost.gt(0) && drawCost.gt(drawSystem.maxDrawCost)) {
-    drawCost = drawSystem.maxDrawCost;
-  }
+  const drawCost = resolveEffectiveDrawCost(drawCostBase, drawSystem);
 
   const walletBefore = toDecimal(user.withdrawable_balance ?? 0);
   const userPoolBefore = toDecimal(user.user_pool_balance ?? 0);
@@ -322,16 +332,21 @@ export async function executeDrawInTransaction(
   }
 
   const config = await loadDrawConfig(tx);
+  const currentTime = getNow();
+  if (!skipGuards) {
+    await enforceDrawGuards(tx, userId, config.drawSystem, currentTime);
+  }
+
+  const effectiveDrawCost = resolveEffectiveDrawCost(
+    await getDrawCost(tx),
+    config.drawSystem,
+  );
+  await assertKycStakeAllowed(userId, toMoneyString(effectiveDrawCost), tx);
   const fairnessSeed = await ensureFairnessSeed(
     tx,
     Number(config.poolSystem.epochSeconds ?? 0),
   );
   const { clientNonce, nonceSource } = resolveNonce(options?.clientNonce);
-
-  const currentTime = getNow();
-  if (!skipGuards) {
-    await enforceDrawGuards(tx, userId, config.drawSystem, currentTime);
-  }
 
   const drawState = await debitDrawCost(
     tx,
@@ -400,6 +415,7 @@ export async function executeDrawInTransaction(
     payoutControl: config.payoutControl,
     poolSystem: config.poolSystem,
     pityStreakAfter,
+    playMode: options?.playMode ?? null,
   });
 
   logger.info("draw executed", {
@@ -416,5 +432,12 @@ export async function executeDrawInTransaction(
 }
 
 export async function executeDraw(userId: number, options?: DrawOptions) {
-  return db.transaction((tx) => executeDrawInTransaction(tx, userId, options));
+  return db.transaction(async (tx) => {
+    const result = await executeDrawInTransaction(tx, userId, options);
+    await assertWalletLedgerInvariant(tx, userId, {
+      service: "draw",
+      operation: "executeDraw",
+    });
+    return result;
+  });
 }

@@ -9,8 +9,10 @@ import {
   persistenceError,
   unprocessableEntityError,
 } from '../../shared/errors';
+import { toJsonbLiteral } from '../../shared/jsonb';
 import { toDecimal, toMoneyString } from '../../shared/money';
 import { readSqlRows } from '../../shared/sql-result';
+import { assertWalletLedgerInvariant } from '../wallet/invariant-service';
 
 type DbExecutor = DbClient | DbTransaction;
 
@@ -66,7 +68,10 @@ export async function grantBonus(
       balanceAfter: toMoneyString(bonusAfter),
       referenceType: payload.referenceType ?? null,
       referenceId: payload.referenceId ?? null,
-      metadata: payload.metadata ?? null,
+      metadata:
+        payload.metadata === undefined || payload.metadata === null
+          ? null
+          : toJsonbLiteral(payload.metadata),
     });
 
     return {
@@ -77,7 +82,14 @@ export async function grantBonus(
   };
 
   if (executor === db) {
-    return db.transaction(async (tx) => run(tx));
+    return db.transaction(async (tx) => {
+      const result = await run(tx);
+      await assertWalletLedgerInvariant(tx, payload.userId, {
+        service: 'bonus',
+        operation: 'grantBonus',
+      });
+      return result;
+    });
   }
   return run(executor);
 }
@@ -146,12 +158,19 @@ export async function releaseBonusManual(payload: {
       metadata: { reason: 'manual_release', balanceType: 'bonus' },
     });
 
-    return {
+    const result = {
       userId: wallet.user_id,
       released: toMoneyString(releaseAmount),
       bonusBefore: toMoneyString(bonusBefore),
       bonusAfter: toMoneyString(bonusAfter),
       withdrawableAfter: toMoneyString(withdrawableAfter),
     };
+
+    await assertWalletLedgerInvariant(tx, payload.userId, {
+      service: 'bonus',
+      operation: 'releaseBonusManual',
+    });
+
+    return result;
   });
 }

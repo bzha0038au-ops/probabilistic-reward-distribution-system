@@ -11,6 +11,14 @@ type DbExecutor = DbClient | DbTransaction;
 
 const HOUSE_ACCOUNT_ID = 1;
 
+type HouseBalanceField = 'prizePoolBalance' | 'houseBankroll';
+type HouseDeltaParams = {
+  entryType?: string;
+  referenceType?: string;
+  referenceId?: number | null;
+  metadata?: Record<string, unknown> | null;
+};
+
 const ensureHouseAccount = async (db: DbExecutor) => {
   await db
     .insert(houseAccount)
@@ -63,25 +71,21 @@ export async function getPrizePoolBalance(db: DbExecutor, lock = false) {
   return toDecimal(account.prizePoolBalance ?? 0);
 }
 
-export async function applyPrizePoolDelta(
+const applyHouseBalanceDelta = async (
   db: DbExecutor,
+  balanceField: HouseBalanceField,
   delta: Decimal.Value,
-  params?: {
-    entryType?: string;
-    referenceType?: string;
-    referenceId?: number | null;
-    metadata?: Record<string, unknown> | null;
-  }
-) {
+  params?: HouseDeltaParams
+) => {
   const account = await getHouseAccount(db, true);
-  const before = toDecimal(account.prizePoolBalance ?? 0);
+  const before = toDecimal(account[balanceField] ?? 0);
   const change = toDecimal(delta);
   const after = before.plus(change);
 
   await db
     .update(houseAccount)
     .set({
-      prizePoolBalance: toMoneyString(after),
+      [balanceField]: toMoneyString(after),
       updatedAt: new Date(),
     })
     .where(eq(houseAccount.id, account.id));
@@ -114,6 +118,22 @@ export async function applyPrizePoolDelta(
   });
 
   return { before, after };
+};
+
+export async function applyPrizePoolDelta(
+  db: DbExecutor,
+  delta: Decimal.Value,
+  params?: HouseDeltaParams
+) {
+  return applyHouseBalanceDelta(db, 'prizePoolBalance', delta, params);
+}
+
+export async function applyHouseBankrollDelta(
+  db: DbExecutor,
+  delta: Decimal.Value,
+  params?: HouseDeltaParams
+) {
+  return applyHouseBalanceDelta(db, 'houseBankroll', delta, params);
 }
 
 export async function setPrizePoolBalance(

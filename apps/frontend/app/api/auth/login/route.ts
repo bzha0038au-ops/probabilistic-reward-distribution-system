@@ -15,14 +15,32 @@ import {
 
 const APP_PATH = "/app";
 
-const sanitizeRedirectPath = (value: FormDataEntryValue | null) => {
+const sanitizeRedirectPath = (
+  value: FormDataEntryValue | null,
+  requestUrl: string,
+) => {
   const redirectTo = typeof value === "string" ? value.trim() : "";
 
-  if (!redirectTo.startsWith("/") || redirectTo.startsWith("//")) {
+  if (!redirectTo) {
     return APP_PATH;
   }
 
-  return redirectTo;
+  if (redirectTo.startsWith("/") && !redirectTo.startsWith("//")) {
+    return redirectTo;
+  }
+
+  try {
+    const requestOrigin = new URL(requestUrl).origin;
+    const redirectUrl = new URL(redirectTo);
+
+    if (redirectUrl.origin !== requestOrigin) {
+      return APP_PATH;
+    }
+
+    return `${redirectUrl.pathname}${redirectUrl.search}${redirectUrl.hash}` || APP_PATH;
+  } catch {
+    return APP_PATH;
+  }
 };
 
 const errorResponse = (error: string, status = 400, code?: ApiErrorCode) =>
@@ -44,6 +62,33 @@ const successResponse = (redirectTo: string) =>
     redirectTo,
   });
 
+const isDocumentFormSubmission = (request: Request) =>
+  request.headers.get("sec-fetch-dest") === "document" ||
+  request.headers.get("sec-fetch-mode") === "navigate";
+
+const buildAbsoluteUrl = (request: Request, path: string) =>
+  new URL(path, request.url);
+
+const buildLoginRedirect = (request: Request, error: string, redirectTo: string) => {
+  const target = buildAbsoluteUrl(request, "/login");
+  target.searchParams.set("error", error);
+
+  if (redirectTo !== APP_PATH) {
+    target.searchParams.set("callbackUrl", redirectTo);
+  }
+
+  return target;
+};
+
+const documentRedirect = (request: Request, path: string) =>
+  NextResponse.redirect(buildAbsoluteUrl(request, path), { status: 303 });
+
+const documentErrorRedirect = (
+  request: Request,
+  error: string,
+  redirectTo: string,
+) => NextResponse.redirect(buildLoginRedirect(request, error, redirectTo), { status: 303 });
+
 const withCookie = (response: NextResponse, token: string) => {
   response.cookies.set(
     getBackendTokenCookieName(),
@@ -60,9 +105,18 @@ export async function POST(request: Request) {
     .trim()
     .toLowerCase();
   const password = String(formData.get("password") ?? "");
-  const redirectTo = sanitizeRedirectPath(formData.get("redirectTo"));
+  const redirectTo = sanitizeRedirectPath(formData.get("redirectTo"), request.url);
+  const isDocumentSubmit = isDocumentFormSubmission(request);
 
   if (!email || !password) {
+    if (isDocumentSubmit) {
+      return documentErrorRedirect(
+        request,
+        "Missing email or password.",
+        redirectTo,
+      );
+    }
+
     return errorResponse(
       "Missing email or password.",
       400,
@@ -86,6 +140,10 @@ export async function POST(request: Request) {
 
     result = await parseApiResponse<UserSessionResponse>(response);
   } catch {
+    if (isDocumentSubmit) {
+      return documentErrorRedirect(request, "Login request failed.", redirectTo);
+    }
+
     return errorResponse(
       "Login request failed.",
       502,
@@ -94,6 +152,10 @@ export async function POST(request: Request) {
   }
 
   if (!result.ok) {
+    if (isDocumentSubmit) {
+      return documentErrorRedirect(request, result.error.message, redirectTo);
+    }
+
     return errorResponse(
       result.error.message,
       result.status ?? 401,
@@ -102,11 +164,19 @@ export async function POST(request: Request) {
   }
 
   if (!result.data?.token) {
+    if (isDocumentSubmit) {
+      return documentErrorRedirect(request, "CredentialsSignin", redirectTo);
+    }
+
     return errorResponse(
       "CredentialsSignin",
       401,
       API_ERROR_CODES.UNAUTHORIZED,
     );
+  }
+
+  if (isDocumentSubmit) {
+    return withCookie(documentRedirect(request, redirectTo), result.data.token);
   }
 
   return withCookie(successResponse(redirectTo), result.data.token);

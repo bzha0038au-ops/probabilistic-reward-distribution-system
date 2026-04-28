@@ -89,7 +89,11 @@ export function validateSessionSecrets() {
   const userPreviousSecret = readSecret("USER_JWT_SECRET_PREVIOUS");
   const webSecret = readSecret("AUTH_SECRET") || readSecret("NEXTAUTH_SECRET");
   const adminMfaSecret = readSecret("ADMIN_MFA_ENCRYPTION_SECRET");
+  const userMfaSecret = readSecret("USER_MFA_ENCRYPTION_SECRET");
   const adminMfaBreakGlassSecret = readSecret("ADMIN_MFA_BREAK_GLASS_SECRET");
+  const handHistoryEvidenceSecret = readSecret(
+    "HAND_HISTORY_EVIDENCE_SIGNING_SECRET",
+  );
   const activeSessionSecrets = [
     { name: "ADMIN_JWT_SECRET", value: adminSecret },
     {
@@ -136,8 +140,20 @@ export function validateSessionSecrets() {
       compareName: candidate.name,
     });
     assertDistinct({
+      candidate: userMfaSecret,
+      candidateName: "USER_MFA_ENCRYPTION_SECRET",
+      compareTo: candidate.value,
+      compareName: candidate.name,
+    });
+    assertDistinct({
       candidate: adminMfaBreakGlassSecret,
       candidateName: "ADMIN_MFA_BREAK_GLASS_SECRET",
+      compareTo: candidate.value,
+      compareName: candidate.name,
+    });
+    assertDistinct({
+      candidate: handHistoryEvidenceSecret,
+      candidateName: "HAND_HISTORY_EVIDENCE_SIGNING_SECRET",
       compareTo: candidate.value,
       compareName: candidate.name,
     });
@@ -147,6 +163,42 @@ export function validateSessionSecrets() {
     candidateName: "ADMIN_MFA_BREAK_GLASS_SECRET",
     compareTo: adminMfaSecret,
     compareName: "ADMIN_MFA_ENCRYPTION_SECRET",
+  });
+  assertDistinct({
+    candidate: userMfaSecret,
+    candidateName: "USER_MFA_ENCRYPTION_SECRET",
+    compareTo: adminMfaSecret,
+    compareName: "ADMIN_MFA_ENCRYPTION_SECRET",
+  });
+  assertDistinct({
+    candidate: userMfaSecret,
+    candidateName: "USER_MFA_ENCRYPTION_SECRET",
+    compareTo: adminMfaBreakGlassSecret,
+    compareName: "ADMIN_MFA_BREAK_GLASS_SECRET",
+  });
+  assertDistinct({
+    candidate: handHistoryEvidenceSecret,
+    candidateName: "HAND_HISTORY_EVIDENCE_SIGNING_SECRET",
+    compareTo: webSecret,
+    compareName: "AUTH_SECRET",
+  });
+  assertDistinct({
+    candidate: handHistoryEvidenceSecret,
+    candidateName: "HAND_HISTORY_EVIDENCE_SIGNING_SECRET",
+    compareTo: adminMfaSecret,
+    compareName: "ADMIN_MFA_ENCRYPTION_SECRET",
+  });
+  assertDistinct({
+    candidate: handHistoryEvidenceSecret,
+    candidateName: "HAND_HISTORY_EVIDENCE_SIGNING_SECRET",
+    compareTo: userMfaSecret,
+    compareName: "USER_MFA_ENCRYPTION_SECRET",
+  });
+  assertDistinct({
+    candidate: handHistoryEvidenceSecret,
+    candidateName: "HAND_HISTORY_EVIDENCE_SIGNING_SECRET",
+    compareTo: adminMfaBreakGlassSecret,
+    compareName: "ADMIN_MFA_BREAK_GLASS_SECRET",
   });
 
   if (process.env.NODE_ENV === "production") {
@@ -165,6 +217,16 @@ export function validateSessionSecrets() {
         "ADMIN_MFA_ENCRYPTION_SECRET must be at least 32 characters in production.",
       );
     }
+    if (!userMfaSecret) {
+      throw internalInvariantError(
+        "USER_MFA_ENCRYPTION_SECRET must be set in production and must not reuse JWT/web/admin MFA secrets.",
+      );
+    }
+    if (userMfaSecret.length < 32) {
+      throw internalInvariantError(
+        "USER_MFA_ENCRYPTION_SECRET must be at least 32 characters in production.",
+      );
+    }
     if (!adminMfaBreakGlassSecret) {
       throw internalInvariantError(
         "ADMIN_MFA_BREAK_GLASS_SECRET must be set in production.",
@@ -173,6 +235,16 @@ export function validateSessionSecrets() {
     if (adminMfaBreakGlassSecret.length < 32) {
       throw internalInvariantError(
         "ADMIN_MFA_BREAK_GLASS_SECRET must be at least 32 characters in production.",
+      );
+    }
+    if (!handHistoryEvidenceSecret) {
+      throw internalInvariantError(
+        "HAND_HISTORY_EVIDENCE_SIGNING_SECRET must be set in production and must not reuse session or MFA secrets.",
+      );
+    }
+    if (handHistoryEvidenceSecret.length < 32) {
+      throw internalInvariantError(
+        "HAND_HISTORY_EVIDENCE_SIGNING_SECRET must be at least 32 characters in production.",
       );
     }
   }

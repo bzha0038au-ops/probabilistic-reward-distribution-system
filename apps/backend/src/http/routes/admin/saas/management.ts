@@ -1,11 +1,13 @@
 import type { AppInstance } from "../../types";
 import { API_ERROR_CODES } from "@reward/shared-types/api";
 import {
+  SaasAgentControlUpsertSchema,
   SaasTenantCreateSchema,
   SaasTenantInviteAcceptSchema,
   SaasTenantInviteCreateSchema,
   SaasTenantLinkCreateSchema,
   SaasTenantMembershipCreateSchema,
+  SaasTenantRiskEnvelopePatchSchema,
 } from "@reward/shared-types/saas";
 
 import { ADMIN_PERMISSION_KEYS } from "../../../../modules/admin-permission/definitions";
@@ -16,10 +18,13 @@ import {
   createSaasTenantInvite,
   createSaasTenantLink,
   createSaasTenantMembership,
+  createSaasTenantRiskEnvelopeDraft,
+  deleteSaasAgentControl,
   deleteSaasTenantLink,
   deleteSaasTenantMembership,
   getSaasOverview,
   revokeSaasTenantInvite,
+  upsertSaasAgentControl,
 } from "../../../../modules/saas/service";
 import { getConfigView } from "../../../../shared/config";
 import { parseSchema } from "../../../../shared/validation";
@@ -100,6 +105,197 @@ export async function registerAdminSaasManagementRoutes(
         return sendSuccess(reply, tenant, 201);
       } catch (error) {
         return sendErrorForException(reply, error, "Failed to create tenant.");
+      }
+    },
+  );
+
+  protectedRoutes.post(
+    "/admin/saas/tenants/:tenantId/agent-controls",
+    {
+      config: { rateLimit: adminRateLimit },
+      preHandler: [
+        requireAdminPermission(ADMIN_PERMISSION_KEYS.CONFIG_UPDATE, {
+          requireStepUp: false,
+        }),
+        enforceAdminLimit,
+      ],
+    },
+    async (request, reply) => {
+      const tenantId = parseIdParam(request.params, "tenantId");
+      if (!tenantId) {
+        return sendError(
+          reply,
+          400,
+          "Invalid tenant id.",
+          undefined,
+          API_ERROR_CODES.INVALID_TENANT_ID,
+        );
+      }
+
+      const parsed = parseSchema(SaasAgentControlUpsertSchema, {
+        ...toObject(request.body),
+        tenantId,
+      });
+      if (!parsed.isValid) {
+        return sendError(
+          reply,
+          400,
+          "Invalid request.",
+          parsed.errors,
+          API_ERROR_CODES.INVALID_REQUEST,
+        );
+      }
+
+      try {
+        const control = await upsertSaasAgentControl(
+          parsed.data,
+          request.admin?.adminId ?? null,
+          request.admin?.permissions ?? [],
+        );
+        await recordAdminAction({
+          adminId: request.admin?.adminId ?? null,
+          action: "saas_agent_control_upsert",
+          targetType: "saas_agent_control",
+          targetId: control.id,
+          metadata: {
+            tenantId,
+            agentId: control.agentId,
+            mode: control.mode,
+            reason: control.reason,
+            budgetMultiplier: control.budgetMultiplier,
+          },
+          ip: request.ip,
+        });
+        return sendSuccess(reply, control, 201);
+      } catch (error) {
+        return sendErrorForException(
+          reply,
+          error,
+          "Failed to save agent control.",
+        );
+      }
+    },
+  );
+
+  protectedRoutes.delete(
+    "/admin/saas/tenants/:tenantId/agent-controls/:controlId",
+    {
+      config: { rateLimit: adminRateLimit },
+      preHandler: [
+        requireAdminPermission(ADMIN_PERMISSION_KEYS.CONFIG_UPDATE, {
+          requireStepUp: false,
+        }),
+        enforceAdminLimit,
+      ],
+    },
+    async (request, reply) => {
+      const tenantId = parseIdParam(request.params, "tenantId");
+      const controlId = parseIdParam(request.params, "controlId");
+      if (!tenantId || !controlId) {
+        return sendError(
+          reply,
+          400,
+          "Invalid tenant or agent control id.",
+          undefined,
+          API_ERROR_CODES.INVALID_AGENT_CONTROL_ID,
+        );
+      }
+
+      try {
+        const control = await deleteSaasAgentControl(
+          tenantId,
+          controlId,
+          request.admin?.adminId ?? null,
+          request.admin?.permissions ?? [],
+        );
+        await recordAdminAction({
+          adminId: request.admin?.adminId ?? null,
+          action: "saas_agent_control_delete",
+          targetType: "saas_agent_control",
+          targetId: control.id,
+          metadata: {
+            tenantId,
+            agentId: control.agentId,
+          },
+          ip: request.ip,
+        });
+        return sendSuccess(reply, control);
+      } catch (error) {
+        return sendErrorForException(
+          reply,
+          error,
+          "Failed to delete agent control.",
+        );
+      }
+    },
+  );
+
+  protectedRoutes.post(
+    "/admin/saas/tenants/:tenantId/risk-envelope/drafts",
+    {
+      config: { rateLimit: adminRateLimit },
+      preHandler: [
+        requireAdminPermission(ADMIN_PERMISSION_KEYS.CONFIG_UPDATE, {
+          requireStepUp: false,
+        }),
+        enforceAdminLimit,
+      ],
+    },
+    async (request, reply) => {
+      const tenantId = parseIdParam(request.params, "tenantId");
+      if (!tenantId) {
+        return sendError(
+          reply,
+          400,
+          "Invalid tenant id.",
+          undefined,
+          API_ERROR_CODES.INVALID_TENANT_ID,
+        );
+      }
+
+      const body = toObject(request.body);
+      const parsed = parseSchema(SaasTenantRiskEnvelopePatchSchema, {
+        ...body,
+        tenantId,
+      });
+      if (!parsed.isValid) {
+        return sendError(
+          reply,
+          400,
+          "Invalid request.",
+          parsed.errors,
+          API_ERROR_CODES.INVALID_REQUEST,
+        );
+      }
+
+      const reason = typeof body.reason === "string" ? body.reason : undefined;
+
+      try {
+        const created = await createSaasTenantRiskEnvelopeDraft(
+          parsed.data,
+          request.admin?.adminId ?? 0,
+          request.admin?.permissions ?? [],
+          reason,
+        );
+        await recordAdminAction({
+          adminId: request.admin?.adminId ?? null,
+          action: "saas_tenant_risk_envelope_change_request_created",
+          targetType: "config_change_request",
+          targetId: created.id,
+          metadata: {
+            changeType: created.changeType,
+            summary: created.summary,
+            tenantId,
+          },
+          ip: request.ip,
+        });
+        return sendSuccess(reply, created, 201);
+      } catch (error) {
+        return sendErrorForException(
+          reply,
+          error,
+          "Failed to create tenant risk envelope change request.",
+        );
       }
     },
   );

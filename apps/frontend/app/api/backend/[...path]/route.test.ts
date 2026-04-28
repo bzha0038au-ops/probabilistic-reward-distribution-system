@@ -2,7 +2,9 @@ import { NextRequest } from 'next/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const { getBackendAccessToken } = vi.hoisted(() => ({
-  getBackendAccessToken: vi.fn(async () => 'signed-backend-token'),
+  getBackendAccessToken: vi.fn<() => Promise<string | null>>(
+    async () => 'signed-backend-token'
+  ),
 }));
 
 vi.mock('@/lib/auth/server-token', () => ({
@@ -65,6 +67,70 @@ describe('backend proxy route', () => {
     expect(response.status).toBe(200);
     expect(fetchSpy).toHaveBeenCalledWith(
       new URL('http://localhost:4000/transactions?limit=8'),
+      expect.objectContaining({
+        method: 'GET',
+        cache: 'no-store',
+        headers: expect.any(Headers),
+      })
+    );
+  });
+
+  it('forwards market position submissions for authenticated browser routes', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, data: { id: 7 } }), {
+        status: 201,
+        headers: {
+          'content-type': 'application/json',
+        },
+      })
+    );
+
+    const response = await POST(
+      new NextRequest('https://example.com/api/backend/markets/42/positions', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          outcomeKey: 'yes',
+          stakeAmount: '12.50',
+        }),
+      }),
+      { params: { path: ['markets', '42', 'positions'] } }
+    );
+
+    expect(response.status).toBe(201);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      new URL('http://localhost:4000/markets/42/positions'),
+      expect.objectContaining({
+        method: 'POST',
+        cache: 'no-store',
+        headers: expect.any(Headers),
+        body: expect.any(ArrayBuffer),
+      })
+    );
+  });
+
+  it('forwards portfolio history queries for authenticated browser routes', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, data: { items: [] } }), {
+        status: 200,
+        headers: {
+          'content-type': 'application/json',
+        },
+      })
+    );
+
+    const response = await GET(
+      new NextRequest(
+        'https://example.com/api/backend/markets/history?status=resolved&page=2&limit=10'
+      ),
+      { params: { path: ['markets', 'history'] } }
+    );
+
+    expect(response.status).toBe(200);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      new URL('http://localhost:4000/markets/history?status=resolved&page=2&limit=10'),
       expect.objectContaining({
         method: 'GET',
         cache: 'no-store',

@@ -167,7 +167,7 @@ export function UserDashboardAccountSection({
               <CardTitle>{c.routesTitle}</CardTitle>
               <CardDescription>{c.routesDescription}</CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-4 xl:grid-cols-4">
+            <CardContent className="grid gap-4 xl:grid-cols-5">
               <GameplayRouteCard
                 href="/app/slot"
                 title={c.gachaTitle}
@@ -181,6 +181,14 @@ export function UserDashboardAccountSection({
                 title={c.quickEightTitle}
                 description={c.quickEightDescription}
                 openLabel={c.quickEightOpen}
+                statusLabel={c.drawUnlocked}
+                lockedNote={!emailVerified ? c.routeLockedHint : null}
+              />
+              <GameplayRouteCard
+                href="/app/holdem"
+                title={c.holdemTitle}
+                description={c.holdemDescription}
+                openLabel={c.holdemOpen}
                 statusLabel={c.drawUnlocked}
                 lockedNote={!emailVerified ? c.routeLockedHint : null}
               />
@@ -241,6 +249,13 @@ export function UserDashboardAccountSection({
                 description={c.securityRouteDescription}
                 openLabel={c.securityRouteOpen}
                 statusLabel={c.securityRouteStatus}
+              />
+              <GameplayRouteCard
+                href="/app/verification"
+                title={c.verificationRouteTitle}
+                description={c.verificationRouteDescription}
+                openLabel={c.verificationRouteOpen}
+                statusLabel={c.verificationRouteStatus}
               />
             </CardContent>
           </Card>

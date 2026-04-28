@@ -12,14 +12,22 @@ import {
   uniqueIndex,
   varchar,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { drawStatusValues } from "@reward/shared-types/draw";
 import {
+  saasAgentControlModeValues,
   saasBillingCollectionMethodValues,
   prizeEngineApiKeyScopeValues,
+  saasDecisionTypeValues,
   saasBillingPlanValues,
   saasBillingRunStatusValues,
   saasBillingTopUpStatusValues,
   saasEnvironmentValues,
+  saasOutboundWebhookDeliveryStatusValues,
+  saasOutboundWebhookEventValues,
+  saasRewardEnvelopeCapHitStrategyValues,
+  saasRewardEnvelopeWindowValues,
+  saasProjectStrategyValues,
   saasResourceStatusValues,
   saasStripeWebhookEventStatusValues,
   saasTenantInviteStatusValues,
@@ -29,6 +37,34 @@ import {
 
 import { admins } from "./user.js";
 
+const antiExploitSeverityValues = [
+  "low",
+  "medium",
+  "high",
+  "critical",
+] as const;
+
+const antiExploitIdentityTypeValues = [
+  "agent_id",
+  "fingerprint",
+  "player_external_id",
+  "api_key",
+] as const;
+
+const antiExploitEventTypeValues = [
+  "anti_exploit_hit",
+  "agent_blocklist_applied",
+] as const;
+
+const antiExploitPluginValues = [
+  "idempotency_check",
+  "signature_anomaly",
+  "fingerprint_dedup",
+  "behavior_template_anomaly",
+  "group_correlation_spike",
+  "reward_risk_score",
+] as const;
+
 export const saasTenants = pgTable(
   "saas_tenants",
   {
@@ -36,6 +72,21 @@ export const saasTenants = pgTable(
     slug: varchar("slug", { length: 64 }).notNull(),
     name: varchar("name", { length: 160 }).notNull(),
     billingEmail: varchar("billing_email", { length: 255 }),
+    riskEnvelopeDailyBudgetCap: numeric("risk_envelope_daily_budget_cap", {
+      precision: 14,
+      scale: 2,
+    }),
+    riskEnvelopeMaxSinglePayout: numeric("risk_envelope_max_single_payout", {
+      precision: 14,
+      scale: 2,
+    }),
+    riskEnvelopeVarianceCap: numeric("risk_envelope_variance_cap", {
+      precision: 14,
+      scale: 2,
+    }),
+    riskEnvelopeEmergencyStop: boolean("risk_envelope_emergency_stop")
+      .notNull()
+      .default(false),
     status: varchar("status", {
       length: 32,
       enum: saasResourceStatusValues,
@@ -84,6 +135,13 @@ export const saasProjects = pgTable(
     prizePoolBalance: numeric("prize_pool_balance", { precision: 14, scale: 2 })
       .notNull()
       .default("0"),
+    strategy: varchar("strategy", {
+      length: 32,
+      enum: saasProjectStrategyValues,
+    })
+      .notNull()
+      .default("weighted_gacha"),
+    strategyParams: jsonb("strategy_params").notNull().default({}),
     fairnessEpochSeconds: integer("fairness_epoch_seconds")
       .notNull()
       .default(3600),
@@ -150,6 +208,110 @@ export const saasProjectPrizes = pgTable(
   }),
 );
 
+export const saasRewardEnvelopes = pgTable(
+  "saas_reward_envelopes",
+  {
+    id: serial("id").primaryKey(),
+    tenantId: integer("tenant_id")
+      .notNull()
+      .references(() => saasTenants.id, { onDelete: "cascade" }),
+    projectId: integer("project_id").references(() => saasProjects.id, {
+      onDelete: "cascade",
+    }),
+    window: varchar("window", {
+      length: 16,
+      enum: saasRewardEnvelopeWindowValues,
+    }).notNull(),
+    onCapHitStrategy: varchar("on_cap_hit_strategy", {
+      length: 16,
+      enum: saasRewardEnvelopeCapHitStrategyValues,
+    })
+      .notNull()
+      .default("reject"),
+    budgetCap: numeric("budget_cap", { precision: 14, scale: 4 })
+      .notNull()
+      .default("0"),
+    expectedPayoutPerCall: numeric("expected_payout_per_call", {
+      precision: 14,
+      scale: 4,
+    })
+      .notNull()
+      .default("0"),
+    varianceCap: numeric("variance_cap", { precision: 14, scale: 4 })
+      .notNull()
+      .default("0"),
+    currentConsumed: numeric("current_consumed", { precision: 14, scale: 4 })
+      .notNull()
+      .default("0"),
+    currentCallCount: integer("current_call_count").notNull().default(0),
+    currentWindowStartedAt: timestamp("current_window_started_at", {
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    tenantProjectIdx: index("saas_reward_envelopes_tenant_project_idx").on(
+      table.tenantId,
+      table.projectId,
+    ),
+    tenantWindowIdx: index("saas_reward_envelopes_tenant_window_idx").on(
+      table.tenantId,
+      table.window,
+    ),
+    projectWindowIdx: index("saas_reward_envelopes_project_window_idx").on(
+      table.projectId,
+      table.window,
+    ),
+  }),
+);
+
+export const saasAgents = pgTable(
+  "saas_agents",
+  {
+    id: serial("id").primaryKey(),
+    projectId: integer("project_id")
+      .notNull()
+      .references(() => saasProjects.id, { onDelete: "cascade" }),
+    externalId: varchar("external_id", { length: 128 }).notNull(),
+    groupId: varchar("group_id", { length: 128 }),
+    ownerMetadata: jsonb("owner_metadata"),
+    fingerprint: varchar("fingerprint", { length: 255 }),
+    status: varchar("status", {
+      length: 32,
+      enum: saasResourceStatusValues,
+    })
+      .notNull()
+      .default("active"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    projectExternalUnique: uniqueIndex(
+      "saas_agents_project_external_unique",
+    ).on(table.projectId, table.externalId),
+    projectGroupIdx: index("saas_agents_project_group_idx").on(
+      table.projectId,
+      table.groupId,
+    ),
+    projectStatusIdx: index("saas_agents_project_status_idx").on(
+      table.projectId,
+      table.status,
+    ),
+    fingerprintIdx: index("saas_agents_fingerprint_idx").on(
+      table.projectId,
+      table.fingerprint,
+    ),
+  }),
+);
+
 export const saasPlayers = pgTable(
   "saas_players",
   {
@@ -189,11 +351,23 @@ export const saasDrawRecords = pgTable(
     playerId: integer("player_id")
       .notNull()
       .references(() => saasPlayers.id, { onDelete: "cascade" }),
+    environment: varchar("environment", {
+      length: 16,
+      enum: saasEnvironmentValues,
+    }).notNull(),
+    agentId: varchar("agent_id", { length: 128 }).notNull(),
+    groupId: varchar("group_id", { length: 128 }),
     prizeId: integer("prize_id").references(() => saasProjectPrizes.id, {
       onDelete: "set null",
     }),
     drawCost: numeric("draw_cost", { precision: 14, scale: 2 }).notNull(),
     rewardAmount: numeric("reward_amount", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0"),
+    expectedRewardAmount: numeric("expected_reward_amount", {
+      precision: 14,
+      scale: 4,
+    })
       .notNull()
       .default("0"),
     status: varchar("status", { length: 32, enum: drawStatusValues }).notNull(),
@@ -209,6 +383,187 @@ export const saasDrawRecords = pgTable(
     projectStatusCreatedIdx: index(
       "saas_draw_records_project_status_created_idx",
     ).on(table.projectId, table.status, table.createdAt),
+    projectAgentCreatedIdx: index(
+      "saas_draw_records_project_agent_created_idx",
+    ).on(table.projectId, table.agentId, table.createdAt),
+    projectGroupCreatedIdx: index(
+      "saas_draw_records_project_group_created_idx",
+    ).on(table.projectId, table.groupId, table.createdAt),
+  }),
+);
+
+export const saasAgentGroupCorrelations = pgTable(
+  "saas_agent_group_correlations",
+  {
+    id: serial("id").primaryKey(),
+    projectId: integer("project_id")
+      .notNull()
+      .references(() => saasProjects.id, { onDelete: "cascade" }),
+    agentId: varchar("agent_id", { length: 128 }).notNull(),
+    playerId: integer("player_id")
+      .notNull()
+      .references(() => saasPlayers.id, { onDelete: "cascade" }),
+    drawRecordId: integer("draw_record_id")
+      .notNull()
+      .references(() => saasDrawRecords.id, { onDelete: "cascade" }),
+    groupId: varchar("group_id", { length: 128 }).notNull(),
+    windowSeconds: integer("window_seconds").notNull(),
+    groupDrawCountWindow: integer("group_draw_count_window")
+      .notNull()
+      .default(0),
+    groupDistinctPlayerCountWindow: integer(
+      "group_distinct_player_count_window",
+    )
+      .notNull()
+      .default(0),
+    groupRewardAmountWindow: numeric("group_reward_amount_window", {
+      precision: 14,
+      scale: 4,
+    })
+      .notNull()
+      .default("0"),
+    groupExpectedRewardAmountWindow: numeric(
+      "group_expected_reward_amount_window",
+      {
+        precision: 14,
+        scale: 4,
+      },
+    )
+      .notNull()
+      .default("0"),
+    groupPositiveVarianceWindow: numeric("group_positive_variance_window", {
+      precision: 14,
+      scale: 4,
+    })
+      .notNull()
+      .default("0"),
+    agentDrawCountWindow: integer("agent_draw_count_window")
+      .notNull()
+      .default(0),
+    agentRewardAmountWindow: numeric("agent_reward_amount_window", {
+      precision: 14,
+      scale: 4,
+    })
+      .notNull()
+      .default("0"),
+    agentExpectedRewardAmountWindow: numeric(
+      "agent_expected_reward_amount_window",
+      {
+        precision: 14,
+        scale: 4,
+      },
+    )
+      .notNull()
+      .default("0"),
+    agentPositiveVarianceWindow: numeric("agent_positive_variance_window", {
+      precision: 14,
+      scale: 4,
+    })
+      .notNull()
+      .default("0"),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    projectGroupCreatedIdx: index(
+      "saas_agent_group_corr_project_group_created_idx",
+    ).on(table.projectId, table.groupId, table.createdAt),
+    agentCreatedIdx: index("saas_agent_group_corr_agent_created_idx").on(
+      table.agentId,
+      table.createdAt,
+    ),
+    drawRecordUnique: uniqueIndex(
+      "saas_agent_group_corr_draw_record_unique",
+    ).on(table.drawRecordId),
+  }),
+);
+
+export const saasDistributionSnapshots = pgTable(
+  "saas_distribution_snapshots",
+  {
+    id: serial("id").primaryKey(),
+    projectId: integer("project_id")
+      .notNull()
+      .references(() => saasProjects.id, { onDelete: "cascade" }),
+    windowKey: varchar("window_key", { length: 16 }).notNull(),
+    capturedAt: timestamp("captured_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+    windowEnd: timestamp("window_end", { withTimezone: true }).notNull(),
+    drawCount: integer("draw_count").notNull().default(0),
+    trackedDrawCount: integer("tracked_draw_count").notNull().default(0),
+    trackingCoverageRatio: numeric("tracking_coverage_ratio", {
+      precision: 12,
+      scale: 6,
+    })
+      .notNull()
+      .default("0"),
+    actualPayoutSum: numeric("actual_payout_sum", {
+      precision: 14,
+      scale: 2,
+    })
+      .notNull()
+      .default("0"),
+    expectedPayoutSum: numeric("expected_payout_sum", {
+      precision: 14,
+      scale: 2,
+    })
+      .notNull()
+      .default("0"),
+    payoutDeviationAmount: numeric("payout_deviation_amount", {
+      precision: 14,
+      scale: 2,
+    })
+      .notNull()
+      .default("0"),
+    payoutDeviationRatio: numeric("payout_deviation_ratio", {
+      precision: 12,
+      scale: 6,
+    })
+      .notNull()
+      .default("0"),
+    maxBucketDeviationRatio: numeric("max_bucket_deviation_ratio", {
+      precision: 12,
+      scale: 6,
+    })
+      .notNull()
+      .default("0"),
+    actualPayoutHistogram: jsonb("actual_payout_histogram")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    expectedPayoutHistogram: jsonb("expected_payout_histogram")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    actualBucketHistogram: jsonb("actual_bucket_histogram")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    expectedBucketHistogram: jsonb("expected_bucket_histogram")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    breachReasons: jsonb("breach_reasons")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    projectWindowCapturedUnique: uniqueIndex(
+      "saas_distribution_snapshots_project_window_captured_unique",
+    ).on(table.projectId, table.windowKey, table.capturedAt),
+    projectCapturedIdx: index(
+      "saas_distribution_snapshots_project_captured_idx",
+    ).on(table.projectId, table.capturedAt),
+    windowCapturedIdx: index(
+      "saas_distribution_snapshots_window_captured_idx",
+    ).on(table.windowKey, table.capturedAt),
   }),
 );
 
@@ -222,6 +577,10 @@ export const saasLedgerEntries = pgTable(
     playerId: integer("player_id")
       .notNull()
       .references(() => saasPlayers.id, { onDelete: "cascade" }),
+    environment: varchar("environment", {
+      length: 16,
+      enum: saasEnvironmentValues,
+    }).notNull(),
     entryType: varchar("entry_type", { length: 64 }).notNull(),
     amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
     balanceBefore: numeric("balance_before", {
@@ -258,6 +617,10 @@ export const saasFairnessSeeds = pgTable(
     projectId: integer("project_id")
       .notNull()
       .references(() => saasProjects.id, { onDelete: "cascade" }),
+    environment: varchar("environment", {
+      length: 16,
+      enum: saasEnvironmentValues,
+    }).notNull(),
     epoch: integer("epoch").notNull(),
     epochSeconds: integer("epoch_seconds").notNull(),
     commitHash: varchar("commit_hash", { length: 128 }).notNull(),
@@ -703,6 +1066,278 @@ export const saasTenantLinks = pgTable(
   }),
 );
 
+export const agentBlocklist = pgTable(
+  "agent_blocklist",
+  {
+    id: serial("id").primaryKey(),
+    tenantId: integer("tenant_id")
+      .notNull()
+      .references(() => saasTenants.id, { onDelete: "cascade" }),
+    agentId: varchar("agent_id", { length: 128 }).notNull(),
+    mode: varchar("mode", {
+      length: 32,
+      enum: saasAgentControlModeValues,
+    })
+      .notNull()
+      .default("blocked"),
+    reason: varchar("reason", { length: 255 }).notNull(),
+    budgetMultiplier: numeric("budget_multiplier", {
+      precision: 5,
+      scale: 4,
+    }),
+    createdByAdminId: integer("created_by_admin_id").references(
+      () => admins.id,
+      {
+        onDelete: "set null",
+      },
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    tenantAgentUnique: uniqueIndex("agent_blocklist_tenant_agent_unique").on(
+      table.tenantId,
+      table.agentId,
+    ),
+    tenantModeIdx: index("agent_blocklist_tenant_mode_idx").on(
+      table.tenantId,
+      table.mode,
+    ),
+    tenantUpdatedIdx: index("agent_blocklist_tenant_updated_idx").on(
+      table.tenantId,
+      table.updatedAt,
+    ),
+  }),
+);
+
+export const agentRiskState = pgTable(
+  "agent_risk_state",
+  {
+    id: serial("id").primaryKey(),
+    tenantId: integer("tenant_id")
+      .notNull()
+      .references(() => saasTenants.id, { onDelete: "cascade" }),
+    projectId: integer("project_id")
+      .notNull()
+      .references(() => saasProjects.id, { onDelete: "cascade" }),
+    apiKeyId: integer("api_key_id")
+      .notNull()
+      .references(() => saasApiKeys.id, { onDelete: "cascade" }),
+    agentId: varchar("agent_id", { length: 128 }),
+    playerExternalId: varchar("player_external_id", { length: 128 }),
+    identityType: varchar("identity_type", {
+      length: 32,
+      enum: antiExploitIdentityTypeValues,
+    }).notNull(),
+    identityValueHash: varchar("identity_value_hash", {
+      length: 128,
+    }).notNull(),
+    identityHint: varchar("identity_hint", { length: 160 }),
+    riskScore: integer("risk_score").notNull().default(0),
+    hitCount: integer("hit_count").notNull().default(0),
+    severeHitCount: integer("severe_hit_count").notNull().default(0),
+    lastSeverity: varchar("last_severity", {
+      length: 16,
+      enum: antiExploitSeverityValues,
+    })
+      .notNull()
+      .default("low"),
+    lastPlugin: varchar("last_plugin", {
+      length: 64,
+      enum: antiExploitPluginValues,
+    }).notNull(),
+    lastReason: varchar("last_reason", { length: 255 }).notNull(),
+    metadata: jsonb("metadata"),
+    firstHitAt: timestamp("first_hit_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    lastHitAt: timestamp("last_hit_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    projectIdentityUnique: uniqueIndex(
+      "agent_risk_state_project_identity_unique",
+    ).on(table.projectId, table.identityType, table.identityValueHash),
+    tenantAgentIdx: index("agent_risk_state_tenant_agent_idx").on(
+      table.tenantId,
+      table.agentId,
+    ),
+    projectRiskIdx: index("agent_risk_state_project_risk_idx").on(
+      table.projectId,
+      table.riskScore,
+      table.lastHitAt,
+    ),
+    apiKeyHitIdx: index("agent_risk_state_api_key_hit_idx").on(
+      table.apiKeyId,
+      table.lastHitAt,
+    ),
+  }),
+);
+
+export const auditEvents = pgTable(
+  "audit_events",
+  {
+    id: serial("id").primaryKey(),
+    tenantId: integer("tenant_id")
+      .notNull()
+      .references(() => saasTenants.id, { onDelete: "cascade" }),
+    projectId: integer("project_id")
+      .notNull()
+      .references(() => saasProjects.id, { onDelete: "cascade" }),
+    apiKeyId: integer("api_key_id")
+      .notNull()
+      .references(() => saasApiKeys.id, { onDelete: "cascade" }),
+    agentId: varchar("agent_id", { length: 128 }),
+    playerExternalId: varchar("player_external_id", { length: 128 }),
+    eventType: varchar("event_type", {
+      length: 32,
+      enum: antiExploitEventTypeValues,
+    }).notNull(),
+    severity: varchar("severity", {
+      length: 16,
+      enum: antiExploitSeverityValues,
+    }).notNull(),
+    plugin: varchar("plugin", {
+      length: 64,
+      enum: antiExploitPluginValues,
+    }).notNull(),
+    identityType: varchar("identity_type", {
+      length: 32,
+      enum: antiExploitIdentityTypeValues,
+    }).notNull(),
+    identityValueHash: varchar("identity_value_hash", {
+      length: 128,
+    }).notNull(),
+    identityHint: varchar("identity_hint", { length: 160 }),
+    ip: varchar("ip", { length: 64 }),
+    userAgent: varchar("user_agent", { length: 255 }),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    projectCreatedIdx: index("audit_events_project_created_idx").on(
+      table.projectId,
+      table.createdAt,
+    ),
+    eventTypeCreatedIdx: index("audit_events_event_type_created_idx").on(
+      table.eventType,
+      table.createdAt,
+    ),
+    agentCreatedIdx: index("audit_events_agent_created_idx").on(
+      table.agentId,
+      table.createdAt,
+    ),
+    identityCreatedIdx: index("audit_events_identity_created_idx").on(
+      table.identityType,
+      table.identityValueHash,
+      table.createdAt,
+    ),
+  }),
+);
+
+export const saasOutboundWebhooks = pgTable(
+  "saas_outbound_webhooks",
+  {
+    id: serial("id").primaryKey(),
+    projectId: integer("project_id")
+      .notNull()
+      .references(() => saasProjects.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    secret: varchar("secret", { length: 255 }).notNull(),
+    events: jsonb("events").notNull(),
+    isActive: boolean("is_active").notNull().default(true),
+    lastDeliveredAt: timestamp("last_delivered_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    projectUrlUnique: uniqueIndex(
+      "saas_outbound_webhooks_project_url_unique",
+    ).on(table.projectId, table.url),
+    projectActiveIdx: index("saas_outbound_webhooks_project_active_idx").on(
+      table.projectId,
+      table.isActive,
+    ),
+  }),
+);
+
+export const saasOutboundWebhookDeliveries = pgTable(
+  "saas_outbound_webhook_deliveries",
+  {
+    id: serial("id").primaryKey(),
+    webhookId: integer("webhook_id")
+      .notNull()
+      .references(() => saasOutboundWebhooks.id, { onDelete: "cascade" }),
+    projectId: integer("project_id")
+      .notNull()
+      .references(() => saasProjects.id, { onDelete: "cascade" }),
+    drawRecordId: integer("draw_record_id").references(
+      () => saasDrawRecords.id,
+      {
+        onDelete: "set null",
+      },
+    ),
+    eventType: varchar("event_type", {
+      length: 64,
+      enum: saasOutboundWebhookEventValues,
+    }).notNull(),
+    eventId: varchar("event_id", { length: 191 }).notNull(),
+    payload: jsonb("payload").notNull(),
+    status: varchar("status", {
+      length: 32,
+      enum: saasOutboundWebhookDeliveryStatusValues,
+    })
+      .notNull()
+      .default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    lastHttpStatus: integer("last_http_status"),
+    lastError: text("last_error"),
+    lastResponseBody: text("last_response_body"),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    webhookEventUnique: uniqueIndex(
+      "saas_outbound_webhook_deliveries_webhook_event_unique",
+    ).on(table.webhookId, table.eventId),
+    statusNextAttemptIdx: index(
+      "saas_outbound_webhook_deliveries_status_next_attempt_idx",
+    ).on(table.status, table.nextAttemptAt),
+    projectCreatedIdx: index(
+      "saas_outbound_webhook_deliveries_project_created_idx",
+    ).on(table.projectId, table.createdAt),
+    webhookCreatedIdx: index(
+      "saas_outbound_webhook_deliveries_webhook_created_idx",
+    ).on(table.webhookId, table.createdAt),
+  }),
+);
+
 export const saasStripeWebhookEvents = pgTable(
   "saas_stripe_webhook_events",
   {
@@ -775,10 +1410,18 @@ export const saasUsageEvents = pgTable(
     playerId: integer("player_id").references(() => saasPlayers.id, {
       onDelete: "set null",
     }),
+    environment: varchar("environment", {
+      length: 16,
+      enum: saasEnvironmentValues,
+    }).notNull(),
     eventType: varchar("event_type", {
       length: 64,
       enum: prizeEngineApiKeyScopeValues,
     }).notNull(),
+    decisionType: varchar("decision_type", {
+      length: 32,
+      enum: saasDecisionTypeValues,
+    }),
     referenceType: varchar("reference_type", { length: 64 }),
     referenceId: integer("reference_id"),
     units: integer("units").notNull().default(1),
@@ -803,6 +1446,9 @@ export const saasUsageEvents = pgTable(
     billingRunIdx: index("saas_usage_events_billing_run_idx").on(
       table.billingRunId,
     ),
+    billingRunDecisionIdx: index(
+      "saas_usage_events_billing_run_decision_idx",
+    ).on(table.billingRunId, table.decisionType),
     eventReferenceUnique: uniqueIndex(
       "saas_usage_events_event_reference_unique",
     ).on(table.eventType, table.referenceType, table.referenceId),

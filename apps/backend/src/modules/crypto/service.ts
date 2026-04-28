@@ -35,6 +35,7 @@ import {
   markDepositProviderPending,
   markDepositProviderSucceeded,
 } from '../top-up';
+import { screenUserFirstDeposit } from '../aml';
 import {
   createWithdrawal,
   markWithdrawalProviderProcessing,
@@ -584,6 +585,8 @@ export async function createCryptoDeposit(payload: {
   memo?: string | null;
   metadata?: Record<string, unknown> | null;
 }) {
+  await screenUserFirstDeposit(payload.userId, payload.metadata ?? null);
+
   return db.transaction(async (tx) => {
     const paymentConfig = await getPaymentConfig(tx);
     if (!paymentConfig.depositEnabled) {

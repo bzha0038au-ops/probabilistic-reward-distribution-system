@@ -10,6 +10,8 @@ import { getSessionSecret, verifySessionJwt } from './session-secret';
 export const USER_SESSION_COOKIE = 'reward_user_session';
 export const USER_SESSION_TTL_SECONDS =
   Number(process.env.USER_SESSION_TTL ?? '') || 60 * 60 * 8;
+export const USER_REALTIME_TOKEN_TTL_SECONDS =
+  Number(process.env.USER_REALTIME_TOKEN_TTL ?? '') || 60 * 5;
 
 export type UserSessionPayload = {
   userId: number;
@@ -51,11 +53,67 @@ export async function createUserSessionToken(
   return { token, expiresAt, sessionId: session.jti };
 }
 
+export async function createUserRealtimeToken(
+  payload: UserSessionPayload,
+  ttlSeconds = USER_REALTIME_TOKEN_TTL_SECONDS
+) {
+  const now = Math.floor(Date.now() / 1000);
+  const expiresAt = now + ttlSeconds;
+  const token = await new SignJWT({
+    userId: payload.userId,
+    email: payload.email,
+    role: payload.role,
+    scope: 'realtime',
+  })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setSubject(String(payload.userId))
+    .setJti(payload.sessionId)
+    .setIssuedAt(now)
+    .setExpirationTime(expiresAt)
+    .sign(getSessionSecret('user'));
+
+  return {
+    token,
+    expiresAt,
+  };
+}
+
 export async function verifyUserSessionToken(token?: string | null) {
   if (!token) return null;
 
   try {
     const { payload } = await verifySessionJwt(token, 'user');
+    const userId = Number(payload.userId ?? payload.sub ?? 0);
+    const sessionId = typeof payload.jti === 'string' ? payload.jti : '';
+    if (!userId || !sessionId) return null;
+
+    const session = await validateAuthSession({
+      jti: sessionId,
+      userId,
+      kind: 'user',
+    });
+    if (!session) return null;
+
+    return {
+      userId,
+      email: String(payload.email ?? ''),
+      role: (payload.role as AuthSessionRole) ?? 'user',
+      sessionId: session.jti,
+    } satisfies UserSessionPayload;
+  } catch {
+    return null;
+  }
+}
+
+export async function verifyUserRealtimeToken(token?: string | null) {
+  if (!token) return null;
+
+  try {
+    const { payload } = await verifySessionJwt(token, 'user');
+    if (payload.scope !== 'realtime') {
+      return null;
+    }
+
     const userId = Number(payload.userId ?? payload.sub ?? 0);
     const sessionId = typeof payload.jti === 'string' ? payload.jti : '';
     if (!userId || !sessionId) return null;

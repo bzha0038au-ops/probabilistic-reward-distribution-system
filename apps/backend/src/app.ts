@@ -4,6 +4,7 @@ import fastify, { type FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
+import websocket from '@fastify/websocket';
 
 import {
   RequestContextPlugin,
@@ -22,6 +23,7 @@ import { registerHttpMetricsHooks } from './shared/observability';
 import { CsrfPlugin } from './http/csrf';
 import { registerRoutes } from './http/routes';
 import type { AppInstance } from './http/routes/types';
+import { registerRealtime } from './realtime';
 import {
   assertActivePaymentProviderSecretsResolvable,
   assertAutomatedPaymentModeSupported,
@@ -128,6 +130,12 @@ export async function buildApp(options: BuildAppOptions = {}) {
     ...(redis ? { redis } : {}),
   });
   await app.register(CsrfPlugin);
+  await app.register(websocket, {
+    options: {
+      maxPayload: 64 * 1024,
+    },
+  });
+  await registerRealtime(app);
 
   await registerRoutes(app);
   app.addHook('onClose', async () => {

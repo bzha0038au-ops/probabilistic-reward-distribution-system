@@ -87,4 +87,8 @@ logger.info('saas billing worker booted', {
   webhookLockTimeoutMs: config.saasBillingWebhookLockTimeoutMs,
   automationEnabled: config.saasBillingAutomationEnabled,
   automationBatchSize: config.saasBillingAutomationBatchSize,
+  outboundWebhookBatchSize: config.saasOutboundWebhookBatchSize,
+  outboundWebhookLockTimeoutMs: config.saasOutboundWebhookLockTimeoutMs,
+  outboundWebhookRequestTimeoutMs: config.saasOutboundWebhookRequestTimeoutMs,
+  outboundWebhookMaxAttempts: config.saasOutboundWebhookMaxAttempts,
 });

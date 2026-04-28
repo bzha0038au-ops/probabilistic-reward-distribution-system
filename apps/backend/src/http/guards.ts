@@ -1,5 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { API_ERROR_CODES } from "@reward/shared-types/api";
+import type { KycTier } from "@reward/shared-types/kyc";
+import type { UserFreezeScope } from "@reward/shared-types/risk";
 
 import {
   type AdminPermissionKey,
@@ -9,23 +11,39 @@ import {
   canAdminAccess,
   getAdminAccessProfileByUserId,
 } from "../modules/admin-permission/service";
-import { verifyAdminMfaChallenge } from "../modules/admin-mfa/service";
+import {
+  verifyAdminMfaBreakGlassCode,
+  verifyAdminMfaChallenge,
+} from "../modules/admin-mfa/service";
 import { context } from "../shared/context";
 import { bindActorObservability } from "../shared/telemetry";
 import {
+  ADMIN_ACCESS_TOKEN_SCOPES,
   ADMIN_SESSION_COOKIE,
   type AuthenticatedAdmin,
+  verifyScopedAdminAccessToken,
   verifyAdminSessionToken,
 } from "../shared/admin-session";
 import {
   USER_SESSION_COOKIE,
   verifyUserSessionToken,
 } from "../shared/user-session";
+import { toDecimal, toMoneyString } from "../shared/money";
 import { sendError } from "./respond";
 import { isUserFrozen } from "../modules/risk/service";
-import { getSystemFlags } from "../modules/system/service";
+import {
+  getSystemFlags,
+  getWithdrawalRiskConfig,
+} from "../modules/system/service";
+import { getEffectiveUserKycTier } from "../modules/kyc/service";
 import { db } from "../db";
+import { getCurrentLegalAcceptanceStateForUser } from "../modules/legal/service";
 import { getUserById } from "../modules/user/service";
+import {
+  isUserMfaEnabled,
+  verifyUserMfaChallenge,
+} from "../modules/user-mfa/service";
+import { toAmountString } from "./utils";
 
 const setActorContext = (payload: {
   userId: number;
@@ -38,6 +56,19 @@ const setActorContext = (payload: {
   }
 
   bindActorObservability(payload);
+};
+
+const freezeErrorMessages: Record<UserFreezeScope, string> = {
+  account_lock: "Account locked.",
+  withdrawal_lock: "Withdrawals locked.",
+  gameplay_lock: "Gameplay locked.",
+  topup_lock: "Top-ups locked.",
+};
+
+const userKycTierRank: Record<KycTier, number> = {
+  tier_0: 0,
+  tier_1: 1,
+  tier_2: 2,
 };
 
 export const requireUser = async (request: FastifyRequest) => {
@@ -54,9 +85,40 @@ export const requireUser = async (request: FastifyRequest) => {
   return user;
 };
 
+const readQueryStringValue = (query: unknown, key: string) => {
+  if (!query || typeof query !== "object") {
+    return null;
+  }
+
+  const value = Reflect.get(query, key);
+  return typeof value === "string" && value.trim() !== ""
+    ? value.trim()
+    : null;
+};
+
+const supportsScopedAdminAccessToken = (request: FastifyRequest) =>
+  request.url.split("?", 1)[0] === "/admin/ws/table-monitoring";
+
+const resolveScopedAdminAccessToken = async (request: FastifyRequest) => {
+  if (!supportsScopedAdminAccessToken(request)) {
+    return null;
+  }
+
+  const accessToken = readQueryStringValue(request.query, "accessToken");
+  if (!accessToken) {
+    return null;
+  }
+
+  return verifyScopedAdminAccessToken(accessToken, {
+    scope: ADMIN_ACCESS_TOKEN_SCOPES.TABLE_MONITORING_WS,
+  });
+};
+
 export const requireAdmin = async (request: FastifyRequest) => {
   const token = request.cookies[ADMIN_SESSION_COOKIE];
-  const session = await verifyAdminSessionToken(token);
+  const session =
+    (await verifyAdminSessionToken(token)) ??
+    (await resolveScopedAdminAccessToken(request));
   if (!session) return null;
 
   const adminProfile = await getAdminAccessProfileByUserId(session.userId);
@@ -90,11 +152,25 @@ export const requireUserGuard = async (
   if (systemFlags.maintenanceMode) {
     return sendError(reply, 503, "System under maintenance.");
   }
-  const frozen = await isUserFrozen(user.userId);
+  const frozen = await isUserFrozen(user.userId, { scope: "account_lock" });
   if (frozen) {
     return sendError(reply, 423, "Account locked.");
   }
   request.user = user;
+};
+
+export const requireUserFreezeScope = (scope: UserFreezeScope) => {
+  return async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = request.user;
+    if (!user) {
+      return sendError(reply, 401, "Unauthorized");
+    }
+
+    const frozen = await isUserFrozen(user.userId, { scope });
+    if (frozen) {
+      return sendError(reply, 423, freezeErrorMessages[scope]);
+    }
+  };
 };
 
 export const requireVerifiedUser = (requirements: {
@@ -137,6 +213,54 @@ export const requireVerifiedUser = (requirements: {
   };
 };
 
+export const requireUserKycTier = (requirements: {
+  minimum: KycTier;
+}) => {
+  return async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = request.user;
+    if (!user) {
+      return sendError(reply, 401, "Unauthorized");
+    }
+
+    const currentTier = await getEffectiveUserKycTier(user.userId);
+    if (
+      userKycTierRank[currentTier] <
+      userKycTierRank[requirements.minimum]
+    ) {
+      return sendError(
+        reply,
+        403,
+        "KYC verification required.",
+        undefined,
+        API_ERROR_CODES.KYC_TIER_REQUIRED,
+      );
+    }
+  };
+};
+
+export const requireCurrentLegalAcceptance = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+) => {
+  const user = request.user;
+  if (!user) {
+    return sendError(reply, 401, "Unauthorized");
+  }
+
+  const legal = await getCurrentLegalAcceptanceStateForUser(user.userId);
+  if (!legal.requiresAcceptance) {
+    return;
+  }
+
+  return sendError(
+    reply,
+    403,
+    "Accept the current legal documents to continue.",
+    undefined,
+    API_ERROR_CODES.LEGAL_ACCEPTANCE_REQUIRED,
+  );
+};
+
 export const requireAdminGuard = async (
   request: FastifyRequest,
   reply: FastifyReply,
@@ -145,7 +269,7 @@ export const requireAdminGuard = async (
   if (!admin) {
     return sendError(reply, 401, "Unauthorized");
   }
-  const frozen = await isUserFrozen(admin.userId);
+  const frozen = await isUserFrozen(admin.userId, { scope: "account_lock" });
   if (frozen) {
     return sendError(reply, 423, "Account locked.");
   }
@@ -179,9 +303,107 @@ const extractAdminTotpCode = (request: FastifyRequest) => {
   return bodyCode?.trim() || null;
 };
 
+const extractAdminBreakGlassCode = (request: FastifyRequest) => {
+  const headerValue = request.headers["x-admin-break-glass-code"];
+  const headerCode = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+  if (typeof headerCode === "string" && headerCode.trim() !== "") {
+    return headerCode.trim();
+  }
+
+  const body = toObject(request.body);
+  const bodyCode = readString(Reflect.get(body, "breakGlassCode"));
+  return bodyCode?.trim() || null;
+};
+
+const extractUserTotpCode = (request: FastifyRequest) => {
+  const headerValue = request.headers["x-user-totp-code"];
+  const headerCode = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+  if (typeof headerCode === "string" && headerCode.trim() !== "") {
+    return headerCode.trim();
+  }
+
+  const body = toObject(request.body);
+  const bodyCode = readString(Reflect.get(body, "totpCode"));
+  return bodyCode?.trim() || null;
+};
+
+export const requireUserMfaStepUp = (
+  options: {
+    amountField?: string;
+  } = {},
+) => {
+  return async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = request.user;
+    if (!user) {
+      return sendError(reply, 401, "Unauthorized");
+    }
+
+    const body = toObject(request.body);
+    const amount = toAmountString(
+      Reflect.get(body, options.amountField ?? "amount"),
+    );
+    if (!amount) {
+      return;
+    }
+
+    const amountValue = toDecimal(amount);
+    const { largeAmountSecondApprovalThreshold } =
+      await getWithdrawalRiskConfig(db);
+    if (
+      largeAmountSecondApprovalThreshold.lte(0) ||
+      amountValue.lt(largeAmountSecondApprovalThreshold)
+    ) {
+      return;
+    }
+
+    const mfaEnabled = await isUserMfaEnabled(user.userId);
+    if (!mfaEnabled) {
+      return sendError(
+        reply,
+        403,
+        "User MFA must be enabled for high-value withdrawals.",
+        undefined,
+        API_ERROR_CODES.USER_MFA_REQUIRED,
+      );
+    }
+
+    const totpCode = extractUserTotpCode(request);
+    if (!totpCode) {
+      return sendError(
+        reply,
+        401,
+        "User step-up code required.",
+        undefined,
+        API_ERROR_CODES.USER_STEP_UP_REQUIRED,
+      );
+    }
+
+    const result = await verifyUserMfaChallenge({
+      userId: user.userId,
+      code: totpCode,
+    });
+    if (!result.valid || !result.method) {
+      return sendError(
+        reply,
+        401,
+        "Invalid user step-up code.",
+        undefined,
+        API_ERROR_CODES.USER_STEP_UP_INVALID,
+      );
+    }
+
+    request.userStepUp = {
+      verified: true,
+      method: result.method,
+      verifiedAt: new Date().toISOString(),
+      amountThreshold: toMoneyString(largeAmountSecondApprovalThreshold),
+    };
+  };
+};
+
 export const requireAdminPermission = (
   permission: AdminPermissionKey,
-  options: { requireStepUp?: boolean } = {},
+  options: { requireStepUp?: boolean; requireBreakGlass?: boolean } = {},
 ) => {
   return async (request: FastifyRequest, reply: FastifyReply) => {
     const admin = request.admin;
@@ -199,52 +421,89 @@ export const requireAdminPermission = (
       );
     }
 
-    const requireStepUp =
-      options.requireStepUp ?? STEP_UP_ADMIN_PERMISSIONS.has(permission);
-    if (!requireStepUp) {
+    const requireBreakGlass = options.requireBreakGlass === true;
+    const requireStepUp = requireBreakGlass
+      ? true
+      : options.requireStepUp ?? STEP_UP_ADMIN_PERMISSIONS.has(permission);
+    if (!requireStepUp && !requireBreakGlass) {
       return;
     }
 
-    if (!admin.mfaEnabled) {
-      return sendError(
-        reply,
-        403,
-        "Admin MFA must be enabled for this action.",
-        undefined,
-        API_ERROR_CODES.ADMIN_MFA_REQUIRED,
-      );
+    let verifiedMethod: "totp" | "recovery_code" | null = null;
+    let recoveryCodesRemaining = 0;
+    const verifiedAt = new Date().toISOString();
+
+    if (requireStepUp) {
+      if (!admin.mfaEnabled) {
+        return sendError(
+          reply,
+          403,
+          "Admin MFA must be enabled for this action.",
+          undefined,
+          API_ERROR_CODES.ADMIN_MFA_REQUIRED,
+        );
+      }
+
+      const totpCode = extractAdminTotpCode(request);
+      if (!totpCode) {
+        return sendError(
+          reply,
+          401,
+          "Admin step-up code required.",
+          undefined,
+          API_ERROR_CODES.ADMIN_STEP_UP_REQUIRED,
+        );
+      }
+
+      const result = await verifyAdminMfaChallenge({
+        adminId: admin.adminId,
+        code: totpCode,
+      });
+      if (!result.valid || !result.method) {
+        return sendError(
+          reply,
+          401,
+          "Invalid admin step-up code.",
+          undefined,
+          API_ERROR_CODES.ADMIN_STEP_UP_INVALID,
+        );
+      }
+
+      verifiedMethod = result.method;
+      recoveryCodesRemaining = result.recoveryCodesRemaining;
     }
 
-    const totpCode = extractAdminTotpCode(request);
-    if (!totpCode) {
-      return sendError(
-        reply,
-        401,
-        "Admin step-up code required.",
-        undefined,
-        API_ERROR_CODES.ADMIN_STEP_UP_REQUIRED,
-      );
+    if (requireBreakGlass) {
+      const breakGlassCode = extractAdminBreakGlassCode(request);
+      if (!breakGlassCode) {
+        return sendError(
+          reply,
+          401,
+          "Admin break-glass code required.",
+          undefined,
+          API_ERROR_CODES.ADMIN_BREAK_GLASS_REQUIRED,
+        );
+      }
+
+      if (!verifyAdminMfaBreakGlassCode(breakGlassCode)) {
+        return sendError(
+          reply,
+          401,
+          "Invalid admin break-glass code.",
+          undefined,
+          API_ERROR_CODES.ADMIN_BREAK_GLASS_INVALID,
+        );
+      }
     }
 
-    const result = await verifyAdminMfaChallenge({
-      adminId: admin.adminId,
-      code: totpCode,
-    });
-    if (!result.valid) {
-      return sendError(
-        reply,
-        401,
-        "Invalid admin step-up code.",
-        undefined,
-        API_ERROR_CODES.ADMIN_STEP_UP_INVALID,
-      );
+    if (verifiedMethod) {
+      request.adminStepUp = {
+        verified: true,
+        method: verifiedMethod,
+        verifiedAt,
+        recoveryCodesRemaining,
+        breakGlassVerified: requireBreakGlass,
+      };
     }
-
-    request.adminStepUp = {
-      verified: true,
-      method: result.method,
-      verifiedAt: new Date().toISOString(),
-      recoveryCodesRemaining: result.recoveryCodesRemaining,
-    };
   };
 };

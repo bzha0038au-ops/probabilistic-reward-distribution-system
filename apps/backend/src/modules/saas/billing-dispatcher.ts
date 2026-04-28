@@ -6,6 +6,7 @@ import {
   runSaasStripeReconciliationCycle,
   runSaasStripeWebhookCompensationCycle,
 } from './billing-service';
+import { runSaasOutboundWebhookDeliveryCycle } from './outbound-webhook-service';
 
 let timer: NodeJS.Timeout | null = null;
 let inFlight: Promise<void> | null = null;
@@ -18,16 +19,18 @@ const runCycle = async () => {
 
   inFlight = (async () => {
     try {
-      const [billing, reconciliation, webhooks] = await Promise.all([
+      const [billing, reconciliation, webhooks, outboundWebhooks] = await Promise.all([
         runSaasBillingAutomationCycle(),
         runSaasStripeReconciliationCycle(),
         runSaasStripeWebhookCompensationCycle(),
+        runSaasOutboundWebhookDeliveryCycle(),
       ]);
 
       logger.info('saas billing cycle completed', {
         billing,
         reconciliation,
         webhooks,
+        outboundWebhooks,
       });
     } catch (error) {
       captureException(error, {

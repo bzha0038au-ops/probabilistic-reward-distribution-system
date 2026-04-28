@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
+import { redirect } from "next/navigation";
 
 import { LocaleSwitcher } from '@/components/locale-switcher';
 import { LogoutForm } from '@/components/logout-form';
@@ -16,14 +17,20 @@ export default async function ProtectedAppLayout({
 }) {
   const t = getServerTranslations();
   const currentSession = await requireCurrentUserSession();
+  if (currentSession.legal.requiresAcceptance) {
+    redirect("/legal");
+  }
   const navItems = [
     { href: '/app', label: t('common.dashboard') },
     { href: '/app/rewards', label: t('app.navRewards') },
     { href: '/app/wallet', label: t('app.navWallet') },
     { href: '/app/payments', label: t('app.navPayments') },
+    { href: '/app/verification', label: 'KYC' },
     { href: '/app/security', label: t('app.navSecurity') },
+    { href: '/app/markets', label: t('app.navMarkets') },
     { href: '/app/slot', label: t('app.navGacha') },
     { href: '/app/quick-eight', label: t('app.navQuickEight') },
+    { href: '/app/holdem', label: t('app.navHoldem') },
     { href: '/app/blackjack', label: t('app.navBlackjack') },
     { href: '/app/fairness', label: t('app.navFairness') },
   ];

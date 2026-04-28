@@ -1,10 +1,14 @@
 import Decimal from "decimal.js";
 import {
+  agentBlocklist,
   saasApiKeys,
+  saasAgents,
   saasBillingAccounts,
   saasBillingRuns,
   saasBillingTopUps,
   saasLedgerEntries,
+  saasOutboundWebhookDeliveries,
+  saasOutboundWebhooks,
   saasProjectPrizes,
   saasProjects,
   saasStripeWebhookEvents,
@@ -21,9 +25,14 @@ import type {
   PrizeEngineProjectApiRateLimitUsage,
   SaasApiKey,
   SaasApiKeyIssue,
+  SaasAgent,
   SaasBillingAccount,
   SaasBillingRun,
   SaasBillingTopUp,
+  SaasAgentControl,
+  SaasOutboundWebhook,
+  SaasOutboundWebhookDelivery,
+  SaasOutboundWebhookEvent,
   SaasProject,
   SaasProjectPrize,
   SaasStripeWebhookEvent,
@@ -31,16 +40,27 @@ import type {
   SaasTenantInvite,
   SaasTenantLink,
   SaasTenantMembership,
+  SaasUsageEvent,
 } from "@reward/shared-types/saas";
-import { prizeEngineApiKeyScopeValues } from "@reward/shared-types/saas";
+import {
+  prizeEngineApiKeyScopeValues,
+  saasOutboundWebhookEventValues,
+} from "@reward/shared-types/saas";
 
 import { toMoneyString } from "../../shared/money";
 import type { SaasAdminActor } from "./access";
+import {
+  readBillingRunDecisionBreakdown,
+  resolveBillingDecisionPricing,
+} from "./billing";
 import {
   DEFAULT_FAIRNESS_EPOCH_SECONDS,
   DEFAULT_PROJECT_API_RATE_LIMIT_BURST,
   DEFAULT_PROJECT_API_RATE_LIMIT_DAILY,
   DEFAULT_PROJECT_API_RATE_LIMIT_HOURLY,
+  DEFAULT_PROJECT_SELECTION_STRATEGY,
+  normalizeProjectStrategyParams,
+  resolveProjectSelectionStrategy,
 } from "./prize-engine-domain";
 
 export const normalizeScopes = (value: unknown): PrizeEngineApiKeyScope[] => {
@@ -57,13 +77,56 @@ export const normalizeScopes = (value: unknown): PrizeEngineApiKeyScope[] => {
   );
 };
 
-export const normalizeMetadata = (value: unknown) =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (Object.fromEntries(Object.entries(value)) as Record<string, unknown>)
-    : null;
+export const normalizeMetadata = (
+  value: unknown,
+): Record<string, unknown> | null => {
+  let current = value;
+
+  while (typeof current === "string" && current.trim() !== "") {
+    try {
+      current = JSON.parse(current) as unknown;
+    } catch {
+      return null;
+    }
+  }
+
+  if (
+    typeof current === "object" &&
+    current !== null &&
+    !Array.isArray(current)
+  ) {
+    return Object.fromEntries(Object.entries(current)) as Record<
+      string,
+      unknown
+    >;
+  }
+
+  return null;
+};
+
+export const normalizeOutboundWebhookEvents = (
+  value: unknown,
+): SaasOutboundWebhookEvent[] => {
+  const source = Array.isArray(value) ? value : [];
+  const allowed = new Set(saasOutboundWebhookEventValues);
+  return Array.from(
+    new Set(
+      source.filter(
+        (event): event is SaasOutboundWebhookEvent =>
+          typeof event === "string" &&
+          allowed.has(event as SaasOutboundWebhookEvent),
+      ),
+    ),
+  );
+};
 
 const maskApiKey = (keyPrefix: string, plainKey: string) =>
   `${keyPrefix}••••${plainKey.slice(-4)}`;
+
+const maskWebhookSecret = (secret: string) =>
+  secret.length <= 8
+    ? `${secret.slice(0, 2)}••••`
+    : `${secret.slice(0, 4)}••••${secret.slice(-4)}`;
 
 export const toSaasTenant = (
   row: typeof saasTenants.$inferSelect,
@@ -73,6 +136,18 @@ export const toSaasTenant = (
   name: row.name,
   billingEmail: row.billingEmail,
   status: row.status,
+  riskEnvelope: {
+    dailyBudgetCap: row.riskEnvelopeDailyBudgetCap
+      ? toMoneyString(row.riskEnvelopeDailyBudgetCap)
+      : null,
+    maxSinglePayout: row.riskEnvelopeMaxSinglePayout
+      ? toMoneyString(row.riskEnvelopeMaxSinglePayout)
+      : null,
+    varianceCap: row.riskEnvelopeVarianceCap
+      ? toMoneyString(row.riskEnvelopeVarianceCap)
+      : null,
+    emergencyStop: Boolean(row.riskEnvelopeEmergencyStop),
+  },
   metadata: normalizeMetadata(row.metadata),
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
@@ -91,6 +166,10 @@ export const toSaasProject = (
   currency: row.currency,
   drawCost: toMoneyString(row.drawCost),
   prizePoolBalance: toMoneyString(row.prizePoolBalance),
+  strategy: resolveProjectSelectionStrategy(
+    row.strategy ?? DEFAULT_PROJECT_SELECTION_STRATEGY,
+  ),
+  strategyParams: normalizeProjectStrategyParams(row.strategyParams),
   fairnessEpochSeconds: Number(
     row.fairnessEpochSeconds ?? DEFAULT_FAIRNESS_EPOCH_SECONDS,
   ),
@@ -127,6 +206,19 @@ export const toSaasPrize = (
   updatedAt: row.updatedAt,
 });
 
+export const toSaasAgent = (
+  row: typeof saasAgents.$inferSelect,
+): SaasAgent => ({
+  id: row.id,
+  projectId: row.projectId,
+  agentId: row.externalId,
+  groupId: row.groupId,
+  ownerMetadata: normalizeMetadata(row.ownerMetadata),
+  fingerprint: row.fingerprint,
+  status: row.status,
+  createdAt: row.createdAt,
+});
+
 export const toSaasBilling = (
   row: typeof saasBillingAccounts.$inferSelect,
 ): SaasBillingAccount => ({
@@ -139,6 +231,7 @@ export const toSaasBilling = (
   portalConfigurationId: row.portalConfigurationId,
   baseMonthlyFee: toMoneyString(row.baseMonthlyFee),
   drawFee: new Decimal(row.drawFee).toFixed(4),
+  decisionPricing: resolveBillingDecisionPricing(row.metadata, row.drawFee),
   currency: row.currency,
   isBillable: Boolean(row.isBillable),
   metadata: normalizeMetadata(row.metadata),
@@ -179,6 +272,7 @@ export const toSaasBillingRun = (
   creditAppliedAmount: toMoneyString(row.creditAppliedAmount),
   totalAmount: toMoneyString(row.totalAmount),
   drawCount: Number(row.drawCount ?? 0),
+  decisionBreakdown: readBillingRunDecisionBreakdown(row.metadata),
   stripeCustomerId: row.stripeCustomerId,
   stripeInvoiceId: row.stripeInvoiceId,
   stripeInvoiceStatus: row.stripeInvoiceStatus,
@@ -244,6 +338,23 @@ export const toSaasTenantLink = (
   updatedAt: row.updatedAt,
 });
 
+export const toSaasAgentControl = (
+  row: typeof agentBlocklist.$inferSelect,
+): SaasAgentControl => ({
+  id: row.id,
+  tenantId: row.tenantId,
+  agentId: row.agentId,
+  mode: row.mode,
+  reason: row.reason,
+  budgetMultiplier:
+    row.budgetMultiplier === null
+      ? null
+      : new Decimal(row.budgetMultiplier).toNumber(),
+  createdByAdminId: row.createdByAdminId,
+  createdAt: row.createdAt,
+  updatedAt: row.updatedAt,
+});
+
 export const toSaasStripeWebhookEvent = (
   row: typeof saasStripeWebhookEvents.$inferSelect,
 ): SaasStripeWebhookEvent => ({
@@ -257,6 +368,40 @@ export const toSaasStripeWebhookEvent = (
   lastError: row.lastError,
   processedAt: row.processedAt,
   nextAttemptAt: row.nextAttemptAt,
+  createdAt: row.createdAt,
+  updatedAt: row.updatedAt,
+});
+
+export const toSaasOutboundWebhook = (
+  row: typeof saasOutboundWebhooks.$inferSelect,
+): SaasOutboundWebhook => ({
+  id: row.id,
+  projectId: row.projectId,
+  url: row.url,
+  secretPreview: maskWebhookSecret(row.secret),
+  events: normalizeOutboundWebhookEvents(row.events),
+  isActive: Boolean(row.isActive),
+  lastDeliveredAt: row.lastDeliveredAt,
+  createdAt: row.createdAt,
+  updatedAt: row.updatedAt,
+});
+
+export const toSaasOutboundWebhookDelivery = (
+  row: typeof saasOutboundWebhookDeliveries.$inferSelect,
+): SaasOutboundWebhookDelivery => ({
+  id: row.id,
+  webhookId: row.webhookId,
+  projectId: row.projectId,
+  drawRecordId: row.drawRecordId,
+  eventType: row.eventType,
+  eventId: row.eventId,
+  status: row.status,
+  attempts: Number(row.attempts ?? 0),
+  lastHttpStatus: row.lastHttpStatus,
+  lastError: row.lastError,
+  lastResponseBody: row.lastResponseBody,
+  nextAttemptAt: row.nextAttemptAt,
+  deliveredAt: row.deliveredAt,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });
@@ -303,6 +448,7 @@ export const toPrizeEngineLedgerEntry = (
   id: row.id,
   projectId: row.projectId,
   playerId: row.playerId,
+  environment: row.environment,
   entryType: row.entryType,
   amount: toMoneyString(row.amount),
   balanceBefore: toMoneyString(row.balanceBefore),
@@ -313,14 +459,18 @@ export const toPrizeEngineLedgerEntry = (
   createdAt: row.createdAt,
 });
 
-export const toSaasUsageEvent = (row: typeof saasUsageEvents.$inferSelect) => ({
+export const toSaasUsageEvent = (
+  row: typeof saasUsageEvents.$inferSelect,
+): SaasUsageEvent => ({
   id: row.id,
   tenantId: row.tenantId,
   projectId: row.projectId,
   apiKeyId: row.apiKeyId,
   billingRunId: row.billingRunId,
   playerId: row.playerId,
+  environment: row.environment,
   eventType: row.eventType,
+  decisionType: row.decisionType,
   referenceType: row.referenceType,
   referenceId: row.referenceId,
   units: row.units,
@@ -333,4 +483,5 @@ export const toSaasUsageEvent = (row: typeof saasUsageEvents.$inferSelect) => ({
 export const toSaasAdminActor = (
   adminId?: number | null,
   permissions?: string[],
-): SaasAdminActor => (adminId ? { adminId, permissions } : null);
+  accessScope: "global" | "membership" = "global",
+): SaasAdminActor => (adminId ? { adminId, permissions, accessScope } : null);

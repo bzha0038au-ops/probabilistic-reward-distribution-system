@@ -21,6 +21,7 @@ export type AppConfig = {
   telegramPageChatId: string;
   telegramTicketChatId: string;
   telegramDigestChatId: string;
+  amlReviewSlaMinutes: number;
   observabilityWithdrawStuckThresholdMinutes: number;
   paymentOperatingMode: 'manual_review' | 'automated';
   paymentAutomatedModeOptIn: boolean;
@@ -29,6 +30,8 @@ export type AppConfig = {
   paymentReconciliationLookbackMinutes: number;
   paymentReconciliationPendingTimeoutMinutes: number;
   paymentReconciliationMaxOrdersPerProvider: number;
+  walletReconciliationEnabled: boolean;
+  walletReconciliationIntervalMs: number;
   paymentOperationsEnabled: boolean;
   paymentOperationsIntervalMs: number;
   paymentOperationsTimeoutMinutes: number;
@@ -46,6 +49,20 @@ export type AppConfig = {
   saasBillingWebhookLockTimeoutMs: number;
   saasBillingAutomationEnabled: boolean;
   saasBillingAutomationBatchSize: number;
+  saasOutboundWebhookBatchSize: number;
+  saasOutboundWebhookLockTimeoutMs: number;
+  saasOutboundWebhookRequestTimeoutMs: number;
+  saasOutboundWebhookMaxAttempts: number;
+  fairnessAuditWorkerEnabled: boolean;
+  fairnessAuditWorkerIntervalMs: number;
+  holdemTurnTimeoutMs: number;
+  holdemTimeoutWorkerEnabled: boolean;
+  holdemTimeoutWorkerIntervalMs: number;
+  holdemTimeoutWorkerBatchSize: number;
+  blackjackTurnTimeoutMs: number;
+  blackjackTimeoutWorkerEnabled: boolean;
+  blackjackTimeoutWorkerIntervalMs: number;
+  blackjackTimeoutWorkerBatchSize: number;
   webBaseUrl: string;
   adminBaseUrl: string;
   port: number;
@@ -232,6 +249,12 @@ const schema = {
     default: '',
     env: 'TELEGRAM_DIGEST_CHAT_ID',
   },
+  amlReviewSlaMinutes: {
+    doc: 'Age in minutes after which a pending AML hit has breached operator SLA',
+    format: 'int',
+    default: 60,
+    env: 'AML_REVIEW_SLA_MINUTES',
+  },
   observabilityWithdrawStuckThresholdMinutes: {
     doc: 'Age in minutes after which requested, approved, provider_submitted, or provider_processing withdrawals are considered stuck',
     format: 'int',
@@ -279,6 +302,18 @@ const schema = {
     format: 'int',
     default: 200,
     env: 'PAYMENT_RECONCILIATION_MAX_ORDERS_PER_PROVIDER',
+  },
+  walletReconciliationEnabled: {
+    doc: 'Enable scheduled wallet-vs-ledger reconciliation jobs',
+    format: Boolean,
+    default: true,
+    env: 'WALLET_RECONCILIATION_ENABLED',
+  },
+  walletReconciliationIntervalMs: {
+    doc: 'Interval in ms between scheduled wallet reconciliation cycles',
+    format: 'int',
+    default: 86_400_000,
+    env: 'WALLET_RECONCILIATION_INTERVAL_MS',
   },
   paymentOperationsEnabled: {
     doc: 'Enable scheduled timeout cleanup and stuck-order compensation jobs',
@@ -381,6 +416,30 @@ const schema = {
     format: 'int',
     default: 100,
     env: 'SAAS_BILLING_AUTOMATION_BATCH_SIZE',
+  },
+  saasOutboundWebhookBatchSize: {
+    doc: 'Maximum queued SaaS outbound webhook deliveries processed per worker cycle',
+    format: 'int',
+    default: 25,
+    env: 'SAAS_OUTBOUND_WEBHOOK_BATCH_SIZE',
+  },
+  saasOutboundWebhookLockTimeoutMs: {
+    doc: 'Time in ms before an in-flight SaaS outbound webhook delivery can be reclaimed',
+    format: 'int',
+    default: 120_000,
+    env: 'SAAS_OUTBOUND_WEBHOOK_LOCK_TIMEOUT_MS',
+  },
+  saasOutboundWebhookRequestTimeoutMs: {
+    doc: 'HTTP timeout in ms for each SaaS outbound webhook delivery attempt',
+    format: 'int',
+    default: 10_000,
+    env: 'SAAS_OUTBOUND_WEBHOOK_REQUEST_TIMEOUT_MS',
+  },
+  saasOutboundWebhookMaxAttempts: {
+    doc: 'Maximum SaaS outbound webhook delivery attempts before retries stop',
+    format: 'int',
+    default: 8,
+    env: 'SAAS_OUTBOUND_WEBHOOK_MAX_ATTEMPTS',
   },
   webBaseUrl: {
     doc: 'Web frontend base URL',
@@ -681,6 +740,66 @@ const schema = {
     format: String,
     default: '',
     env: 'AUTH_TWILIO_MESSAGING_SERVICE_SID',
+  },
+  fairnessAuditWorkerEnabled: {
+    doc: 'Enable scheduled fairness reveal and commit/reveal self-audit jobs',
+    format: Boolean,
+    default: true,
+    env: 'FAIRNESS_AUDIT_WORKER_ENABLED',
+  },
+  fairnessAuditWorkerIntervalMs: {
+    doc: 'Interval in ms between fairness reveal self-audit cycles',
+    format: 'int',
+    default: 60000,
+    env: 'FAIRNESS_AUDIT_WORKER_INTERVAL_MS',
+  },
+  holdemTurnTimeoutMs: {
+    doc: 'Maximum think time in ms before an active holdem turn is auto-played by the system',
+    format: 'int',
+    default: 30000,
+    env: 'HOLDEM_TURN_TIMEOUT_MS',
+  },
+  holdemTimeoutWorkerEnabled: {
+    doc: 'Enable the dedicated holdem timeout worker',
+    format: Boolean,
+    default: true,
+    env: 'HOLDEM_TIMEOUT_WORKER_ENABLED',
+  },
+  holdemTimeoutWorkerIntervalMs: {
+    doc: 'Interval in ms between holdem timeout worker scans',
+    format: 'int',
+    default: 1000,
+    env: 'HOLDEM_TIMEOUT_WORKER_INTERVAL_MS',
+  },
+  holdemTimeoutWorkerBatchSize: {
+    doc: 'Maximum expired holdem turns processed per timeout worker cycle',
+    format: 'int',
+    default: 50,
+    env: 'HOLDEM_TIMEOUT_WORKER_BATCH_SIZE',
+  },
+  blackjackTurnTimeoutMs: {
+    doc: 'Maximum think time in ms before an active blackjack turn is auto-played by the system',
+    format: 'int',
+    default: 30000,
+    env: 'BLACKJACK_TURN_TIMEOUT_MS',
+  },
+  blackjackTimeoutWorkerEnabled: {
+    doc: 'Enable the dedicated blackjack timeout worker',
+    format: Boolean,
+    default: true,
+    env: 'BLACKJACK_TIMEOUT_WORKER_ENABLED',
+  },
+  blackjackTimeoutWorkerIntervalMs: {
+    doc: 'Interval in ms between blackjack timeout worker scans',
+    format: 'int',
+    default: 1000,
+    env: 'BLACKJACK_TIMEOUT_WORKER_INTERVAL_MS',
+  },
+  blackjackTimeoutWorkerBatchSize: {
+    doc: 'Maximum expired blackjack turns processed per timeout worker cycle',
+    format: 'int',
+    default: 50,
+    env: 'BLACKJACK_TIMEOUT_WORKER_BATCH_SIZE',
   },
   sysAuthFailureWindowMinutes: {
     doc: 'System-config override for auth failure window',

@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import Decimal from "decimal.js";
 import { API_ERROR_CODES } from "@reward/shared-types/api";
 import {
+  agentBlocklist,
   admins,
   saasApiKeys,
   saasBillingAccounts,
@@ -22,6 +23,7 @@ import type {
   SaasApiKeyRotate,
   SaasApiKeyRotation,
   SaasApiKeyRevoke,
+  SaasAgentControlUpsert,
   SaasBillingAccountUpsert,
   SaasProjectCreate,
   SaasProjectPatch,
@@ -32,10 +34,13 @@ import type {
   SaasTenantInviteCreate,
   SaasTenantLinkCreate,
   SaasTenantMembershipCreate,
+  SaasTenantProvisioning,
+  SaasTenantRiskEnvelopePatch,
 } from "@reward/shared-types/saas";
 
-import { db } from "../../db";
+import { db, type DbTransaction } from "../../db";
 import { sendSaasTenantInviteNotification } from "../auth/notification-service";
+import { createSaasTenantRiskEnvelopeDraft as createSaasTenantRiskEnvelopeControlDraft } from "../control/service";
 import {
   badRequestError,
   conflictError,
@@ -54,15 +59,22 @@ import { getSaasStripeClient, isSaasStripeEnabled } from "./stripe";
 import {
   DEFAULT_API_KEY_SCOPES,
   hashValue,
+  normalizeProjectStrategyParams,
   resolveProjectApiRateLimit,
   resolveEpochSeconds,
+  resolveProjectSelectionStrategy,
 } from "./prize-engine-domain";
+import {
+  attachBillingDecisionPricingMetadata,
+  resolveBillingDecisionPricing,
+} from "./billing";
 import {
   normalizeMetadata,
   normalizeScopes,
   toSaasAdminActor,
   toSaasApiKey,
   toSaasBilling,
+  toSaasAgentControl,
   toSaasInvite,
   toSaasMembership,
   toSaasProject,
@@ -86,18 +98,64 @@ export {
 } from "./billing-service";
 export {
   authenticateProjectApiKey,
+  applyProjectAgentControl,
   createPrizeEngineDraw,
+  createPrizeEngineReward,
   getPrizeEngineFairnessCommit,
   getPrizeEngineLedger,
+  getPrizeEngineObservabilityDistribution,
   getPrizeEngineOverview,
+  listPrizeEngineObservabilityDistributions,
+  recordPrizeEngineUsageEvent,
   revealPrizeEngineFairnessSeed,
 } from "./prize-engine-service";
+export {
+  createSaasOutboundWebhook,
+  deleteSaasOutboundWebhook,
+  runSaasOutboundWebhookDeliveryCycle,
+  updateSaasOutboundWebhook,
+} from "./outbound-webhook-service";
 export { getSaasOverview } from "./overview-service";
+export { getSaasTenantUsageDashboard } from "./usage-service";
 export type { ProjectApiAuth } from "./prize-engine-domain";
 
 const DEFAULT_SAAS_INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const DEFAULT_API_KEY_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 const DEFAULT_API_KEY_ROTATION_OVERLAP_MS = 60 * 60 * 1000;
+const DEFAULT_SANDBOX_PROJECT_SLUG = "sandbox";
+const DEFAULT_SANDBOX_PROJECT_NAME = "Sandbox";
+const DEFAULT_SANDBOX_PROJECT_CURRENCY = "RWDT";
+const DEFAULT_SANDBOX_PROJECT_PRIZE_POOL_BALANCE = "500.00";
+const DEFAULT_SANDBOX_PROJECT_METADATA = {
+  bootstrapSource: "tenant_signup",
+  budgetEnvelope: "sandbox",
+  helloRewardReady: true,
+  sandboxCurrency: true,
+} as const;
+const DEFAULT_SANDBOX_BILLING_METADATA = {
+  bootstrapSource: "tenant_signup",
+  billingMode: "sandbox_only",
+} as const;
+const DEFAULT_SANDBOX_PRIZES = [
+  {
+    name: "Starter Credits",
+    stock: 500,
+    weight: 24,
+    rewardAmount: "5.00",
+  },
+  {
+    name: "Power Boost",
+    stock: 250,
+    weight: 8,
+    rewardAmount: "15.00",
+  },
+  {
+    name: "Lucky Crate",
+    stock: 100,
+    weight: 3,
+    rewardAmount: "50.00",
+  },
+] as const;
 
 const resolveApiKeyExpiry = (
   value?: string,
@@ -168,6 +226,38 @@ const buildInviteUrl = (baseUrl: string, token: string) =>
 const normalizeTenantInviteEmail = (value: string) =>
   value.trim().toLowerCase();
 
+const normalizeAgentId = (value: string) => {
+  const agentId = value.trim();
+  if (!agentId) {
+    throw badRequestError("Agent id is required.", {
+      code: API_ERROR_CODES.INVALID_AGENT_ID,
+    });
+  }
+
+  if (agentId.length > 128) {
+    throw badRequestError("Agent id is too long.", {
+      code: API_ERROR_CODES.INVALID_AGENT_ID,
+    });
+  }
+
+  return agentId;
+};
+
+const resolveAgentBudgetMultiplier = (payload: SaasAgentControlUpsert) => {
+  if (payload.mode === "blocked") {
+    return null;
+  }
+
+  const parsed = Number(payload.budgetMultiplier);
+  if (!Number.isFinite(parsed) || parsed <= 0 || parsed >= 1) {
+    throw badRequestError("Budget multiplier must be between 0 and 1.", {
+      code: API_ERROR_CODES.INVALID_REQUEST,
+    });
+  }
+
+  return new Decimal(parsed).toDecimalPlaces(4, Decimal.ROUND_DOWN).toFixed(4);
+};
+
 const hasBillingAccountVersionChanged = (
   row: typeof saasBillingAccountVersions.$inferSelect | undefined,
   next: {
@@ -178,6 +268,11 @@ const hasBillingAccountVersionChanged = (
     portalConfigurationId: string | null;
     baseMonthlyFee: string;
     drawFee: string;
+    decisionPricing: {
+      reject: string;
+      mute: string;
+      payout: string;
+    };
     currency: string;
     isBillable: boolean;
     metadata: Record<string, unknown> | null;
@@ -195,6 +290,8 @@ const hasBillingAccountVersionChanged = (
     row.portalConfigurationId !== next.portalConfigurationId ||
     toMoneyString(row.baseMonthlyFee) !== next.baseMonthlyFee ||
     new Decimal(row.drawFee).toFixed(4) !== next.drawFee ||
+    JSON.stringify(resolveBillingDecisionPricing(row.metadata, row.drawFee)) !==
+      JSON.stringify(next.decisionPricing) ||
     row.currency !== next.currency ||
     Boolean(row.isBillable) !== next.isBillable ||
     JSON.stringify(normalizeMetadata(row.metadata)) !==
@@ -202,19 +299,151 @@ const hasBillingAccountVersionChanged = (
   );
 };
 
-export async function createSaasTenant(payload: SaasTenantCreate) {
-  const [created] = await db
-    .insert(saasTenants)
+const bootstrapTenantSandbox = async (
+  tx: DbTransaction,
+  tenant: typeof saasTenants.$inferSelect,
+) => {
+  const now = new Date();
+  const [billingAccount] = await tx
+    .insert(saasBillingAccounts)
     .values({
-      slug: normalizeSlug(payload.slug),
-      name: payload.name.trim(),
-      billingEmail: payload.billingEmail ?? null,
-      status: payload.status ?? "active",
-      metadata: normalizeMetadata(payload.metadata),
+      tenantId: tenant.id,
+      planCode: "starter",
+      stripeCustomerId: null,
+      collectionMethod: "send_invoice",
+      autoBillingEnabled: false,
+      portalConfigurationId: null,
+      baseMonthlyFee: "0.00",
+      drawFee: "0.0000",
+      currency: "USD",
+      isBillable: false,
+      metadata: DEFAULT_SANDBOX_BILLING_METADATA,
+      updatedAt: now,
     })
     .returning();
 
-  return toSaasTenant(created);
+  if (!billingAccount) {
+    throw conflictError("Failed to create tenant billing account.", {
+      code: API_ERROR_CODES.FAILED_TO_SAVE_BILLING_ACCOUNT,
+    });
+  }
+
+  await tx.insert(saasBillingAccountVersions).values({
+    tenantId: tenant.id,
+    billingAccountId: billingAccount.id,
+    planCode: billingAccount.planCode,
+    stripeCustomerId: billingAccount.stripeCustomerId,
+    collectionMethod: billingAccount.collectionMethod,
+    autoBillingEnabled: Boolean(billingAccount.autoBillingEnabled),
+    portalConfigurationId: billingAccount.portalConfigurationId,
+    baseMonthlyFee: toMoneyString(billingAccount.baseMonthlyFee),
+    drawFee: new Decimal(billingAccount.drawFee).toFixed(4),
+    currency: billingAccount.currency,
+    isBillable: false,
+    metadata: normalizeMetadata(billingAccount.metadata),
+    effectiveAt: now,
+    createdByAdminId: null,
+    createdAt: now,
+  });
+
+  const rateLimits = resolveProjectApiRateLimit({});
+  const [sandboxProject] = await tx
+    .insert(saasProjects)
+    .values({
+      tenantId: tenant.id,
+      slug: DEFAULT_SANDBOX_PROJECT_SLUG,
+      name: DEFAULT_SANDBOX_PROJECT_NAME,
+      environment: "sandbox",
+      status: tenant.status,
+      currency: DEFAULT_SANDBOX_PROJECT_CURRENCY,
+      drawCost: "0.00",
+      prizePoolBalance: DEFAULT_SANDBOX_PROJECT_PRIZE_POOL_BALANCE,
+      strategy: resolveProjectSelectionStrategy(undefined),
+      strategyParams: normalizeProjectStrategyParams(undefined),
+      fairnessEpochSeconds: resolveEpochSeconds(undefined),
+      maxDrawCount: 1,
+      missWeight: 0,
+      ...rateLimits,
+      metadata: DEFAULT_SANDBOX_PROJECT_METADATA,
+    })
+    .returning();
+
+  if (!sandboxProject) {
+    throw conflictError("Failed to create sandbox project.");
+  }
+
+  const sandboxPrizes =
+    DEFAULT_SANDBOX_PRIZES.length > 0
+      ? await tx
+          .insert(saasProjectPrizes)
+          .values(
+            DEFAULT_SANDBOX_PRIZES.map((prize) => ({
+              projectId: sandboxProject.id,
+              name: prize.name,
+              stock: prize.stock,
+              weight: prize.weight,
+              rewardAmount: prize.rewardAmount,
+              isActive: true,
+              metadata: {
+                bootstrapSource: "tenant_signup",
+                sandboxFixture: true,
+              },
+            })),
+          )
+          .returning()
+      : [];
+
+  return {
+    sandboxProject: toSaasProject(sandboxProject),
+    sandboxPrizes: sandboxPrizes.map(toSaasPrize),
+    billingAccount: toSaasBilling(billingAccount),
+  };
+};
+
+export async function createSaasTenant(
+  payload: SaasTenantCreate,
+): Promise<SaasTenantProvisioning> {
+  return db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(saasTenants)
+      .values({
+        slug: normalizeSlug(payload.slug),
+        name: payload.name.trim(),
+        billingEmail: payload.billingEmail ?? null,
+        status: payload.status ?? "active",
+        metadata: normalizeMetadata(payload.metadata),
+      })
+      .returning();
+
+    if (!created) {
+      throw conflictError("Failed to create tenant.");
+    }
+
+    const bootstrap = await bootstrapTenantSandbox(tx, created);
+    return {
+      ...toSaasTenant(created),
+      bootstrap,
+    };
+  });
+}
+
+export async function createSaasTenantRiskEnvelopeDraft(
+  payload: SaasTenantRiskEnvelopePatch,
+  adminId: number,
+  permissions?: string[],
+  reason?: string | null,
+) {
+  await assertTenantCapability(
+    toSaasAdminActor(adminId, permissions),
+    payload.tenantId,
+    "billing:write",
+  );
+
+  return createSaasTenantRiskEnvelopeControlDraft({
+    adminId,
+    riskEnvelope: payload,
+    reason,
+  });
 }
 
 export async function createSaasProject(
@@ -250,6 +479,8 @@ export async function createSaasProject(
       currency: (payload.currency ?? "USD").trim().toUpperCase(),
       drawCost: toMoneyString(payload.drawCost ?? 0),
       prizePoolBalance: toMoneyString(payload.prizePoolBalance ?? 0),
+      strategy: resolveProjectSelectionStrategy(payload.strategy),
+      strategyParams: normalizeProjectStrategyParams(payload.strategyParams),
       fairnessEpochSeconds: resolveEpochSeconds(payload.fairnessEpochSeconds),
       maxDrawCount: Math.min(
         Math.max(Number(payload.maxDrawCount ?? 1), 1),
@@ -284,6 +515,16 @@ export async function updateSaasProject(
         : {}),
       ...(payload.prizePoolBalance !== undefined
         ? { prizePoolBalance: toMoneyString(payload.prizePoolBalance) }
+        : {}),
+      ...(payload.strategy !== undefined
+        ? { strategy: resolveProjectSelectionStrategy(payload.strategy) }
+        : {}),
+      ...(payload.strategyParams !== undefined
+        ? {
+            strategyParams: normalizeProjectStrategyParams(
+              payload.strategyParams,
+            ),
+          }
         : {}),
       ...(payload.fairnessEpochSeconds !== undefined
         ? {
@@ -381,7 +622,21 @@ export async function upsertSaasBillingAccount(
   }
 
   const now = new Date();
-  const metadata = normalizeMetadata(payload.metadata);
+  const existingMetadata = normalizeMetadata(existing?.metadata);
+  const incomingMetadata = normalizeMetadata(payload.metadata);
+  const metadata = attachBillingDecisionPricingMetadata(
+    payload.metadata === undefined
+      ? existingMetadata
+      : {
+          ...(existingMetadata ?? {}),
+          ...(incomingMetadata ?? {}),
+        },
+    payload.decisionPricing,
+  );
+  const decisionPricing = resolveBillingDecisionPricing(
+    metadata,
+    payload.drawFee,
+  );
   const values = {
     tenantId: payload.tenantId,
     planCode: payload.planCode,
@@ -437,6 +692,7 @@ export async function upsertSaasBillingAccount(
         portalConfigurationId: persisted.portalConfigurationId,
         baseMonthlyFee: toMoneyString(persisted.baseMonthlyFee),
         drawFee: new Decimal(persisted.drawFee).toFixed(4),
+        decisionPricing,
         currency: persisted.currency,
         isBillable: Boolean(persisted.isBillable),
         metadata: normalizeMetadata(persisted.metadata),
@@ -477,9 +733,10 @@ export async function createProjectApiKey(
   payload: SaasApiKeyCreate,
   adminId?: number | null,
   permissions?: string[],
+  accessScope: "global" | "membership" = "global",
 ) {
   await assertProjectCapability(
-    toSaasAdminActor(adminId ?? null, permissions),
+    toSaasAdminActor(adminId ?? null, permissions, accessScope),
     payload.projectId,
     "key:write",
   );
@@ -520,9 +777,10 @@ export async function rotateProjectApiKey(
   payload: SaasApiKeyRotate,
   adminId?: number | null,
   permissions?: string[],
+  accessScope: "global" | "membership" = "global",
 ) {
   await assertProjectCapability(
-    toSaasAdminActor(adminId ?? null, permissions),
+    toSaasAdminActor(adminId ?? null, permissions, accessScope),
     projectId,
     "key:write",
   );
@@ -633,9 +891,10 @@ export async function revokeProjectApiKey(
   payload: SaasApiKeyRevoke,
   adminId?: number | null,
   permissions?: string[],
+  accessScope: "global" | "membership" = "global",
 ) {
   await assertProjectCapability(
-    toSaasAdminActor(adminId ?? null, permissions),
+    toSaasAdminActor(adminId ?? null, permissions, accessScope),
     projectId,
     "key:write",
   );
@@ -958,9 +1217,12 @@ export async function acceptSaasTenantInvite(
   }
 
   if (normalizeTenantInviteEmail(admin.adminEmail) !== invite.email) {
-    throw forbiddenError("Invitation email does not match your admin account.", {
-      code: API_ERROR_CODES.INVITATION_EMAIL_MISMATCH,
-    });
+    throw forbiddenError(
+      "Invitation email does not match your admin account.",
+      {
+        code: API_ERROR_CODES.INVITATION_EMAIL_MISMATCH,
+      },
+    );
   }
 
   const membership = await db.transaction(async (tx) => {
@@ -1111,6 +1373,72 @@ export async function deleteSaasTenantLink(
   }
 
   return toSaasTenantLink(deleted);
+}
+
+export async function upsertSaasAgentControl(
+  payload: SaasAgentControlUpsert,
+  adminId?: number | null,
+  permissions?: string[],
+) {
+  await assertTenantCapability(
+    toSaasAdminActor(adminId ?? null, permissions),
+    payload.tenantId,
+    "agent:control:write",
+  );
+
+  const [saved] = await db
+    .insert(agentBlocklist)
+    .values({
+      tenantId: payload.tenantId,
+      agentId: normalizeAgentId(payload.agentId),
+      mode: payload.mode,
+      reason: payload.reason.trim(),
+      budgetMultiplier: resolveAgentBudgetMultiplier(payload),
+      createdByAdminId: adminId ?? null,
+    })
+    .onConflictDoUpdate({
+      target: [agentBlocklist.tenantId, agentBlocklist.agentId],
+      set: {
+        mode: payload.mode,
+        reason: payload.reason.trim(),
+        budgetMultiplier: resolveAgentBudgetMultiplier(payload),
+        updatedAt: new Date(),
+      },
+    })
+    .returning();
+
+  return toSaasAgentControl(saved);
+}
+
+export async function deleteSaasAgentControl(
+  tenantId: number,
+  controlId: number,
+  adminId?: number | null,
+  permissions?: string[],
+) {
+  await assertTenantCapability(
+    toSaasAdminActor(adminId ?? null, permissions),
+    tenantId,
+    "agent:control:write",
+  );
+
+  const [deleted] = await db
+    .delete(agentBlocklist)
+    .where(
+      and(
+        eq(agentBlocklist.id, controlId),
+        eq(agentBlocklist.tenantId, tenantId),
+      ),
+    )
+    .returning();
+
+  if (!deleted) {
+    throw notFoundError("Agent control not found.", {
+      code: API_ERROR_CODES.AGENT_CONTROL_NOT_FOUND,
+    });
+  }
+
+  return toSaasAgentControl(deleted);
 }
 
 export async function listProjectPrizes(

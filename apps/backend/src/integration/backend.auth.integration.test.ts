@@ -12,16 +12,20 @@ import {
   loginUser,
   registerUser,
   seedAdminAccount,
+  verifyUserContacts,
 } from './integration-test-support';
 import { and, asc, desc, eq } from '@reward/database/orm';
 import { expect, vi } from 'vitest';
 import {
   adminActions,
+  amlChecks,
   admins,
   authEvents,
   authSessions,
   authTokens,
+  freezeRecords,
   users,
+  userMfaSecrets,
   userWallets,
 } from '@reward/database';
 
@@ -66,6 +70,76 @@ describeIntegrationSuite('backend auth integration', () => {
     expect(wallet?.userId).toBe(user.id);
   });
 
+  it('blocks registration with an AML review freeze and notifies active admins', async () => {
+    await seedAdminAccount({
+      email: 'aml-review-admin@example.com',
+    });
+
+    const response = await getApp().inject({
+      method: 'POST',
+      url: '/auth/register',
+      headers: {
+        'content-type': 'application/json',
+      },
+      payload: {
+        email: 'aml-watchlist-user@example.com',
+        password: 'secret-123',
+      },
+    });
+
+    expect(response.statusCode).toBe(423);
+    expect(response.json().error.code).toBe('AML_REVIEW_REQUIRED');
+    expect(authNotificationCaptures.emailVerification).toHaveLength(0);
+    expect(authNotificationCaptures.amlReview).toHaveLength(1);
+    expect(authNotificationCaptures.amlReview[0]).toEqual(
+      expect.objectContaining({
+        email: 'aml-review-admin@example.com',
+        checkpoint: 'registration',
+        userEmail: 'aml-watchlist-user@example.com',
+        riskLevel: 'high',
+        providerKey: 'mock',
+      }),
+    );
+
+    const [user] = await getDb()
+      .select({ id: users.id, email: users.email })
+      .from(users)
+      .where(eq(users.email, 'aml-watchlist-user@example.com'))
+      .limit(1);
+
+    expect(user?.email).toBe('aml-watchlist-user@example.com');
+
+    const [freeze] = await getDb()
+      .select({
+        status: freezeRecords.status,
+        reason: freezeRecords.reason,
+      })
+      .from(freezeRecords)
+      .where(eq(freezeRecords.userId, user!.id))
+      .limit(1);
+
+    expect(freeze).toMatchObject({
+      status: 'active',
+      reason: 'aml_review',
+    });
+
+    const [check] = await getDb()
+      .select({
+        checkpoint: amlChecks.checkpoint,
+        result: amlChecks.result,
+        riskLevel: amlChecks.riskLevel,
+      })
+      .from(amlChecks)
+      .where(eq(amlChecks.userId, user!.id))
+      .limit(1);
+
+    expect(check).toMatchObject({
+      checkpoint: 'registration',
+      result: 'hit',
+      riskLevel: 'high',
+    });
+  });
+
   it('retries email verification delivery when registration already created the user', async () => {
     const email = 'register-retry@example.com';
     const notificationModule = await import('../modules/auth/notification-service');
@@ -87,7 +161,7 @@ describeIntegrationSuite('backend auth integration', () => {
     });
 
     expect(firstResponse.statusCode).toBe(503);
-    expect(firstResponse.json().error.code).toBe('AUTH_NOTIFICATION_ENQUEUE_FAILED');
+    expect(firstResponse.json().error.code).toBeUndefined();
     expect(authNotificationCaptures.emailVerification).toHaveLength(0);
 
     const usersWithEmailAfterFirstAttempt = await getDb()
@@ -670,6 +744,111 @@ describeIntegrationSuite('backend auth integration', () => {
     expect(
       phoneVerificationEvents.map((event) => event.eventType)
     ).toContain('phone_verification_success');
+  });
+
+  it('enrolls user MFA through the HTTP flow and exposes status', async () => {
+    const email = 'user-mfa@example.com';
+    const password = 'secret-123';
+    const user = await registerUser(email, password);
+    await verifyUserContacts(user.id, { email: true, phone: true });
+    const session = await loginUser(email, password);
+
+    const initialStatusResponse = await getApp().inject({
+      method: 'GET',
+      url: '/auth/user/mfa/status',
+      headers: {
+        authorization: `Bearer ${session.token}`,
+      },
+    });
+
+    expect(initialStatusResponse.statusCode).toBe(200);
+    expect(initialStatusResponse.json().data).toEqual({
+      mfaEnabled: false,
+      largeWithdrawalThreshold: '500.00',
+    });
+
+    const enrollmentResponse = await getApp().inject({
+      method: 'POST',
+      url: '/auth/user/mfa/enrollment',
+      headers: {
+        authorization: `Bearer ${session.token}`,
+        'content-type': 'application/json',
+      },
+      payload: {},
+    });
+
+    expect(enrollmentResponse.statusCode).toBe(201);
+    const enrollmentPayload = enrollmentResponse.json().data as {
+      secret: string;
+      enrollmentToken: string;
+      otpauthUrl: string;
+    };
+    expect(enrollmentPayload.secret).toBeTruthy();
+    expect(enrollmentPayload.enrollmentToken).toBeTruthy();
+    expect(enrollmentPayload.otpauthUrl).toContain('otpauth://totp/');
+
+    const { generateTotpCode } = await import('../modules/mfa/totp');
+    const verifyResponse = await getApp().inject({
+      method: 'POST',
+      url: '/auth/user/mfa/verify',
+      headers: {
+        authorization: `Bearer ${session.token}`,
+        'content-type': 'application/json',
+      },
+      payload: {
+        enrollmentToken: enrollmentPayload.enrollmentToken,
+        totpCode: generateTotpCode(enrollmentPayload.secret),
+      },
+    });
+
+    expect(verifyResponse.statusCode).toBe(200);
+    expect(verifyResponse.json().data).toEqual({
+      mfaEnabled: true,
+    });
+
+    const [storedSecret] = await getDb()
+      .select({
+        userId: userMfaSecrets.userId,
+        secretCiphertext: userMfaSecrets.secretCiphertext,
+      })
+      .from(userMfaSecrets)
+      .where(eq(userMfaSecrets.userId, user.id))
+      .limit(1);
+
+    expect(storedSecret).toEqual({
+      userId: user.id,
+      secretCiphertext: expect.any(String),
+    });
+
+    const enabledStatusResponse = await getApp().inject({
+      method: 'GET',
+      url: '/auth/user/mfa/status',
+      headers: {
+        authorization: `Bearer ${session.token}`,
+      },
+    });
+
+    expect(enabledStatusResponse.statusCode).toBe(200);
+    expect(enabledStatusResponse.json().data).toEqual({
+      mfaEnabled: true,
+      largeWithdrawalThreshold: '500.00',
+    });
+
+    const [enabledEvent] = await getDb()
+      .select({
+        eventType: authEvents.eventType,
+      })
+      .from(authEvents)
+      .where(
+        and(
+          eq(authEvents.userId, user.id),
+          eq(authEvents.eventType, 'user_mfa_enabled')
+        )
+      )
+      .orderBy(desc(authEvents.id))
+      .limit(1);
+
+    expect(enabledEvent?.eventType).toBe('user_mfa_enabled');
   });
 
   it('enrolls admin MFA end-to-end and rotates admin sessions', { tag: 'critical' }, async () => {

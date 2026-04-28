@@ -1,5 +1,5 @@
 import {
-  buildAdminCookieHeaders,
+  buildAdminBreakGlassHeaders,
   enrollAdminMfa,
   FINANCE_ADMIN_PERMISSION_KEYS,
   getApp,
@@ -11,7 +11,7 @@ import {
   seedUserWithWallet,
   verifyUserContacts,
 } from './integration-test-support';
-import { asc, desc, eq } from '@reward/database/orm';
+import { and, asc, desc, eq, inArray } from '@reward/database/orm';
 import { expect } from 'vitest';
 import {
   cryptoChainTransactions,
@@ -268,7 +268,7 @@ export function registerFinanceCryptoScenarios() {
     const { admin, password } = await seedAdminAccount({ email });
     await grantAdminPermissions(admin.id, FINANCE_ADMIN_PERMISSION_KEYS);
     const adminSession = await enrollAdminMfa({ email, password });
-    const headers = buildAdminCookieHeaders(adminSession.token);
+    const headers = buildAdminBreakGlassHeaders(adminSession.token);
 
     const confirmResponse = await getApp().inject({
       method: 'PATCH',
@@ -321,7 +321,12 @@ export function registerFinanceCryptoScenarios() {
         amount: ledgerEntries.amount,
       })
       .from(ledgerEntries)
-      .where(eq(ledgerEntries.userId, user.id))
+      .where(
+        and(
+          eq(ledgerEntries.userId, user.id),
+          eq(ledgerEntries.entryType, 'deposit_credit')
+        )
+      )
       .orderBy(asc(ledgerEntries.id));
 
     expect(entries).toEqual([{ entryType: 'deposit_credit', amount: '18.25' }]);
@@ -377,7 +382,7 @@ export function registerFinanceCryptoScenarios() {
     const { admin, password } = await seedAdminAccount({ email });
     await grantAdminPermissions(admin.id, FINANCE_ADMIN_PERMISSION_KEYS);
     const adminSession = await enrollAdminMfa({ email, password });
-    const headers = buildAdminCookieHeaders(adminSession.token);
+    const headers = buildAdminBreakGlassHeaders(adminSession.token);
 
     const approveResponse = await getApp().inject({
       method: 'PATCH',
@@ -467,7 +472,12 @@ export function registerFinanceCryptoScenarios() {
         amount: ledgerEntries.amount,
       })
       .from(ledgerEntries)
-      .where(eq(ledgerEntries.userId, user.id))
+      .where(
+        and(
+          eq(ledgerEntries.userId, user.id),
+          inArray(ledgerEntries.entryType, ['withdraw_request', 'withdraw_paid'])
+        )
+      )
       .orderBy(asc(ledgerEntries.id));
 
     expect(entries).toEqual([

@@ -63,6 +63,7 @@ const buildSingleDrawSummary = (
   overview: DrawOverviewResponse | null,
   currentCatalog: DrawCatalogResponse,
 ): DrawPlayResponse => ({
+  requestedCount: 1,
   count: 1,
   totalCost: result.drawCost,
   totalReward: result.rewardAmount,
@@ -73,9 +74,10 @@ const buildSingleDrawSummary = (
       currentCatalog.balance,
       result.drawCost,
       result.rewardAmount,
-    ),
+  ),
   highestRarity: result.prize?.displayRarity ?? null,
   pity: overview?.pity ?? currentCatalog.pity,
+  playMode: overview?.playMode ?? currentCatalog.playMode,
   results: [result],
 });
 

@@ -57,6 +57,10 @@ export const WITHDRAW_RISK_SHARED_DEVICE_USER_THRESHOLD_KEY =
   'withdraw_risk.shared_device_user_threshold';
 export const WITHDRAW_RISK_SHARED_PAYOUT_USER_THRESHOLD_KEY =
   'withdraw_risk.shared_payout_user_threshold';
+export const KYC_TIER_1_MAX_STAKE_AMOUNT_KEY =
+  'kyc.tier_1_max_stake_amount';
+export const KYC_TIER_2_MAX_DAILY_WITHDRAWAL_AMOUNT_KEY =
+  'kyc.tier_2_max_daily_withdrawal_amount';
 export const REWARD_SIGNUP_ENABLED_KEY = 'reward_events.signup_bonus_enabled';
 export const REWARD_SIGNUP_AMOUNT_KEY = 'reward_events.signup_bonus_amount';
 export const REWARD_REFERRAL_ENABLED_KEY = 'reward_events.referral_bonus_enabled';
@@ -91,6 +95,19 @@ export const BLACKJACK_RESPLIT_ALLOWED_KEY = 'blackjack.resplit_allowed';
 export const BLACKJACK_MAX_SPLIT_HANDS_KEY = 'blackjack.max_split_hands';
 export const BLACKJACK_SPLIT_TEN_VALUE_CARDS_ALLOWED_KEY =
   'blackjack.split_ten_value_cards_allowed';
+export const HOLDEM_RAKE_BPS_KEY = 'holdem.rake_bps';
+export const HOLDEM_RAKE_CAP_AMOUNT_KEY = 'holdem.rake_cap_amount';
+export const HOLDEM_RAKE_NO_FLOP_NO_DROP_KEY = 'holdem.rake_no_flop_no_drop';
+export const HOLDEM_TIME_BANK_MS_KEY = 'holdem.time_bank_ms';
+export const HOLDEM_DISCONNECT_GRACE_SECONDS_KEY =
+  'holdem.disconnect_grace_seconds';
+export const HOLDEM_SEAT_LEASE_SECONDS_KEY = 'holdem.seat_lease_seconds';
+export const SAAS_USAGE_ALERT_MAX_MINUTE_QPS_KEY =
+  'saas_usage_alert.max_minute_qps';
+export const SAAS_USAGE_ALERT_MAX_SINGLE_PAYOUT_AMOUNT_KEY =
+  'saas_usage_alert.max_single_payout_amount';
+export const SAAS_USAGE_ALERT_MAX_ANTI_EXPLOIT_RATE_PCT_KEY =
+  'saas_usage_alert.max_anti_exploit_rate_pct';
 export const ANALYTICS_STATS_DELAY_KEY = 'analytics.stats_visibility_delay_minutes';
 export const ANALYTICS_PUBLIC_STATS_KEY = 'analytics.public_stats_enabled';
 export const ANALYTICS_POOL_PUBLIC_KEY = 'analytics.pool_balance_public';

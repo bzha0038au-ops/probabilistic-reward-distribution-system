@@ -1,7 +1,4 @@
-import type {
-  RewardMission,
-  RewardMissionId,
-} from "@reward/shared-types/gamification";
+import type { RewardMission } from "@reward/shared-types/gamification";
 
 import type { MobileFairnessLocale } from "./fairness";
 
@@ -71,6 +68,33 @@ const mobileCopy = {
         resend: "Send another verification email",
         resending: "Sending verification email...",
       },
+      legal: {
+        title: "Current legal documents",
+        subtitle:
+          "Review and accept every active document before creating the account.",
+        loading: "Loading current documents...",
+        empty: "No active legal documents are configured right now.",
+        versionLabel: (version: string) => `Version ${version}`,
+        checkboxLabel: (slug: string, version: string) =>
+          `I accept ${slug} version ${version}.`,
+        required: "Accept every current document before continuing.",
+      },
+    },
+    legalGate: {
+      title: "Accept updated legal documents",
+      subtitle:
+        "A new version is effective. Accept the pending documents before returning to the app.",
+      loading: "Loading current documents...",
+      empty: "No current documents were returned.",
+      versionLabel: (version: string) => `Version ${version}`,
+      acceptedBadge: "Already accepted",
+      checkboxLabel: (slug: string, version: string) =>
+        `Accept ${slug} version ${version}.`,
+      submit: "Accept and continue",
+      submitting: "Recording acceptance...",
+      refresh: "Refresh documents",
+      required: "Accept every pending document before continuing.",
+      success: "Legal documents accepted. Returning to the app.",
     },
     verificationCallout: {
       title: "Finish email verification",
@@ -122,7 +146,7 @@ const mobileCopy = {
         ready: "Ready",
         claimed: "Claimed",
       } satisfies Record<RewardMission["status"], string>,
-      missionCopy: {
+      legacyMissionCopy: {
         daily_checkin: {
           title: "Daily check-in",
           description:
@@ -148,10 +172,7 @@ const mobileCopy = {
           description:
             "Create your first deposit request to unlock a starter economy reward.",
         },
-      } satisfies Record<
-        RewardMissionId,
-        { title: string; description: string }
-      >,
+      } satisfies Record<string, { title: string; description: string }>,
       autoAwardedBadge: "Auto",
       rewardAmount: "Bonus",
       progress: (current: number, target: number) =>
@@ -250,6 +271,31 @@ const mobileCopy = {
         resend: "重新发送验证邮件",
         resending: "验证邮件发送中...",
       },
+      legal: {
+        title: "当前生效条款",
+        subtitle: "创建账户前，请先阅读并接受所有当前生效文档。",
+        loading: "正在加载当前文档...",
+        empty: "当前还没有配置生效中的法律文档。",
+        versionLabel: (version: string) => `版本 ${version}`,
+        checkboxLabel: (slug: string, version: string) =>
+          `我接受 ${slug} 第 ${version} 版。`,
+        required: "继续前请先接受所有当前文档。",
+      },
+    },
+    legalGate: {
+      title: "接受更新后的条款",
+      subtitle: "已有新版本文档生效。先接受待签文档，再继续返回应用。",
+      loading: "正在加载当前文档...",
+      empty: "当前没有返回可签署文档。",
+      versionLabel: (version: string) => `版本 ${version}`,
+      acceptedBadge: "已接受",
+      checkboxLabel: (slug: string, version: string) =>
+        `接受 ${slug} 第 ${version} 版。`,
+      submit: "接受并继续",
+      submitting: "正在记录签署...",
+      refresh: "刷新文档",
+      required: "继续前请先接受所有待签文档。",
+      success: "条款已接受，正在返回应用。",
     },
     verificationCallout: {
       title: "完成邮箱验证",
@@ -300,7 +346,7 @@ const mobileCopy = {
         ready: "可领取",
         claimed: "已领取",
       } satisfies Record<RewardMission["status"], string>,
-      missionCopy: {
+      legacyMissionCopy: {
         daily_checkin: {
           title: "每日签到",
           description: "每天签到以保持连续天数，并自动获得当日奖励。",
@@ -321,10 +367,7 @@ const mobileCopy = {
           title: "首充启动",
           description: "创建第一笔充值申请，解锁经济系统新手奖励。",
         },
-      } satisfies Record<
-        RewardMissionId,
-        { title: string; description: string }
-      >,
+      } satisfies Record<string, { title: string; description: string }>,
       autoAwardedBadge: "自动",
       rewardAmount: "奖励",
       progress: (current: number, target: number) =>

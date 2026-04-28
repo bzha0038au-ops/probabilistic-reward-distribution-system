@@ -1,9 +1,12 @@
 import {
+  agentBlocklist,
   admins,
   saasApiKeys,
   saasBillingAccounts,
   saasBillingRuns,
   saasBillingTopUps,
+  saasOutboundWebhookDeliveries,
+  saasOutboundWebhooks,
   saasPlayers,
   saasProjectPrizes,
   saasProjects,
@@ -29,7 +32,10 @@ import type { SaasApiKey, SaasOverview } from "@reward/shared-types/saas";
 
 import { db } from "../../db";
 import { type SaasAdminActor, resolveAccessibleTenantIds } from "./access";
-import { BILLING_DRAW_EVENT_TYPE } from "./billing";
+import {
+  BILLING_LIVE_ENVIRONMENT,
+  BILLING_REWARD_EVENT_TYPES,
+} from "./billing";
 import {
   toSaasApiKey,
   toSaasBilling,
@@ -37,6 +43,9 @@ import {
   toSaasBillingTopUp,
   toSaasInvite,
   toSaasMembership,
+  toSaasAgentControl,
+  toSaasOutboundWebhook,
+  toSaasOutboundWebhookDelivery,
   toSaasProject,
   toSaasPrize,
   toSaasStripeWebhookEvent,
@@ -48,11 +57,39 @@ import {
   peekPrizeEngineApiRateLimitUsage,
   summarizePrizeEngineProjectRateLimitUsage,
 } from "./prize-engine-rate-limit";
+import { listPrizeEngineObservabilityDistributions } from "./prize-engine-service";
 
 export async function getSaasOverview(
   actor?: SaasAdminActor,
 ): Promise<SaasOverview> {
   const accessibleTenantIds = await resolveAccessibleTenantIds(actor ?? null);
+  if (accessibleTenantIds !== null && accessibleTenantIds.length === 0) {
+    return {
+      summary: {
+        tenantCount: 0,
+        projectCount: 0,
+        apiKeyCount: 0,
+        playerCount: 0,
+        drawCount30d: 0,
+        billableTenantCount: 0,
+      },
+      memberships: [],
+      tenants: [],
+      projects: [],
+      projectObservability: [],
+      projectPrizes: [],
+      apiKeys: [],
+      billingRuns: [],
+      topUps: [],
+      invites: [],
+      tenantLinks: [],
+      agentControls: [],
+      webhookEvents: [],
+      outboundWebhooks: [],
+      outboundDeliveries: [],
+      recentUsage: [],
+    };
+  }
 
   const tenantFilter =
     accessibleTenantIds && accessibleTenantIds.length > 0
@@ -93,6 +130,10 @@ export async function getSaasOverview(
           inArray(saasTenantLinks.childTenantId, accessibleTenantIds),
         )
       : undefined;
+  const agentControlFilter =
+    accessibleTenantIds && accessibleTenantIds.length > 0
+      ? inArray(agentBlocklist.tenantId, accessibleTenantIds)
+      : undefined;
   const webhookTenantFilter =
     accessibleTenantIds && accessibleTenantIds.length > 0
       ? inArray(saasStripeWebhookEvents.tenantId, accessibleTenantIds)
@@ -107,6 +148,7 @@ export async function getSaasOverview(
     topUps,
     invites,
     tenantLinks,
+    agentControls,
     webhookEvents,
     recentUsageRows,
     playerCounts,
@@ -210,6 +252,16 @@ export async function getSaasOverview(
           .where(tenantLinkFilter)
           .orderBy(desc(saasTenantLinks.id))
       : db.select().from(saasTenantLinks).orderBy(desc(saasTenantLinks.id)),
+    agentControlFilter
+      ? db
+          .select()
+          .from(agentBlocklist)
+          .where(agentControlFilter)
+          .orderBy(desc(agentBlocklist.updatedAt), desc(agentBlocklist.id))
+      : db
+          .select()
+          .from(agentBlocklist)
+          .orderBy(desc(agentBlocklist.updatedAt), desc(agentBlocklist.id)),
     webhookTenantFilter
       ? db
           .select()
@@ -261,7 +313,8 @@ export async function getSaasOverview(
           .where(
             and(
               usageTenantFilter,
-              eq(saasUsageEvents.eventType, BILLING_DRAW_EVENT_TYPE),
+              eq(saasUsageEvents.environment, BILLING_LIVE_ENVIRONMENT),
+              inArray(saasUsageEvents.eventType, BILLING_REWARD_EVENT_TYPES),
               gte(
                 saasUsageEvents.createdAt,
                 new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
@@ -277,7 +330,8 @@ export async function getSaasOverview(
           .from(saasUsageEvents)
           .where(
             and(
-              eq(saasUsageEvents.eventType, BILLING_DRAW_EVENT_TYPE),
+              eq(saasUsageEvents.environment, BILLING_LIVE_ENVIRONMENT),
+              inArray(saasUsageEvents.eventType, BILLING_REWARD_EVENT_TYPES),
               gte(
                 saasUsageEvents.createdAt,
                 new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
@@ -294,8 +348,22 @@ export async function getSaasOverview(
       : null;
   const apiKeyProjectFilter =
     projectIds.length > 0 ? inArray(saasApiKeys.projectId, projectIds) : null;
+  const outboundWebhookProjectFilter =
+    projectIds.length > 0
+      ? inArray(saasOutboundWebhooks.projectId, projectIds)
+      : null;
+  const outboundDeliveryProjectFilter =
+    projectIds.length > 0
+      ? inArray(saasOutboundWebhookDeliveries.projectId, projectIds)
+      : null;
 
-  const [projectPrizes, apiKeys] = await Promise.all([
+  const [
+    projectPrizes,
+    apiKeys,
+    outboundWebhooks,
+    outboundDeliveries,
+    projectObservability,
+  ] = await Promise.all([
     projectIdFilter
       ? db
           .select()
@@ -310,6 +378,22 @@ export async function getSaasOverview(
           .where(apiKeyProjectFilter)
           .orderBy(desc(saasApiKeys.id))
       : Promise.resolve([]),
+    outboundWebhookProjectFilter
+      ? db
+          .select()
+          .from(saasOutboundWebhooks)
+          .where(outboundWebhookProjectFilter)
+          .orderBy(desc(saasOutboundWebhooks.id))
+      : Promise.resolve([]),
+    outboundDeliveryProjectFilter
+      ? db
+          .select()
+          .from(saasOutboundWebhookDeliveries)
+          .where(outboundDeliveryProjectFilter)
+          .orderBy(desc(saasOutboundWebhookDeliveries.id))
+          .limit(20)
+      : Promise.resolve([]),
+    listPrizeEngineObservabilityDistributions(projectIds, { days: 30 }),
   ]);
 
   const billingByTenant = new Map(
@@ -437,6 +521,7 @@ export async function getSaasOverview(
     projects: projects.map((project) =>
       toSaasProject(project, projectRateLimitUsageByProject.get(project.id)),
     ),
+    projectObservability,
     projectPrizes: projectPrizes.map(toSaasPrize),
     apiKeys: apiKeys.map(
       (row) =>
@@ -450,7 +535,10 @@ export async function getSaasOverview(
     topUps: topUps.map(toSaasBillingTopUp),
     invites: invites.map(toSaasInvite),
     tenantLinks: tenantLinks.map(toSaasTenantLink),
+    agentControls: agentControls.map(toSaasAgentControl),
     webhookEvents: webhookEvents.map(toSaasStripeWebhookEvent),
+    outboundWebhooks: outboundWebhooks.map(toSaasOutboundWebhook),
+    outboundDeliveries: outboundDeliveries.map(toSaasOutboundWebhookDelivery),
     recentUsage: recentUsageRows.map(toSaasUsageEvent),
   };
 }

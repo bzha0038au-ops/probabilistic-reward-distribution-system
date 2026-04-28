@@ -8,6 +8,7 @@ const schema = {
     amount: { type: ['number', 'string'] },
     payoutMethodId: { type: ['number', 'string'], nullable: true },
     bankCardId: { type: ['number', 'string'], nullable: true },
+    totpCode: { type: 'string', nullable: true },
     metadata: { type: 'object', nullable: true },
   },
 } as const;

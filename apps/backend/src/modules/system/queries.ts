@@ -75,6 +75,9 @@ import {
   REWARD_SIGNUP_AMOUNT_KEY,
   REWARD_SIGNUP_ENABLED_KEY,
   REWARD_TOP_UP_STARTER_AMOUNT_KEY,
+  SAAS_USAGE_ALERT_MAX_ANTI_EXPLOIT_RATE_PCT_KEY,
+  SAAS_USAGE_ALERT_MAX_MINUTE_QPS_KEY,
+  SAAS_USAGE_ALERT_MAX_SINGLE_PAYOUT_AMOUNT_KEY,
   SYSTEM_DEFAULT_LANGUAGE_KEY,
   SYSTEM_LOGIN_ENABLED_KEY,
   SYSTEM_MAINTENANCE_MODE_KEY,
@@ -952,5 +955,37 @@ export async function getAuthFailureConfig(db: DbExecutor) {
     authFailureWindowMinutes: windowMinutes,
     authFailureFreezeThreshold: userThreshold,
     adminFailureFreezeThreshold: adminThreshold,
+  };
+}
+
+export async function getSaasUsageAlertConfig(db: DbExecutor) {
+  const rows = await getConfigRowsByKeys(db, [
+    SAAS_USAGE_ALERT_MAX_MINUTE_QPS_KEY,
+    SAAS_USAGE_ALERT_MAX_SINGLE_PAYOUT_AMOUNT_KEY,
+    SAAS_USAGE_ALERT_MAX_ANTI_EXPLOIT_RATE_PCT_KEY,
+  ]);
+  const maxMinuteQps = await getConfigDecimalFromRows(
+    db,
+    rows,
+    SAAS_USAGE_ALERT_MAX_MINUTE_QPS_KEY,
+    5,
+  );
+  const maxSinglePayoutAmount = await getConfigDecimalFromRows(
+    db,
+    rows,
+    SAAS_USAGE_ALERT_MAX_SINGLE_PAYOUT_AMOUNT_KEY,
+    100,
+  );
+  const maxAntiExploitRatePct = await getConfigDecimalFromRows(
+    db,
+    rows,
+    SAAS_USAGE_ALERT_MAX_ANTI_EXPLOIT_RATE_PCT_KEY,
+    20,
+  );
+
+  return {
+    maxMinuteQps,
+    maxSinglePayoutAmount,
+    maxAntiExploitRatePct,
   };
 }

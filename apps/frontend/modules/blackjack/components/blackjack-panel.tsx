@@ -46,7 +46,7 @@ const copy = {
   en: {
     title: "Blackjack",
     description:
-      "Classic player-vs-dealer blackjack with split support on the shared wallet and prize-pool ledger.",
+      "Blackjack on a shared table where an AI dealer sits across from the player while the shared wallet and prize-pool ledger settle every hand.",
     balance: "Current balance",
     fairness: "Fairness commit",
     minStake: "Min stake",
@@ -84,11 +84,16 @@ const copy = {
     points: "Points",
     hand: "Hand",
     currentBet: "Bet",
+    tableTitle: "Same-table seating",
+    tableId: "Table",
+    seat: "Seat",
+    aiDealer: "AI dealer",
+    you: "You",
   },
   "zh-CN": {
     title: "二十一点",
     description:
-      "经典庄闲二十一点，支持分牌并直接复用共享钱包、奖池和账本结算。",
+      "二十一点现在显式接入同桌 AI 智能荷官，牌局仍然复用共享钱包、奖池和账本结算。",
     balance: "当前余额",
     fairness: "公平性提交",
     minStake: "最小下注",
@@ -126,6 +131,11 @@ const copy = {
     points: "点数",
     hand: "手牌",
     currentBet: "当前下注",
+    tableTitle: "同桌席位",
+    tableId: "桌号",
+    seat: "座位",
+    aiDealer: "AI 智能荷官",
+    you: "你",
   },
 } as const;
 
@@ -355,6 +365,56 @@ function PlayerHandBlock(props: {
   );
 }
 
+function getTableSeatLabel(
+  locale: keyof typeof copy,
+  seat: BlackjackGame["table"]["seats"][number],
+) {
+  const c = copy[locale];
+  const occupant =
+    seat.role === "dealer" && seat.participantType === "ai_robot"
+      ? c.aiDealer
+      : seat.isSelf
+        ? c.you
+        : c.player;
+
+  return `${occupant} · ${c.seat} ${seat.seatIndex + 1}`;
+}
+
+function TableBlock(props: {
+  locale: keyof typeof copy;
+  game: BlackjackGame;
+}) {
+  const c = copy[props.locale];
+
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-slate-100">{c.tableTitle}</p>
+          <p className="text-xs text-slate-400">
+            {c.tableId}: {props.game.table.tableId}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {props.game.table.seats.map((seat) => (
+            <span
+              key={`${props.game.table.tableId}-${seat.participantId}-${seat.seatIndex}`}
+              className={cn(
+                "rounded-full border px-3 py-1 text-xs",
+                seat.role === "dealer"
+                  ? "border-cyan-400/30 bg-cyan-400/10 text-cyan-100"
+                  : "border-slate-700 text-slate-300",
+              )}
+            >
+              {getTableSeatLabel(props.locale, seat)}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function BlackjackPanel({
   disabled = false,
   disabledReason = null,
@@ -553,6 +613,8 @@ export function BlackjackPanel({
             >
               {getStatusLabel(locale, overview.activeGame.status)}
             </div>
+
+            <TableBlock locale={locale} game={overview.activeGame} />
 
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
               <HandBlock

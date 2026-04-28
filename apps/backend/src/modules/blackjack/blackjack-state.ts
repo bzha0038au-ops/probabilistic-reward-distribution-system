@@ -5,16 +5,18 @@ import type {
   BlackjackGame,
   BlackjackGameStatus,
   BlackjackGameSummary,
+  BlackjackTable,
 } from "@reward/shared-types/blackjack";
 
 import { internalInvariantError } from "../../shared/errors";
 import { toDecimal, toMoneyString } from "../../shared/money";
 import { parseSchema } from "../../shared/validation";
+import { buildRoundId } from "../hand-history/round-id";
 import {
   BlackjackMetadataSchema,
   isTenValueRank,
+  resolveBlackjackTable,
   scoreBlackjackCards,
-  type BlackjackActionHistoryEntry,
   type BlackjackGameRow,
   type BlackjackGameState,
   type BlackjackMetadata,
@@ -52,6 +54,52 @@ export const getActivePlayerHand = (game: BlackjackGameState) => {
   return game.metadata.playerHands[game.metadata.activeHandIndex] ?? null;
 };
 
+const resolveGameTable = (
+  game: BlackjackGameState,
+): BlackjackTable => {
+  const table = resolveBlackjackTable({
+    userId: game.userId,
+    fairness: game.metadata.fairness,
+    table: game.metadata.table,
+  });
+  game.metadata.table = table;
+  return table;
+};
+
+const hasPendingPlayerTurn = (game: BlackjackGameState) => {
+  if (game.status !== "active") {
+    return false;
+  }
+
+  const activeHand = getActivePlayerHand(game);
+  if (!activeHand || activeHand.state !== "active") {
+    return false;
+  }
+
+  const playerScore = scoreBlackjackCards(activeHand.cards);
+  return !playerScore.bust && playerScore.total < 21;
+};
+
+export const syncBlackjackTableTurnState = (game: BlackjackGameState) => {
+  const currentTurnSeatIndex = hasPendingPlayerTurn(game) ? 1 : null;
+  const turnDeadlineAt =
+    currentTurnSeatIndex === 1 ? game.turnDeadlineAt ?? null : null;
+  const table = resolveGameTable(game);
+
+  const nextTable: BlackjackTable = {
+    ...table,
+    currentTurnSeatIndex,
+    turnTimeoutAction:
+      currentTurnSeatIndex === 1 ? table.turnTimeoutAction : null,
+    seats: table.seats.map((seat) => ({
+      ...seat,
+      turnDeadlineAt:
+        seat.seatIndex === currentTurnSeatIndex ? turnDeadlineAt : null,
+    })),
+  };
+  game.metadata.table = nextTable;
+};
+
 export const syncLegacyPlayerCards = (game: BlackjackGameState) => {
   const currentHand = getActivePlayerHand(game) ?? getPrimaryPlayerHand(game);
   if (currentHand) {
@@ -61,6 +109,11 @@ export const syncLegacyPlayerCards = (game: BlackjackGameState) => {
 
 export const toGameState = (row: BlackjackGameRow): BlackjackGameState => {
   const metadata = parseMetadata(row.metadata);
+  const table: BlackjackTable = resolveBlackjackTable({
+    userId: row.userId,
+    fairness: metadata.fairness,
+    table: metadata.table,
+  });
   const playerHands =
     metadata.playerHands.length > 0
       ? metadata.playerHands
@@ -76,15 +129,18 @@ export const toGameState = (row: BlackjackGameRow): BlackjackGameState => {
     row.status === "active"
       ? Math.min(metadata.activeHandIndex ?? 0, playerHands.length - 1)
       : null;
+  const resolvedMetadata: BlackjackGameState["metadata"] = {
+    ...metadata,
+    table,
+    playerHands,
+    activeHandIndex,
+  };
   const game: BlackjackGameState = {
     ...row,
-    metadata: {
-      ...metadata,
-      playerHands,
-      activeHandIndex,
-    },
+    metadata: resolvedMetadata,
   };
   syncLegacyPlayerCards(game);
+  syncBlackjackTableTurnState(game);
   return game;
 };
 
@@ -289,6 +345,8 @@ export const serializeBlackjackGame = (
   game: BlackjackGameState,
   walletBalance: ReturnType<typeof toDecimal>,
 ): BlackjackGame => {
+  syncBlackjackTableTurnState(game);
+  const table = resolveGameTable(game);
   const playerHands = game.metadata.playerHands.map((hand, index) =>
     buildPlayerHandView(game, hand, index),
   );
@@ -296,17 +354,22 @@ export const serializeBlackjackGame = (
 
   return {
     id: game.id,
+    roundId: buildRoundId({ roundType: "blackjack", roundEntityId: game.id }),
     userId: game.userId,
     stakeAmount: toMoneyString(game.stakeAmount),
     totalStake: toMoneyString(game.totalStake),
     payoutAmount: toMoneyString(game.payoutAmount),
     status: game.status,
+    turnDeadlineAt: game.turnDeadlineAt ?? null,
+    turnTimeoutAction: table.turnTimeoutAction,
+    table,
     playerHand: buildHandView(currentHand?.cards ?? game.playerCards, false),
     playerHands,
     activeHandIndex: game.metadata.activeHandIndex,
     dealerHand: buildHandView(game.dealerCards, game.status === "active"),
     availableActions: getAvailableActions(game, walletBalance),
     fairness: game.metadata.fairness,
+    playMode: game.metadata.playMode,
     createdAt: game.createdAt,
     settledAt: game.settledAt ?? null,
   };
@@ -319,6 +382,7 @@ export const serializeBlackjackSummary = (
 
   return {
     id: game.id,
+    roundId: buildRoundId({ roundType: "blackjack", roundEntityId: game.id }),
     userId: game.userId,
     stakeAmount: toMoneyString(game.stakeAmount),
     totalStake: toMoneyString(game.totalStake),
@@ -330,13 +394,6 @@ export const serializeBlackjackSummary = (
     createdAt: game.createdAt,
     settledAt: game.settledAt ?? null,
   };
-};
-
-export const appendActionHistory = (
-  game: BlackjackGameState,
-  entry: BlackjackActionHistoryEntry,
-) => {
-  game.metadata.actionHistory.push(entry);
 };
 
 export const takeNextCard = (game: BlackjackGameState) => {
@@ -421,13 +478,21 @@ export const advanceResolvableHands = (
   game: BlackjackGameState,
   walletBalance: ReturnType<typeof toDecimal>,
 ) => {
+  const events: Array<{
+    type: "auto_stand_split_aces";
+    actor: "system";
+    payload: {
+      handIndex: number;
+      total: number;
+    };
+  }> = [];
   let activeHand = getActivePlayerHand(game);
   while (activeHand) {
     const playerScore = scoreBlackjackCards(activeHand.cards);
     if (playerScore.bust) {
       const allHandsComplete = advancePlayerHand(game, "bust");
       if (allHandsComplete) {
-        return true;
+        return { allHandsComplete: true, events };
       }
       activeHand = getActivePlayerHand(game);
       continue;
@@ -435,7 +500,7 @@ export const advanceResolvableHands = (
     if (playerScore.total === 21) {
       const allHandsComplete = advancePlayerHand(game, "stood");
       if (allHandsComplete) {
-        return true;
+        return { allHandsComplete: true, events };
       }
       activeHand = getActivePlayerHand(game);
       continue;
@@ -445,25 +510,27 @@ export const advanceResolvableHands = (
       isRestrictedSplitAceHand(activeHand, game.metadata.config) &&
       !canSplitHand({ game, hand: activeHand, walletBalance })
     ) {
-      appendActionHistory(game, {
-        action: "auto_stand_split_aces",
+      events.push({
+        type: "auto_stand_split_aces",
         actor: "system",
-        handIndex: game.metadata.activeHandIndex ?? 0,
-        total: playerScore.total,
+        payload: {
+          handIndex: game.metadata.activeHandIndex ?? 0,
+          total: playerScore.total,
+        },
       });
       const allHandsComplete = advancePlayerHand(game, "stood");
       if (allHandsComplete) {
-        return true;
+        return { allHandsComplete: true, events };
       }
       activeHand = getActivePlayerHand(game);
       continue;
     }
 
     syncLegacyPlayerCards(game);
-    return false;
+    return { allHandsComplete: false, events };
   }
 
-  return true;
+  return { allHandsComplete: true, events };
 };
 
 const resolveStatusPayoutAmount = (
@@ -490,18 +557,31 @@ const resolveStatusPayoutAmount = (
 };
 
 export const playDealerHand = (game: BlackjackGameState) => {
+  const events: Array<{
+    type: "dealer_draw";
+    actor: "dealer";
+    payload: {
+      card: BlackjackCard;
+      total: number;
+    };
+  }> = [];
   while (shouldDealerHit(game.dealerCards, game.metadata.config)) {
     const card = takeNextCard(game);
     game.dealerCards.push(card);
-    appendActionHistory(game, {
-      action: "dealer_draw",
+    events.push({
+      type: "dealer_draw",
       actor: "dealer",
-      card,
-      total: scoreBlackjackCards(game.dealerCards).total,
+      payload: {
+        card,
+        total: scoreBlackjackCards(game.dealerCards).total,
+      },
     });
   }
 
-  return scoreBlackjackCards(game.dealerCards);
+  return {
+    dealerScore: scoreBlackjackCards(game.dealerCards),
+    events,
+  };
 };
 
 const resolveRegularHandPayoutAmount = (

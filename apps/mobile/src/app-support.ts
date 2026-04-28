@@ -40,6 +40,8 @@ export type AppStackParamList = {
   security: undefined;
   gacha: undefined;
   quickEight: undefined;
+  predictionMarket: undefined;
+  holdem: undefined;
   blackjack: undefined;
   fairness: undefined;
 };
@@ -52,6 +54,7 @@ export type WebRoute =
   | "/app/slot"
   | "/app/gacha"
   | "/app/quick-eight"
+  | "/app/holdem"
   | "/app/blackjack"
   | "/app/fairness";
 

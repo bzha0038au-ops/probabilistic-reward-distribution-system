@@ -30,6 +30,7 @@ const copy = {
     claiming: "Claiming...",
     claim: "Claim reward",
     auto: "Auto",
+    todayCheckInGranted: "Today's check-in granted",
     claimed: "Claimed",
     ready: "Ready",
     inProgress: "In progress",
@@ -38,7 +39,7 @@ const copy = {
     resetsAt: "Resets at",
     progress: "{current}/{target}",
     empty: "No missions are available yet.",
-    missionCopy: {
+    legacyMissionCopy: {
       daily_checkin: {
         title: "Daily check-in",
         description:
@@ -63,7 +64,7 @@ const copy = {
         description:
           "Create your first deposit request to unlock a starter economy reward.",
       },
-    },
+    } satisfies Record<string, { title: string; description: string }>,
   },
   "zh-CN": {
     title: "奖励中心",
@@ -78,6 +79,7 @@ const copy = {
     claiming: "领取中...",
     claim: "领取奖励",
     auto: "自动发放",
+    todayCheckInGranted: "今日签到奖励已发放",
     claimed: "已领取",
     ready: "可领取",
     inProgress: "进行中",
@@ -86,7 +88,7 @@ const copy = {
     resetsAt: "重置时间",
     progress: "{current}/{target}",
     empty: "当前还没有可展示的奖励任务。",
-    missionCopy: {
+    legacyMissionCopy: {
       daily_checkin: {
         title: "每日签到",
         description: "每天登录保持连击，系统会自动发放当日签到奖励。",
@@ -107,7 +109,7 @@ const copy = {
         title: "首充起步",
         description: "创建第一笔充值申请，领取起步型经济奖励。",
       },
-    },
+    } satisfies Record<string, { title: string; description: string }>,
   },
 } as const;
 
@@ -133,6 +135,10 @@ export function RewardCenter({
 }: RewardCenterProps) {
   const locale = useLocale();
   const c = copy[locale];
+  const legacyMissionCopy = c.legacyMissionCopy as Record<
+    string,
+    { title: string; description: string }
+  >;
 
   const formatAmount = (value: string) => {
     const numeric = Number(value);
@@ -165,6 +171,17 @@ export function RewardCenter({
     if (mission.status === "disabled") return c.disabled;
     return c.inProgress;
   };
+
+  const resolveMissionCopy = (mission: RewardMission) =>
+    (mission.title.trim() !== "" || mission.description.trim() !== ""
+      ? {
+          title: mission.title,
+          description: mission.description,
+        }
+      : legacyMissionCopy[mission.id]) ?? {
+      title: mission.title,
+      description: mission.description,
+    };
 
   return (
     <Card className="overflow-hidden border-amber-200/70 bg-gradient-to-br from-amber-50 via-white to-cyan-50 shadow-sm">
@@ -200,9 +217,7 @@ export function RewardCenter({
               {c.missions}
             </h3>
             {center?.summary.todayDailyClaimed ? (
-              <Badge variant="default">
-                {c.missionCopy.daily_checkin.title}
-              </Badge>
+              <Badge variant="default">{c.todayCheckInGranted}</Badge>
             ) : null}
           </div>
 
@@ -216,7 +231,7 @@ export function RewardCenter({
 
           <div className="grid gap-4 lg:grid-cols-2">
             {center?.missions.map((mission) => {
-              const missionCopy = c.missionCopy[mission.id];
+              const missionCopy = resolveMissionCopy(mission);
               const ratio = Math.max(
                 0,
                 Math.min(

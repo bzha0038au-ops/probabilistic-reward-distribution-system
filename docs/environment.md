@@ -23,6 +23,7 @@ variables before the app starts.
 - The same backend env file is used by both the API process and the
   auth-notification worker process.
 - `ADMIN_MFA_ENCRYPTION_SECRET` (required in production; must differ from JWT/web secrets)
+- `USER_MFA_ENCRYPTION_SECRET` (required in production; must differ from JWT/web/admin MFA secrets)
 - `ADMIN_MFA_BREAK_GLASS_SECRET` (required in production; must differ from all other secrets)
 - `DRAW_COST` (optional seed value for `system_config.draw_cost`)
 - `DRAW_POOL_CACHE_TTL_SECONDS` (optional, probability pool cache TTL; `0` disables)
@@ -61,6 +62,12 @@ variables before the app starts.
   `AUTH_NOTIFICATION_SMS_THROTTLE_WINDOW_MS`,
   `AUTH_NOTIFICATION_ALERT_THROTTLE_MAX`,
   `AUTH_NOTIFICATION_ALERT_THROTTLE_WINDOW_MS`
+- `HOLDEM_TURN_TIMEOUT_MS`, `HOLDEM_TIMEOUT_WORKER_ENABLED`,
+  `HOLDEM_TIMEOUT_WORKER_INTERVAL_MS`,
+  `HOLDEM_TIMEOUT_WORKER_BATCH_SIZE`
+- `BLACKJACK_TURN_TIMEOUT_MS`, `BLACKJACK_TIMEOUT_WORKER_ENABLED`,
+  `BLACKJACK_TIMEOUT_WORKER_INTERVAL_MS`,
+  `BLACKJACK_TIMEOUT_WORKER_BATCH_SIZE`
 - `PASSWORD_RESET_TTL_MINUTES`, `EMAIL_VERIFICATION_TTL_MINUTES`,
   `PHONE_VERIFICATION_TTL_MINUTES` (optional token/code TTL overrides)
 - `ANOMALOUS_LOGIN_LOOKBACK_DAYS` (optional; login anomaly comparison window)
@@ -145,11 +152,12 @@ environment values:
 - `USER_JWT_SECRET_PREVIOUS` and `ADMIN_JWT_SECRET_PREVIOUS` must not reuse any
   current JWT secret, `AUTH_SECRET`, or the MFA secrets.
 - `ADMIN_MFA_ENCRYPTION_SECRET` must not match any JWT or web secret.
+- `USER_MFA_ENCRYPTION_SECRET` must not match any JWT, web, or admin MFA secret.
 - `ADMIN_MFA_BREAK_GLASS_SECRET` must not match any JWT, web, or MFA encryption secret.
 - `AUTH_SECRET` is only for NextAuth in the web app.
 - In production, current and previous JWT secrets, when set, plus
-  `ADMIN_MFA_ENCRYPTION_SECRET` and `ADMIN_MFA_BREAK_GLASS_SECRET` must be at
-  least 32 characters.
+  `ADMIN_MFA_ENCRYPTION_SECRET`, `USER_MFA_ENCRYPTION_SECRET`, and
+  `ADMIN_MFA_BREAK_GLASS_SECRET` must be at least 32 characters.
 - In production, prefer `*_FILE` variables in container env files so secret
   managers inject file content instead of long-lived plaintext env values.
 - In production, password-reset and verification endpoints return `503` unless the
@@ -171,5 +179,5 @@ environment values:
 - The manual deploy workflow keeps a `previous-known-good` image tag per app
   image on the deployment host and stores release state under
   `$DEPLOY_PATH/shared/<environment>/ops/release-state.env`.
-- Production should run the auth-notification worker as a separate process from
-  the Fastify API.
+- Production should run the auth-notification worker, holdem-timeout worker,
+  and blackjack-timeout worker as separate processes from the Fastify API.

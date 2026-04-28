@@ -139,6 +139,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
+  blackjackTableCard: {
+    gap: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.panelMuted,
+    padding: 14,
+  },
 });
 
 type BlackjackRouteScreenProps = {
@@ -258,6 +266,19 @@ export function BlackjackRouteScreen(props: BlackjackRouteScreenProps) {
       </View>
     </View>
   );
+
+  const getTableSeatLabel = (
+    seat: BlackjackGame["table"]["seats"][number],
+  ) => {
+    const occupant =
+      seat.role === "dealer" && seat.participantType === "ai_robot"
+        ? props.screenCopy.aiDealer
+        : seat.isSelf
+          ? props.screenCopy.you
+          : props.screenCopy.playerHand;
+
+    return `${occupant} · ${props.screenCopy.seat} ${seat.seatIndex + 1}`;
+  };
 
   const renderPlayerHand = (hand: BlackjackGame["playerHands"][number]) => (
     <View
@@ -517,6 +538,32 @@ export function BlackjackRouteScreen(props: BlackjackRouteScreenProps) {
                 <Text style={props.styles.badgeText}>
                   Payout {props.formatAmount(activeGame.payoutAmount)}
                 </Text>
+              </View>
+            </View>
+
+            <View style={styles.blackjackTableCard}>
+              <Text style={styles.blackjackHandTitle}>
+                {props.screenCopy.tableTitle}
+              </Text>
+              <Text style={styles.blackjackHistoryBody}>
+                {props.screenCopy.tableId} {activeGame.table.tableId}
+              </Text>
+              <View style={props.styles.badgeRow}>
+                {activeGame.table.seats.map((seat) => (
+                  <View
+                    key={`${activeGame.table.tableId}-${seat.participantId}-${seat.seatIndex}`}
+                    style={[
+                      props.styles.badge,
+                      seat.role === "dealer"
+                        ? props.styles.badgeSuccess
+                        : props.styles.badgeMuted,
+                    ]}
+                  >
+                    <Text style={props.styles.badgeText}>
+                      {getTableSeatLabel(seat)}
+                    </Text>
+                  </View>
+                ))}
               </View>
             </View>
 

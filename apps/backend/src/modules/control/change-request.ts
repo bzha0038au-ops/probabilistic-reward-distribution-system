@@ -1,15 +1,17 @@
-import { toDecimal, toMoneyString } from '../../shared/money';
-import { reviewPaymentProviderConfig } from '../payment/provider-config';
+import { toDecimal, toMoneyString } from "../../shared/money";
+import { reviewPaymentProviderConfig } from "../payment/provider-config";
 import type {
+  LegalDocumentPublishPayload,
   PaymentProviderDraftPayload,
   PaymentProviderExecutionMode,
   PaymentProviderFlow,
   PaymentProviderGrayRuleDraftPayload,
+  SaasTenantRiskEnvelopeDraftPayload,
   SystemConfigDraftPayload,
-} from './service';
+} from "./service";
 
 export const toRecord = (value: unknown): Record<string, unknown> => {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return {};
   }
 
@@ -17,11 +19,11 @@ export const toRecord = (value: unknown): Record<string, unknown> => {
 };
 
 export const readString = (value: unknown) =>
-  typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
+  typeof value === "string" && value.trim() !== "" ? value.trim() : null;
 
 export const normalizeReason = (value: string | null | undefined) => {
-  const trimmed = value?.trim() ?? '';
-  return trimmed === '' ? null : trimmed;
+  const trimmed = value?.trim() ?? "";
+  return trimmed === "" ? null : trimmed;
 };
 
 export const normalizeSupportedFlows = (flows: readonly string[]) =>
@@ -29,38 +31,38 @@ export const normalizeSupportedFlows = (flows: readonly string[]) =>
     new Set(
       flows.filter(
         (flow): flow is PaymentProviderFlow =>
-          flow === 'deposit' || flow === 'withdrawal'
-      )
-    )
+          flow === "deposit" || flow === "withdrawal",
+      ),
+    ),
   );
 
 export const normalizeIntegerList = (
-  values: readonly number[] | null | undefined
+  values: readonly number[] | null | undefined,
 ) =>
   Array.from(
     new Set(
       (values ?? [])
         .map((value) => Math.trunc(value))
-        .filter((value) => Number.isInteger(value) && value > 0)
-    )
+        .filter((value) => Number.isInteger(value) && value > 0),
+    ),
   );
 
 export const normalizeCodeList = (
-  values: readonly string[] | null | undefined
+  values: readonly string[] | null | undefined,
 ) =>
   Array.from(
     new Set(
       (values ?? [])
         .map((value) => value.trim().toUpperCase())
-        .filter((value) => value !== '')
-    )
+        .filter((value) => value !== ""),
+    ),
   );
 
 export const normalizeOptionalMoneyString = (
-  value: string | null | undefined
+  value: string | null | undefined,
 ) => {
-  const trimmed = value?.trim() ?? '';
-  if (trimmed === '') {
+  const trimmed = value?.trim() ?? "";
+  if (trimmed === "") {
     return null;
   }
 
@@ -68,7 +70,7 @@ export const normalizeOptionalMoneyString = (
 };
 
 export const normalizeGrayRules = (
-  rules: readonly PaymentProviderGrayRuleDraftPayload[] | null | undefined
+  rules: readonly PaymentProviderGrayRuleDraftPayload[] | null | undefined,
 ) =>
   (rules ?? [])
     .map((rule) => ({
@@ -94,8 +96,8 @@ export const normalizeGrayRules = (
     .filter((rule) => Object.keys(rule).length > 0);
 
 export const buildConfirmationPhrase = (
-  action: 'submit' | 'publish',
-  requestId: number
+  action: "submit" | "publish",
+  requestId: number,
 ) => `${action.toUpperCase()} ${requestId}`;
 
 const mapSystemConfigKeys = (payload: SystemConfigDraftPayload) =>
@@ -103,131 +105,190 @@ const mapSystemConfigKeys = (payload: SystemConfigDraftPayload) =>
     .filter(([, value]) => value !== undefined)
     .map(([key]) => key);
 
-export const buildSystemConfigSummary = (
-  payload: SystemConfigDraftPayload
-) => {
+export const buildSystemConfigSummary = (payload: SystemConfigDraftPayload) => {
   const keys = mapSystemConfigKeys(payload);
-  return keys.length > 0
-    ? `系统配置变更：${keys.join('、')}`
-    : '系统配置草稿';
+  return keys.length > 0 ? `系统配置变更：${keys.join("、")}` : "系统配置草稿";
 };
 
 export const buildProviderSummary = (payload: PaymentProviderDraftPayload) => {
   const flowLabel =
-    payload.supportedFlows.length > 0 ? payload.supportedFlows.join('/') : 'none';
-  const modeLabel = payload.executionMode === 'automated' ? 'automated' : 'manual';
-  const stateLabel = payload.isActive ? '启用' : '停用';
-  const operation = payload.providerId ? '更新' : '新增';
+    payload.supportedFlows.length > 0
+      ? payload.supportedFlows.join("/")
+      : "none";
+  const modeLabel =
+    payload.executionMode === "automated" ? "automated" : "manual";
+  const stateLabel = payload.isActive ? "启用" : "停用";
+  const operation = payload.providerId ? "更新" : "新增";
 
   return `${operation}通道 ${payload.name} (${payload.providerType}) / ${stateLabel} / priority=${payload.priority} / flows=${flowLabel} / mode=${modeLabel}`;
 };
 
+export const buildSaasTenantRiskEnvelopeSummary = (
+  payload: SaasTenantRiskEnvelopeDraftPayload,
+) => {
+  const parts = [
+    payload.dailyBudgetCap !== undefined
+      ? `日预算 ${payload.dailyBudgetCap ?? "无上限"}`
+      : null,
+    payload.maxSinglePayout !== undefined
+      ? `单次派奖 ${payload.maxSinglePayout ?? "无上限"}`
+      : null,
+    payload.varianceCap !== undefined
+      ? `方差 ${payload.varianceCap ?? "无上限"}`
+      : null,
+    payload.emergencyStop !== undefined
+      ? `紧急停付 ${payload.emergencyStop ? "开启" : "关闭"}`
+      : null,
+  ].filter((value): value is string => value !== null);
+
+  return parts.length > 0
+    ? `SaaS 租户 #${payload.tenantId} 风险包络兜底：${parts.join(" / ")}`
+    : `SaaS 租户 #${payload.tenantId} 风险包络兜底`;
+};
+
+export const buildLegalDocumentPublishSummary = (
+  payload: LegalDocumentPublishPayload,
+) => {
+  const rolloutLabel =
+    payload.rolloutPercent >= 100 ? "全量" : `灰度 ${payload.rolloutPercent}%`;
+
+  return `发布条款 ${payload.documentKey} v${payload.version} (${payload.locale}) / ${rolloutLabel}`;
+};
+
 export const isSystemConfigChangePayload = (
-  value: Record<string, unknown>
+  value: Record<string, unknown>,
 ): value is SystemConfigDraftPayload =>
   [
-    'poolBalance',
-    'drawCost',
-    'weightJitterEnabled',
-    'weightJitterPct',
-    'bonusAutoReleaseEnabled',
-    'bonusUnlockWagerRatio',
-    'authFailureWindowMinutes',
-    'authFailureFreezeThreshold',
-    'adminFailureFreezeThreshold',
-    'profileSecurityRewardAmount',
-    'firstDrawRewardAmount',
-    'drawStreakDailyRewardAmount',
-    'topUpStarterRewardAmount',
-    'blackjackMinStake',
-    'blackjackMaxStake',
-    'blackjackWinPayoutMultiplier',
-    'blackjackPushPayoutMultiplier',
-    'blackjackNaturalPayoutMultiplier',
-    'blackjackDealerHitsSoft17',
-    'blackjackDoubleDownAllowed',
-    'blackjackSplitAcesAllowed',
-    'blackjackHitSplitAcesAllowed',
-    'blackjackResplitAllowed',
-    'blackjackMaxSplitHands',
-    'blackjackSplitTenValueCardsAllowed',
+    "poolBalance",
+    "drawCost",
+    "weightJitterEnabled",
+    "weightJitterPct",
+    "bonusAutoReleaseEnabled",
+    "bonusUnlockWagerRatio",
+    "authFailureWindowMinutes",
+    "authFailureFreezeThreshold",
+    "adminFailureFreezeThreshold",
+    "profileSecurityRewardAmount",
+    "firstDrawRewardAmount",
+    "drawStreakDailyRewardAmount",
+    "topUpStarterRewardAmount",
+    "blackjackMinStake",
+    "blackjackMaxStake",
+    "blackjackWinPayoutMultiplier",
+    "blackjackPushPayoutMultiplier",
+    "blackjackNaturalPayoutMultiplier",
+    "blackjackDealerHitsSoft17",
+    "blackjackDoubleDownAllowed",
+    "blackjackSplitAcesAllowed",
+    "blackjackHitSplitAcesAllowed",
+    "blackjackResplitAllowed",
+    "blackjackMaxSplitHands",
+    "blackjackSplitTenValueCardsAllowed",
+    "saasUsageAlertMaxMinuteQps",
+    "saasUsageAlertMaxSinglePayoutAmount",
+    "saasUsageAlertMaxAntiExploitRatePct",
   ].some((key) => Reflect.has(value, key));
 
 export const isProviderDraftPayload = (
-  value: Record<string, unknown>
+  value: Record<string, unknown>,
 ): value is PaymentProviderDraftPayload =>
-  typeof Reflect.get(value, 'name') === 'string' &&
-  typeof Reflect.get(value, 'providerType') === 'string' &&
-  typeof Reflect.get(value, 'priority') === 'number' &&
-  typeof Reflect.get(value, 'isActive') === 'boolean' &&
-  Array.isArray(Reflect.get(value, 'supportedFlows')) &&
-  (Reflect.get(value, 'executionMode') === 'manual' ||
-    Reflect.get(value, 'executionMode') === 'automated');
+  typeof Reflect.get(value, "name") === "string" &&
+  typeof Reflect.get(value, "providerType") === "string" &&
+  typeof Reflect.get(value, "priority") === "number" &&
+  typeof Reflect.get(value, "isActive") === "boolean" &&
+  Array.isArray(Reflect.get(value, "supportedFlows")) &&
+  (Reflect.get(value, "executionMode") === "manual" ||
+    Reflect.get(value, "executionMode") === "automated");
+
+export const isSaasTenantRiskEnvelopeDraftPayload = (
+  value: Record<string, unknown>,
+): value is SaasTenantRiskEnvelopeDraftPayload =>
+  typeof Reflect.get(value, "tenantId") === "number" &&
+  ["dailyBudgetCap", "maxSinglePayout", "varianceCap", "emergencyStop"].some(
+    (key) => Reflect.has(value, key),
+  );
+
+export const isLegalDocumentPublishPayload = (
+  value: Record<string, unknown>,
+): value is LegalDocumentPublishPayload =>
+  typeof Reflect.get(value, "documentId") === "number" &&
+  typeof Reflect.get(value, "documentKey") === "string" &&
+  typeof Reflect.get(value, "locale") === "string" &&
+  typeof Reflect.get(value, "title") === "string" &&
+  typeof Reflect.get(value, "version") === "number" &&
+  typeof Reflect.get(value, "rolloutPercent") === "number";
 
 export const parseProviderConfig = (configValue: unknown) => {
   const review = reviewPaymentProviderConfig(configValue);
   const config = review.config;
   const supportedFlows = normalizeSupportedFlows(
-    Array.isArray(Reflect.get(config, 'supportedFlows'))
-      ? (Reflect.get(config, 'supportedFlows') as string[])
+    Array.isArray(Reflect.get(config, "supportedFlows"))
+      ? (Reflect.get(config, "supportedFlows") as string[])
       : [
-          ...(Reflect.get(config, 'supportsDeposit') === true ? ['deposit'] : []),
-          ...(Reflect.get(config, 'supportsWithdraw') === true
-            ? ['withdrawal']
+          ...(Reflect.get(config, "supportsDeposit") === true
+            ? ["deposit"]
             : []),
-        ]
+          ...(Reflect.get(config, "supportsWithdraw") === true
+            ? ["withdrawal"]
+            : []),
+        ],
   );
   const executionMode =
-    Reflect.get(config, 'executionMode') === 'automated' ? 'automated' : 'manual';
+    Reflect.get(config, "executionMode") === "automated"
+      ? "automated"
+      : "manual";
 
   return {
     config,
     review,
     supportedFlows,
     executionMode: executionMode as PaymentProviderExecutionMode,
-    adapter: readString(Reflect.get(config, 'adapter')),
+    adapter: readString(Reflect.get(config, "adapter")),
     grayPercent:
-      typeof Reflect.get(config, 'grayPercent') === 'number'
-        ? Math.max(0, Math.min(100, Number(Reflect.get(config, 'grayPercent'))))
-        : typeof Reflect.get(config, 'greyPercent') === 'number'
-          ? Math.max(0, Math.min(100, Number(Reflect.get(config, 'greyPercent'))))
+      typeof Reflect.get(config, "grayPercent") === "number"
+        ? Math.max(0, Math.min(100, Number(Reflect.get(config, "grayPercent"))))
+        : typeof Reflect.get(config, "greyPercent") === "number"
+          ? Math.max(
+              0,
+              Math.min(100, Number(Reflect.get(config, "greyPercent"))),
+            )
           : null,
     grayUserIds: normalizeIntegerList(
-      Array.isArray(Reflect.get(config, 'grayUserIds'))
-        ? (Reflect.get(config, 'grayUserIds') as number[])
-        : Array.isArray(Reflect.get(config, 'greyUserIds'))
-          ? (Reflect.get(config, 'greyUserIds') as number[])
-          : []
+      Array.isArray(Reflect.get(config, "grayUserIds"))
+        ? (Reflect.get(config, "grayUserIds") as number[])
+        : Array.isArray(Reflect.get(config, "greyUserIds"))
+          ? (Reflect.get(config, "greyUserIds") as number[])
+          : [],
     ),
     grayCountryCodes: normalizeCodeList(
-      Array.isArray(Reflect.get(config, 'grayCountryCodes'))
-        ? (Reflect.get(config, 'grayCountryCodes') as string[])
-        : Array.isArray(Reflect.get(config, 'greyCountryCodes'))
-          ? (Reflect.get(config, 'greyCountryCodes') as string[])
-          : []
+      Array.isArray(Reflect.get(config, "grayCountryCodes"))
+        ? (Reflect.get(config, "grayCountryCodes") as string[])
+        : Array.isArray(Reflect.get(config, "greyCountryCodes"))
+          ? (Reflect.get(config, "greyCountryCodes") as string[])
+          : [],
     ),
     grayCurrencies: normalizeCodeList(
-      Array.isArray(Reflect.get(config, 'grayCurrencies'))
-        ? (Reflect.get(config, 'grayCurrencies') as string[])
-        : Array.isArray(Reflect.get(config, 'greyCurrencies'))
-          ? (Reflect.get(config, 'greyCurrencies') as string[])
-          : []
+      Array.isArray(Reflect.get(config, "grayCurrencies"))
+        ? (Reflect.get(config, "grayCurrencies") as string[])
+        : Array.isArray(Reflect.get(config, "greyCurrencies"))
+          ? (Reflect.get(config, "greyCurrencies") as string[])
+          : [],
     ),
     grayMinAmount: normalizeOptionalMoneyString(
-      readString(Reflect.get(config, 'grayMinAmount')) ??
-        readString(Reflect.get(config, 'greyMinAmount'))
+      readString(Reflect.get(config, "grayMinAmount")) ??
+        readString(Reflect.get(config, "greyMinAmount")),
     ),
     grayMaxAmount: normalizeOptionalMoneyString(
-      readString(Reflect.get(config, 'grayMaxAmount')) ??
-        readString(Reflect.get(config, 'greyMaxAmount'))
+      readString(Reflect.get(config, "grayMaxAmount")) ??
+        readString(Reflect.get(config, "greyMaxAmount")),
     ),
     grayRules: normalizeGrayRules(
-      Array.isArray(Reflect.get(config, 'grayRules'))
+      Array.isArray(Reflect.get(config, "grayRules"))
         ? (Reflect.get(
             config,
-            'grayRules'
+            "grayRules",
           ) as PaymentProviderGrayRuleDraftPayload[])
-        : []
+        : [],
     ),
   };
 };

@@ -30,6 +30,13 @@ const schema = {
     blackjackResplitAllowed: { type: 'boolean' },
     blackjackMaxSplitHands: { type: 'integer', minimum: 2, maximum: 8 },
     blackjackSplitTenValueCardsAllowed: { type: 'boolean' },
+    saasUsageAlertMaxMinuteQps: { type: ['number', 'string'], minimum: 0 },
+    saasUsageAlertMaxSinglePayoutAmount: { type: ['number', 'string'], minimum: 0 },
+    saasUsageAlertMaxAntiExploitRatePct: {
+      type: ['number', 'string'],
+      minimum: 0,
+      maximum: 100,
+    },
   },
 } as const;
 

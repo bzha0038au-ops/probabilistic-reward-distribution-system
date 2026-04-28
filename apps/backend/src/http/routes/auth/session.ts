@@ -1,5 +1,6 @@
 import type { AppInstance } from '../types';
 
+import { getCurrentLegalAcceptanceStateForUser } from "../../../modules/legal/service";
 import { getUserById } from '../../../modules/user/service';
 import {
   listActiveAuthSessions,
@@ -7,6 +8,7 @@ import {
   revokeAuthSessions,
 } from '../../../modules/session/service';
 import { recordAdminAction } from '../../../modules/admin/audit';
+import { createUserRealtimeToken } from '../../../shared/user-session';
 import { sendError, sendSuccess } from '../../respond';
 import {
   readSessionIdParam,
@@ -45,11 +47,21 @@ export async function registerAuthSessionRoutes(app: AppInstance) {
         expiresAt: null,
         current: true,
       } as const);
+    const legal = await getCurrentLegalAcceptanceStateForUser(user.userId);
 
     return sendSuccess(reply, {
       user: toSessionUser(currentUser),
       session: currentSession,
+      legal,
     });
+  });
+
+  app.get('/auth/user/realtime-token', async (request, reply) => {
+    const user = await requireCurrentUserSession(request, reply);
+    if (!user) return;
+
+    const token = await createUserRealtimeToken(user);
+    return sendSuccess(reply, token);
   });
 
   app.get('/auth/user/sessions', async (request, reply) => {

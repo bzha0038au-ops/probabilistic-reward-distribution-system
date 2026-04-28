@@ -1,6 +1,17 @@
 import { z } from 'zod';
 
 import { MoneyLikeSchema, OptionalPositiveIntSchema } from './common';
+import {
+  CurrentLegalAcceptanceStateSchema,
+  LegalAcceptanceInputSchema,
+} from "./legal";
+
+// Defer legal schema resolution so auth contracts do not depend on module
+// initialization order when shared-types files are loaded through different runtimes.
+const LegalAcceptanceInputRefSchema = z.lazy(() => LegalAcceptanceInputSchema);
+const CurrentLegalAcceptanceStateRefSchema = z.lazy(
+  () => CurrentLegalAcceptanceStateSchema,
+);
 
 export const AuthCredentialsSchema = z.object({
   email: z.string().email(),
@@ -16,6 +27,7 @@ export const PhoneNumberSchema = z
 
 export const RegisterRequestSchema = AuthCredentialsSchema.extend({
   referrerId: OptionalPositiveIntSchema,
+  legalAcceptances: z.array(LegalAcceptanceInputRefSchema).default([]),
 });
 
 export type RegisterRequest = z.infer<typeof RegisterRequestSchema>;
@@ -51,6 +63,7 @@ export const UserSessionResponseSchema = z.object({
   expiresAt: z.number(),
   sessionId: z.string().optional(),
   user: UserSchema,
+  legal: CurrentLegalAcceptanceStateRefSchema.optional(),
 });
 
 export type UserSessionResponse = z.infer<typeof UserSessionResponseSchema>;
@@ -63,6 +76,50 @@ export const AdminSessionResponseSchema = z.object({
 });
 
 export type AdminSessionResponse = z.infer<typeof AdminSessionResponseSchema>;
+
+export const UserMfaStatusResponseSchema = z.object({
+  mfaEnabled: z.boolean(),
+  largeWithdrawalThreshold: z.string(),
+});
+
+export type UserMfaStatusResponse = z.infer<typeof UserMfaStatusResponseSchema>;
+
+export const UserMfaEnrollmentResponseSchema = z.object({
+  secret: z.string().min(1),
+  otpauthUrl: z.string().url(),
+  enrollmentToken: z.string().min(1),
+});
+
+export type UserMfaEnrollmentResponse = z.infer<
+  typeof UserMfaEnrollmentResponseSchema
+>;
+
+export const UserMfaVerifyRequestSchema = z.object({
+  enrollmentToken: z.string().min(1),
+  totpCode: z.string().min(6).max(8),
+});
+
+export type UserMfaVerifyRequest = z.infer<typeof UserMfaVerifyRequestSchema>;
+
+export const UserMfaVerifyResponseSchema = z.object({
+  mfaEnabled: z.literal(true),
+});
+
+export type UserMfaVerifyResponse = z.infer<typeof UserMfaVerifyResponseSchema>;
+
+export const UserMfaDisableRequestSchema = z.object({
+  totpCode: z.string().min(1).max(64),
+});
+
+export type UserMfaDisableRequest = z.infer<typeof UserMfaDisableRequestSchema>;
+
+export const UserMfaDisableResponseSchema = z.object({
+  mfaEnabled: z.literal(false),
+});
+
+export type UserMfaDisableResponse = z.infer<
+  typeof UserMfaDisableResponseSchema
+>;
 
 export const BonusReleaseRequestSchema = z.object({
   userId: z.number().int().positive(),
@@ -153,10 +210,20 @@ export type AuthSessionSummary = z.infer<typeof AuthSessionSummarySchema>;
 export const CurrentUserSessionResponseSchema = z.object({
   user: UserSchema,
   session: AuthSessionSummarySchema,
+  legal: CurrentLegalAcceptanceStateRefSchema,
 });
 
 export type CurrentUserSessionResponse = z.infer<
   typeof CurrentUserSessionResponseSchema
+>;
+
+export const UserRealtimeTokenResponseSchema = z.object({
+  token: z.string().min(1),
+  expiresAt: z.number().int().positive(),
+});
+
+export type UserRealtimeTokenResponse = z.infer<
+  typeof UserRealtimeTokenResponseSchema
 >;
 
 export const UserSessionsResponseSchema = z.object({

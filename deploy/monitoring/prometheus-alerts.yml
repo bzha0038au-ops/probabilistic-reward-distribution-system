@@ -56,6 +56,17 @@ groups:
           description: At least one withdrawal has exceeded the stuck threshold.
           runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/runbooks/RewardBackendWithdrawalsStuck.md
 
+      - alert: RewardBackendAmlHitsOverdue
+        expr: reward_backend_aml_review_hits_total{state="overdue"} > 0
+        for: 5m
+        labels:
+          severity: page
+          service: reward-backend
+        annotations:
+          summary: Reward AML hits have breached operator SLA
+          description: At least one AML hit is still pending review after the configured SLA window.
+          runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/runbooks/RewardBackendAmlHitsOverdue.md
+
       - alert: RewardBackendNotificationBacklogGrowing
         expr: |
           reward_backend_auth_notification_oldest_pending_age_seconds > 300
@@ -128,6 +139,17 @@ groups:
           summary: Reward SaaS billing collection is at risk
           description: Failed SaaS billing runs or retry-exhausted SaaS Stripe webhooks indicate tenants may not have been charged.
           runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/runbooks/RewardBackendSaasBillingCollectionAtRisk.md
+
+      - alert: RewardBackendSaasPayoutDistributionBreached
+        expr: reward_backend_saas_distribution_snapshot_breach > 0
+        for: 15m
+        labels:
+          severity: ticket
+          service: reward-backend
+        annotations:
+          summary: Reward SaaS payout distribution breached configured tolerance
+          description: Project {{ $labels.project_slug }} ({{ $labels.project_id }}) in {{ $labels.environment }} has breached the {{ $labels.reason }} payout-distribution threshold for the {{ $labels.window }} rolling window for at least 15 minutes.
+          runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/on-call-runbook.md
 
       # Prometheus alert rules do not honor repeat_interval directly; downstream
       # Alertmanager or equivalent routing should consume this annotation.

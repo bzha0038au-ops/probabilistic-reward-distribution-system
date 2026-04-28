@@ -1,16 +1,26 @@
 import fastify from 'fastify';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+type PendingAmlMetrics = {
+  pendingCount: number;
+  overdueCount: number;
+  oldestPendingAt: Date | null;
+  oldestOverdueAt: Date | null;
+};
+
 const {
   assertNotificationChannelAvailable,
   client,
   config,
+  getPendingAmlMetrics,
   getNotificationDeliverySummary,
   getNotificationProviderStatus,
   getRedis,
   getPaymentCapabilitySummary,
   getRuntimeMetadata,
+  refreshSaasDistributionSnapshots,
   redisPing,
+  saasDistributionMetricBuckets,
   assertAutomatedPaymentModeSupported,
   logger,
 } = vi.hoisted(() => ({
@@ -27,6 +37,7 @@ const {
   })),
   client: vi.fn(async (): Promise<unknown[]> => [{ ok: 1 }]),
   config: {
+    amlReviewSlaMinutes: 60,
     nodeEnv: 'test' as const,
     logLevel: 'info' as const,
     redisUrl: 'redis://localhost:6379',
@@ -44,6 +55,12 @@ const {
     saasBillingAutomationBatchSize: 100,
   },
   getNotificationDeliverySummary: vi.fn(),
+  getPendingAmlMetrics: vi.fn(async (): Promise<PendingAmlMetrics> => ({
+    pendingCount: 0,
+    overdueCount: 0,
+    oldestPendingAt: null,
+    oldestOverdueAt: null,
+  })),
   getNotificationProviderStatus: vi.fn(),
   getPaymentCapabilitySummary: vi.fn(() => ({
     operatingMode: 'manual_review',
@@ -62,6 +79,7 @@ const {
     release: 'dev',
     commitSha: 'unknown',
   })),
+  refreshSaasDistributionSnapshots: vi.fn(),
   logger: {
     info: vi.fn(),
     error: vi.fn(),
@@ -69,6 +87,15 @@ const {
     warning: vi.fn(),
   },
   redisPing: vi.fn(),
+  saasDistributionMetricBuckets: [
+    'zero',
+    'gt0_to_lte1',
+    'gt1_to_lte5',
+    'gt5_to_lte10',
+    'gt10_to_lte25',
+    'gt25_to_lte100',
+    'gt100',
+  ],
 }));
 
 vi.mock('../db.ts', () => ({
@@ -87,6 +114,12 @@ vi.mock('../modules/auth/notification-service', () => ({
   assertNotificationChannelAvailable,
   getNotificationDeliverySummary,
   getNotificationProviderStatus,
+}));
+vi.mock('../modules/aml/service', () => ({
+  getPendingAmlMetrics,
+}));
+vi.mock('../modules/aml/service.ts', () => ({
+  getPendingAmlMetrics,
 }));
 
 vi.mock('./config.ts', () => ({
@@ -123,6 +156,10 @@ vi.mock('../modules/payment/service', () => ({
   assertAutomatedPaymentModeSupported,
   getPaymentCapabilitySummary,
 }));
+vi.mock('../modules/saas/distribution-monitoring', () => ({
+  refreshSaasDistributionSnapshots,
+  saasDistributionMetricBuckets,
+}));
 
 import {
   buildLivenessReport,
@@ -143,6 +180,7 @@ describe('observability', () => {
     config.nodeEnv = 'test';
     config.logLevel = 'info';
     config.redisUrl = 'redis://localhost:6379';
+    config.amlReviewSlaMinutes = 60;
     config.observabilityServiceName = 'backend';
     config.observabilityEnvironment = 'test';
     config.observabilityRelease = 'dev';
@@ -193,6 +231,13 @@ describe('observability', () => {
       emailProvider: 'mock',
       smsProvider: 'mock',
     });
+    getPendingAmlMetrics.mockResolvedValue({
+      pendingCount: 0,
+      overdueCount: 0,
+      oldestPendingAt: null,
+      oldestOverdueAt: null,
+    });
+    refreshSaasDistributionSnapshots.mockResolvedValue([]);
     resetObservabilityMetrics();
   });
 
@@ -315,6 +360,12 @@ describe('observability', () => {
         smsProvider: 'mock',
       },
     });
+    getPendingAmlMetrics.mockResolvedValueOnce({
+      pendingCount: 2,
+      overdueCount: 1,
+      oldestPendingAt: new Date(Date.now() - 180_000),
+      oldestOverdueAt: new Date(Date.now() - 120_000),
+    });
     client
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
@@ -372,6 +423,64 @@ describe('observability', () => {
         },
       ])
       .mockResolvedValueOnce([{ count: 1 }]);
+    refreshSaasDistributionSnapshots.mockResolvedValueOnce([
+      {
+        projectId: 42,
+        projectSlug: 'alpha-project',
+        environment: 'sandbox',
+        windowKey: '1h',
+        capturedAt: new Date(),
+        windowStart: new Date(Date.now() - 60 * 60 * 1000),
+        windowEnd: new Date(),
+        drawCount: 12,
+        trackedDrawCount: 12,
+        trackingCoverageRatio: 1,
+        actualPayoutSum: '48.00',
+        expectedPayoutSum: '36.00',
+        payoutDeviationAmount: '12.00',
+        payoutDeviationRatio: 0.333333,
+        maxBucketDeviationRatio: 0.2,
+        actualPayoutHistogram: {
+          '0.00': 6,
+          '5.00': 6,
+        },
+        expectedPayoutHistogram: {
+          '0.00': 7.2,
+          '5.00': 4.8,
+        },
+        actualBucketHistogram: {
+          zero: 6,
+          gt0_to_lte1: 0,
+          gt1_to_lte5: 6,
+          gt5_to_lte10: 0,
+          gt10_to_lte25: 0,
+          gt25_to_lte100: 0,
+          gt100: 0,
+        },
+        expectedBucketHistogram: {
+          zero: 7.2,
+          gt0_to_lte1: 0,
+          gt1_to_lte5: 4.8,
+          gt5_to_lte10: 0,
+          gt10_to_lte25: 0,
+          gt25_to_lte100: 0,
+          gt100: 0,
+        },
+        breachReasons: ['ev_deviation', 'bucket_share_deviation'],
+        alertEligible: true,
+        monitoringConfig: {
+          enabled: true,
+          minDrawCount: {
+            '1m': 10,
+            '1h': 25,
+            '24h': 100,
+          },
+          trackingCoverageRatioThreshold: 0.95,
+          evDeviationRatioThreshold: 0.2,
+          bucketDeviationRatioThreshold: 0.15,
+        },
+      },
+    ]);
 
     await refreshOperationalMetrics();
 
@@ -381,6 +490,9 @@ describe('observability', () => {
     expect(metrics).toContain('status="pending"');
     expect(metrics).toContain('status="failed"');
     expect(metrics).toContain('reward_backend_auth_notification_oldest_pending_age_seconds');
+    expect(metrics).toContain('reward_backend_aml_review_hits_total');
+    expect(metrics).toContain('state="overdue"');
+    expect(metrics).toContain('reward_backend_aml_review_oldest_pending_age_seconds');
     expect(metrics).toContain('reward_backend_payment_webhook_events_total');
     expect(metrics).toContain('reward_backend_payment_webhook_oldest_pending_age_seconds');
     expect(metrics).toContain('reward_backend_payment_reconciliation_open_issues_total');
@@ -391,6 +503,18 @@ describe('observability', () => {
     expect(metrics).toContain('reward_backend_saas_webhook_events_total');
     expect(metrics).toContain('reward_backend_saas_webhook_oldest_ready_age_seconds');
     expect(metrics).toContain('reward_backend_saas_webhook_retry_exhausted_total');
+    expect(metrics).toContain('reward_backend_saas_distribution_snapshot_draws_total');
+    expect(metrics).toContain(
+      'reward_backend_saas_distribution_snapshot_expected_payout_sum'
+    );
+    expect(metrics).toContain(
+      'reward_backend_saas_distribution_snapshot_actual_bucket_total'
+    );
+    expect(metrics).toContain(
+      'reward_backend_saas_distribution_snapshot_breach'
+    );
+    expect(metrics).toContain('project_slug="alpha-project"');
+    expect(metrics).toContain('reason="ev_deviation"');
   });
 
   it('records payment runtime counters for Prometheus alerts', async () => {

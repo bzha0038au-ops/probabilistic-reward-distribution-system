@@ -6,6 +6,8 @@ type Bucket = {
   resetAt: number;
 };
 
+const inMemoryRateLimiterBuckets = new Set<Map<string, Bucket>>();
+
 export type RateLimitResult = {
   allowed: boolean;
   remaining: number;
@@ -29,6 +31,7 @@ export const createRateLimiter = (options: {
   prefix?: string;
 }) => {
   const buckets = new Map<string, Bucket>();
+  inMemoryRateLimiterBuckets.add(buckets);
   const { limit, windowMs, prefix } = options;
 
   const resolveLimit = (overrideLimit?: number) => {
@@ -146,4 +149,10 @@ export const createRateLimiter = (options: {
   };
 
   return { consume, peek };
+};
+
+export const resetInMemoryRateLimiters = () => {
+  for (const buckets of inMemoryRateLimiterBuckets) {
+    buckets.clear();
+  }
 };

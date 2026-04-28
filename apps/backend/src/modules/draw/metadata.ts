@@ -1,4 +1,5 @@
 import Decimal from 'decimal.js';
+import type { PlayModeSnapshot } from "@reward/shared-types/play-mode";
 
 import { toMoneyString } from '../../shared/money';
 import type {
@@ -30,6 +31,7 @@ export const buildDrawRecordMetadata = (params: {
   payoutControl: DrawConfigBundle['payoutControl'];
   poolSystem: DrawConfigBundle['poolSystem'];
   pityStreakAfter: number;
+  playMode?: PlayModeSnapshot | null;
 }) => {
   const {
     drawState,
@@ -42,6 +44,7 @@ export const buildDrawRecordMetadata = (params: {
     payoutControl,
     poolSystem,
     pityStreakAfter,
+    playMode,
   } = params;
 
   const updatedPoolBalance = computeUpdatedPoolBalance(
@@ -114,6 +117,7 @@ export const buildDrawRecordMetadata = (params: {
         randomPick: selectionState.selection?.randomPick ?? null,
         algorithm: 'sha256(seed:nonce:totalWeight)%totalWeight+1',
       },
+      playMode: playMode ?? null,
       payoutControl: {
         maxBigPerHour: toMoneyString(payoutControl.maxBigPerHour),
         maxBigPerDay: toMoneyString(payoutControl.maxBigPerDay),

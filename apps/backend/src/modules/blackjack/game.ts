@@ -4,13 +4,21 @@ import { z } from "zod";
 import { sql } from "@reward/database/orm";
 import {
   BLACKJACK_CONFIG,
+  BLACKJACK_TURN_TIMEOUT_ACTION,
   BlackjackCardSchema,
   BlackjackConfigSchema,
   BlackjackFairnessSchema,
   BlackjackGameStatusSchema,
+  BlackjackTableSchema,
   type BlackjackCard,
   type BlackjackConfig,
+  type BlackjackFairness,
+  type BlackjackTable,
 } from "@reward/shared-types/blackjack";
+import {
+  PlayModeSnapshotSchema,
+  type PlayModeSnapshot,
+} from "@reward/shared-types/play-mode";
 
 import type { DbClient, DbTransaction } from "../../db";
 import { badRequestError, internalInvariantError } from "../../shared/errors";
@@ -20,19 +28,20 @@ import { parseSchema } from "../../shared/validation";
 
 export const BLACKJACK_REFERENCE_TYPE = "blackjack_game";
 export const MAX_RECENT_GAMES = 5;
+export const BLACKJACK_AI_DEALER_ID = "ai-dealer:default";
+
+const DEFAULT_PLAY_MODE_SNAPSHOT: PlayModeSnapshot = {
+  type: "standard",
+  appliedMultiplier: 1,
+  nextMultiplier: 1,
+  streak: 0,
+  lastOutcome: null,
+  carryActive: false,
+};
 
 export type DbExecutor = DbClient | DbTransaction;
 
 const DateLikeSchema = z.union([z.date(), z.string()]);
-
-const BlackjackActionHistoryEntrySchema = z.object({
-  action: z.string(),
-  actor: z.enum(["player", "dealer", "system"]),
-  card: BlackjackCardSchema.optional(),
-  handIndex: z.number().int().nonnegative().optional(),
-  total: z.number().int().nullable().optional(),
-  status: BlackjackGameStatusSchema.optional(),
-});
 
 const blackjackPlayerHandProgressValues = [
   "active",
@@ -59,10 +68,21 @@ const BlackjackStoredConfigSchema = BlackjackConfigSchema.partial()
   }))
   .pipe(BlackjackConfigSchema);
 
+const BlackjackActionHistoryEntrySchema = z.object({
+  action: z.string(),
+  actor: z.enum(["player", "dealer", "system"]),
+  card: BlackjackCardSchema.optional(),
+  handIndex: z.number().int().nonnegative().optional(),
+  total: z.number().int().nullable().optional(),
+  status: BlackjackGameStatusSchema.optional(),
+});
+
 export const BlackjackMetadataSchema = z.object({
   config: BlackjackStoredConfigSchema.default(BLACKJACK_CONFIG),
   fairness: BlackjackFairnessSchema,
+  table: BlackjackTableSchema.optional(),
   actionHistory: z.array(BlackjackActionHistoryEntrySchema).default([]),
+  playMode: PlayModeSnapshotSchema.default(DEFAULT_PLAY_MODE_SNAPSHOT),
   playerHands: z.array(BlackjackStoredPlayerHandSchema).default([]),
   activeHandIndex: z.number().int().nonnegative().nullable().default(0),
 });
@@ -78,6 +98,7 @@ const BlackjackGameRowSchema = z.object({
   deck: z.array(BlackjackCardSchema),
   nextCardIndex: z.number().int().nonnegative(),
   status: BlackjackGameStatusSchema,
+  turnDeadlineAt: DateLikeSchema.nullable().optional(),
   metadata: z.unknown().nullable().optional(),
   settledAt: DateLikeSchema.nullable().optional(),
   createdAt: DateLikeSchema,
@@ -96,20 +117,74 @@ export const LockedBlackjackUserRowsSchema = z.array(
   LockedBlackjackUserRowSchema,
 );
 
-export type BlackjackActionHistoryEntry = z.infer<
-  typeof BlackjackActionHistoryEntrySchema
->;
 export type BlackjackGameRow = z.infer<typeof BlackjackGameRowSchema>;
 export type LockedBlackjackUserRow = z.infer<
   typeof LockedBlackjackUserRowSchema
 >;
 export type BlackjackMetadata = z.infer<typeof BlackjackMetadataSchema>;
+export type ResolvedBlackjackMetadata = Omit<BlackjackMetadata, "table"> & {
+  table: BlackjackTable;
+};
 export type BlackjackStoredPlayerHand = z.infer<
   typeof BlackjackStoredPlayerHandSchema
 >;
 export type BlackjackGameState = Omit<BlackjackGameRow, "metadata"> & {
-  metadata: BlackjackMetadata;
+  metadata: ResolvedBlackjackMetadata;
 };
+
+export type BlackjackActionHistoryEntry = z.infer<
+  typeof BlackjackActionHistoryEntrySchema
+>;
+
+const buildBlackjackTableId = (params: {
+  userId: number;
+  fairness: BlackjackFairness;
+}) => {
+  const nonceFragment = params.fairness.clientNonce.slice(0, 12) || "auto";
+  return `bj-${params.fairness.epoch}-${params.userId}-${nonceFragment}`;
+};
+
+export const buildBlackjackTable = (params: {
+  userId: number;
+  fairness: BlackjackFairness;
+  tableId?: string;
+}): BlackjackTable => ({
+  tableId: params.tableId ?? buildBlackjackTableId(params),
+  capacity: 2,
+  sharedDeck: true,
+  currentTurnSeatIndex: 1,
+  turnTimeoutAction: BLACKJACK_TURN_TIMEOUT_ACTION,
+  seats: [
+    {
+      seatIndex: 0,
+      role: "dealer",
+      participantType: "ai_robot",
+      participantId: BLACKJACK_AI_DEALER_ID,
+      isSelf: false,
+      turnDeadlineAt: null,
+    },
+    {
+      seatIndex: 1,
+      role: "player",
+      participantType: "human_user",
+      participantId: `user:${params.userId}`,
+      isSelf: true,
+      turnDeadlineAt: null,
+    },
+  ],
+});
+
+export const resolveBlackjackTable = (params: {
+  userId: number;
+  fairness: BlackjackFairness;
+  table?: BlackjackTable;
+}): BlackjackTable =>
+  params.table
+    ? params.table
+    : buildBlackjackTable({
+        userId: params.userId,
+        fairness: params.fairness,
+      });
 
 export const parseSqlRows = <T>(
   schema: z.ZodType<T[]>,

@@ -13,6 +13,7 @@ import {
   captureAdminServerException,
   initAdminServerObservability,
 } from '$lib/observability/server';
+import { resolveAdminDefaultRoute } from '$lib/admin/access';
 
 initAdminServerObservability();
 
@@ -45,17 +46,19 @@ export const handle: Handle = async ({ event, resolve }) => {
   event.locals.locale = resolveLocaleFromRequest(event);
 
   const path = event.url.pathname;
+  const routeId = event.route.id;
+  const isAdminRoute = routeId?.startsWith('/(admin)') ?? false;
 
   if (path.startsWith('/account')) {
-    throw redirect(303, '/admin');
+    throw redirect(303, admin ? resolveAdminDefaultRoute(admin) : '/login');
   }
 
-  if (path.startsWith('/admin') && !admin) {
+  if (isAdminRoute && !admin) {
     throw redirect(303, '/login');
   }
 
   if (path.startsWith('/login') && admin) {
-    throw redirect(303, '/admin');
+    throw redirect(303, resolveAdminDefaultRoute(admin));
   }
 
   return resolve(event, {

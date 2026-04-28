@@ -1,0 +1,38 @@
+{
+  "name": "@reward/saas-portal",
+  "private": true,
+  "scripts": {
+    "dev": "rm -rf .next-dev && next dev --hostname localhost --port 3002",
+    "dev:turbo": "rm -rf .next-dev && next dev --turbo --hostname localhost --port 3002",
+    "build": "rm -rf .next-dev && next build",
+    "start": "next start -H 0.0.0.0 -p 3002",
+    "lint": "next lint",
+    "check": "next lint"
+  },
+  "dependencies": {
+    "@auth/core": "0.18.4",
+    "@radix-ui/react-label": "^2.0.2",
+    "@radix-ui/react-slot": "^1.0.2",
+    "@reward/shared-types": "workspace:*",
+    "@types/node": "^20.10.5",
+    "@types/react": "^18.2.45",
+    "@types/react-dom": "^18.2.18",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.0",
+    "geist": "^1.2.0",
+    "next": "^14.0.4",
+    "next-auth": "5.0.0-beta.4",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "tailwind-merge": "^2.2.1",
+    "tailwindcss-animate": "^1.0.7"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.16",
+    "eslint": "8.56.0",
+    "eslint-config-next": "^14.0.4",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.3.3"
+  }
+}

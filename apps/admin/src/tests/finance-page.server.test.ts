@@ -8,7 +8,7 @@ vi.mock("$lib/server/api", () => ({
   apiRequest,
 }))
 
-import { actions, load } from "../routes/(admin)/finance/+page.server"
+import { actions, load } from "../routes/(admin)/(c)/finance/+page.server"
 
 const makeRequest = (entries: Record<string, string> = {}) => {
   const formData = new FormData()
@@ -102,6 +102,7 @@ describe("finance admin page server", () => {
     const result = await load({
       fetch: vi.fn(),
       cookies: {},
+      locals: { locale: "en" },
     } as never)
 
     expect(apiRequest).toHaveBeenNthCalledWith(
@@ -271,6 +272,7 @@ describe("finance admin page server", () => {
       headers: { "Content-Type": "application/json" },
     })
     expect(JSON.parse(String(init?.body))).toEqual({
+      breakGlassCode: null,
       confirmations: null,
       totpCode: "123456",
       processingChannel: "manual_bank",
@@ -295,6 +297,55 @@ describe("finance admin page server", () => {
       status: 400,
       data: { error: "Operator note is required." },
     })
+  })
+
+  it("rejects withdrawal approval when the break-glass code is missing", async () => {
+    const result = await actions.approveWithdrawal({
+      request: makeRequest({
+        id: "7",
+        totpCode: "123456",
+        operatorNote: "manual withdrawal review complete",
+      }),
+      fetch: vi.fn(),
+      cookies: {},
+    } as never)
+
+    expect(apiRequest).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
+      status: 400,
+      data: { error: "Admin break-glass code is required." },
+    })
+  })
+
+  it("calls the backend approval endpoint when the withdrawal payload is complete", async () => {
+    apiRequest.mockResolvedValue({
+      ok: true,
+      data: { id: 7, status: "approved" },
+    })
+
+    const result = await actions.approveWithdrawal({
+      request: makeRequest({
+        id: "7",
+        totpCode: "123456",
+        breakGlassCode: "break-glass-secret",
+        operatorNote: "manual withdrawal review complete",
+      }),
+      fetch: vi.fn(),
+      cookies: {},
+    } as never)
+
+    expect(apiRequest).toHaveBeenCalledTimes(1)
+    const [, , path, init] = apiRequest.mock.calls[0]
+    expect(path).toBe("/admin/withdrawals/7/approve")
+    expect(JSON.parse(String(init?.body))).toEqual({
+      confirmations: null,
+      totpCode: "123456",
+      breakGlassCode: "break-glass-secret",
+      processingChannel: null,
+      settlementReference: null,
+      operatorNote: "manual withdrawal review complete",
+    })
+    expect(result).toEqual({ success: true })
   })
 
   it("rejects withdrawal provider submission when the settlement reference is missing", async () => {
@@ -356,6 +407,7 @@ describe("finance admin page server", () => {
     const [, , path, init] = apiRequest.mock.calls[0]
     expect(path).toBe("/admin/withdrawals/9/pay")
     expect(JSON.parse(String(init?.body))).toEqual({
+      breakGlassCode: null,
       confirmations: null,
       totpCode: "123456",
       processingChannel: "manual_bank",

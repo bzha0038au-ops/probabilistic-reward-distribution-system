@@ -21,9 +21,10 @@ export async function createCustomerPortalSession(
   },
   adminId?: number | null,
   permissions?: string[],
+  accessScope: "global" | "membership" = "global",
 ): Promise<SaasCustomerPortalSession> {
   await assertTenantCapability(
-    toSaasAdminActor(adminId ?? null, permissions),
+    toSaasAdminActor(adminId ?? null, permissions, accessScope),
     tenantId,
     "tenant:read",
   );
@@ -62,9 +63,10 @@ export async function createBillingSetupSession(
   },
   adminId?: number | null,
   permissions?: string[],
+  accessScope: "global" | "membership" = "global",
 ): Promise<SaasBillingSetupSession> {
   await assertTenantCapability(
-    toSaasAdminActor(adminId ?? null, permissions),
+    toSaasAdminActor(adminId ?? null, permissions, accessScope),
     tenantId,
     "tenant:read",
   );

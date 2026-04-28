@@ -1,4 +1,3 @@
-import Decimal from "decimal.js";
 import { API_ERROR_CODES } from "@reward/shared-types/api";
 import {
   saasBillingAccountVersions,
@@ -22,13 +21,15 @@ import {
 import { toDecimal } from "../../shared/money";
 import { assertTenantCapability } from "./access";
 import {
-  BILLING_DRAW_EVENT_TYPE,
+  BILLING_LIVE_ENVIRONMENT,
   BILLING_RUN_DISPATCHED_STATUSES,
   BILLING_RUN_TERMINAL_STATUSES,
   buildBillingRunInvoiceActionIdempotencyKey,
   buildBillingRunStripeFingerprint,
+  resolveBillingDecisionPricing,
   resolveBillingPeriod,
   selectBillingAccountVersionForPeriod,
+  summarizeUsageEventsForBilling,
 } from "./billing";
 import {
   buildBillingAccountSnapshot,
@@ -222,6 +223,7 @@ export async function createBillingRun(
       .where(
         and(
           eq(saasUsageEvents.tenantId, tenant.id),
+          eq(saasUsageEvents.environment, BILLING_LIVE_ENVIRONMENT),
           isNull(saasUsageEvents.billingRunId),
           gte(saasUsageEvents.createdAt, periodStart),
           lt(saasUsageEvents.createdAt, periodEnd),
@@ -231,23 +233,35 @@ export async function createBillingRun(
     const usageEvents = await tx
       .select({
         eventType: saasUsageEvents.eventType,
+        decisionType: saasUsageEvents.decisionType,
         units: saasUsageEvents.units,
         amount: saasUsageEvents.amount,
+        metadata: saasUsageEvents.metadata,
       })
       .from(saasUsageEvents)
-      .where(eq(saasUsageEvents.billingRunId, billingRun.id));
+      .where(
+        and(
+          eq(saasUsageEvents.billingRunId, billingRun.id),
+          eq(saasUsageEvents.environment, BILLING_LIVE_ENVIRONMENT),
+        ),
+      );
 
-    const usageFeeAmount = usageEvents.reduce(
-      (sum, event) => sum.plus(toDecimal(event.amount)),
-      new Decimal(0),
+    const decisionPricing = resolveBillingDecisionPricing(
+      billingAccountVersion.metadata,
+      billingAccountVersion.drawFee,
     );
-    const drawCount = usageEvents.reduce(
-      (sum, event) =>
-        event.eventType === BILLING_DRAW_EVENT_TYPE
-          ? sum + Number(event.units ?? 0)
-          : sum,
-      0,
+    const normalizedUsageEvents = usageEvents.map((event) => ({
+      eventType: event.eventType,
+      decisionType: event.decisionType,
+      units: Number(event.units ?? 0),
+      amount: toDecimal(event.amount).toFixed(4),
+      metadata: normalizeMetadata(event.metadata),
+    }));
+    const usageSummary = summarizeUsageEventsForBilling(
+      normalizedUsageEvents.filter((event) => event.metadata?.billable !== false),
+      decisionPricing,
     );
+    const usageFeeAmount = toDecimal(usageSummary.usageFeeAmount);
     const baseFeeAmount = toDecimal(billingAccountVersion.baseMonthlyFee);
     const totalAmount = baseFeeAmount.plus(usageFeeAmount);
 
@@ -262,13 +276,14 @@ export async function createBillingRun(
         usageFeeAmount: usageFeeAmount.toFixed(2),
         creditAppliedAmount: "0",
         totalAmount: totalAmount.toFixed(2),
-        drawCount,
+        drawCount: usageSummary.drawCount,
         stripeCustomerId: billingAccountVersion.stripeCustomerId,
         metadata: normalizeMetadata({
           generatedBy: adminId ? "manual" : "automation",
           periodStart: periodStart.toISOString(),
           periodEnd: periodEnd.toISOString(),
           billingSnapshot: buildBillingAccountSnapshot(billingAccountVersion),
+          decisionBreakdown: usageSummary.decisionBreakdown,
         }),
         updatedAt: new Date(),
       })

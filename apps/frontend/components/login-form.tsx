@@ -69,7 +69,12 @@ export function LoginForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col space-y-4">
+    <form
+      action="/api/auth/login"
+      method="post"
+      onSubmit={handleSubmit}
+      className="flex flex-col space-y-4"
+    >
       <input type="hidden" name="redirectTo" value={redirectTo} />
       <div className="space-y-2">
         <Label htmlFor="email">{emailLabel}</Label>

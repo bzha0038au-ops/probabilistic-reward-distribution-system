@@ -8,6 +8,8 @@ export type MobileAppRoute =
   | 'security'
   | 'gacha'
   | 'quickEight'
+  | 'predictionMarket'
+  | 'holdem'
   | 'blackjack'
   | 'fairness';
 

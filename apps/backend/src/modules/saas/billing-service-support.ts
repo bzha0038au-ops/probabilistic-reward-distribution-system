@@ -19,6 +19,8 @@ import {
   buildBillingRunInvoiceCreateIdempotencyKey,
   buildBillingRunInvoiceLineItemIdempotencyKey,
   buildBillingRunStripeFingerprint,
+  readBillingRunDecisionBreakdown,
+  resolveBillingDecisionPricing,
   parseStripeInvoiceObject,
   resolveBillingRunStatusFromInvoice,
   resolveStripeCreditAppliedAmount,
@@ -81,6 +83,7 @@ export const buildBillingAccountSnapshot = (
   portalConfigurationId: row.portalConfigurationId,
   baseMonthlyFee: toMoneyString(row.baseMonthlyFee),
   drawFee: new Decimal(row.drawFee).toFixed(4),
+  decisionPricing: resolveBillingDecisionPricing(row.metadata, row.drawFee),
   currency: row.currency,
   isBillable: Boolean(row.isBillable),
   metadata: normalizeMetadata(row.metadata),
@@ -234,7 +237,34 @@ export const createStripeInvoiceForBillingRun = async (
   }
 
   const usageFeeAmount = toDecimal(run.usageFeeAmount);
-  if (usageFeeAmount.gt(0)) {
+  const decisionBreakdown = readBillingRunDecisionBreakdown(run.metadata);
+  const chargeableDecisionBreakdown = decisionBreakdown.filter((item) =>
+    toDecimal(item.totalAmount).gt(0),
+  );
+  if (chargeableDecisionBreakdown.length > 0) {
+    for (const item of chargeableDecisionBreakdown) {
+      await stripe.invoiceItems.create(
+        {
+          customer: run.stripeCustomerId,
+          invoice: invoice.id,
+          currency: normalizeStripeCurrency(run.currency),
+          amount: toStripeAmount(item.totalAmount),
+          description: `Usage fee - ${item.decisionType} (${item.units} decisions @ ${item.unitAmount})`,
+          metadata: {
+            saasBillingRunId: String(run.id),
+            saasLineType: `usage_fee_${item.decisionType}`,
+            saasDecisionType: item.decisionType,
+          },
+        },
+        {
+          idempotencyKey: buildBillingRunInvoiceLineItemIdempotencyKey(
+            run,
+            `usage_fee_${item.decisionType}`,
+          ),
+        },
+      );
+    }
+  } else if (usageFeeAmount.gt(0)) {
     await stripe.invoiceItems.create(
       {
         customer: run.stripeCustomerId,

@@ -15,7 +15,17 @@ type RouteSwitcherProps = {
 export function RouteSwitcher(props: RouteSwitcherProps) {
   return (
     <View style={props.styles.routeSwitcher}>
-      {(['home', 'gacha', 'quickEight', 'blackjack', 'fairness'] as const).map((route) => (
+      {(
+        [
+          'home',
+          'gacha',
+          'quickEight',
+          'predictionMarket',
+          'holdem',
+          'blackjack',
+          'fairness',
+        ] as const
+      ).map((route) => (
         <ActionButton
           key={route}
           label={props.labels[route]}

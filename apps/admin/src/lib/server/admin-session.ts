@@ -18,6 +18,9 @@ export type AdminSessionPayload = {
   mfaEnabled: boolean;
   mfaRecoveryMode: AdminMfaRecoveryMode;
   sessionId: string;
+  permissions: string[];
+  requiresMfa: boolean;
+  managedScopes?: string[];
 };
 
 const resolveAdminJwtSecret = () => {
@@ -79,6 +82,8 @@ export async function verifyAdminSessionToken(token?: string | null) {
           ? payload.mfaRecoveryMode
           : 'none',
       sessionId,
+      permissions: [],
+      requiresMfa: false,
     } satisfies AdminSessionPayload;
   } catch {
     return null;

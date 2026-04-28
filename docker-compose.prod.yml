@@ -132,6 +132,54 @@ services:
     networks:
       - data
 
+  fairness-audit-worker:
+    <<: *app-defaults
+    image: ${BACKEND_IMAGE:-reward-system/backend}:${IMAGE_TAG:-latest}
+    command: ["pnpm", "--dir", "apps/backend", "start:worker:fairness-audits"]
+    env_file:
+      - ./.env.d/backend.env
+    volumes:
+      - ./.secrets:/run/secrets:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - data
+
+  blackjack-timeout-worker:
+    <<: *app-defaults
+    image: ${BACKEND_IMAGE:-reward-system/backend}:${IMAGE_TAG:-latest}
+    command: ["pnpm", "--dir", "apps/backend", "start:worker:blackjack-timeouts"]
+    env_file:
+      - ./.env.d/backend.env
+    volumes:
+      - ./.secrets:/run/secrets:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - data
+
+  holdem-timeout-worker:
+    <<: *app-defaults
+    image: ${BACKEND_IMAGE:-reward-system/backend}:${IMAGE_TAG:-latest}
+    command: ["pnpm", "--dir", "apps/backend", "start:worker:holdem-timeouts"]
+    env_file:
+      - ./.env.d/backend.env
+    volumes:
+      - ./.secrets:/run/secrets:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - data
+
   frontend:
     <<: *app-defaults
     image: ${FRONTEND_IMAGE:-reward-system/frontend}:${IMAGE_TAG:-latest}

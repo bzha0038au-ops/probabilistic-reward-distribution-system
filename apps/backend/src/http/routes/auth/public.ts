@@ -3,10 +3,12 @@ import { API_ERROR_CODES } from "@reward/shared-types/api";
 import {
   PasswordResetConfirmSchema,
   PasswordResetRequestSchema,
+  RegisterRequestSchema,
   VerificationTokenConfirmSchema,
 } from "@reward/shared-types/auth";
-import { and, eq, gte, sql } from "@reward/database/orm";
-import { ledgerEntries, users } from "@reward/database";
+import { type UserFreezeScope } from "@reward/shared-types/risk";
+import { eq } from "@reward/database/orm";
+import { users } from "@reward/database";
 
 import { db } from "../../../db";
 import {
@@ -15,6 +17,7 @@ import {
   markUserEmailVerified,
   updateUserPassword,
 } from "../../../modules/user/service";
+import { screenUserRegistration } from "../../../modules/aml";
 import {
   verifyAdminCredentials,
   verifyCredentials,
@@ -31,6 +34,12 @@ import {
   verifyAdminMfaBreakGlassCode,
   verifyAdminMfaChallenge,
 } from "../../../modules/admin-mfa/service";
+import {
+  assertCurrentLegalAcceptances,
+  getCurrentEffectiveLegalDocuments,
+  getCurrentLegalAcceptanceStateForUser,
+  recordLegalAcceptancesInTransaction,
+} from "../../../modules/legal/service";
 import { ensureUserFreeze, isUserFrozen } from "../../../modules/risk/service";
 import {
   consumeMarketingBudget,
@@ -38,13 +47,14 @@ import {
   getRewardEventConfig,
   getSystemFlags,
 } from "../../../modules/system/service";
+import { grantDailyCheckInRewardOnLogin } from "../../../modules/gamification/service";
 import { revokeAuthSessions } from "../../../modules/session/service";
 import { withAdminAuditContext } from "../../admin-audit";
 import { createAdminSessionToken } from "../../../shared/admin-session";
 import { applyAuthFailureDelay } from "../../../shared/auth-delay";
 import { createUserSessionToken } from "../../../shared/user-session";
 import { parseSchema } from "../../../shared/validation";
-import { sendError, sendSuccess } from "../../respond";
+import { sendError, sendErrorForException, sendSuccess } from "../../respond";
 import { readStringValue, toObject } from "../../utils";
 import { validateAuth } from "../../validators";
 import {
@@ -63,20 +73,23 @@ import {
   toSessionUser,
 } from "./support";
 
+const ACCOUNT_FREEZE_SCOPE: UserFreezeScope = "account_lock";
+
 export async function registerAuthPublicRoutes(app: AppInstance) {
   app.post(
     "/auth/register",
     { config: { rateLimit: authRateLimit } },
     async (request, reply) => {
-      const payload = toObject(request.body);
-      const validation = validateAuth(payload);
-      if (!validation.isValid) {
-        return sendError(reply, 400, "Invalid request.", validation.errors);
+      const parsed = parseSchema(RegisterRequestSchema, toObject(request.body));
+      if (!parsed.isValid) {
+        return sendError(reply, 400, "Invalid request.", parsed.errors);
       }
 
-      const email = (readStringValue(payload, "email") ?? "").toLowerCase();
-      const password = readStringValue(payload, "password") ?? "";
-      const referrerId = Number(readStringValue(payload, "referrerId") ?? 0);
+      const email = parsed.data.email.toLowerCase();
+      const password = parsed.data.password;
+      const referrerId = Number(parsed.data.referrerId ?? 0);
+      const userAgent = resolveUserAgent(request);
+      const currentLegalDocuments = await getCurrentEffectiveLegalDocuments(db);
 
       const systemFlags = await getSystemFlags(db);
       if (systemFlags.maintenanceMode) {
@@ -140,8 +153,43 @@ export async function registerAuthPublicRoutes(app: AppInstance) {
         );
       }
 
+      try {
+        assertCurrentLegalAcceptances({
+          currentDocuments: currentLegalDocuments,
+          providedAcceptances: parsed.data.legalAcceptances,
+        });
+      } catch (error) {
+        await safeRecordAuthEvent({
+          eventType: "register_blocked",
+          email,
+          ip: request.ip,
+          userAgent,
+          metadata: { reason: "legal_acceptance_required" },
+        });
+        return sendErrorForException(reply, error, "Registration blocked.");
+      }
+
       const existing = await getUserByEmail(email);
       if (existing) {
+        if (await isUserFrozen(existing.id, { scope: ACCOUNT_FREEZE_SCOPE })) {
+          await safeRecordAuthEvent({
+            eventType: "register_blocked",
+            email,
+            userId: existing.id,
+            ip: request.ip,
+            userAgent: resolveUserAgent(request),
+            metadata: { reason: "account_lock" },
+          });
+          await applyAuthFailureDelay();
+          return sendError(
+            reply,
+            423,
+            "Account locked.",
+            undefined,
+            API_ERROR_CODES.ACCOUNT_LOCKED,
+          );
+        }
+
         if (!existing.emailVerifiedAt) {
           try {
             await requestEmailVerification({
@@ -167,7 +215,32 @@ export async function registerAuthPublicRoutes(app: AppInstance) {
         );
       }
 
-      const user = await createUserWithWallet(email, password);
+      const user = await createUserWithWallet(email, password, {
+        afterCreate: async (transaction, createdUser) => {
+          await recordLegalAcceptancesInTransaction(transaction, {
+            userId: createdUser.id,
+            documents: currentLegalDocuments,
+            source: "register",
+            ip: request.ip,
+            userAgent,
+          });
+        },
+      });
+      try {
+        await screenUserRegistration(user.id);
+      } catch (error) {
+        await safeRecordAuthEvent({
+          eventType: "register_blocked",
+          email,
+          userId: user.id,
+          ip: request.ip,
+          userAgent: resolveUserAgent(request),
+          metadata: { reason: "aml_review" },
+        });
+        await applyAuthFailureDelay();
+        return sendErrorForException(reply, error, "Registration blocked.");
+      }
+
       await safeRecordAuthEvent({
         eventType: "register_success",
         email,
@@ -414,14 +487,17 @@ export async function registerAuthPublicRoutes(app: AppInstance) {
 
       const failureConfig = await resolveAuthFailureConfig();
       const existingUser = await getUserByEmail(email);
-      if (existingUser && (await isUserFrozen(existingUser.id))) {
+      if (
+        existingUser &&
+        (await isUserFrozen(existingUser.id, { scope: ACCOUNT_FREEZE_SCOPE }))
+      ) {
         await safeRecordAuthEvent({
           eventType: "user_login_blocked",
           email,
           userId: existingUser.id,
           ip: request.ip,
           userAgent: resolveUserAgent(request),
-          metadata: { reason: "account_frozen" },
+          metadata: { reason: "account_lock" },
         });
         await applyAuthFailureDelay();
         return sendError(
@@ -452,7 +528,8 @@ export async function registerAuthPublicRoutes(app: AppInstance) {
           if (shouldFreeze) {
             await ensureUserFreeze({
               userId: existingUser.id,
-              reason: "auth_failure_threshold",
+              reason: "auth_failure",
+              scope: ACCOUNT_FREEZE_SCOPE,
             });
           }
         }
@@ -508,42 +585,16 @@ export async function registerAuthPublicRoutes(app: AppInstance) {
         });
       }
 
-      const rewardConfig = await getRewardEventConfig(db);
-      if (rewardConfig.dailyEnabled && rewardConfig.dailyAmount.gt(0)) {
-        const startOfDay = new Date();
-        startOfDay.setHours(0, 0, 0, 0);
-        const [{ total = 0 }] = await db
-          .select({ total: sql<number>`count(*)` })
-          .from(ledgerEntries)
-          .where(
-            and(
-              eq(ledgerEntries.userId, user.id),
-              eq(ledgerEntries.entryType, "daily_bonus"),
-              gte(ledgerEntries.createdAt, startOfDay),
-            ),
-          );
-        if (Number(total ?? 0) === 0) {
-          const budget = await consumeMarketingBudget(
-            db,
-            rewardConfig.dailyAmount,
-          );
-          if (budget.allowed) {
-            await grantBonus({
-              userId: user.id,
-              amount: rewardConfig.dailyAmount.toString(),
-              entryType: "daily_bonus",
-              referenceType: "reward_event",
-              metadata: { reason: "daily_bonus" },
-            });
-          }
-        }
-      }
+      await grantDailyCheckInRewardOnLogin(user.id);
+
+      const legal = await getCurrentLegalAcceptanceStateForUser(user.id);
 
       return sendSuccess(reply, {
         token,
         expiresAt,
         sessionId,
         user: toSessionUser(user),
+        legal,
       });
     },
   );
@@ -565,14 +616,17 @@ export async function registerAuthPublicRoutes(app: AppInstance) {
 
       const failureConfig = await resolveAuthFailureConfig();
       const existingUser = await getUserByEmail(email);
-      if (existingUser && (await isUserFrozen(existingUser.id))) {
+      if (
+        existingUser &&
+        (await isUserFrozen(existingUser.id, { scope: ACCOUNT_FREEZE_SCOPE }))
+      ) {
         await safeRecordAuthEvent({
           eventType: "admin_login_blocked",
           email,
           userId: existingUser.id,
           ip: request.ip,
           userAgent: resolveUserAgent(request),
-          metadata: { reason: "account_frozen" },
+          metadata: { reason: "account_lock" },
         });
         await applyAuthFailureDelay();
         return sendError(
@@ -603,7 +657,8 @@ export async function registerAuthPublicRoutes(app: AppInstance) {
           if (shouldFreeze) {
             await ensureUserFreeze({
               userId: existingUser.id,
-              reason: "admin_auth_failure_threshold",
+              reason: "auth_failure",
+              scope: ACCOUNT_FREEZE_SCOPE,
             });
           }
         }
@@ -657,7 +712,8 @@ export async function registerAuthPublicRoutes(app: AppInstance) {
           if (shouldFreeze) {
             await ensureUserFreeze({
               userId: user.id,
-              reason: "admin_auth_failure_threshold",
+              reason: "auth_failure",
+              scope: ACCOUNT_FREEZE_SCOPE,
             });
           }
 

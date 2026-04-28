@@ -1,40 +1,44 @@
-import type { DbClient, DbTransaction } from '../../db';
-import { reviewPaymentProviderConfig } from '../payment/provider-config';
+import type { DbClient, DbTransaction } from "../../db";
+import { reviewPaymentProviderConfig } from "../payment/provider-config";
 
 export {
   getControlCenterOverview,
   listControlChangeRequests,
   listPaymentProvidersForAdmin,
   toSystemConfigResponse,
-} from './control-overview-service';
+} from "./control-overview-service";
 export {
   approveControlChangeRequest,
+  createLegalDocumentPublishDraft,
   createPaymentProviderDraft,
+  createSaasTenantRiskEnvelopeDraft,
   createSystemConfigDraft,
   publishControlChangeRequest,
   rejectControlChangeRequest,
   submitControlChangeRequest,
-} from './control-change-request-service';
+} from "./control-change-request-service";
 export {
   resetPaymentProviderCircuitBreaker,
   tripPaymentProviderCircuitBreaker,
-} from './control-circuit-breaker-service';
+} from "./control-circuit-breaker-service";
 
 export type DbExecutor = DbClient | DbTransaction;
 
 export type ControlChangeRequestStatus =
-  | 'draft'
-  | 'pending_approval'
-  | 'approved'
-  | 'published'
-  | 'rejected';
+  | "draft"
+  | "pending_approval"
+  | "approved"
+  | "published"
+  | "rejected";
 
 export type ControlChangeRequestType =
-  | 'system_config_update'
-  | 'payment_provider_upsert';
+  | "system_config_update"
+  | "payment_provider_upsert"
+  | "legal_document_publish"
+  | "saas_tenant_risk_envelope_upsert";
 
-export type PaymentProviderFlow = 'deposit' | 'withdrawal';
-export type PaymentProviderExecutionMode = 'manual' | 'automated';
+export type PaymentProviderFlow = "deposit" | "withdrawal";
+export type PaymentProviderExecutionMode = "manual" | "automated";
 
 export type SystemConfigDraftPayload = {
   poolBalance?: string | number;
@@ -62,6 +66,9 @@ export type SystemConfigDraftPayload = {
   blackjackResplitAllowed?: boolean;
   blackjackMaxSplitHands?: number;
   blackjackSplitTenValueCardsAllowed?: boolean;
+  saasUsageAlertMaxMinuteQps?: string | number;
+  saasUsageAlertMaxSinglePayoutAmount?: string | number;
+  saasUsageAlertMaxAntiExploitRatePct?: string | number;
 };
 
 export type PaymentProviderGrayRuleDraftPayload = {
@@ -89,6 +96,23 @@ export type PaymentProviderDraftPayload = {
   grayMinAmount?: string | null;
   grayMaxAmount?: string | null;
   grayRules?: PaymentProviderGrayRuleDraftPayload[];
+};
+
+export type SaasTenantRiskEnvelopeDraftPayload = {
+  tenantId: number;
+  dailyBudgetCap?: string | number | null;
+  maxSinglePayout?: string | number | null;
+  varianceCap?: string | number | null;
+  emergencyStop?: boolean;
+};
+
+export type LegalDocumentPublishPayload = {
+  documentId: number;
+  documentKey: string;
+  locale: string;
+  title: string;
+  version: number;
+  rolloutPercent: number;
 };
 
 export type ControlChangeRequestRecord = {
@@ -126,7 +150,11 @@ export type ControlChangeAuditField = {
 };
 
 export type PublishedControlChangeRequestAudit = {
-  resource: 'system_config' | 'payment_provider';
+  resource:
+    | "system_config"
+    | "payment_provider"
+    | "legal_document_publication"
+    | "saas_tenant_risk_envelope";
   targetId: number | null;
   changedKeys: string[];
   fieldDiff: ControlChangeAuditField[];
@@ -163,6 +191,9 @@ export type ControlSystemConfig = {
   blackjackResplitAllowed: boolean;
   blackjackMaxSplitHands: number;
   blackjackSplitTenValueCardsAllowed: boolean;
+  saasUsageAlertMaxMinuteQps: string;
+  saasUsageAlertMaxSinglePayoutAmount: string;
+  saasUsageAlertMaxAntiExploitRatePct: string;
 };
 
 export type ControlPaymentProviderRecord = {
@@ -184,7 +215,9 @@ export type ControlPaymentProviderRecord = {
   grayMinAmount: string | null;
   grayMaxAmount: string | null;
   grayRules: PaymentProviderGrayRuleDraftPayload[];
-  configViolations: ReturnType<typeof reviewPaymentProviderConfig>['violations'];
+  configViolations: ReturnType<
+    typeof reviewPaymentProviderConfig
+  >["violations"];
 };
 
 export type ControlCenterOverview = {

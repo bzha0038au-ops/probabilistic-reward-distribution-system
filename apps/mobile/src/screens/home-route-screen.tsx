@@ -43,7 +43,12 @@ export function HomeRouteScreen(props: HomeRouteScreenProps) {
 }
 
 function isPrimaryRoute(route: HomeMenuRouteKey) {
-  return route === 'account' || route === 'rewards' || route === 'gacha';
+  return (
+    route === 'account' ||
+    route === 'rewards' ||
+    route === 'gacha' ||
+    route === 'predictionMarket'
+  );
 }
 
 const styles = StyleSheet.create({

@@ -13,17 +13,30 @@
   "exports": {
     ".": "./src/index.ts",
     "./admin": "./src/admin.ts",
+    "./aml": "./src/aml.ts",
     "./api": "./src/api.ts",
     "./auth": "./src/auth.ts",
     "./blackjack": "./src/blackjack.ts",
+    "./community": "./src/community.ts",
     "./common": "./src/common.ts",
     "./draw": "./src/draw.ts",
     "./fairness": "./src/fairness.ts",
     "./finance": "./src/finance.ts",
+    "./forum": "./src/forum.ts",
     "./gamification": "./src/gamification.ts",
+    "./hand-history": "./src/hand-history.ts",
+    "./holdem": "./src/holdem.ts",
+    "./kyc": "./src/kyc.ts",
+    "./legal": "./src/legal.ts",
     "./notification": "./src/notification.ts",
+    "./prediction-market": "./src/prediction-market.ts",
+    "./play-mode": "./src/play-mode.ts",
     "./quick-eight": "./src/quick-eight.ts",
+    "./realtime": "./src/realtime.ts",
+    "./risk": "./src/risk.ts",
     "./saas": "./src/saas.ts",
+    "./table-engine": "./src/table-engine.ts",
+    "./table-monitoring": "./src/table-monitoring.ts",
     "./user": "./src/user.ts"
   },
   "types": "./src/index.ts",
@@ -31,6 +44,9 @@
     "*": {
       "admin": [
         "src/admin.ts"
+      ],
+      "aml": [
+        "src/aml.ts"
       ],
       "api": [
         "src/api.ts"
@@ -40,6 +56,9 @@
       ],
       "blackjack": [
         "src/blackjack.ts"
+      ],
+      "community": [
+        "src/community.ts"
       ],
       "common": [
         "src/common.ts"
@@ -53,17 +72,50 @@
       "finance": [
         "src/finance.ts"
       ],
+      "forum": [
+        "src/forum.ts"
+      ],
       "gamification": [
         "src/gamification.ts"
+      ],
+      "hand-history": [
+        "src/hand-history.ts"
+      ],
+      "holdem": [
+        "src/holdem.ts"
+      ],
+      "kyc": [
+        "src/kyc.ts"
+      ],
+      "legal": [
+        "src/legal.ts"
       ],
       "notification": [
         "src/notification.ts"
       ],
+      "prediction-market": [
+        "src/prediction-market.ts"
+      ],
+      "play-mode": [
+        "src/play-mode.ts"
+      ],
       "quick-eight": [
         "src/quick-eight.ts"
       ],
+      "realtime": [
+        "src/realtime.ts"
+      ],
+      "risk": [
+        "src/risk.ts"
+      ],
       "saas": [
         "src/saas.ts"
+      ],
+      "table-engine": [
+        "src/table-engine.ts"
+      ],
+      "table-monitoring": [
+        "src/table-monitoring.ts"
       ],
       "user": [
         "src/user.ts"

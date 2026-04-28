@@ -8,7 +8,7 @@ vi.mock("$lib/server/api", () => ({
   apiRequest,
 }))
 
-import { actions, load } from "../routes/(admin)/admin/+page.server"
+import { actions, load } from "../routes/(admin)/(engine)/config/+page.server"
 
 const makeRequest = (entries: Record<string, string> = {}) => {
   const formData = new FormData()
@@ -112,10 +112,6 @@ describe("admin page server", () => {
           authFailureWindowMinutes: "15",
           authFailureFreezeThreshold: "8",
           adminFailureFreezeThreshold: "5",
-          profileSecurityRewardAmount: "8",
-          firstDrawRewardAmount: "3",
-          drawStreakDailyRewardAmount: "5",
-          topUpStarterRewardAmount: "10",
           blackjackMinStake: "1",
           blackjackMaxStake: "100",
           blackjackWinPayoutMultiplier: "2",

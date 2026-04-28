@@ -2,9 +2,11 @@ import type {
   RewardCenterResponse,
   RewardMission,
   RewardMissionId,
+  RewardMissionMetric,
 } from "@reward/shared-types/gamification";
 
 import { toMoneyString } from "../../shared/money";
+import type { RewardMissionDefinition } from "./catalog";
 
 export type RewardCenterSnapshot = {
   bonusBalance: string | number;
@@ -18,12 +20,7 @@ export type RewardCenterSnapshot = {
     missionId: RewardMissionId | null;
     createdAt: Date;
   }>;
-  dailyEnabled: boolean;
-  dailyAmount: string;
-  profileSecurityRewardAmount: string;
-  firstDrawRewardAmount: string;
-  drawStreakDailyRewardAmount: string;
-  topUpStarterRewardAmount: string;
+  missions: RewardMissionDefinition[];
 };
 
 const startOfDay = (value = new Date()) => {
@@ -87,149 +84,103 @@ const findMissionClaim = (
   return claims[0] ?? null;
 };
 
-export function evaluateRewardCenter(
+const evaluateMetricProgress = (
   snapshot: RewardCenterSnapshot,
-  now = new Date(),
-): RewardCenterResponse {
-  const profileSecurityEnabled =
-    Number(snapshot.profileSecurityRewardAmount) > 0;
-  const firstDrawEnabled = Number(snapshot.firstDrawRewardAmount) > 0;
-  const drawStreakDailyEnabled =
-    Number(snapshot.drawStreakDailyRewardAmount) > 0;
-  const topUpStarterEnabled = Number(snapshot.topUpStarterRewardAmount) > 0;
-  const nextResetAt = addDays(startOfDay(now), 1);
-  const todayDailyClaim =
-    snapshot.dailyClaims.find((entry) => isSameDay(entry, now)) ?? null;
-  const streakDays = calculateDailyStreak(snapshot.dailyClaims, now);
+  metric: RewardMissionMetric,
+) => {
+  if (metric === "verified_contacts") {
+    return (
+      Number(Boolean(snapshot.emailVerifiedAt)) +
+      Number(Boolean(snapshot.phoneVerifiedAt))
+    );
+  }
 
-  const missions: RewardMission[] = [
-    {
-      id: "daily_checkin",
+  if (metric === "draw_count_all") {
+    return snapshot.drawCountAll;
+  }
+
+  if (metric === "draw_count_today") {
+    return snapshot.drawCountToday;
+  }
+
+  return snapshot.depositCount;
+};
+
+const evaluateMission = (
+  definition: RewardMissionDefinition,
+  snapshot: RewardCenterSnapshot,
+  now: Date,
+  nextResetAt: Date,
+  todayDailyClaim: Date | null,
+): RewardMission => {
+  if (definition.type === "daily_checkin") {
+    const enabled = definition.isActive && Number(definition.reward) > 0;
+    return {
+      id: definition.id,
+      title: definition.params.title,
+      description: definition.params.description,
       cadence: "daily",
-      status: !snapshot.dailyEnabled
+      status: !enabled
         ? "disabled"
         : todayDailyClaim
           ? "claimed"
           : "in_progress",
-      rewardAmount: snapshot.dailyAmount,
+      rewardAmount: definition.reward,
       progressCurrent: todayDailyClaim ? 1 : 0,
       progressTarget: 1,
       claimable: false,
       autoAwarded: true,
       claimedAt: todayDailyClaim,
       resetsAt: nextResetAt,
-    },
-    (() => {
-      const claim = findMissionClaim(
-        snapshot.missionClaims,
-        "profile_security",
-        now,
-        "one_time",
-      );
-      const progressCurrent =
-        Number(Boolean(snapshot.emailVerifiedAt)) +
-        Number(Boolean(snapshot.phoneVerifiedAt));
-      return {
-        id: "profile_security" as const,
-        cadence: "one_time" as const,
-        status: !profileSecurityEnabled
-          ? "disabled"
-          : claim
-            ? "claimed"
-            : progressCurrent >= 2
-              ? "ready"
-              : "in_progress",
-        rewardAmount: snapshot.profileSecurityRewardAmount,
-        progressCurrent,
-        progressTarget: 2,
-        claimable: profileSecurityEnabled && !claim && progressCurrent >= 2,
-        autoAwarded: false,
-        claimedAt: claim?.createdAt ?? null,
-        resetsAt: null,
-      };
-    })(),
-    (() => {
-      const claim = findMissionClaim(
-        snapshot.missionClaims,
-        "first_draw",
-        now,
-        "one_time",
-      );
-      const progressCurrent = Math.min(snapshot.drawCountAll, 1);
-      return {
-        id: "first_draw" as const,
-        cadence: "one_time" as const,
-        status: !firstDrawEnabled
-          ? "disabled"
-          : claim
-            ? "claimed"
-            : progressCurrent >= 1
-              ? "ready"
-              : "in_progress",
-        rewardAmount: snapshot.firstDrawRewardAmount,
-        progressCurrent,
-        progressTarget: 1,
-        claimable: firstDrawEnabled && !claim && progressCurrent >= 1,
-        autoAwarded: false,
-        claimedAt: claim?.createdAt ?? null,
-        resetsAt: null,
-      };
-    })(),
-    (() => {
-      const claim = findMissionClaim(
-        snapshot.missionClaims,
-        "draw_streak_daily",
-        now,
-        "daily",
-      );
-      const progressCurrent = Math.min(snapshot.drawCountToday, 3);
-      return {
-        id: "draw_streak_daily" as const,
-        cadence: "daily" as const,
-        status: !drawStreakDailyEnabled
-          ? "disabled"
-          : claim
-            ? "claimed"
-            : progressCurrent >= 3
-              ? "ready"
-              : "in_progress",
-        rewardAmount: snapshot.drawStreakDailyRewardAmount,
-        progressCurrent,
-        progressTarget: 3,
-        claimable: drawStreakDailyEnabled && !claim && progressCurrent >= 3,
-        autoAwarded: false,
-        claimedAt: claim?.createdAt ?? null,
-        resetsAt: nextResetAt,
-      };
-    })(),
-    (() => {
-      const claim = findMissionClaim(
-        snapshot.missionClaims,
-        "top_up_starter",
-        now,
-        "one_time",
-      );
-      const progressCurrent = Math.min(snapshot.depositCount, 1);
-      return {
-        id: "top_up_starter" as const,
-        cadence: "one_time" as const,
-        status: !topUpStarterEnabled
-          ? "disabled"
-          : claim
-            ? "claimed"
-            : progressCurrent >= 1
-              ? "ready"
-              : "in_progress",
-        rewardAmount: snapshot.topUpStarterRewardAmount,
-        progressCurrent,
-        progressTarget: 1,
-        claimable: topUpStarterEnabled && !claim && progressCurrent >= 1,
-        autoAwarded: false,
-        claimedAt: claim?.createdAt ?? null,
-        resetsAt: null,
-      };
-    })(),
-  ];
+    };
+  }
+
+  const claim = findMissionClaim(
+    snapshot.missionClaims,
+    definition.id,
+    now,
+    definition.params.cadence,
+  );
+  const progressCurrent = Math.min(
+    evaluateMetricProgress(snapshot, definition.params.metric),
+    definition.params.target,
+  );
+  const enabled = definition.isActive && Number(definition.reward) > 0;
+
+  return {
+    id: definition.id,
+    title: definition.params.title,
+    description: definition.params.description,
+    cadence: definition.params.cadence,
+    status: !enabled
+      ? "disabled"
+      : claim
+        ? "claimed"
+        : progressCurrent >= definition.params.target
+          ? "ready"
+          : "in_progress",
+    rewardAmount: definition.reward,
+    progressCurrent,
+    progressTarget: definition.params.target,
+    claimable:
+      enabled && claim === null && progressCurrent >= definition.params.target,
+    autoAwarded: false,
+    claimedAt: claim?.createdAt ?? null,
+    resetsAt: definition.params.cadence === "daily" ? nextResetAt : null,
+  };
+};
+
+export function evaluateRewardCenter(
+  snapshot: RewardCenterSnapshot,
+  now = new Date(),
+): RewardCenterResponse {
+  const nextResetAt = addDays(startOfDay(now), 1);
+  const todayDailyClaim =
+    snapshot.dailyClaims.find((entry) => isSameDay(entry, now)) ?? null;
+  const streakDays = calculateDailyStreak(snapshot.dailyClaims, now);
+  const missions = snapshot.missions.map((definition) =>
+    evaluateMission(definition, snapshot, now, nextResetAt, todayDailyClaim),
+  );
 
   return {
     summary: {

@@ -68,6 +68,16 @@ Error:
 - `GET /withdrawals`
 - `POST /withdrawals`
 
+## Prize Engine
+
+- `GET /v1/engine/overview`
+- `GET /v1/engine/fairness/commit`
+- `GET /v1/engine/fairness/reveal?epoch=...`
+- `POST /v1/engine/rewards` (canonical behavior-driven reward API; request body is centered on `agent`, `behavior`, and `idempotencyKey`)
+- `POST /v1/engine/draws` (legacy gacha compatibility route; deprecated and scheduled to sunset on October 28, 2026)
+- `GET /v1/engine/observability/distribution?days=...`
+- `GET /v1/engine/ledger?playerId=...&limit=...`
+
 ## Admin
 
 - `GET /admin/payment-capabilities` (manual-review capability overview; lists

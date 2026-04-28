@@ -25,6 +25,24 @@ type RewardCenterSectionProps = {
 };
 
 export function RewardCenterSection(props: RewardCenterSectionProps) {
+  const legacyMissionCopy = props.copy.legacyMissionCopy as Record<
+    string,
+    { title: string; description: string }
+  >;
+
+  const resolveMissionCopy = (mission: NonNullable<
+    RewardCenterSectionProps["rewardCenter"]
+  >["missions"][number]) =>
+    (mission.title.trim() !== "" || mission.description.trim() !== ""
+      ? {
+          title: mission.title,
+          description: mission.description,
+        }
+      : legacyMissionCopy[mission.id]) ?? {
+      title: mission.title,
+      description: mission.description,
+    };
+
   return (
     <SectionCard title={props.copy.title} subtitle={props.copy.subtitle}>
       <View style={styles.rewardSummaryGrid}>
@@ -98,7 +116,7 @@ export function RewardCenterSection(props: RewardCenterSectionProps) {
 
       <View style={styles.rewardMissionList}>
         {props.rewardCenter?.missions.map((mission) => {
-          const missionCopy = props.copy.missionCopy[mission.id];
+          const missionCopy = resolveMissionCopy(mission);
           const progressRatio = Math.max(
             0,
             Math.min(

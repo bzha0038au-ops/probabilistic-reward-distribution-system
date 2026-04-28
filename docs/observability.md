@@ -126,6 +126,8 @@ Current metrics include:
 - `reward_backend_draw_requests_total`
 - `reward_backend_auth_notification_deliveries`
 - `reward_backend_auth_notification_oldest_pending_age_seconds`
+- `reward_backend_aml_review_hits_total`
+- `reward_backend_aml_review_oldest_pending_age_seconds`
 - `reward_backend_withdrawals_stuck_total`
 - `reward_backend_withdrawals_oldest_stuck_age_seconds`
 - `reward_backend_payment_webhook_signature_verifications_total`
@@ -140,6 +142,17 @@ Current metrics include:
 - `reward_backend_saas_webhook_events_total`
 - `reward_backend_saas_webhook_oldest_ready_age_seconds`
 - `reward_backend_saas_webhook_retry_exhausted_total`
+- `reward_backend_saas_distribution_snapshot_draws_total`
+- `reward_backend_saas_distribution_snapshot_tracked_draws_total`
+- `reward_backend_saas_distribution_snapshot_tracking_coverage_ratio`
+- `reward_backend_saas_distribution_snapshot_actual_payout_sum`
+- `reward_backend_saas_distribution_snapshot_expected_payout_sum`
+- `reward_backend_saas_distribution_snapshot_payout_deviation_amount`
+- `reward_backend_saas_distribution_snapshot_payout_deviation_ratio`
+- `reward_backend_saas_distribution_snapshot_max_bucket_deviation_ratio`
+- `reward_backend_saas_distribution_snapshot_actual_bucket_total`
+- `reward_backend_saas_distribution_snapshot_expected_bucket_total`
+- `reward_backend_saas_distribution_snapshot_breach`
 - `reward_backend_stripe_api_requests_total`
 - `reward_backend_stripe_api_failures_total`
 
@@ -160,12 +173,14 @@ The minimum production dashboard should show:
 - total request rate and 5xx ratio
 - draw success vs error rate
 - notification backlog counts and oldest pending age
+- AML pending-hit queue depth and oldest pending age
 - stuck withdrawals by status and age
 - payment webhook signature volume / failure ratio
 - payment reconciliation manual-review queue depth and oldest issue age
 - outbound payment queue state and idempotency conflicts
 - Stripe rate-limit / 5xx failures and retry backlog
 - failed SaaS billing runs and retry-exhausted SaaS webhooks
+- SaaS payout-distribution snapshot draw counts, EV drift, bucket drift, and breach state by project/window
 - PostgreSQL data volume usage, Redis maxmemory usage, and registry storage usage
 - current `reward_backend_build_info` release / commit
 
@@ -176,11 +191,13 @@ The minimum production alert set should cover:
 - draw error rate
 - withdraw stuck
 - notification backlog / dead-letter growth
+- AML pending hits breaching SLA
 - payment webhook signature failure spikes
 - reconciliation manual-review queue growth
 - outbound idempotency conflicts
 - Stripe rate-limit / 5xx degradation
 - failed SaaS billing runs and retry-exhausted SaaS webhooks
+- SaaS payout-distribution breach windows
 - PostgreSQL data volume thresholds at 70% / 85% / 95%
 - Redis memory thresholds at 70% / 85% / 95%
 - Registry storage threshold at 80%
@@ -211,6 +228,10 @@ alerts. They are alert thresholds, not customer-facing SLAs.
 - SaaS webhook retry exhaustion threshold:
   `reward_backend_saas_webhook_retry_exhausted_total` counts failed webhook
   rows whose `attempts` are at least 8.
+- SaaS payout-distribution breach:
+  any `reward_backend_saas_distribution_snapshot_breach` series above 0 for
+  15 minutes raises a ticket, keyed by `project_slug`, rolling `window`, and
+  `reason`.
 
 ## Capacity Thresholds
 

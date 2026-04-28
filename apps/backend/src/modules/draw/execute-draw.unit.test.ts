@@ -25,6 +25,10 @@ vi.mock('../fairness/service', () => ({
   ensureFairnessSeed: vi.fn(),
 }));
 
+vi.mock('../kyc/service', () => ({
+  assertKycStakeAllowed: vi.fn(),
+}));
+
 vi.mock('../../shared/logger', () => ({
   logger: {
     info: vi.fn(),
@@ -51,6 +55,7 @@ vi.mock('./selection', () => ({
 
 import { logger } from '../../shared/logger';
 import { ensureFairnessSeed } from '../fairness/service';
+import { assertKycStakeAllowed } from '../kyc/service';
 import {
   getBonusReleaseConfig,
   getDrawCost,
@@ -272,6 +277,7 @@ const mockConfigBundle = (config: DrawConfigBundle) => {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(assertKycStakeAllowed).mockResolvedValue(undefined);
 });
 
 describe('executeDrawInTransaction', () => {
@@ -324,6 +330,7 @@ describe('executeDrawInTransaction', () => {
 
     expect(result).toEqual(record);
     expect(ensureFairnessSeed).toHaveBeenCalledWith(tx, 3600);
+    expect(assertKycStakeAllowed).toHaveBeenCalledWith(123, '10.00', tx);
     expect(prepareDrawSelection).toHaveBeenCalledWith(
       expect.objectContaining({
         tx,
@@ -422,6 +429,7 @@ describe('executeDrawInTransaction', () => {
     );
 
     expect(getDrawSystemConfig).not.toHaveBeenCalled();
+    expect(assertKycStakeAllowed).not.toHaveBeenCalled();
   });
 
   it('stops the flow when draw guards reject the request', async () => {
@@ -447,6 +455,8 @@ describe('executeDrawInTransaction', () => {
     ).rejects.toThrow('Draws are disabled.');
 
     expect(getDrawCost).not.toHaveBeenCalled();
+    expect(assertKycStakeAllowed).not.toHaveBeenCalled();
+    expect(ensureFairnessSeed).not.toHaveBeenCalled();
     expect(prepareDrawSelection).not.toHaveBeenCalled();
     expect(resolveDrawOutcome).not.toHaveBeenCalled();
   });

@@ -13,6 +13,7 @@ import {
   getGamificationRewardConfig,
   getPoolBalance,
   getRandomizationConfig,
+  getSaasUsageAlertConfig,
 } from "../../../modules/system/service";
 import { recordAdminAction } from "../../../modules/admin/audit";
 import { withAdminAuditContext } from "../../admin-audit";
@@ -34,6 +35,7 @@ export async function registerAdminConfigRoutes(protectedRoutes: AppInstance) {
       const authFailure = await getAuthFailureConfig(db);
       const gamificationReward = await getGamificationRewardConfig(db);
       const blackjackConfig = await getBlackjackConfig(db);
+      const saasUsageAlert = await getSaasUsageAlertConfig(db);
 
       return sendSuccess(reply, {
         poolBalance: toMoneyString(poolBalance),
@@ -73,6 +75,15 @@ export async function registerAdminConfigRoutes(protectedRoutes: AppInstance) {
           blackjackConfig.naturalPayoutMultiplier,
         blackjackDealerHitsSoft17: blackjackConfig.dealerHitsSoft17,
         blackjackDoubleDownAllowed: blackjackConfig.doubleDownAllowed,
+        saasUsageAlertMaxMinuteQps: toMoneyString(
+          saasUsageAlert.maxMinuteQps,
+        ),
+        saasUsageAlertMaxSinglePayoutAmount: toMoneyString(
+          saasUsageAlert.maxSinglePayoutAmount,
+        ),
+        saasUsageAlertMaxAntiExploitRatePct: toMoneyString(
+          saasUsageAlert.maxAntiExploitRatePct,
+        ),
       });
     },
   );

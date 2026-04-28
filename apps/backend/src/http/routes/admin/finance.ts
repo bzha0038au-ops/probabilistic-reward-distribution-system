@@ -572,9 +572,9 @@ export async function registerAdminFinanceRoutes(protectedRoutes: AppInstance) {
     {
       config: { rateLimit: adminRateLimit },
       preHandler: [
-        requireAdminPermission(
-          ADMIN_PERMISSION_KEYS.FINANCE_APPROVE_WITHDRAWAL
-        ),
+        requireAdminPermission(ADMIN_PERMISSION_KEYS.FINANCE_APPROVE_WITHDRAWAL, {
+          requireBreakGlass: true,
+        }),
         enforceAdminLimit,
       ],
     },

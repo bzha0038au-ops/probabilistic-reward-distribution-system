@@ -5,6 +5,7 @@ import { type DbTransaction } from '../../db';
 import { applyPrizePoolDelta } from '../house/service';
 import { toMoneyString } from '../../shared/money';
 import { buildDrawRecordMetadata } from './metadata';
+import type { PlayModeSnapshot } from "@reward/shared-types/play-mode";
 import type {
   DebitedDrawState,
   DrawConfigBundle,
@@ -76,6 +77,7 @@ export const createDrawRecord = async (params: {
   payoutControl: DrawConfigBundle['payoutControl'];
   poolSystem: DrawConfigBundle['poolSystem'];
   pityStreakAfter: number;
+  playMode?: PlayModeSnapshot | null;
 }) => {
   const {
     tx,
@@ -90,6 +92,7 @@ export const createDrawRecord = async (params: {
     payoutControl,
     poolSystem,
     pityStreakAfter,
+    playMode,
   } = params;
   const { metadata, updatedPoolBalance } = buildDrawRecordMetadata({
     drawState,
@@ -102,6 +105,7 @@ export const createDrawRecord = async (params: {
     payoutControl,
     poolSystem,
     pityStreakAfter,
+    playMode,
   });
 
   const [record] = await tx

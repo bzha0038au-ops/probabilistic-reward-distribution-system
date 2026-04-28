@@ -1,6 +1,7 @@
 import Decimal from "decimal.js";
 import { z } from "zod";
 import type { DrawStatus } from "@reward/shared-types/draw";
+import type { PlayModeSnapshot } from "@reward/shared-types/play-mode";
 export type { DrawStatus };
 import type {
   getDrawSystemConfig,
@@ -45,6 +46,7 @@ export type BudgetSource = {
 
 export type DrawOptions = {
   clientNonce?: string | null;
+  playMode?: PlayModeSnapshot | null;
 };
 
 export type DrawConfigBundle = {

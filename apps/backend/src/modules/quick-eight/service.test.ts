@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 process.env.DATABASE_URL ||= 'postgresql://postgres:postgres@127.0.0.1:5433/reward_test';
 
+const { drawQuickEightNumbers, resolveQuickEightMultiplier } = await import('./service');
+
 describe('quick eight service helpers', () => {
-  it('draws deterministic unique numbers from the configured board', async () => {
-    const { drawQuickEightNumbers } = await import('./service');
+  it('draws deterministic unique numbers from the configured board', () => {
     const first = drawQuickEightNumbers({
       seed: 'seed-1',
       userId: 42,
@@ -25,8 +26,7 @@ describe('quick eight service helpers', () => {
     expect(first.rngDigest).toHaveLength(64);
   });
 
-  it('resolves the configured payout multipliers', async () => {
-    const { resolveQuickEightMultiplier } = await import('./service');
+  it('resolves the configured payout multipliers', () => {
     expect(resolveQuickEightMultiplier(3).toFixed(2)).toBe('0.00');
     expect(resolveQuickEightMultiplier(6).toFixed(2)).toBe('95.00');
     expect(resolveQuickEightMultiplier(8).toFixed(2)).toBe('4800.00');

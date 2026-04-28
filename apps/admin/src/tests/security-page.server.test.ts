@@ -50,24 +50,12 @@ describe('security admin page server', () => {
           limit: 10,
           hasNext: true,
         },
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        data: {
-          items: [],
-          limit: 25,
-          hasNext: false,
-          hasPrevious: false,
-          nextCursor: null,
-          prevCursor: null,
-          direction: 'next',
-          sort: 'desc',
-        },
       });
 
     const result = await load({
       fetch: vi.fn(),
       cookies: {},
+      locals: { locale: 'en' },
       url: new URL(
         'http://localhost/security?email=user@example.com&authLimit=25&freezePage=2&freezeLimit=10'
       ),
@@ -85,12 +73,6 @@ describe('security admin page server', () => {
       {},
       '/admin/freeze-records?limit=10&page=2'
     );
-    expect(apiRequest).toHaveBeenNthCalledWith(
-      3,
-      expect.any(Function),
-      {},
-      '/admin/admin-actions?'
-    );
     expect(result).toMatchObject({
       error: null,
       authEvents: {
@@ -102,10 +84,6 @@ describe('security admin page server', () => {
         page: 2,
         limit: 10,
         hasNext: true,
-      },
-      adminActions: {
-        items: [],
-        limit: 25,
       },
     });
   });
@@ -127,11 +105,11 @@ describe('security admin page server', () => {
   it('calls the release endpoint when releasing a freeze record', async () => {
     apiRequest.mockResolvedValue({
       ok: true,
-      data: { userId: 88, status: 'released' },
+      data: { id: 88, status: 'released' },
     });
 
     const result = await actions.releaseFreeze({
-      request: makeRequest({ userId: '88', totpCode: '123456' }),
+      request: makeRequest({ freezeRecordId: '88', totpCode: '123456' }),
       fetch: vi.fn(),
       cookies: {},
     } as never);
@@ -143,7 +121,63 @@ describe('security admin page server', () => {
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ totpCode: '123456' }),
+        body: JSON.stringify({ totpCode: '123456', breakGlassCode: null }),
+      }
+    );
+    expect(result).toEqual({ success: true });
+  });
+
+  it('rejects createFreeze when the break-glass code is missing', async () => {
+    const result = await actions.createFreeze({
+      request: makeRequest({
+        userId: '42',
+        reason: 'manual_admin',
+        scope: 'account_lock',
+        totpCode: '123456',
+      }),
+      fetch: vi.fn(),
+      cookies: {},
+    } as never);
+
+    expect(apiRequest).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      status: 400,
+      data: { error: 'Admin break-glass code is required.' },
+    });
+  });
+
+  it('calls the create freeze endpoint with MFA and break-glass', async () => {
+    apiRequest.mockResolvedValue({
+      ok: true,
+      data: { id: 99, status: 'active' },
+    });
+
+    const result = await actions.createFreeze({
+      request: makeRequest({
+        userId: '42',
+        reason: 'manual_admin',
+        scope: 'account_lock',
+        totpCode: '123456',
+        breakGlassCode: 'break-glass-secret',
+      }),
+      fetch: vi.fn(),
+      cookies: {},
+    } as never);
+
+    expect(apiRequest).toHaveBeenCalledWith(
+      expect.any(Function),
+      {},
+      '/admin/freeze-records',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: 42,
+          reason: 'manual_admin',
+          scope: 'account_lock',
+          totpCode: '123456',
+          breakGlassCode: 'break-glass-secret',
+        }),
       }
     );
     expect(result).toEqual({ success: true });
