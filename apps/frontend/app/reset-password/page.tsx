@@ -18,7 +18,7 @@ import { getServerTranslations } from '@/lib/i18n/server';
 async function resetPasswordAction(formData: FormData) {
   'use server';
 
-  const t = getServerTranslations();
+  const t = await getServerTranslations();
   const token = String(formData.get('token') ?? '').trim();
   const password = String(formData.get('password') ?? '');
 
@@ -52,15 +52,16 @@ async function resetPasswordAction(formData: FormData) {
   redirect('/login?reset=1');
 }
 
-export default function ResetPassword({
+export default async function ResetPassword({
   searchParams,
 }: {
-  searchParams?: { token?: string; error?: string };
+  searchParams?: Promise<{ token?: string; error?: string }>;
 }) {
-  const t = getServerTranslations();
-  const token = searchParams?.token ?? '';
-  const errorMessage = searchParams?.error
-    ? decodeURIComponent(searchParams.error)
+  const resolvedSearchParams = await searchParams;
+  const t = await getServerTranslations();
+  const token = resolvedSearchParams?.token ?? '';
+  const errorMessage = resolvedSearchParams?.error
+    ? decodeURIComponent(resolvedSearchParams.error)
     : !token
       ? t('auth.resetTokenMissing')
       : null;

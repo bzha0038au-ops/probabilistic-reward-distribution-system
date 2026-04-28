@@ -731,7 +731,6 @@ const buildAdminCookieHeaders = (token: string) => ({
   cookie: `${ADMIN_SESSION_COOKIE}=${encodeURIComponent(token)}; ${CSRF_COOKIE}=${TEST_CSRF_TOKEN}`,
   origin: ADMIN_ORIGIN,
   [CSRF_HEADER]: TEST_CSRF_TOKEN,
-  'content-type': 'application/json',
 });
 
 const buildAdminBreakGlassHeaders = (token: string) => ({
@@ -741,7 +740,6 @@ const buildAdminBreakGlassHeaders = (token: string) => ({
 
 const buildUserAuthHeaders = (token: string) => ({
   authorization: `Bearer ${token}`,
-  'content-type': 'application/json',
 });
 
 const registerUser = async (email: string, password = 'secret-123') => {

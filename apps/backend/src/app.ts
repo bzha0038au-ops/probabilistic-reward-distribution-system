@@ -97,7 +97,9 @@ export async function buildApp(options: BuildAppOptions = {}) {
   assertAutomatedPaymentModeSupported(config);
   const { db, resetDb } = await import('./db');
   await assertActivePaymentProviderSecretsResolvable(db);
-  const app = fastify({ logger: getPinoLogger() }) as unknown as AppInstance;
+  const app = fastify({
+    loggerInstance: getPinoLogger(),
+  }) as unknown as AppInstance;
 
   const installHandlers =
     options.installProcessHandlers ?? config.nodeEnv !== 'test';

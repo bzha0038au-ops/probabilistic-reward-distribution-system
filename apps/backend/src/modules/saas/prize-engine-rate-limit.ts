@@ -102,7 +102,7 @@ type AntiExploitContext = {
 type HistoricalDrawTraceRow = {
   id: number;
   playerId: number;
-  createdAt: Date;
+  createdAt: Date | string;
   playerExternalId: string | null;
   agentId: string | null;
   payloadDigest: string | null;
@@ -304,7 +304,14 @@ const summarizeOpaqueValue = (value: string | null) => {
   return `${value.slice(0, 12)}…${value.slice(-4)}`;
 };
 
-const toIsoString = (value: Date) => value.toISOString();
+const toIsoString = (value: Date | string) => {
+  const parsed = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error("Invalid prize engine timestamp.");
+  }
+
+  return parsed.toISOString();
+};
 
 const isSevereHit = (severity: AntiExploitSeverity) =>
   ANTI_EXPLOIT_SEVERITY_RANK[severity] >=
@@ -361,8 +368,9 @@ const loadHistoricalDrawTraces = async (params: {
   limit?: number;
 }) => {
   const fieldSql = antiExploitTraceFieldSql(params.field);
+  const sinceIso = params.since?.toISOString() ?? null;
   const sinceClause = params.since
-    ? sql`AND ${saasDrawRecords.createdAt} >= ${params.since}`
+    ? sql`AND ${saasDrawRecords.createdAt} >= ${sinceIso}`
     : sql``;
   const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
 

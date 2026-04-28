@@ -15,6 +15,8 @@ const loadAutoBillingCandidates = async (params: {
   periodEnd: Date;
   limit: number;
 }) => {
+  const periodStartIso = params.periodStart.toISOString();
+  const periodEndIso = params.periodEnd.toISOString();
   const result = await db.execute(sql`
     WITH before_period AS (
       SELECT DISTINCT ON (${saasBillingAccountVersions.tenantId})
@@ -23,7 +25,7 @@ const loadAutoBillingCandidates = async (params: {
         ${saasBillingAccountVersions.autoBillingEnabled} AS auto_billing_enabled,
         ${saasBillingAccountVersions.isBillable} AS is_billable
       FROM ${saasBillingAccountVersions}
-      WHERE ${saasBillingAccountVersions.effectiveAt} <= ${params.periodStart}
+      WHERE ${saasBillingAccountVersions.effectiveAt} <= ${periodStartIso}
       ORDER BY
         ${saasBillingAccountVersions.tenantId},
         ${saasBillingAccountVersions.effectiveAt} DESC,
@@ -37,8 +39,8 @@ const loadAutoBillingCandidates = async (params: {
         ${saasBillingAccountVersions.isBillable} AS is_billable
       FROM ${saasBillingAccountVersions}
       WHERE
-        ${saasBillingAccountVersions.effectiveAt} > ${params.periodStart}
-        AND ${saasBillingAccountVersions.effectiveAt} < ${params.periodEnd}
+        ${saasBillingAccountVersions.effectiveAt} > ${periodStartIso}
+        AND ${saasBillingAccountVersions.effectiveAt} < ${periodEndIso}
       ORDER BY
         ${saasBillingAccountVersions.tenantId},
         ${saasBillingAccountVersions.effectiveAt} ASC,
@@ -62,12 +64,12 @@ const loadAutoBillingCandidates = async (params: {
       ON ${saasTenants.id} = resolved.tenant_id
     LEFT JOIN "saas_billing_runs" AS period_runs
       ON period_runs."tenant_id" = resolved.tenant_id
-      AND period_runs."period_start" = ${params.periodStart}
-      AND period_runs."period_end" = ${params.periodEnd}
+      AND period_runs."period_start" = ${periodStartIso}
+      AND period_runs."period_end" = ${periodEndIso}
     LEFT JOIN "saas_billing_runs" AS completed_runs
       ON completed_runs."tenant_id" = resolved.tenant_id
-      AND completed_runs."period_start" = ${params.periodStart}
-      AND completed_runs."period_end" = ${params.periodEnd}
+      AND completed_runs."period_start" = ${periodStartIso}
+      AND completed_runs."period_end" = ${periodEndIso}
       AND (
         completed_runs."status" IN ('sent', 'paid', 'void', 'uncollectible')
         OR (

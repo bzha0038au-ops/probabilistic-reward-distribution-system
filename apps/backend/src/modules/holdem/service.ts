@@ -1625,6 +1625,7 @@ const findUserSeat = async (executor: DbExecutor, userId: number) => {
 
 const persistTableState = async (tx: DbTransaction, state: HoldemTableState) => {
   const now = new Date();
+  const nowIso = now.toISOString();
   syncHoldemTurnDeadlines(state, now);
   state.updatedAt = now;
 
@@ -1632,37 +1633,39 @@ const persistTableState = async (tx: DbTransaction, state: HoldemTableState) => 
     UPDATE ${holdemTables}
     SET status = ${state.status},
         metadata = ${toJsonbLiteral(state.metadata)},
-        updated_at = ${now}
+        updated_at = ${nowIso}
     WHERE id = ${state.id}
   `);
 
   for (const seat of state.seats) {
     seat.updatedAt = now;
+    const presenceHeartbeatAt = seat.presenceHeartbeatAt
+      ? new Date(seat.presenceHeartbeatAt).toISOString()
+      : null;
+    const disconnectGraceExpiresAt = seat.disconnectGraceExpiresAt
+      ? new Date(seat.disconnectGraceExpiresAt).toISOString()
+      : null;
+    const seatLeaseExpiresAt = seat.seatLeaseExpiresAt
+      ? new Date(seat.seatLeaseExpiresAt).toISOString()
+      : null;
+    const turnDeadlineAt = seat.turnDeadlineAt
+      ? new Date(seat.turnDeadlineAt).toISOString()
+      : null;
     await tx.execute(sql`
       UPDATE ${holdemTableSeats}
       SET stack_amount = ${toMoneyString(seat.stackAmount)},
           committed_amount = ${toMoneyString(seat.committedAmount)},
           total_committed_amount = ${toMoneyString(seat.totalCommittedAmount)},
           status = ${seat.status},
-          presence_heartbeat_at = ${
-            seat.presenceHeartbeatAt ? new Date(seat.presenceHeartbeatAt) : null
-          },
-          disconnect_grace_expires_at = ${
-            seat.disconnectGraceExpiresAt
-              ? new Date(seat.disconnectGraceExpiresAt)
-              : null
-          },
-          seat_lease_expires_at = ${
-            seat.seatLeaseExpiresAt ? new Date(seat.seatLeaseExpiresAt) : null
-          },
+          presence_heartbeat_at = ${presenceHeartbeatAt},
+          disconnect_grace_expires_at = ${disconnectGraceExpiresAt},
+          seat_lease_expires_at = ${seatLeaseExpiresAt},
           auto_cash_out_pending = ${seat.autoCashOutPending},
-          turn_deadline_at = ${
-            seat.turnDeadlineAt ? new Date(seat.turnDeadlineAt) : null
-          },
+          turn_deadline_at = ${turnDeadlineAt},
           hole_cards = ${toJsonbLiteral(seat.holeCards)},
           last_action = ${seat.lastAction ?? null},
           metadata = ${toJsonbLiteral(seat.metadata)},
-          updated_at = ${now}
+          updated_at = ${nowIso}
       WHERE id = ${seat.id}
     `);
   }

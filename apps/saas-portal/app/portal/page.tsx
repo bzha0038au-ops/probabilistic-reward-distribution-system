@@ -6,11 +6,12 @@ import { PortalDashboard } from "@/modules/portal/components/portal-dashboard";
 export default async function PortalPage({
   searchParams,
 }: {
-  searchParams?: {
+  searchParams?: Promise<{
     invite?: string;
     billingSetup?: string;
-  };
+  }>;
 }) {
+  const resolvedSearchParams = await searchParams;
   const result = await apiRequestServer<SaasOverview>("/portal/saas/overview", {
     cache: "no-store",
   });
@@ -19,8 +20,8 @@ export default async function PortalPage({
     <PortalDashboard
       overview={result.ok ? result.data : null}
       error={result.ok ? null : result.error.message}
-      inviteToken={searchParams?.invite?.trim() || null}
-      billingSetupStatus={searchParams?.billingSetup?.trim() || null}
+      inviteToken={resolvedSearchParams?.invite?.trim() || null}
+      billingSetupStatus={resolvedSearchParams?.billingSetup?.trim() || null}
     />
   );
 }

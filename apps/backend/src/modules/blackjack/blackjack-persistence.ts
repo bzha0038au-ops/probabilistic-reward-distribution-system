@@ -124,6 +124,7 @@ export const persistGameState = async (
   game: BlackjackGameState,
 ) => {
   const now = new Date();
+  const nowIso = now.toISOString();
   syncLegacyPlayerCards(game);
   syncBlackjackTableTurnState(game);
   game.updatedAt = now;
@@ -136,6 +137,10 @@ export const persistGameState = async (
     playerHands: game.metadata.playerHands,
     activeHandIndex: game.metadata.activeHandIndex,
   };
+  const turnDeadlineAt =
+    game.turnDeadlineAt ? new Date(game.turnDeadlineAt).toISOString() : null;
+  const settledAt =
+    game.settledAt ? new Date(game.settledAt).toISOString() : null;
 
   await tx.execute(sql`
     UPDATE ${blackjackGames}
@@ -147,12 +152,10 @@ export const persistGameState = async (
         deck = ${toJsonbLiteral(game.deck)},
         next_card_index = ${game.nextCardIndex},
         status = ${game.status},
-        turn_deadline_at = ${
-          game.turnDeadlineAt ? new Date(game.turnDeadlineAt) : null
-        },
+        turn_deadline_at = ${turnDeadlineAt},
         metadata = ${toJsonbLiteral(metadata)},
-        settled_at = ${game.settledAt ? new Date(game.settledAt) : null},
-        updated_at = ${now}
+        settled_at = ${settledAt},
+        updated_at = ${nowIso}
     WHERE id = ${game.id}
   `);
 };

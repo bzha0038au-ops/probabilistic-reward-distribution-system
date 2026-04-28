@@ -33,7 +33,7 @@ async function loadCurrentLegalDocuments() {
 async function acceptLegalAction(formData: FormData) {
   "use server";
 
-  const t = getServerTranslations();
+  const t = await getServerTranslations();
   const documentsResult = await loadCurrentLegalDocuments();
   if (!documentsResult.ok) {
     redirect(`/legal?error=${encodeURIComponent(t("legal.loadFailed"))}`);
@@ -71,9 +71,10 @@ async function acceptLegalAction(formData: FormData) {
 export default async function LegalPage({
   searchParams,
 }: {
-  searchParams?: { error?: string };
+  searchParams?: Promise<{ error?: string }>;
 }) {
-  const t = getServerTranslations();
+  const resolvedSearchParams = await searchParams;
+  const t = await getServerTranslations();
   const currentSession = await requireCurrentUserSession();
   if (!currentSession.legal.requiresAcceptance) {
     redirect("/app");
@@ -81,8 +82,8 @@ export default async function LegalPage({
 
   const documentsResult = await loadCurrentLegalDocuments();
   const documents = documentsResult.ok ? documentsResult.data.items : [];
-  const errorMessage = searchParams?.error
-    ? decodeURIComponent(searchParams.error)
+  const errorMessage = resolvedSearchParams?.error
+    ? decodeURIComponent(resolvedSearchParams.error)
     : !documentsResult.ok
       ? t("legal.loadFailed")
       : null;

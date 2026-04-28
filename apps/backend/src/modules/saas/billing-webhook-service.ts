@@ -138,7 +138,9 @@ export async function runSaasStripeWebhookCompensationCycle(params?: {
     params?.lockTimeoutMs ?? config.saasBillingWebhookLockTimeoutMs
   );
   const now = new Date();
+  const nowIso = now.toISOString();
   const staleProcessingCutoff = new Date(now.getTime() - lockTimeoutMs);
+  const staleProcessingCutoffIso = staleProcessingCutoff.toISOString();
   const result = await db.execute(sql`
     WITH picked AS (
       SELECT id
@@ -146,11 +148,11 @@ export async function runSaasStripeWebhookCompensationCycle(params?: {
       WHERE (
         (
           (${saasStripeWebhookEvents.status} = 'pending' OR ${saasStripeWebhookEvents.status} = 'failed')
-          AND ${saasStripeWebhookEvents.nextAttemptAt} <= ${now}
+          AND ${saasStripeWebhookEvents.nextAttemptAt} <= ${nowIso}
         )
         OR (
           ${saasStripeWebhookEvents.status} = 'processing'
-          AND (${saasStripeWebhookEvents.lockedAt} IS NULL OR ${saasStripeWebhookEvents.lockedAt} <= ${staleProcessingCutoff})
+          AND (${saasStripeWebhookEvents.lockedAt} IS NULL OR ${saasStripeWebhookEvents.lockedAt} <= ${staleProcessingCutoffIso})
         )
       )
       ORDER BY ${saasStripeWebhookEvents.nextAttemptAt} ASC, ${saasStripeWebhookEvents.id} ASC
@@ -160,9 +162,9 @@ export async function runSaasStripeWebhookCompensationCycle(params?: {
     UPDATE ${saasStripeWebhookEvents}
     SET
       status = 'processing',
-      locked_at = ${now},
+      locked_at = ${nowIso},
       attempts = ${saasStripeWebhookEvents.attempts} + 1,
-      updated_at = ${now}
+      updated_at = ${nowIso}
     FROM picked
     WHERE ${saasStripeWebhookEvents.id} = picked.id
     RETURNING

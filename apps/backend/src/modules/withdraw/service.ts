@@ -153,13 +153,14 @@ export async function createWithdrawal(payload: {
 
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
+    const startOfDayIso = startOfDay.toISOString();
     const [{ total = 0 }] = await tx
       .select({
         total: sql<number>`coalesce(sum(${withdrawals.amount}), 0)`,
       })
       .from(withdrawals)
       .where(
-        sql`${withdrawals.userId} = ${payload.userId} AND ${withdrawals.createdAt} >= ${startOfDay}`,
+        sql`${withdrawals.userId} = ${payload.userId} AND ${withdrawals.createdAt} >= ${startOfDayIso}`,
       );
 
     const totalToday = toDecimal(total ?? 0);

@@ -15,7 +15,7 @@ export default async function ProtectedAppLayout({
 }: {
   children: ReactNode;
 }) {
-  const t = getServerTranslations();
+  const t = await getServerTranslations();
   const currentSession = await requireCurrentUserSession();
   if (currentSession.legal.requiresAcceptance) {
     redirect("/legal");

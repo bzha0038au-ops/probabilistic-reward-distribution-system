@@ -287,9 +287,11 @@ export async function enqueueRewardCompletedWebhookDeliveries(
 
 const claimDueOutboundWebhookDeliveries = async (limit: number) => {
   const now = new Date();
+  const nowIso = now.toISOString();
   const staleLockCutoff = new Date(
     now.getTime() - config.saasOutboundWebhookLockTimeoutMs,
   );
+  const staleLockCutoffIso = staleLockCutoff.toISOString();
 
   const result = await db.execute(sql`
     WITH picked AS (
@@ -299,11 +301,11 @@ const claimDueOutboundWebhookDeliveries = async (limit: number) => {
         (
           (${saasOutboundWebhookDeliveries.status} = 'pending' OR ${saasOutboundWebhookDeliveries.status} = 'failed')
           AND ${saasOutboundWebhookDeliveries.attempts} < ${config.saasOutboundWebhookMaxAttempts}
-          AND ${saasOutboundWebhookDeliveries.nextAttemptAt} <= ${now}
+          AND ${saasOutboundWebhookDeliveries.nextAttemptAt} <= ${nowIso}
         )
         OR (
           ${saasOutboundWebhookDeliveries.status} = 'sending'
-          AND (${saasOutboundWebhookDeliveries.lockedAt} IS NULL OR ${saasOutboundWebhookDeliveries.lockedAt} <= ${staleLockCutoff})
+          AND (${saasOutboundWebhookDeliveries.lockedAt} IS NULL OR ${saasOutboundWebhookDeliveries.lockedAt} <= ${staleLockCutoffIso})
         )
       )
       ORDER BY ${saasOutboundWebhookDeliveries.nextAttemptAt} ASC, ${saasOutboundWebhookDeliveries.id} ASC
@@ -313,9 +315,9 @@ const claimDueOutboundWebhookDeliveries = async (limit: number) => {
     UPDATE ${saasOutboundWebhookDeliveries}
     SET
       status = 'sending',
-      locked_at = ${now},
+      locked_at = ${nowIso},
       attempts = ${saasOutboundWebhookDeliveries.attempts} + 1,
-      updated_at = ${now}
+      updated_at = ${nowIso}
     FROM picked
     WHERE ${saasOutboundWebhookDeliveries.id} = picked.id
     RETURNING

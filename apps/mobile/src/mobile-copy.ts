@@ -208,6 +208,31 @@ const mobileCopy = {
       expiresAt: (value: string) => `Expires: ${value}`,
       signOutDevice: "Sign out this device",
       revokeSession: "Revoke session",
+      kyc: {
+        title: "KYC verification",
+        subtitle:
+          "Track tier status here, then jump into the hosted flow on this device for document upload or resubmission.",
+        loading: "Loading KYC profile...",
+        refresh: "Refresh KYC",
+        refreshing: "Refreshing...",
+        open: "Open verification page",
+        currentTier: "Current tier",
+        requestedTier: "Requested tier",
+        status: "Review status",
+        submissionVersion: (value: number) => `Submission v${value}`,
+        documents: (value: number) => `${value} document(s) on file`,
+        noSubmission:
+          "No KYC submission has been started yet. Open the verification page to upload documents.",
+        submittedAt: (value: string) => `Submitted: ${value}`,
+        reviewedAt: (value: string) => `Reviewed: ${value}`,
+        rejectionReason: (value: string) => `Review note: ${value}`,
+        riskFlags: (value: string) => `Risk flags: ${value}`,
+        hostedHandoff:
+          "Document capture stays in the hosted verification flow so you can resubmit from the same account without leaving the product path.",
+        tier0: "Tier 0 demo",
+        tier1: "Tier 1 small-stake",
+        tier2: "Tier 2 withdraw + multiplayer",
+      },
     },
   },
   "zh-CN": {
@@ -402,6 +427,31 @@ const mobileCopy = {
       expiresAt: (value: string) => `过期时间：${value}`,
       signOutDevice: "退出当前设备",
       revokeSession: "撤销会话",
+      kyc: {
+        title: "KYC 实名认证",
+        subtitle:
+          "先在这里查看等级和审核状态，再在本机打开托管验证页完成材料上传或补件。",
+        loading: "正在加载 KYC 档案...",
+        refresh: "刷新 KYC",
+        refreshing: "刷新中...",
+        open: "打开验证页",
+        currentTier: "当前等级",
+        requestedTier: "申请等级",
+        status: "审核状态",
+        submissionVersion: (value: number) => `提交版本 v${value}`,
+        documents: (value: number) => `已提交 ${value} 份材料`,
+        noSubmission:
+          "还没有开始 KYC 申请。打开验证页即可上传身份材料。",
+        submittedAt: (value: string) => `提交时间：${value}`,
+        reviewedAt: (value: string) => `审核时间：${value}`,
+        rejectionReason: (value: string) => `审核备注：${value}`,
+        riskFlags: (value: string) => `风险标记：${value}`,
+        hostedHandoff:
+          "证件采集继续走托管验证流程，这样你可以在同一账号路径里直接补件或重提。",
+        tier0: "Tier 0 试玩",
+        tier1: "Tier 1 小额玩法",
+        tier2: "Tier 2 提现 + 多人",
+      },
     },
   },
 } as const;
@@ -418,3 +468,4 @@ export type MobileSignedInCopy = MobileAppCopy["signedIn"];
 export type MobileWalletCopy = MobileAppCopy["wallet"];
 export type MobileRewardCenterCopy = MobileAppCopy["rewardCenter"];
 export type MobileSessionSecurityCopy = MobileAppCopy["sessionSecurity"];
+export type MobileKycCopy = MobileSessionSecurityCopy["kyc"];

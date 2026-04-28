@@ -12,5 +12,5 @@ export async function getBackendAccessToken(request?: Request) {
     return getBackendAccessTokenFromRequest(request);
   }
 
-  return getBackendAccessTokenFromHeaders(new Headers(headers()));
+  return getBackendAccessTokenFromHeaders(new Headers(await headers()));
 }

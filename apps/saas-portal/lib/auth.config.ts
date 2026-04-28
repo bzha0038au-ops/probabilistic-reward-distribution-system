@@ -78,9 +78,11 @@ export const authConfig = {
       const authToken = token as typeof token & AuthTokenState;
 
       if (session.user) {
-        session.user.email = authToken.email ?? null;
-        session.user.role = authToken.role ?? 'user';
-        session.user.id = authToken.userId ?? 0;
+        Object.assign(session.user, {
+          ...(authToken.email ? { email: authToken.email } : {}),
+          role: authToken.role ?? 'user',
+          id: authToken.userId ?? 0,
+        });
       }
 
       return session;

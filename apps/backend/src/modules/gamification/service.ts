@@ -73,6 +73,7 @@ const readMissionId = (value: unknown): RewardMissionId | null =>
 async function readRewardCenterSnapshot(executor: DbExecutor, userId: number) {
   const now = new Date();
   const dayStart = startOfDay(now);
+  const dayStartIso = dayStart.toISOString();
   const missionDefinitions = await listMissionDefinitions(executor);
   const claimableMissionIds = missionDefinitions
     .filter((mission) => mission.type === "metric_threshold")
@@ -112,7 +113,7 @@ async function readRewardCenterSnapshot(executor: DbExecutor, userId: number) {
           SELECT count(*)
           FROM ${drawRecords}
           WHERE ${drawRecords.userId} = ${userId}
-            AND ${drawRecords.createdAt} >= ${dayStart}
+            AND ${drawRecords.createdAt} >= ${dayStartIso}
         ) AS "drawCountToday",
         (
           SELECT count(*)
@@ -300,12 +301,13 @@ export async function grantDailyCheckInRewardOnLogin(userId: number) {
     }
 
     const dayStart = startOfDay();
+    const dayStartIso = dayStart.toISOString();
     const claimResult = await tx.execute(sql`
       SELECT count(*) AS "total"
       FROM ${ledgerEntries}
       WHERE ${ledgerEntries.userId} = ${userId}
         AND ${ledgerEntries.entryType} = ${DAILY_BONUS_ENTRY_TYPE}
-        AND ${ledgerEntries.createdAt} >= ${dayStart}
+        AND ${ledgerEntries.createdAt} >= ${dayStartIso}
     `);
     const [{ total = 0 }] = readSqlRows<{ total: string | number }>(claimResult);
     if (Number(total ?? 0) > 0) {

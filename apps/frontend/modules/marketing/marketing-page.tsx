@@ -6,8 +6,8 @@ import { Metrics } from './components/metrics';
 import { StackStrip } from './components/stack';
 import { getServerMessages } from '@/lib/i18n/server';
 
-export function MarketingPage() {
-  const messages = getServerMessages();
+export async function MarketingPage() {
+  const messages = await getServerMessages();
 
   return (
     <main className="min-h-app-screen bg-white text-slate-900">

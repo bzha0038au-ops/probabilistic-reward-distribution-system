@@ -11,19 +11,20 @@ import {
 } from '@/components/ui/card';
 import { getServerTranslations } from '@/lib/i18n/server';
 
-export default function Login({
+export default async function Login({
   searchParams,
 }: {
-  searchParams?: {
+  searchParams?: Promise<{
     callbackUrl?: string;
     error?: string;
     registered?: string;
     verified?: string;
     reset?: string;
-  };
+  }>;
 }) {
-  const t = getServerTranslations();
-  const error = searchParams?.error;
+  const resolvedSearchParams = await searchParams;
+  const t = await getServerTranslations();
+  const error = resolvedSearchParams?.error;
   const errorMessage =
     error === 'CredentialsSignin'
       ? t('auth.invalidCredentials')
@@ -31,11 +32,11 @@ export default function Login({
         ? decodeURIComponent(error)
         : null;
   const noticeMessage =
-    searchParams?.registered === '1'
+    resolvedSearchParams?.registered === '1'
       ? t('auth.registrationSuccess')
-      : searchParams?.verified === '1'
+      : resolvedSearchParams?.verified === '1'
         ? t('auth.verificationSuccess')
-        : searchParams?.reset === '1'
+        : resolvedSearchParams?.reset === '1'
           ? t('auth.passwordResetSuccess')
           : null;
 
@@ -56,7 +57,7 @@ export default function Login({
             idleLabel={t('common.submit')}
             noticeMessage={noticeMessage}
             initialErrorMessage={errorMessage}
-            redirectTo={searchParams?.callbackUrl ?? '/app'}
+            redirectTo={resolvedSearchParams?.callbackUrl ?? '/app'}
           />
           <p className="mt-4 text-center text-sm text-muted-foreground">
             {t('auth.noAccount')}{' '}

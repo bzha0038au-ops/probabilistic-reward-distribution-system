@@ -14,9 +14,9 @@ import { captureFrontendServerException } from "@/lib/observability/server";
 export const runtime = "nodejs";
 
 type RouteContext = {
-  params: {
+  params: Promise<{
     path: string[];
-  };
+  }>;
 };
 
 const jsonError = (
@@ -63,7 +63,8 @@ const buildForwardHeaders = async (
 };
 
 async function proxyRequest(request: NextRequest, { params }: RouteContext) {
-  const backendPath = `/${params.path.join("/")}`;
+  const { path } = await params;
+  const backendPath = `/${path.join("/")}`;
   const route = resolveBackendProxyRoute(request.method, backendPath);
 
   if (!route.matched) {

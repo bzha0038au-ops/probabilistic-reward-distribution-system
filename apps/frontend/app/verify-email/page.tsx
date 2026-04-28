@@ -16,7 +16,7 @@ import { getServerTranslations } from '@/lib/i18n/server';
 async function verifyEmailAction(formData: FormData) {
   'use server';
 
-  const t = getServerTranslations();
+  const t = await getServerTranslations();
   const token = String(formData.get('token') ?? '').trim();
   if (!token) {
     redirect(`/verify-email?error=${encodeURIComponent(t('auth.verificationTokenMissing'))}`);
@@ -44,15 +44,16 @@ async function verifyEmailAction(formData: FormData) {
   redirect('/login?verified=1');
 }
 
-export default function VerifyEmail({
+export default async function VerifyEmail({
   searchParams,
 }: {
-  searchParams?: { token?: string; error?: string };
+  searchParams?: Promise<{ token?: string; error?: string }>;
 }) {
-  const t = getServerTranslations();
-  const token = searchParams?.token ?? '';
-  const errorMessage = searchParams?.error
-    ? decodeURIComponent(searchParams.error)
+  const resolvedSearchParams = await searchParams;
+  const t = await getServerTranslations();
+  const token = resolvedSearchParams?.token ?? '';
+  const errorMessage = resolvedSearchParams?.error
+    ? decodeURIComponent(resolvedSearchParams.error)
     : !token
       ? t('auth.verificationTokenMissing')
       : null;

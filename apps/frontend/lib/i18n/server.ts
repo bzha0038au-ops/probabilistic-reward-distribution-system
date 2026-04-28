@@ -18,18 +18,18 @@ const normalizeLocale = (value?: string | null): Locale => {
   return DEFAULT_LOCALE;
 };
 
-const getHeaderLocale = () => {
+const getHeaderLocale = async () => {
   try {
-    const accept = headers().get('accept-language');
+    const accept = (await headers()).get('accept-language');
     return accept?.split(',')[0]?.trim() ?? null;
   } catch {
     return null;
   }
 };
 
-export const getServerLocale = (): Locale => {
+export const getServerLocale = async (): Promise<Locale> => {
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const cookieLocale = cookieStore.get(LOCALE_COOKIE)?.value;
     if (cookieLocale && SUPPORTED_LOCALES.includes(cookieLocale as Locale)) {
       return cookieLocale as Locale;
@@ -38,11 +38,13 @@ export const getServerLocale = (): Locale => {
     // Ignore cookie access errors (e.g. during build).
   }
 
-  return normalizeLocale(getHeaderLocale());
+  return normalizeLocale(await getHeaderLocale());
 };
 
-export const getServerMessages = (locale = getServerLocale()) =>
-  getMessages(locale);
+export const getServerMessages = async (locale?: Locale) =>
+  getMessages(locale ?? (await getServerLocale()));
 
-export const getServerTranslations = (locale = getServerLocale()) =>
-  createTranslator(getMessages(locale) as Record<string, unknown>);
+export const getServerTranslations = async (locale?: Locale) =>
+  createTranslator(
+    getMessages(locale ?? (await getServerLocale())) as Record<string, unknown>
+  );

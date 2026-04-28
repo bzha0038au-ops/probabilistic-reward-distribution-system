@@ -43,8 +43,8 @@ export type RewardEnvelopeRow = {
   varianceCap: string;
   currentConsumed: string;
   currentCallCount: number;
-  currentWindowStartedAt: Date;
-  updatedAt: Date;
+  currentWindowStartedAt: Date | string;
+  updatedAt: Date | string;
 };
 
 type CachedRewardEnvelopeRow = Omit<
@@ -55,8 +55,13 @@ type CachedRewardEnvelopeRow = Omit<
   updatedAt: string;
 };
 
-export type RewardEnvelopeState = RewardEnvelopeRow & {
+export type RewardEnvelopeState = Omit<
+  RewardEnvelopeRow,
+  "currentWindowStartedAt" | "updatedAt"
+> & {
   scope: RewardEnvelopeScope;
+  currentWindowStartedAt: Date;
+  updatedAt: Date;
 };
 
 export type RewardEnvelopeDecision = {
@@ -104,6 +109,18 @@ const resolveRewardEnvelopeWindowResetAt = (
 const resolveRewardEnvelopeScope = (
   projectId: number | null,
 ): RewardEnvelopeScope => (projectId === null ? "tenant" : "project");
+
+const toRewardEnvelopeDate = (
+  value: Date | string,
+  field: "currentWindowStartedAt" | "updatedAt",
+) => {
+  const parsed = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error(`Invalid reward envelope ${field} timestamp.`);
+  }
+
+  return parsed;
+};
 
 const buildRewardEnvelopeCacheKey = (payload: {
   scope: RewardEnvelopeScope;
@@ -161,15 +178,6 @@ const parseCachedRewardEnvelopeRow = (value: string) => {
     return null;
   }
 
-  const currentWindowStartedAt = new Date(parsed.currentWindowStartedAt);
-  const updatedAt = new Date(parsed.updatedAt);
-  if (
-    Number.isNaN(currentWindowStartedAt.getTime()) ||
-    Number.isNaN(updatedAt.getTime())
-  ) {
-    return null;
-  }
-
   return {
     id: parsed.id,
     tenantId: parsed.tenantId,
@@ -182,8 +190,11 @@ const parseCachedRewardEnvelopeRow = (value: string) => {
     varianceCap: parsed.varianceCap,
     currentConsumed: parsed.currentConsumed,
     currentCallCount: parsed.currentCallCount,
-    currentWindowStartedAt,
-    updatedAt,
+    currentWindowStartedAt: toRewardEnvelopeDate(
+      parsed.currentWindowStartedAt,
+      "currentWindowStartedAt",
+    ),
+    updatedAt: toRewardEnvelopeDate(parsed.updatedAt, "updatedAt"),
   } satisfies RewardEnvelopeRow;
 };
 
@@ -224,9 +235,14 @@ const normalizeRewardEnvelopeState = (
   row: RewardEnvelopeRow,
   now: Date,
 ): RewardEnvelopeState => {
+  const rowCurrentWindowStartedAt = toRewardEnvelopeDate(
+    row.currentWindowStartedAt,
+    "currentWindowStartedAt",
+  );
+  const rowUpdatedAt = toRewardEnvelopeDate(row.updatedAt, "updatedAt");
   const currentWindowStartedAt = resolveRewardEnvelopeWindowStart(row.window, now);
   const shouldReset =
-    row.currentWindowStartedAt.getTime() !== currentWindowStartedAt.getTime();
+    rowCurrentWindowStartedAt.getTime() !== currentWindowStartedAt.getTime();
 
   return {
     ...row,
@@ -234,6 +250,7 @@ const normalizeRewardEnvelopeState = (
     currentConsumed: shouldReset ? "0.0000" : row.currentConsumed,
     currentCallCount: shouldReset ? 0 : Math.max(0, Number(row.currentCallCount)),
     currentWindowStartedAt,
+    updatedAt: rowUpdatedAt,
   };
 };
 
@@ -412,7 +429,10 @@ export const loadLockedRewardEnvelopeStates = async (
     });
     const cachedRow = cachedRows.get(cacheKey);
     const sourceRow =
-      cachedRow && cachedRow.id === row.id && cachedRow.updatedAt >= row.updatedAt
+      cachedRow &&
+      cachedRow.id === row.id &&
+      toRewardEnvelopeDate(cachedRow.updatedAt, "updatedAt").getTime() >=
+        toRewardEnvelopeDate(row.updatedAt, "updatedAt").getTime()
         ? cachedRow
         : row;
 

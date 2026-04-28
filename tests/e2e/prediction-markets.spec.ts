@@ -371,11 +371,12 @@ test('user can open the portfolio page and filter grouped prediction market hist
   });
 
   await page.goto('/app/markets/portfolio');
-  await expect(page.getByTestId('markets-portfolio-page')).toBeVisible();
-  await page.getByRole('button', { name: 'Open' }).click();
+  const portfolioPage = page.getByTestId('markets-portfolio-page');
+  await expect(portfolioPage).toBeVisible();
+  await portfolioPage.getByRole('button', { name: 'Open' }).click();
   await expect(page.getByText('No records match this status filter yet.')).toBeVisible();
 
-  await page.getByRole('button', { name: 'Resolved' }).click();
+  await portfolioPage.getByRole('button', { name: 'Resolved' }).click();
   await expect(page.getByTestId(`markets-portfolio-item-${marketId}`)).toContainText(
     'Resolved',
   );

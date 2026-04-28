@@ -42,7 +42,7 @@ export const {
         }
 
         return {
-          id: String(result.data.user.id),
+          id: result.data.user.id,
           email: result.data.user.email,
           role: result.data.user.role,
           backendToken: result.data.token,

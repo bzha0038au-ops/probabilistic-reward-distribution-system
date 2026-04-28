@@ -5,7 +5,7 @@ import {
 } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Linking, ScrollView, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import type { CurrentLegalDocument } from "@reward/shared-types/legal";
 import { QUICK_EIGHT_CONFIG } from "@reward/shared-types/quick-eight";
@@ -16,6 +16,7 @@ import {
   type AppStackParamList,
   appNavigationTheme,
   blackjackStatusLabels,
+  buildWebUrl,
   configuredApiBaseUrl,
   drawRarityLabels,
   drawStatusLabels,
@@ -43,6 +44,7 @@ import { useBlackjack } from "./src/hooks/use-blackjack";
 import { useDraw } from "./src/hooks/use-draw";
 import { useFairness } from "./src/hooks/use-fairness";
 import { useHoldem } from "./src/hooks/use-holdem";
+import { useKycProfile } from "./src/hooks/use-kyc-profile";
 import { usePredictionMarket } from "./src/hooks/use-prediction-market";
 import { useQuickEight } from "./src/hooks/use-quick-eight";
 import { useRewardCenter } from "./src/hooks/use-reward-center";
@@ -177,6 +179,17 @@ function NativeApp() {
     resetWallet,
     syncBalance,
   } = useWallet({
+    api,
+    authTokenRef,
+    handleUnauthorizedRef,
+    setError,
+  });
+  const {
+    kycProfile,
+    loadingKycProfile,
+    refreshKycProfile,
+    resetKycProfile,
+  } = useKycProfile({
     api,
     authTokenRef,
     handleUnauthorizedRef,
@@ -369,6 +382,7 @@ function NativeApp() {
 
   const resetSessionExperienceCore = useCallback(() => {
     resetWallet();
+    resetKycProfile();
     resetDraw();
     resetQuickEight();
     resetPredictionMarket();
@@ -382,6 +396,7 @@ function NativeApp() {
     resetDraw,
     resetFairness,
     resetHoldem,
+    resetKycProfile,
     resetPredictionMarket,
     resetQuickEight,
     resetRewardCenter,
@@ -506,6 +521,7 @@ function NativeApp() {
     }
 
     await refreshBalance(overrides);
+    await refreshKycProfile(overrides);
     await refreshSessions(overrides);
     await refreshRewardCenter(overrides);
   };
@@ -516,7 +532,7 @@ function NativeApp() {
     }
 
     void hydrateAuthenticatedState(session);
-  }, [session?.token]);
+  }, [refreshKycProfile, session?.token]);
 
   const legalAcceptanceRequired = Boolean(session?.legal?.requiresAcceptance);
   const pendingLegalDocumentKeys =
@@ -610,6 +626,22 @@ function NativeApp() {
     setError,
     setMessage,
   ]);
+  const handleOpenKycVerification = useCallback(async () => {
+    resetFeedback();
+
+    const url = buildWebUrl("/app/verification");
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) {
+        setError("Unable to open the hosted verification page on this device.");
+        return;
+      }
+
+      await Linking.openURL(url);
+    } catch {
+      setError("Unable to open the hosted verification page on this device.");
+    }
+  }, [resetFeedback, setError]);
   const routeNavigationLocked =
     playingDrawCount !== null ||
     playingQuickEight ||
@@ -682,6 +714,9 @@ function NativeApp() {
       visibleSessions.length === 0
     ) {
       await refreshSessions();
+    }
+    if (nextRoute === "security" && session?.token && !kycProfile) {
+      await refreshKycProfile();
     }
 
     if (nextRoute === "holdem" && session?.token) {
@@ -883,10 +918,15 @@ function NativeApp() {
               currentSession={currentSession}
               visibleSessions={visibleSessions}
               loadingSessions={loadingSessions}
+              kycProfile={kycProfile}
+              loadingKycProfile={loadingKycProfile}
               playingQuickEight={playingQuickEight}
               formatTimestamp={formatTimestamp}
+              formatOptionalTimestamp={formatOptionalTimestamp}
               summarizeUserAgent={summarizeUserAgent}
               onRefreshSessions={() => void refreshSessions()}
+              onRefreshKycProfile={() => void refreshKycProfile()}
+              onOpenKycVerification={() => void handleOpenKycVerification()}
               onOpenResetPassword={() => setScreen("resetPassword")}
               onRevokeAllSessions={() => void revokeAllSessions()}
               onRevokeSession={(entry) => void revokeSession(entry)}

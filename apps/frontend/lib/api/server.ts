@@ -16,7 +16,7 @@ export async function apiRequestServer<T>(
   init: RequestInit = {},
   options: { baseUrl?: string; locale?: string; auth?: boolean } = {}
 ): Promise<ApiResult<T>> {
-  const locale = options.locale ?? getServerLocale();
+  const locale = options.locale ?? (await getServerLocale());
   const authToken =
     options.auth === false ? null : await getBackendAccessToken();
 

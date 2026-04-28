@@ -14,23 +14,24 @@ import { auth } from "@/lib/auth";
 export default async function Login({
   searchParams,
 }: {
-  searchParams?: {
+  searchParams?: Promise<{
     callbackUrl?: string;
     error?: string;
-  };
+  }>;
 }) {
+  const resolvedSearchParams = await searchParams;
   const redirectTo =
-    searchParams?.callbackUrl &&
-    searchParams.callbackUrl.startsWith("/") &&
-    !searchParams.callbackUrl.startsWith("//")
-      ? searchParams.callbackUrl
+    resolvedSearchParams?.callbackUrl &&
+    resolvedSearchParams.callbackUrl.startsWith("/") &&
+    !resolvedSearchParams.callbackUrl.startsWith("//")
+      ? resolvedSearchParams.callbackUrl
       : "/portal";
   const session = await auth();
   if (session?.user) {
     redirect(redirectTo);
   }
 
-  const error = searchParams?.error;
+  const error = resolvedSearchParams?.error;
   const errorMessage =
     error === "CredentialsSignin"
       ? "Invalid credentials."

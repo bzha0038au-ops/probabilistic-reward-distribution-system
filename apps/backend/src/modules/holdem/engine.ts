@@ -95,6 +95,9 @@ const bigBlindAmount = (state: HoldemTableState) => toDecimal(state.bigBlind);
 const sortSeatsByIndex = (seats: HoldemSeatState[]) =>
   seats.slice().sort((left, right) => left.seatIndex - right.seatIndex);
 
+const toIsoStringOrNull = (value: string | Date | null | undefined) =>
+  value ? new Date(value).toISOString() : null;
+
 const findSeatByIndex = (state: HoldemTableState, seatIndex: number | null) =>
   seatIndex === null
     ? null
@@ -1398,10 +1401,10 @@ export const serializeHoldemTable = (
       userId: seat.userId,
       displayName: resolveSeatDisplayName(seat.userId, seat.userEmail),
       connectionState: resolveSeatPresenceState(seat),
-      disconnectGraceExpiresAt: seat.disconnectGraceExpiresAt ?? null,
-      seatLeaseExpiresAt: seat.seatLeaseExpiresAt ?? null,
+      disconnectGraceExpiresAt: toIsoStringOrNull(seat.disconnectGraceExpiresAt),
+      seatLeaseExpiresAt: toIsoStringOrNull(seat.seatLeaseExpiresAt),
       autoCashOutPending: seat.autoCashOutPending ?? false,
-      turnDeadlineAt: seat.turnDeadlineAt ?? null,
+      turnDeadlineAt: toIsoStringOrNull(seat.turnDeadlineAt),
       timeBankRemainingMs: seat.metadata.timeBankRemainingMs,
       stackAmount: toMoneyString(seat.stackAmount),
       committedAmount: toMoneyString(seat.committedAmount),
@@ -1439,9 +1442,13 @@ export const serializeHoldemTable = (
     pendingActorDeadlineAt:
       state.metadata.pendingActorSeatIndex === null
         ? null
-        : findSeatByIndex(state, state.metadata.pendingActorSeatIndex)
-            ?.turnDeadlineAt ?? null,
-    pendingActorTimeBankStartsAt: state.metadata.turnTimeBankStartsAt ?? null,
+        : toIsoStringOrNull(
+            findSeatByIndex(state, state.metadata.pendingActorSeatIndex)
+              ?.turnDeadlineAt ?? null,
+          ),
+    pendingActorTimeBankStartsAt: toIsoStringOrNull(
+      state.metadata.turnTimeBankStartsAt,
+    ),
     pendingActorTimeoutAction:
       state.metadata.pendingActorSeatIndex === null
         ? null
@@ -1451,9 +1458,12 @@ export const serializeHoldemTable = (
         ? null
         : resolveHoldemActionAvailability(state, heroSeatIndex),
     fairness: serializeHoldemFairness(state.metadata.fairness),
-    recentHands: state.metadata.recentHands,
-    createdAt: state.createdAt,
-    updatedAt: state.updatedAt,
+    recentHands: state.metadata.recentHands.map((hand) => ({
+      ...hand,
+      settledAt: toIsoStringOrNull(hand.settledAt) ?? hand.settledAt,
+    })),
+    createdAt: new Date(state.createdAt).toISOString(),
+    updatedAt: new Date(state.updatedAt).toISOString(),
   };
 };
 
@@ -1473,7 +1483,7 @@ export const serializeHoldemTableSummary = (
   heroSeatIndex:
     state.seats.find((seat) => seat.userId === viewerUserId)?.seatIndex ?? null,
   canStart: state.status === "waiting" && listEligibleSeats(state).length >= HOLDEM_MIN_PLAYERS,
-  updatedAt: state.updatedAt,
+  updatedAt: new Date(state.updatedAt).toISOString(),
 });
 
 export const canUserLeaveTable = (state: HoldemTableState, userId: number) => {

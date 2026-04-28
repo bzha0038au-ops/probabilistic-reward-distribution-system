@@ -51,6 +51,7 @@ export type WebRoute =
   | "/login"
   | "/register"
   | "/app"
+  | "/app/verification"
   | "/app/slot"
   | "/app/gacha"
   | "/app/quick-eight"

@@ -29,7 +29,7 @@ export default async function HoldemReplayDetailPage({
 }: {
   params: Promise<{ roundId: string }>;
 }) {
-  const locale = getServerLocale();
+  const locale = await getServerLocale();
   const c = copy[locale === "zh-CN" ? "zh-CN" : "en"];
   const { roundId } = await params;
   const response = await apiRequestServer<HandHistory>(

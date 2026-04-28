@@ -101,6 +101,33 @@ const getInitialProjectId = (
 const ENGINE_BASE_URL =
   process.env.NEXT_PUBLIC_ENGINE_BASE_URL ?? "http://localhost:4000";
 
+const buildSandboxSnippet = (payload: {
+  apiKey: string | null;
+  projectSlug: string | null;
+}) => {
+  const apiKey = payload.apiKey ?? "paste-your-sandbox-key";
+  const projectSlug = payload.projectSlug ?? "sandbox-project";
+
+  return `import { createPrizeEngineClient } from "@reward/prize-engine-sdk";
+
+const apiKey = ${JSON.stringify(apiKey)};
+const client = createPrizeEngineClient({
+  getApiKey: () => apiKey,
+  environment: "sandbox",
+  baseUrl: "${ENGINE_BASE_URL}",
+});
+
+const result = await client.draw({
+  player: {
+    playerId: "${projectSlug}-player-001",
+    displayName: "Portal Sandbox Player",
+  },
+  clientNonce: "${projectSlug}-portal-seed",
+});
+
+console.log(result);`;
+};
+
 export function PortalDashboard({
   overview,
   error,
@@ -178,6 +205,25 @@ export function PortalDashboard({
   const currentProjectUsage = usageEvents.filter(
     (event) => event.projectId === currentProjectId,
   );
+  const sandboxProject =
+    tenantProjects.find((project) => project.environment === "sandbox") ?? null;
+  const sandboxProjectId = sandboxProject?.id ?? null;
+  const sandboxProjectPrizes = prizes.filter(
+    (prize) => prize.projectId === sandboxProjectId,
+  );
+  const sandboxProjectKeys = apiKeys.filter(
+    (apiKey) => apiKey.projectId === sandboxProjectId && !apiKey.revokedAt,
+  );
+  const latestSandboxSecret =
+    issuedKey?.projectId === sandboxProjectId
+      ? issuedKey.apiKey
+      : rotatedKey?.issuedKey.projectId === sandboxProjectId
+        ? rotatedKey.issuedKey.apiKey
+        : null;
+  const sandboxSnippet = buildSandboxSnippet({
+    apiKey: latestSandboxSecret,
+    projectSlug: sandboxProject?.slug ?? null,
+  });
 
   const refreshOverview = () => {
     startTransition(() => {
@@ -323,6 +369,54 @@ export function PortalDashboard({
     setRotatedKey(null);
     form.reset();
     refreshOverview();
+  };
+
+  const handleSelectSandboxProject = () => {
+    if (!sandboxProjectId) {
+      setErrorBanner("This tenant does not have a sandbox project yet.");
+      return;
+    }
+
+    setSelectedProjectId(sandboxProjectId);
+    setSuccessBanner("Sandbox project selected.");
+  };
+
+  const handleIssueSandboxStarterKey = async () => {
+    if (!sandboxProjectId || !sandboxProject) {
+      setErrorBanner("This tenant does not have a sandbox project yet.");
+      return;
+    }
+
+    const result = await postJson<SaasApiKeyIssue>(
+      `/portal/saas/projects/${sandboxProjectId}/keys`,
+      {
+        label: `${sandboxProject.slug}-starter`,
+        scopes: [...API_KEY_SCOPE_OPTIONS],
+      },
+      "Sandbox API key issued.",
+    );
+    if (!result) {
+      return;
+    }
+
+    setIssuedKey(result);
+    setRotatedKey(null);
+    setSelectedProjectId(sandboxProjectId);
+    refreshOverview();
+  };
+
+  const handleCopySandboxSnippet = async () => {
+    if (!navigator.clipboard) {
+      setErrorBanner("Clipboard access is unavailable in this browser.");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(sandboxSnippet);
+      setSuccessBanner("Copied the sandbox SDK snippet.");
+    } catch {
+      setErrorBanner("Failed to copy the sandbox SDK snippet.");
+    }
   };
 
   const handleRotateKey = async (apiKey: SaasApiKey) => {
@@ -680,6 +774,156 @@ export function PortalDashboard({
                 <p className="mt-3 text-3xl font-semibold text-white">{value}</p>
               </div>
             ))}
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+        <Card className="border-slate-200 bg-white/90 shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
+          <CardHeader className="gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge className="rounded-full bg-sky-100 text-sky-800 hover:bg-sky-100">
+                D2 sandbox
+              </Badge>
+              <Badge className="rounded-full bg-slate-100 text-slate-700 hover:bg-slate-100">
+                zero-friction onboarding
+              </Badge>
+            </div>
+            <CardTitle>Sandbox is already provisioned</CardTitle>
+            <CardDescription>
+              New tenants land with a sandbox project, seeded sample prizes, and
+              a copy-ready SDK path. This card exposes those bootstrap assets
+              immediately instead of sending operators through multiple portal
+              sections first.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-5">
+            {sandboxProject ? (
+              <>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-3xl border border-slate-200 bg-slate-50/80 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+                      Project
+                    </p>
+                    <p className="mt-2 text-lg font-semibold text-slate-950">
+                      {sandboxProject.name}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-600">
+                      {sandboxProject.slug}
+                    </p>
+                  </div>
+                  <div className="rounded-3xl border border-slate-200 bg-slate-50/80 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+                      Seed prizes
+                    </p>
+                    <p className="mt-2 text-lg font-semibold text-slate-950">
+                      {sandboxProjectPrizes.length}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Ready for first-run draws
+                    </p>
+                  </div>
+                  <div className="rounded-3xl border border-slate-200 bg-slate-50/80 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+                      Active keys
+                    </p>
+                    <p className="mt-2 text-lg font-semibold text-slate-950">
+                      {sandboxProjectKeys.length}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Issue one if you want to run the snippet right now
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-3xl border border-slate-200 bg-slate-50/80 p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge className="rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+                      {sandboxProject.environment}
+                    </Badge>
+                    <span className="text-sm text-slate-600">
+                      Draw cost {sandboxProject.drawCost} {sandboxProject.currency}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">
+                    Seed catalog:
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {sandboxProjectPrizes.length > 0 ? (
+                      sandboxProjectPrizes.slice(0, 6).map((prize) => (
+                        <Badge
+                          key={prize.id}
+                          className="rounded-full bg-white text-slate-700 hover:bg-white"
+                        >
+                          {prize.name} · {prize.rewardAmount}
+                        </Badge>
+                      ))
+                    ) : (
+                      <span className="text-sm text-slate-500">
+                        No sandbox prizes are visible yet.
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleSelectSandboxProject}
+                    disabled={isPending}
+                  >
+                    Focus sandbox project
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleIssueSandboxStarterKey}
+                    disabled={isPending}
+                  >
+                    Issue starter key
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void handleCopySandboxSnippet()}
+                  >
+                    Copy SDK snippet
+                  </Button>
+                </div>
+
+                <p className="text-sm leading-6 text-slate-600">
+                  {latestSandboxSecret
+                    ? "A fresh sandbox secret is in memory from this session, so the snippet on the right is genuinely copy-and-run."
+                    : "Issue a starter key first if you want the snippet on the right to include a fresh secret instead of the placeholder token."}
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-slate-500">
+                No sandbox project is visible for the selected tenant yet.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 bg-slate-950 text-slate-100 shadow-[0_24px_80px_rgba(15,23,42,0.18)]">
+          <CardHeader className="gap-2">
+            <CardTitle className="text-white">Copy-and-run SDK snippet</CardTitle>
+            <CardDescription className="text-slate-400">
+              Uses the provisioned sandbox environment and a tenant-specific
+              nonce so new operators can verify the path immediately.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <pre className="overflow-x-auto rounded-3xl bg-black/30 p-5 text-sm text-slate-100">
+              <code>{sandboxSnippet}</code>
+            </pre>
+            <p className="text-sm leading-6 text-slate-400">
+              Base URL {ENGINE_BASE_URL} · project{" "}
+              {sandboxProject ? sandboxProject.slug : "not provisioned"} ·{" "}
+              {latestSandboxSecret
+                ? "fresh secret embedded from the latest key issue/rotation response"
+                : "replace the placeholder key before running"}
+            </p>
           </CardContent>
         </Card>
       </section>

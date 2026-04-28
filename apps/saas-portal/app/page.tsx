@@ -5,10 +5,11 @@ import { auth } from "@/lib/auth";
 export default async function Home({
   searchParams,
 }: {
-  searchParams?: { invite?: string };
+  searchParams?: Promise<{ invite?: string }>;
 }) {
+  const resolvedSearchParams = await searchParams;
   const session = await auth();
-  const invite = searchParams?.invite?.trim();
+  const invite = resolvedSearchParams?.invite?.trim();
   const portalPath = invite
     ? `/portal?invite=${encodeURIComponent(invite)}`
     : "/portal";

@@ -38,13 +38,13 @@ export const viewport: Viewport = {
   colorScheme: 'light',
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: ReactNode;
 }) {
-  const locale = getServerLocale();
-  const messages = getServerMessages(locale);
+  const locale = await getServerLocale();
+  const messages = await getServerMessages(locale);
 
   return (
     <html lang={locale}>

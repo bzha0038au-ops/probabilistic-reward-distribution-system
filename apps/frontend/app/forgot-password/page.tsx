@@ -18,7 +18,7 @@ import { getServerTranslations } from '@/lib/i18n/server';
 async function requestPasswordResetAction(formData: FormData) {
   'use server';
 
-  const t = getServerTranslations();
+  const t = await getServerTranslations();
   const email = String(formData.get('email') ?? '').toLowerCase().trim();
   if (!email) {
     redirect(`/forgot-password?error=${encodeURIComponent(t('auth.missingFields'))}`);
@@ -46,17 +46,20 @@ async function requestPasswordResetAction(formData: FormData) {
   redirect('/forgot-password?sent=1');
 }
 
-export default function ForgotPassword({
+export default async function ForgotPassword({
   searchParams,
 }: {
-  searchParams?: { error?: string; sent?: string };
+  searchParams?: Promise<{ error?: string; sent?: string }>;
 }) {
-  const t = getServerTranslations();
-  const errorMessage = searchParams?.error
-    ? decodeURIComponent(searchParams.error)
+  const resolvedSearchParams = await searchParams;
+  const t = await getServerTranslations();
+  const errorMessage = resolvedSearchParams?.error
+    ? decodeURIComponent(resolvedSearchParams.error)
     : null;
   const sentMessage =
-    searchParams?.sent === '1' ? t('auth.forgotPasswordSubmitted') : null;
+    resolvedSearchParams?.sent === '1'
+      ? t('auth.forgotPasswordSubmitted')
+      : null;
 
   return (
     <AuthPageShell>

@@ -13,14 +13,14 @@ export async function registerRealtimeRoutes(
       websocket: true,
       preValidation: requireRealtimeUserGuard,
     },
-    (connection, request) => {
+    (socket, request) => {
       const user = request.user;
       if (!user) {
-        connection.socket.close();
+        socket.close();
         return;
       }
 
-      realtime.attachConnection({ socket: connection.socket, user });
+      realtime.attachConnection({ socket, user });
       logger.info('realtime websocket upgraded', {
         userId: user.userId,
         sessionId: user.sessionId,

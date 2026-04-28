@@ -110,6 +110,7 @@ const readFirstSqlRow = <TRow>(result: unknown) => readSqlRows<TRow>(result)[0];
 const countCompletedUsers = async (definition: RewardMissionDefinition) => {
   if (definition.type === "daily_checkin") {
     const dayStart = startOfDay();
+    const dayStartIso = dayStart.toISOString();
     const [row] = await db
       .select({
         total: sql<number>`count(distinct ${ledgerEntries.userId})`,
@@ -117,7 +118,7 @@ const countCompletedUsers = async (definition: RewardMissionDefinition) => {
       .from(ledgerEntries)
       .where(sql`
         ${ledgerEntries.entryType} = ${DAILY_BONUS_ENTRY_TYPE}
-        AND ${ledgerEntries.createdAt} >= ${dayStart}
+        AND ${ledgerEntries.createdAt} >= ${dayStartIso}
       `);
 
     return Number(row?.total ?? 0);
@@ -152,12 +153,13 @@ const countCompletedUsers = async (definition: RewardMissionDefinition) => {
 
   if (definition.params.metric === "draw_count_today") {
     const dayStart = startOfDay();
+    const dayStartIso = dayStart.toISOString();
     const row = readFirstSqlRow<CountRow>(await db.execute(sql`
       SELECT count(*) AS "total"
       FROM (
         SELECT ${drawRecords.userId}
         FROM ${drawRecords}
-        WHERE ${drawRecords.createdAt} >= ${dayStart}
+        WHERE ${drawRecords.createdAt} >= ${dayStartIso}
         GROUP BY ${drawRecords.userId}
         HAVING count(*) >= ${definition.params.target}
       ) AS "qualified_users"
@@ -186,9 +188,10 @@ const buildMissionMetrics = async (
   const window = toMetricWindow(definition);
   const completedUsers = await countCompletedUsers(definition);
   const rewardGrantWhere = buildRewardGrantWhere(definition);
+  const todayStartIso = startOfDay().toISOString();
   const claimWindowCondition =
     window === "today"
-      ? sql`AND ${ledgerEntries.createdAt} >= ${startOfDay()}`
+      ? sql`AND ${ledgerEntries.createdAt} >= ${todayStartIso}`
       : sql``;
 
   const claimRow = readFirstSqlRow<MissionClaimMetricsRow>(await db.execute(sql`

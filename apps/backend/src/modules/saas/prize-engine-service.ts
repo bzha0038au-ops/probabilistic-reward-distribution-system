@@ -132,9 +132,21 @@ type LockedRewardRiskStateRow = {
   hitCount: number;
   severeHitCount: number;
   riskScore: number;
-  lastHitAt: Date;
-  updatedAt: Date;
+  lastHitAt: Date | string;
+  updatedAt: Date | string;
   metadata: Record<string, unknown> | null;
+};
+
+const toRewardRiskStateDate = (
+  value: Date | string,
+  field: "lastHitAt" | "updatedAt",
+) => {
+  const parsed = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error(`Invalid reward risk state ${field} timestamp.`);
+  }
+
+  return parsed;
 };
 
 const clampUnitInterval = (value: number | null | undefined) => {
@@ -981,22 +993,29 @@ const resolveRewardRiskState = async (
     params.auth.projectId,
     identityValueHash,
   );
-  const previousAccumulatedRisk = existingState
-    ? fromStoredRiskScore(existingState.riskScore)
+  const normalizedExistingState = existingState
+    ? {
+        ...existingState,
+        lastHitAt: toRewardRiskStateDate(existingState.lastHitAt, "lastHitAt"),
+        updatedAt: toRewardRiskStateDate(existingState.updatedAt, "updatedAt"),
+      }
+    : null;
+  const previousAccumulatedRisk = normalizedExistingState
+    ? fromStoredRiskScore(normalizedExistingState.riskScore)
     : 0;
   const now = new Date();
-  const decayedAccumulatedRisk = existingState
+  const decayedAccumulatedRisk = normalizedExistingState
     ? decayAccumulatedRisk(
         previousAccumulatedRisk,
-        now.getTime() - existingState.updatedAt.getTime(),
+        now.getTime() - normalizedExistingState.updatedAt.getTime(),
         riskStateHalfLifeSeconds,
       )
     : 0;
   const effectiveRisk = accumulateRewardRisk(decayedAccumulatedRisk, inputRisk);
 
-  if (existingState || inputRisk > 0 || effectiveRisk > 0) {
+  if (normalizedExistingState || inputRisk > 0 || effectiveRisk > 0) {
     const nextMetadata = {
-      ...(normalizeMetadata(existingState?.metadata) ?? {}),
+      ...(normalizeMetadata(normalizedExistingState?.metadata) ?? {}),
       rewardRisk: {
         inputRisk: roundRiskMetric(inputRisk),
         previousAccumulatedRisk: roundRiskMetric(previousAccumulatedRisk),
@@ -1007,7 +1026,7 @@ const resolveRewardRiskState = async (
       },
     };
 
-    if (existingState) {
+    if (normalizedExistingState) {
       await tx
         .update(agentRiskState)
         .set({
@@ -1016,9 +1035,10 @@ const resolveRewardRiskState = async (
           playerExternalId: params.player.externalPlayerId,
           identityHint: params.trackedAgent.agentId.slice(0, 160),
           riskScore: toStoredRiskScore(effectiveRisk),
-          hitCount: existingState.hitCount + (inputRisk > 0 ? 1 : 0),
+          hitCount:
+            normalizedExistingState.hitCount + (inputRisk > 0 ? 1 : 0),
           severeHitCount:
-            existingState.severeHitCount +
+            normalizedExistingState.severeHitCount +
             (inputRisk >= REWARD_RISK_SEVERE_THRESHOLD ? 1 : 0),
           lastSeverity: resolveRewardRiskSeverity(
             Math.max(inputRisk, effectiveRisk),
@@ -1027,10 +1047,10 @@ const resolveRewardRiskState = async (
           lastReason:
             inputRisk > 0 ? "reward_risk_signal" : "reward_risk_decay_refresh",
           metadata: nextMetadata,
-          lastHitAt: inputRisk > 0 ? now : existingState.lastHitAt,
+          lastHitAt: inputRisk > 0 ? now : normalizedExistingState.lastHitAt,
           updatedAt: now,
         })
-        .where(eq(agentRiskState.id, existingState.id));
+        .where(eq(agentRiskState.id, normalizedExistingState.id));
     } else {
       await tx.insert(agentRiskState).values({
         tenantId: params.auth.tenantId,

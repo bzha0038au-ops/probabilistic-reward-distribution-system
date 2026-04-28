@@ -187,6 +187,7 @@ const resolveRecoveredAlerts = async (
   mismatchedUserIds: number[]
 ) => {
   const now = new Date();
+  const nowIso = now.toISOString();
   const autoResolvableStatusesSql = sql.join(
     AUTO_RESOLVABLE_RECONCILIATION_STATUSES.map((status) => sql`${status}`),
     sql`, `
@@ -217,8 +218,8 @@ const resolveRecoveredAlerts = async (
     SET
       run_id = ${runId},
       status = 'resolved',
-      resolved_at = ${now},
-      updated_at = ${now}
+      resolved_at = ${nowIso},
+      updated_at = ${nowIso}
     WHERE ${reconciliationAlerts.alertType} = ${WALLET_RECONCILIATION_ALERT_TYPE}
       AND ${reconciliationAlerts.status} IN (${autoResolvableStatusesSql})
       AND ${reconciliationAlerts.userId} IS NOT NULL

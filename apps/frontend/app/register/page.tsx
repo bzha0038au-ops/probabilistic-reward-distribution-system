@@ -35,7 +35,7 @@ async function loadCurrentLegalDocuments() {
 async function registerAction(formData: FormData) {
   "use server";
 
-  const t = getServerTranslations();
+  const t = await getServerTranslations();
   const email = String(formData.get("email") ?? "").toLowerCase();
   const password = String(formData.get("password") ?? "");
   const legalDocumentsResult = await loadCurrentLegalDocuments();
@@ -83,12 +83,12 @@ async function registerAction(formData: FormData) {
   redirect("/login?registered=1");
 }
 
-export default function Register({
+export default async function Register({
   searchParams,
 }: {
-  searchParams?: { error?: string };
+  searchParams?: Promise<{ error?: string }>;
 }) {
-  return <RegisterPage searchParams={searchParams} />;
+  return <RegisterPage searchParams={await searchParams} />;
 }
 
 async function RegisterPage({
@@ -96,7 +96,7 @@ async function RegisterPage({
 }: {
   searchParams?: { error?: string };
 }) {
-  const pageT = getServerTranslations();
+  const pageT = await getServerTranslations();
   const legalDocumentsResult = await loadCurrentLegalDocuments();
   const errorMessage = searchParams?.error
     ? decodeURIComponent(searchParams.error)

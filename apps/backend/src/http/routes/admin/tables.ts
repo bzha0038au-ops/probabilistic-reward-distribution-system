@@ -285,12 +285,12 @@ export async function registerAdminTableRoutes(protectedRoutes: AppInstance) {
       websocket: true,
       preHandler: [requireAdminPermission(ADMIN_PERMISSION_KEYS.TABLES_READ)],
     },
-    (connection, request) => {
+    (socket, request) => {
       let lastFingerprint = "";
 
       const sendEvent = (payload: Record<string, unknown>) => {
-        if (connection.socket.readyState === 1) {
-          connection.socket.send(JSON.stringify(payload));
+        if (socket.readyState === 1) {
+          socket.send(JSON.stringify(payload));
         }
       };
 
@@ -324,7 +324,7 @@ export async function registerAdminTableRoutes(protectedRoutes: AppInstance) {
         });
       }, 2_000);
 
-      connection.socket.on("close", () => {
+      socket.on("close", () => {
         clearInterval(interval);
       });
 

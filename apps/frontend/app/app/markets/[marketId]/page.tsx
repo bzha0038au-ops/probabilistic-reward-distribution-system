@@ -3,15 +3,16 @@ import { notFound } from 'next/navigation';
 import { PredictionMarketDetailPage } from '@/modules/markets/components/prediction-market-detail-page';
 
 type MarketDetailPageProps = {
-  params: {
+  params: Promise<{
     marketId: string;
-  };
+  }>;
 };
 
-export default function MarketDetailPage({
+export default async function MarketDetailPage({
   params,
 }: MarketDetailPageProps) {
-  const marketId = Number(params.marketId);
+  const { marketId: marketIdParam } = await params;
+  const marketId = Number(marketIdParam);
 
   if (!Number.isInteger(marketId) || marketId <= 0) {
     notFound();
