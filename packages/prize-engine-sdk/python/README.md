@@ -1,6 +1,9 @@
 # Python SDK Draft
 
 This directory contains a draft Python mirror of `@reward/prize-engine-sdk`.
+It is meant to track the shipped SDK surface exposed from the package's
+committed `dist/` entrypoints rather than repo-internal TypeScript source
+imports.
 
 Current scope:
 
@@ -13,6 +16,13 @@ Current scope:
 
 The draft intentionally uses the Python standard library only so it can be
 reviewed without adding repo-level Python dependencies.
+
+Boundary notes:
+
+- Treat this client as a trusted-runtime helper, the same as the TypeScript SDK.
+- Use project API keys from a server, worker, or other protected runtime.
+- When the TypeScript SDK surface changes, update this mirror against the
+  published `dist` contract, not against ad hoc `src/*` internals.
 
 Example:
 

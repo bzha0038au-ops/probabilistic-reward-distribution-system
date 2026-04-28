@@ -63,4 +63,17 @@
 - `pnpm test:load` (`/wallet` + `/draw` authenticated smoke)
 - `pnpm test:load:mutations` (`POST /draw` + `POST /rewards/claim` write-path smoke on an ephemeral Postgres instance)
 
+For a post-merge or pre-release full sweep after broad backend, frontend, or SDK
+changes, run this set from the repo root:
+
+- `pnpm check`
+- `pnpm --dir apps/mobile check` when the native app changed
+- `pnpm lint`
+- `pnpm build`
+- `pnpm test`
+- `pnpm test:integration`
+- `pnpm test:e2e`
+- `pnpm test:load`
+- `pnpm test:load:mutations`
+
 CI runs `pnpm test` plus blocking `pnpm test:integration:critical`, `pnpm test:e2e:critical`, and an explicit `pnpm --dir apps/mobile check` gate. Those commands are the merge guard for core draw / funds / admin-risk regressions plus React Native type safety, while the full `pnpm test:integration` and `pnpm test:e2e` suites remain available for broader sweeps. The deploy verify workflow runs the full integration and e2e suites for `staging`, while non-staging deploys stay on the critical gates. `pnpm test:load` remains a repeatable smoke gate for throughput regressions.

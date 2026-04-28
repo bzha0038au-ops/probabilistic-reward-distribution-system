@@ -165,10 +165,13 @@ pnpm --dir apps/backend dev:worker:payment-operations
 pnpm db:seed:manual
 pnpm db:seed:saas-portal-demo
 pnpm check
+pnpm --dir apps/mobile check
 pnpm lint
 pnpm test
 pnpm test:integration
+pnpm test:integration:critical
 pnpm test:e2e
+pnpm test:e2e:critical
 pnpm test:e2e:install
 pnpm test:load
 pnpm test:load:mutations
@@ -214,6 +217,8 @@ This ensures:
 
 - 2 portal demo tenants bound to `admin.manual@example.com`
 - bootstrap sandbox projects with starter billing profiles
+- seed each tenant sandbox with sample prizes and a portal-visible starter
+  onboarding path (`Issue starter key` + `Copy SDK snippet`)
 - an extra `Agent Staging` project under `Portal Demo Alpha` for project-switch QA
 
 ## Project At A Glance
@@ -254,9 +259,9 @@ flowchart LR
 
 ## What This Project Does
 
-- Lets users register, log in, manage sessions, top up, withdraw, draw rewards, inspect wallet history, and play additional user-facing games such as blackjack and quick-eight
+- Lets users register, log in, manage sessions, top up, withdraw, draw rewards, inspect wallet history, complete verification and legal acceptance flows, and play additional user-facing games such as blackjack and quick-eight
 - Gives operators a separate admin console to manage prizes, review finance flows, inspect risk and audit events, issue SaaS API keys, and change runtime config safely through draft and approval flows
-- Exposes a separate SaaS prize-engine surface under `/v1/engine/*` for trusted project-to-project integrations through `@reward/prize-engine-sdk`
+- Exposes a separate SaaS prize-engine surface under `/v1/engine/*` for trusted project-to-project integrations through `@reward/prize-engine-sdk`, with the SaaS portal auto-provisioning a sandbox project, sample prizes, and a copy-ready starter snippet for new tenants
 - Persists auth sessions for both users and admins so clients can list, revoke, and reconcile active sessions instead of treating JWTs as fully stateless
 - Keeps draw execution, wallet mutation, finance review, notification delivery, and background reconciliation inside the backend with explicit ledger writes and worker boundaries
 - Keeps schema, migrations, shared contracts, and client packages inside the same workspace so product and platform changes evolve together
@@ -270,7 +275,9 @@ The highest-risk path is `executeDraw(userId)`: debit the draw cost, evaluate pr
 - Manual-review payment flows plus dedicated webhook, reconciliation, outbound, and operations worker paths
 - Runtime config and payment provider changes go through a control-center draft / submit / approve / reject workflow instead of direct mutation
 - Shared first-party user API client (`@reward/user-core`) and separate external SaaS SDK (`@reward/prize-engine-sdk`)
+- SaaS portal onboarding exposes the provisioned sandbox project, seeded sample prizes, starter-key issuance, and a copy-and-run SDK snippet directly in `/portal`
 - Admin audit, risk, MFA, finance, and configuration surfaces separated from the public apps
+- Web and native user security surfaces both expose verification / KYC status, while hosted verification and legal acceptance remain backend-governed
 - Persisted user/admin session inventories support current-session restore, session listing, single-session revoke, and revoke-all flows
 - Workspace-level tests plus backend integration tests against a self-bootstrapped real Postgres instance
 

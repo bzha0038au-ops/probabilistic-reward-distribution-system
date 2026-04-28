@@ -68,6 +68,10 @@ Lifecycle:
 - Must follow semver, changelog, and migration-note discipline.
 - Breaking route/auth/error-shape changes require an explicit major-version
   release plan.
+- The published entrypoint is `dist/`. Committed `dist/*.js` and `dist/*.d.ts`
+  artifacts are intentional for this package so non-workspace consumers and
+  language mirrors can pin the same shipped surface. Treat `src/` as authoring
+  source inside the monorepo rather than the external contract.
 
 Server-only rule:
 
@@ -143,6 +147,8 @@ Use `@reward/prize-engine-sdk` when:
 - The caller is a B2B integrator or trusted backend.
 - The auth model is a project API key.
 - The API being called is under `/v1/engine/*`.
+- The consumer should resolve the package through its built `dist/` entrypoints,
+  not by importing `src/*` files directly.
 
 Use an app-local adapter or direct `fetch` when:
 
