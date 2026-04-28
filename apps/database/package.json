@@ -30,11 +30,11 @@
   "dependencies": {
     "@opentelemetry/api": "^1.9.1",
     "@reward/shared-types": "workspace:*",
-    "drizzle-kit": "^0.21.1",
-    "drizzle-orm": "^0.29.2"
+    "drizzle-kit": "^0.31.10",
+    "drizzle-orm": "^0.45.2"
   },
   "devDependencies": {
-    "dotenv": "^17.3.1",
+    "dotenv": "^17.4.2",
     "typescript": "^5.3.3"
   }
 }

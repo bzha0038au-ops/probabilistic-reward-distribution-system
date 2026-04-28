@@ -61,7 +61,7 @@
     "@playwright/test": "^1.59.1",
     "autocannon": "^8.0.0",
     "pg-embedded": "^0.2.3",
-    "postgres": "^3.4.8",
+    "postgres": "^3.4.9",
     "tsx": "^4.21.0"
   }
 }
