@@ -27,12 +27,16 @@ import { and, asc, desc, eq, sql } from '@reward/database/orm';
 import { expect } from 'vitest';
 import {
   adminActions,
+  economyLedgerEntries,
   adminPermissions,
   authSessions,
   blackjackGames,
   deviceFingerprints,
   fiatPayoutMethods,
   freezeRecords,
+  giftEnergyAccounts,
+  giftTransfers,
+  iapProducts,
   kycDocuments,
   kycProfiles,
   kycReviewEvents,
@@ -46,7 +50,9 @@ import {
   suspiciousAccounts,
   riskTableInteractionEvents,
   riskTableInteractionPairs,
+  storePurchaseOrders,
   userWallets,
+  userAssetBalances,
   walletReconciliationRuns,
 } from '@reward/database';
 import { runKycReverificationSweep } from '../modules/kyc/service';
@@ -1080,22 +1086,25 @@ describeIntegrationSuite('backend admin integration', () => {
 
     const [storedLedger] = await getDb()
       .select({
-        entryType: sql<string>`${ledgerEntries.entryType}`,
-        metadataKind: sql<string>`jsonb_typeof(${ledgerEntries.metadata})`,
-        missionId: sql<string>`${ledgerEntries.metadata} ->> 'missionId'`,
+        entryType: sql<string>`${economyLedgerEntries.entryType}`,
+        assetCode: sql<string>`${economyLedgerEntries.assetCode}`,
+        metadataKind: sql<string>`jsonb_typeof(${economyLedgerEntries.metadata})`,
+        missionId: sql<string>`${economyLedgerEntries.metadata} ->> 'missionId'`,
       })
-      .from(ledgerEntries)
+      .from(economyLedgerEntries)
       .where(
         and(
-          eq(ledgerEntries.userId, user.id),
-          eq(ledgerEntries.entryType, 'gamification_reward'),
+          eq(economyLedgerEntries.userId, user.id),
+          eq(economyLedgerEntries.assetCode, 'B_LUCK'),
+          eq(economyLedgerEntries.entryType, 'gamification_reward'),
         ),
       )
-      .orderBy(desc(ledgerEntries.id))
+      .orderBy(desc(economyLedgerEntries.id))
       .limit(1);
 
     expect(storedLedger).toMatchObject({
       entryType: 'gamification_reward',
+      assetCode: 'B_LUCK',
       metadataKind: 'object',
       missionId,
     });
@@ -2473,10 +2482,12 @@ describeIntegrationSuite('backend admin integration', () => {
       payload: {
         drawCost: '11',
         authFailureWindowMinutes: '21',
+        paymentWithdrawEnabled: false,
         reason: 'integration-test',
       },
     });
     expect(createDraftResponse.statusCode).toBe(201);
+    expect(createDraftResponse.json().data.requiresMfa).toBe(true);
     const requestId = Number(createDraftResponse.json().data.id);
 
     const submitResponse = await getApp().inject({
@@ -2519,6 +2530,7 @@ describeIntegrationSuite('backend admin integration', () => {
     expect(configResponse.json().data).toMatchObject({
       drawCost: '11.00',
       authFailureWindowMinutes: '21.00',
+      paymentWithdrawEnabled: false,
     });
 
     const [publishAction] = await getDb()
@@ -2552,6 +2564,7 @@ describeIntegrationSuite('backend admin integration', () => {
       changedKeys: expect.arrayContaining([
         'drawCost',
         'authFailureWindowMinutes',
+        'paymentWithdrawEnabled',
       ]),
       fieldDiff: expect.arrayContaining([
         expect.objectContaining({
@@ -2564,7 +2577,13 @@ describeIntegrationSuite('backend admin integration', () => {
           from: expect.any(String),
           to: '21.00',
         }),
+        expect.objectContaining({
+          key: 'paymentWithdrawEnabled',
+          from: expect.any(Boolean),
+          to: false,
+        }),
       ]),
+      reviewNotes: 'integration-test',
     });
   });
 
@@ -2796,5 +2815,279 @@ describeIntegrationSuite('backend admin integration', () => {
       .orderBy(desc(predictionMarkets.id));
 
     expect(storedMarkets).toEqual([]);
+  });
+
+  it('admin economy overview returns aggregated asset, gift, order, and risk data', async () => {
+    const email = 'economy-overview-admin@example.com';
+    const { admin, password } = await seedAdminAccount({ email });
+    await grantAdminPermissions(admin.id, FINANCE_ADMIN_PERMISSION_KEYS);
+    const adminSession = await enrollAdminMfa({ email, password });
+
+    const sender = await seedUserWithWallet({
+      email: 'economy-overview-sender@example.com',
+      bonusBalance: '125.00',
+    });
+    const recipient = await seedUserWithWallet({
+      email: 'economy-overview-recipient@example.com',
+      bonusBalance: '15.00',
+    });
+
+    await getDb().insert(giftEnergyAccounts).values({
+      userId: sender.id,
+      currentEnergy: 0,
+      maxEnergy: 10,
+      refillPolicy: {
+        type: 'daily_reset',
+        intervalHours: 24,
+        refillAmount: 10,
+      },
+    });
+
+    const [product] = await getDb()
+      .insert(iapProducts)
+      .values({
+        sku: 'reward.ios.gift-pack.admin-overview',
+        storeChannel: 'ios',
+        deliveryType: 'gift_pack',
+        isActive: true,
+      })
+      .returning({
+        id: iapProducts.id,
+      });
+
+    await getDb().insert(storePurchaseOrders).values({
+      userId: sender.id,
+      recipientUserId: recipient.id,
+      iapProductId: product!.id,
+      storeChannel: 'ios',
+      status: 'verified',
+      idempotencyKey: 'admin-economy-overview-order-1',
+      sourceApp: 'mobile',
+    });
+
+    await getDb().insert(giftTransfers).values({
+      senderUserId: sender.id,
+      receiverUserId: recipient.id,
+      assetCode: 'B_LUCK',
+      amount: '60.00',
+      energyCost: 3,
+      status: 'completed',
+      idempotencyKey: 'admin-economy-overview-gift-1',
+      sourceApp: 'web',
+      deviceFingerprint: 'shared-device',
+      metadata: {
+        requestIp: '203.0.113.10',
+      },
+    });
+
+    await getDb().insert(freezeRecords).values({
+      userId: recipient.id,
+      category: 'operations',
+      reason: 'manual_admin',
+      scope: 'gift_lock',
+      status: 'active',
+    });
+
+    const response = await getApp().inject({
+      method: 'GET',
+      url: '/admin/economy/overview',
+      headers: buildAdminCookieHeaders(adminSession.token),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      ok: true,
+      data: {
+        assetTotals: expect.arrayContaining([
+          expect.objectContaining({
+            assetCode: 'B_LUCK',
+            userCount: 2,
+            availableBalance: '140.00',
+          }),
+        ]),
+        giftSummary: expect.objectContaining({
+          sentTodayCount: 1,
+          sentTodayAmount: '60.00',
+          sentLast24hCount: 1,
+          sentLast24hAmount: '60.00',
+        }),
+        energySummary: expect.objectContaining({
+          exhaustedCount: 1,
+          belowMaxCount: 1,
+          accountCount: 1,
+        }),
+        orderSummary: expect.arrayContaining([
+          expect.objectContaining({
+            status: 'verified',
+            count: 1,
+          }),
+        ]),
+        recentGifts: expect.arrayContaining([
+          expect.objectContaining({
+            senderUserId: sender.id,
+            receiverUserId: recipient.id,
+            amount: '60.00',
+            status: 'completed',
+          }),
+        ]),
+        recentOrders: expect.arrayContaining([
+          expect.objectContaining({
+            userId: sender.id,
+            recipientUserId: recipient.id,
+            status: 'verified',
+            sku: 'reward.ios.gift-pack.admin-overview',
+            deliveryType: 'gift_pack',
+          }),
+        ]),
+        activeGiftLocks: expect.arrayContaining([
+          expect.objectContaining({
+            userId: recipient.id,
+            scope: 'gift_lock',
+            status: 'active',
+          }),
+        ]),
+        riskSignals: expect.arrayContaining([
+          expect.objectContaining({
+            senderUserId: sender.id,
+            receiverUserId: recipient.id,
+            transferCount: 1,
+            totalAmount: '60.00',
+            sharedDeviceCount: 1,
+            sharedIpCount: 1,
+          }),
+        ]),
+      },
+    });
+  });
+
+  it('admin economy routes can inspect and reverse a fulfilled voucher order', async () => {
+    const email = 'economy-reverse-admin@example.com';
+    const { admin, password } = await seedAdminAccount({ email });
+    await grantAdminPermissions(admin.id, FINANCE_ADMIN_PERMISSION_KEYS);
+    const adminSession = await enrollAdminMfa({ email, password });
+
+    await getDb().insert(iapProducts).values({
+      sku: 'reward.ios.voucher.admin-reverse',
+      storeChannel: 'ios',
+      deliveryType: 'voucher',
+      assetCode: 'IAP_VOUCHER',
+      assetAmount: '12.50',
+      isActive: true,
+    });
+
+    const user = await seedUserWithWallet({
+      email: 'economy-reverse-user@example.com',
+    });
+    const { token } = await getCreateUserSessionToken()({
+      userId: user.id,
+      email: user.email,
+      role: 'user',
+    });
+
+    const verifyResponse = await getApp().inject({
+      method: 'POST',
+      url: '/iap/purchases/verify',
+      headers: {
+        ...buildUserAuthHeaders(token),
+        'content-type': 'application/json',
+      },
+      payload: {
+        idempotencyKey: 'admin-economy-reverse-verify-1',
+        storeChannel: 'ios',
+        sku: 'reward.ios.voucher.admin-reverse',
+        receipt: {
+          externalTransactionId: 'admin-economy-reverse-transaction-1',
+          rawPayload: {
+            environment: 'Sandbox',
+          },
+        },
+      },
+    });
+
+    expect(verifyResponse.statusCode).toBe(201);
+    const orderId = Number(verifyResponse.json().data.order.id);
+
+    const detailResponse = await getApp().inject({
+      method: 'GET',
+      url: `/admin/economy/orders/${orderId}`,
+      headers: buildAdminCookieHeaders(adminSession.token),
+    });
+
+    expect(detailResponse.statusCode).toBe(200);
+    expect(detailResponse.json()).toMatchObject({
+      ok: true,
+      data: {
+        order: expect.objectContaining({
+          id: orderId,
+          userId: user.id,
+          status: 'fulfilled',
+          sku: 'reward.ios.voucher.admin-reverse',
+          deliveryType: 'voucher',
+        }),
+        receipt: expect.objectContaining({
+          externalTransactionId: 'admin-economy-reverse-transaction-1',
+        }),
+      },
+    });
+
+    const reverseResponse = await getApp().inject({
+      method: 'POST',
+      url: `/admin/economy/orders/${orderId}/reverse`,
+      headers: {
+        ...buildAdminCookieHeaders(adminSession.token),
+        'content-type': 'application/json',
+      },
+      payload: {
+        totpCode: adminSession.totpCode,
+        targetStatus: 'refunded',
+        reason: 'manual_refund',
+      },
+    });
+
+    expect(reverseResponse.statusCode).toBe(200);
+    expect(reverseResponse.json()).toMatchObject({
+      ok: true,
+      data: {
+        order: expect.objectContaining({
+          id: orderId,
+          status: 'refunded',
+        }),
+      },
+    });
+
+    const [voucherBalance] = await getDb()
+      .select({
+        availableBalance: userAssetBalances.availableBalance,
+      })
+      .from(userAssetBalances)
+      .where(
+        and(
+          eq(userAssetBalances.userId, user.id),
+          eq(userAssetBalances.assetCode, 'IAP_VOUCHER'),
+        ),
+      )
+      .limit(1);
+
+    expect(voucherBalance?.availableBalance).toBe('0.00');
+
+    const ledgerRows = await getDb()
+      .select({
+        entryType: economyLedgerEntries.entryType,
+        amount: economyLedgerEntries.amount,
+      })
+      .from(economyLedgerEntries)
+      .where(eq(economyLedgerEntries.userId, user.id))
+      .orderBy(asc(economyLedgerEntries.id));
+
+    expect(ledgerRows).toEqual([
+      {
+        entryType: 'iap_purchase_fulfill',
+        amount: '12.50',
+      },
+      {
+        entryType: 'iap_purchase_refund_reversal',
+        amount: '-12.50',
+      },
+    ]);
   });
 });

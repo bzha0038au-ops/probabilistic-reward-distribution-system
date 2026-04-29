@@ -50,9 +50,9 @@ These keys are read or written by the backend today.
 
 ### Bonus release + economy
 - `economy.bonus_auto_release_enabled`  
-  Enables automatic bonus release.
+  Legacy setting. Draw rewards no longer auto-release into withdrawable balance.
 - `economy.bonus_unlock_wager_ratio`  
-  Wager ratio used to unlock bonus.
+  Legacy setting kept for compatibility only; new `B luck` balances ignore it.
 - `economy.house_bankroll`
 - `economy.marketing_budget`
 - `economy.bonus_expire_days`

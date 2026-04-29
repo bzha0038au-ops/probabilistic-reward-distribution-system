@@ -17,6 +17,7 @@ export * from './modules/fairness.js';
 export * from './modules/notification.js';
 export * from './modules/data-rights.js';
 export * from './modules/prediction-market.js';
+export * from './modules/economy.js';
 export * from './modules/saas.js';
 export * from './modules/saas-status.js';
 export * from './modules/play-mode.js';

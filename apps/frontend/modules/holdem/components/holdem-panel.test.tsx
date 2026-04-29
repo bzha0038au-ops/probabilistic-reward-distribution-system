@@ -421,10 +421,8 @@ describe("HoldemPanel", () => {
 
     renderHoldemPanel();
 
-    expect(await screen.findByTestId("holdem-action-button-bet")).toBeInTheDocument();
-    expect(
-      screen.queryByTestId("holdem-action-button-raise"),
-    ).not.toBeInTheDocument();
+    expect(await screen.findByTestId("holdem-action-button-bet")).not.toBeNull();
+    expect(screen.queryByTestId("holdem-action-button-raise")).toBeNull();
   });
 
   it("creates a casual two-seat table by default", async () => {

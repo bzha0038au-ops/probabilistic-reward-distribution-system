@@ -1,4 +1,5 @@
 import { useCallback, useState, type MutableRefObject } from 'react';
+import type { WalletBalanceResponse } from '@reward/shared-types/user';
 import { createUserApiClient, type UserApiOverrides } from '@reward/user-core';
 
 type UnauthorizedHandler = (message: string) => Promise<boolean>;
@@ -19,10 +20,12 @@ export function useWallet(options: UseWalletOptions) {
   const { api, authTokenRef, handleUnauthorizedRef, setError } = options;
 
   const [balance, setBalance] = useState('0');
+  const [wallet, setWallet] = useState<WalletBalanceResponse | null>(null);
   const [refreshingBalance, setRefreshingBalance] = useState(false);
 
   const resetWallet = useCallback(() => {
     setBalance('0');
+    setWallet(null);
     setRefreshingBalance(false);
   }, []);
 
@@ -54,7 +57,8 @@ export function useWallet(options: UseWalletOptions) {
         return false;
       }
 
-      setBalance(response.data.balance);
+      setWallet(response.data);
+      setBalance(response.data.balance.withdrawableBalance);
       setRefreshingBalance(false);
       return true;
     },
@@ -63,6 +67,7 @@ export function useWallet(options: UseWalletOptions) {
 
   return {
     balance,
+    wallet,
     refreshingBalance,
     refreshBalance,
     resetWallet,

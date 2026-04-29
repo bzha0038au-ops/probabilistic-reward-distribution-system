@@ -37,6 +37,7 @@ export const zhCNMessages: Messages = {
       prizes: "奖品",
       changeRequests: "变更请求",
       permissions: "权限范围",
+      economy: "经济模型",
       markets: "市场",
       finance: "财务",
       kyc: "KYC 审核",
@@ -143,13 +144,14 @@ export const zhCNMessages: Messages = {
       submit: "更新设置",
     },
     bonus: {
-      title: "奖励释放",
-      description: "当自动释放关闭时，可手动释放奖励余额。",
+      title: "旧奖励释放",
+      description:
+        "该旧路径已停用。B luck 不可提现，也不再允许释放到可提现余额。",
       userId: "用户 ID",
       amount: "释放金额",
       amountPlaceholder: "留空则全部释放",
-      release: "释放奖励",
-      autoReleaseHint: "自动释放已开启，请关闭后再手动释放。",
+      release: "释放已停用",
+      autoReleaseHint: "该旧释放流程已在 B luck 经济模型下停用。",
     },
     legal: {
       title: "法律文档",

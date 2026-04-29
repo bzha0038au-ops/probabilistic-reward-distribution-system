@@ -377,3 +377,38 @@ jobs:
       - name: Fail On Stale Restore Drill Evidence
         if: ${{ steps.freshness.outcome == 'failure' }}
         run: exit 1
+
+  secret-rotation-freshness:
+    if: ${{ github.event_name == 'schedule' && github.event.schedule == '0 18 * * *' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      PRIMARY_ONCALL: ${{ vars.PRIMARY_ONCALL }}
+      SECONDARY_ONCALL: ${{ vars.SECONDARY_ONCALL }}
+      DEPLOY_TG_BOT_TOKEN: ${{ secrets.DEPLOY_TG_BOT_TOKEN }}
+      DEPLOY_TG_PAGE_CHAT_ID: ${{ secrets.DEPLOY_TG_PAGE_CHAT_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check Secret Rotation Evidence Freshness
+        id: freshness
+        continue-on-error: true
+        run: ./deploy/scripts/check-secret-rotation-evidence-freshness.sh docs/operations/evidence 90
+
+      - name: Page Stale Secret Rotation Evidence
+        if: ${{ steps.freshness.outcome == 'failure' }}
+        env:
+          LATEST_FILE: ${{ steps.freshness.outputs.latest_file || 'none' }}
+          LATEST_AGE_DAYS: ${{ steps.freshness.outputs.latest_age_days || 'unknown' }}
+        run: |
+          if [ -n "${DEPLOY_TG_BOT_TOKEN:-}" ] && [ -n "${DEPLOY_TG_PAGE_CHAT_ID:-}" ]; then
+            ./deploy/scripts/telegram-notify.sh \
+              "${DEPLOY_TG_PAGE_CHAT_ID}" \
+              "secret-rotation=stale latest=${LATEST_FILE} age_days=${LATEST_AGE_DAYS} max_days=90 primary=${PRIMARY_ONCALL} secondary=${SECONDARY_ONCALL}"
+          fi
+
+      - name: Fail On Stale Secret Rotation Evidence
+        if: ${{ steps.freshness.outcome == 'failure' }}
+        run: exit 1

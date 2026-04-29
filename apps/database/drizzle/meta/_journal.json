@@ -687,6 +687,27 @@
       "when": 1777654800000,
       "tag": "0098_deferred_payouts",
       "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "6",
+      "when": 1777658400000,
+      "tag": "0099_prize_engine_reward_hot_path_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "6",
+      "when": 1777662000000,
+      "tag": "0100_economy_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "6",
+      "when": 1777665600000,
+      "tag": "0101_holdem_dual_bet_user_group_uniqueness",
+      "breakpoints": true
     }
   ]
 }

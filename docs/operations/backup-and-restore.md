@@ -8,6 +8,10 @@ control, not as an ad hoc DBA task.
 
 - Enable provider-level snapshots and point-in-time recovery for the production
   PostgreSQL cluster.
+- Record the external PITR contract in the deploy environment via
+  `POSTGRES_PITR_ENABLED=true`, `POSTGRES_PITR_STRATEGY`,
+  `POSTGRES_PITR_RPO_MINUTES`, `POSTGRES_WAL_ARCHIVE_ENABLED=true`, and
+  `POSTGRES_WAL_ARCHIVE_URI`.
 - Schedule at least one logical backup per day using
   `.github/workflows/operations-backup.yml`, which calls
   `deploy/scripts/backup-runner.sh`.
@@ -48,6 +52,8 @@ The repo-owned scheduler is
   [`.github/workflows/backup-verify.yml`](../../.github/workflows/backup-verify.yml)
 - Daily restore-drill freshness check: page on-call if the newest committed
   evidence in `docs/operations/evidence/` is older than 45 days
+- Daily secret-rotation freshness check: page on-call if the newest committed
+  evidence in `docs/operations/evidence/` is older than 90 days
 
 Successful monthly drills copy their report into `docs/operations/evidence/`
 as `restore-drill-YYYY-MM.*`, rebuild

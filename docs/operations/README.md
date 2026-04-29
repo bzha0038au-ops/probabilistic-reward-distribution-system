@@ -69,6 +69,7 @@ Root `pnpm ops:*` shortcuts:
 - `pnpm ops:tail-errors`
 - `pnpm ops:check-finance`
 - `pnpm ops:freeze-deploys`
+- `pnpm ops:release-gate`
 - `pnpm ops:rotate-secret`
 - `pnpm ops:rotate-jwt`
 - `pnpm ops:ai-diagnose`
@@ -80,6 +81,7 @@ Root `pnpm ops:*` shortcuts:
 - [`deploy/scripts/postgres-restore.sh`](../../deploy/scripts/postgres-restore.sh)
 - [`deploy/scripts/restore-drill.sh`](../../deploy/scripts/restore-drill.sh)
 - [`deploy/scripts/check-restore-drill-freshness.sh`](../../deploy/scripts/check-restore-drill-freshness.sh)
+- [`deploy/scripts/check-secret-rotation-evidence-freshness.sh`](../../deploy/scripts/check-secret-rotation-evidence-freshness.sh)
 - [`deploy/scripts/ops-notify.sh`](../../deploy/scripts/ops-notify.sh)
 - [`deploy/scripts/telegram-notify.sh`](../../deploy/scripts/telegram-notify.sh)
 - [`deploy/sql/post-restore-checks.sql`](../../deploy/sql/post-restore-checks.sql)
@@ -100,6 +102,8 @@ package / directory was that command in?" during incidents.
 - `pnpm ops:freeze-deploys`: create or clear `.deploy-frozen`, which now
   causes [`.github/workflows/deploy.yml`](../../.github/workflows/deploy.yml) to
   reject deploys for that ref
+- `pnpm ops:release-gate`: block staging / production deploys when required
+  external controls, evidence, or monitoring contracts are missing
 - `pnpm ops:rotate-secret`: unified JWT + SaaS API key rotation / drill helper
 - `pnpm ops:rotate-jwt`: guided dual-secret rotation over
   `*_JWT_SECRET_PREVIOUS`
@@ -125,10 +129,15 @@ workflow:
   `RESTORE_APPROVER`, and `RELEASE_APPROVER`
 - `OFFSITE_STORAGE_URI` and `BACKUP_ENCRYPTION_PASSPHRASE`
 - `BACKUP_ARCHIVE_S3_URI` plus optional `BACKUP_ARCHIVE_CROSS_REGION_S3_URI`
+- `POSTGRES_PITR_ENABLED`, `POSTGRES_PITR_STRATEGY`,
+  `POSTGRES_PITR_RPO_MINUTES`, `POSTGRES_WAL_ARCHIVE_ENABLED`, and
+  `POSTGRES_WAL_ARCHIVE_URI`
 - alert routing for readiness failures, 5xx spikes, draw error rate, withdraw
   stuck, and queue backlog growth
 - a committed restore drill report under `docs/operations/evidence/` from the
   last 45 days
+- a committed secret-rotation drill summary under `docs/operations/evidence/`
+  from the last 90 days
 - an up-to-date [`dr-drills.md`](./dr-drills.md) ledger proving repeated
   successful restores
 - a secret-rotation drill completed within the last 90 days, with command

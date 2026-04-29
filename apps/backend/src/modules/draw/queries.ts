@@ -39,7 +39,6 @@ export async function loadLockedDrawUser(
            u.last_draw_at,
            u.last_win_at,
            w.withdrawable_balance,
-           w.bonus_balance,
            w.wagered_amount
     FROM ${users} u
     JOIN ${userWallets} w ON w.user_id = u.id

@@ -1,10 +1,10 @@
 import { and, eq, isNull, sql } from '@reward/database/orm';
 import Decimal from 'decimal.js';
-import { ledgerEntries, prizes, userWallets, users } from '@reward/database';
+import { prizes, users } from '@reward/database';
 import { type DbTransaction } from '../../db';
 import { toDecimal, toMoneyString } from '../../shared/money';
+import { creditAsset } from '../economy/service';
 import type {
-  DrawUserRow,
   ResolvedDrawOutcome,
   WinningPrizePlan,
 } from './types';
@@ -53,41 +53,46 @@ const decrementPrizeStock = async (params: {
 const creditPrizeReward = async (params: {
   tx: DbTransaction;
   userId: number;
-  user: DrawUserRow;
   prizeId: number;
   rewardAmount: WinningPrizePlan['rewardAmount'];
-  bonusBefore: WinningPrizePlan['rewardAmount'];
   userPoolAfterDebit: WinningPrizePlan['rewardAmount'];
   now: Date;
 }) => {
   const {
     tx,
     userId,
-    user,
     prizeId,
     rewardAmount,
-    bonusBefore,
     userPoolAfterDebit,
     now,
   } = params;
 
   if (rewardAmount.lte(0)) {
-    return bonusBefore;
+    return;
   }
 
-  const bonusAfter = bonusBefore.plus(rewardAmount);
   const userPoolAfterReward = Decimal.max(
     userPoolAfterDebit.minus(rewardAmount),
     0
   );
 
-  await tx
-    .update(userWallets)
-    .set({
-      bonusBalance: toMoneyString(bonusAfter),
-      updatedAt: now,
-    })
-    .where(eq(userWallets.userId, user.id));
+  await creditAsset(
+    {
+      userId,
+      assetCode: 'B_LUCK',
+      amount: rewardAmount,
+      entryType: 'draw_reward',
+      referenceType: 'prize',
+      referenceId: prizeId,
+      audit: {
+        sourceApp: 'backend.draw',
+        metadata: {
+          reason: 'draw_reward',
+        },
+      },
+    },
+    tx
+  );
 
   await tx
     .update(users)
@@ -95,41 +100,24 @@ const creditPrizeReward = async (params: {
       userPoolBalance: toMoneyString(userPoolAfterReward),
       updatedAt: now,
     })
-    .where(eq(users.id, user.id));
-
-  await tx.insert(ledgerEntries).values({
-    userId,
-    entryType: 'draw_reward',
-    amount: toMoneyString(rewardAmount),
-    balanceBefore: toMoneyString(bonusBefore),
-    balanceAfter: toMoneyString(bonusAfter),
-    referenceType: 'prize',
-    referenceId: prizeId,
-    metadata: { reason: 'draw_reward', balanceType: 'bonus' },
-  });
-
-  return bonusAfter;
+    .where(eq(users.id, userId));
 };
 
 export const persistWinningOutcome = async (params: {
   tx: DbTransaction;
   userId: number;
-  user: DrawUserRow;
   plan: WinningPrizePlan;
-  bonusBefore: WinningPrizePlan['rewardAmount'];
   userPoolAfterDebit: WinningPrizePlan['rewardAmount'];
   now: Date;
 }): Promise<ResolvedDrawOutcome> => {
-  const { tx, userId, user, plan, bonusBefore, userPoolAfterDebit, now } = params;
+  const { tx, userId, plan, userPoolAfterDebit, now } = params;
 
   await decrementPrizeStock({ tx, plan, now });
-  const bonusAfterReward = await creditPrizeReward({
+  await creditPrizeReward({
     tx,
     userId,
-    user,
     prizeId: plan.lockedPrize.id,
     rewardAmount: plan.rewardAmount,
-    bonusBefore,
     userPoolAfterDebit,
     now,
   });
@@ -138,7 +126,6 @@ export const persistWinningOutcome = async (params: {
     status: 'won',
     rewardAmount: plan.rewardAmount,
     prizeId: plan.lockedPrize.id,
-    bonusAfterReward,
     payoutLimitReason: null,
   };
 };

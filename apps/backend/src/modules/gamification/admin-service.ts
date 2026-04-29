@@ -1,6 +1,7 @@
 import {
   deposits,
   drawRecords,
+  economyLedgerEntries,
   ledgerEntries,
   missions,
   referrals,
@@ -28,6 +29,7 @@ import {
 
 const DAILY_BONUS_ENTRY_TYPE = "daily_bonus";
 const GAMIFICATION_REWARD_ENTRY_TYPE = "gamification_reward";
+const EARNED_ASSET_CODE = "B_LUCK";
 const MISSIONS_PRIMARY_KEY_CONSTRAINT = "missions_pkey";
 const SINGLE_DAILY_CHECK_IN_CONSTRAINT =
   "missions_single_daily_checkin_unique";
@@ -80,7 +82,7 @@ const toMetricWindow = (
     ? "today"
     : "lifetime";
 
-const buildRewardGrantWhere = (definition: RewardMissionDefinition) => {
+const buildLegacyRewardGrantWhere = (definition: RewardMissionDefinition) => {
   const missionIdSql = jsonbTextPathSql(ledgerEntries.metadata, "missionId");
 
   if (definition.type === "daily_checkin") {
@@ -106,21 +108,61 @@ const buildRewardGrantWhere = (definition: RewardMissionDefinition) => {
   `;
 };
 
+const buildEconomyRewardGrantWhere = (definition: RewardMissionDefinition) => {
+  const missionIdSql = jsonbTextPathSql(
+    economyLedgerEntries.metadata,
+    "missionId",
+  );
+
+  if (definition.type === "daily_checkin") {
+    if (definition.id === "daily_checkin") {
+      return sql`
+        ${economyLedgerEntries.assetCode} = ${EARNED_ASSET_CODE}
+        AND ${economyLedgerEntries.entryType} = ${DAILY_BONUS_ENTRY_TYPE}
+        AND (
+          ${missionIdSql} = ${definition.id}
+          OR ${missionIdSql} IS NULL
+        )
+      `;
+    }
+
+    return sql`
+      ${economyLedgerEntries.assetCode} = ${EARNED_ASSET_CODE}
+      AND ${economyLedgerEntries.entryType} = ${DAILY_BONUS_ENTRY_TYPE}
+      AND ${missionIdSql} = ${definition.id}
+    `;
+  }
+
+  return sql`
+    ${economyLedgerEntries.assetCode} = ${EARNED_ASSET_CODE}
+    AND ${economyLedgerEntries.entryType} = ${GAMIFICATION_REWARD_ENTRY_TYPE}
+    AND ${missionIdSql} = ${definition.id}
+  `;
+};
+
 const readFirstSqlRow = <TRow>(result: unknown) => readSqlRows<TRow>(result)[0];
 
 const countCompletedUsers = async (definition: RewardMissionDefinition) => {
   if (definition.type === "daily_checkin") {
     const dayStart = startOfDay();
     const dayStartIso = dayStart.toISOString();
-    const [row] = await db
-      .select({
-        total: sql<number>`count(distinct ${ledgerEntries.userId})`,
-      })
-      .from(ledgerEntries)
-      .where(sql`
-        ${ledgerEntries.entryType} = ${DAILY_BONUS_ENTRY_TYPE}
-        AND ${ledgerEntries.createdAt} >= ${dayStartIso}
-      `);
+    const row = readFirstSqlRow<CountRow>(await db.execute(sql`
+      SELECT count(distinct "userId") AS "total"
+      FROM (
+        SELECT ${ledgerEntries.userId} AS "userId"
+        FROM ${ledgerEntries}
+        WHERE ${ledgerEntries.entryType} = ${DAILY_BONUS_ENTRY_TYPE}
+          AND ${ledgerEntries.createdAt} >= ${dayStartIso}
+
+        UNION ALL
+
+        SELECT ${economyLedgerEntries.userId} AS "userId"
+        FROM ${economyLedgerEntries}
+        WHERE ${economyLedgerEntries.assetCode} = ${EARNED_ASSET_CODE}
+          AND ${economyLedgerEntries.entryType} = ${DAILY_BONUS_ENTRY_TYPE}
+          AND ${economyLedgerEntries.createdAt} >= ${dayStartIso}
+      ) AS "daily_claims"
+    `));
 
     return Number(row?.total ?? 0);
   }
@@ -229,20 +271,39 @@ const buildMissionMetrics = async (
 ): Promise<RewardMissionAdminMetrics> => {
   const window = toMetricWindow(definition);
   const completedUsers = await countCompletedUsers(definition);
-  const rewardGrantWhere = buildRewardGrantWhere(definition);
+  const legacyRewardGrantWhere = buildLegacyRewardGrantWhere(definition);
+  const economyRewardGrantWhere = buildEconomyRewardGrantWhere(definition);
   const todayStartIso = startOfDay().toISOString();
-  const claimWindowCondition =
+  const legacyClaimWindowCondition =
     window === "today"
       ? sql`AND ${ledgerEntries.createdAt} >= ${todayStartIso}`
+      : sql``;
+  const economyClaimWindowCondition =
+    window === "today"
+      ? sql`AND ${economyLedgerEntries.createdAt} >= ${todayStartIso}`
       : sql``;
 
   const claimRow = readFirstSqlRow<MissionClaimMetricsRow>(await db.execute(sql`
     SELECT
-      count(distinct ${ledgerEntries.userId}) AS "claimedUsers",
-      coalesce(sum(${ledgerEntries.amount}), 0) AS "grantedAmountTotal"
-    FROM ${ledgerEntries}
-    WHERE ${rewardGrantWhere}
-      ${claimWindowCondition}
+      count(distinct "userId") AS "claimedUsers",
+      coalesce(sum("amount"), 0) AS "grantedAmountTotal"
+    FROM (
+      SELECT
+        ${ledgerEntries.userId} AS "userId",
+        ${ledgerEntries.amount} AS "amount"
+      FROM ${ledgerEntries}
+      WHERE ${legacyRewardGrantWhere}
+        ${legacyClaimWindowCondition}
+
+      UNION ALL
+
+      SELECT
+        ${economyLedgerEntries.userId} AS "userId",
+        ${economyLedgerEntries.amount} AS "amount"
+      FROM ${economyLedgerEntries}
+      WHERE ${economyRewardGrantWhere}
+        ${economyClaimWindowCondition}
+    ) AS "mission_claims"
   `));
 
   const claimedUsers = Number(claimRow?.claimedUsers ?? 0);

@@ -1,6 +1,7 @@
 import Decimal from "decimal.js";
 import { ledgerEntries, userWallets, users } from "@reward/database";
 import { eq, sql } from "@reward/database/orm";
+import type { AssetCode } from "@reward/shared-types/economy";
 import type {
   PlayModeGameKey,
   PlayModeOutcome,
@@ -12,6 +13,12 @@ import type { DbTransaction } from "../../db";
 import { conflictError, notFoundError } from "../../shared/errors";
 import { toDecimal, toMoneyString } from "../../shared/money";
 import { readSqlRows } from "../../shared/sql-result";
+import {
+  creditAsset,
+  debitAsset,
+  lockAsset,
+  unlockAsset,
+} from "../economy/service";
 import { applyPrizePoolDelta } from "../house/service";
 import {
   createDeferredPayout,
@@ -30,6 +37,7 @@ type DeferredFundingSource =
 const DEFERRED_WITHHOLD_ENTRY_TYPE = "play_mode_payout_deferred";
 const DEFERRED_RELEASE_ENTRY_TYPE = "play_mode_payout_released";
 const SNOWBALL_ENVELOPE_CAP = toDecimal("500.00");
+const PLAY_MODE_EARNED_ASSET_CODE: AssetCode = "B_LUCK";
 
 const resolveFundingSourceForGame = (
   gameKey: PlayModeGameKey,
@@ -45,6 +53,15 @@ const resolveFundingSourceForGame = (
   }
   return null;
 };
+
+// Legacy "bonus" play-mode state now resolves to the B_LUCK asset for both
+// draw user-pool withholding and holdem casual locked-stack withholding.
+const usesPlayModeEarnedAsset = (
+  balanceType: DeferredBalanceType,
+  fundingSource: DeferredFundingSource,
+) =>
+  balanceType === "bonus" &&
+  (fundingSource === "draw_user_pool" || fundingSource === "locked_balance");
 
 const loadLockedBalances = async (tx: DbTransaction, userId: number) => {
   const walletResult = await tx.execute(sql`
@@ -101,6 +118,92 @@ const applyWalletDelta = async (params: {
     return;
   }
 
+  if (
+    usesPlayModeEarnedAsset(params.balanceType, params.fundingSource) &&
+    params.fundingSource === "draw_user_pool"
+  ) {
+    const { user } = await loadLockedBalances(params.tx, params.userId);
+    const userPoolBefore = toDecimal(user.userPoolBalance ?? 0);
+    const userPoolAfter =
+      params.direction === "withhold"
+        ? userPoolBefore.plus(params.amount)
+        : Decimal.max(userPoolBefore.minus(params.amount), 0);
+
+    const assetMutation = {
+      userId: params.userId,
+      assetCode: PLAY_MODE_EARNED_ASSET_CODE,
+      amount: toMoneyString(params.amount),
+      entryType:
+        params.direction === "withhold"
+          ? DEFERRED_WITHHOLD_ENTRY_TYPE
+          : DEFERRED_RELEASE_ENTRY_TYPE,
+      referenceType: params.referenceType,
+      referenceId: params.referenceId ?? null,
+      audit: {
+        sourceApp: "backend.play_mode",
+        metadata: {
+          balanceType: params.balanceType,
+          assetCode: PLAY_MODE_EARNED_ASSET_CODE,
+          direction: params.direction,
+          userPoolBefore: toMoneyString(userPoolBefore),
+          userPoolAfter: toMoneyString(userPoolAfter),
+          ...(params.metadata ?? {}),
+        },
+      },
+    } as const;
+
+    if (params.direction === "withhold") {
+      await debitAsset(assetMutation, params.tx);
+    } else {
+      await creditAsset(assetMutation, params.tx);
+    }
+
+    await params.tx
+      .update(users)
+      .set({
+        userPoolBalance: toMoneyString(userPoolAfter),
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, params.userId));
+
+    return;
+  }
+
+  if (
+    usesPlayModeEarnedAsset(params.balanceType, params.fundingSource) &&
+    params.fundingSource === "locked_balance"
+  ) {
+    const assetMutation = {
+      userId: params.userId,
+      assetCode: PLAY_MODE_EARNED_ASSET_CODE,
+      amount: toMoneyString(params.amount),
+      entryType:
+        params.direction === "withhold"
+          ? DEFERRED_WITHHOLD_ENTRY_TYPE
+          : DEFERRED_RELEASE_ENTRY_TYPE,
+      referenceType: params.referenceType,
+      referenceId: params.referenceId ?? null,
+      audit: {
+        sourceApp: "backend.play_mode",
+        metadata: {
+          balanceType: params.balanceType,
+          assetCode: PLAY_MODE_EARNED_ASSET_CODE,
+          direction: params.direction,
+          fundingSource: params.fundingSource,
+          ...(params.metadata ?? {}),
+        },
+      },
+    } as const;
+
+    if (params.direction === "withhold") {
+      await lockAsset(assetMutation, params.tx);
+    } else {
+      await unlockAsset(assetMutation, params.tx);
+    }
+
+    return;
+  }
+
   const { wallet, user } = await loadLockedBalances(params.tx, params.userId);
   const withdrawableBefore = toDecimal(wallet.withdrawableBalance ?? 0);
   const bonusBefore = toDecimal(wallet.bonusBalance ?? 0);
@@ -127,14 +230,27 @@ const applyWalletDelta = async (params: {
     throw conflictError("Deferred payout balance adjustment would go negative.");
   }
 
+  const walletUpdate: {
+    withdrawableBalance?: string;
+    bonusBalance?: string;
+    lockedBalance?: string;
+    updatedAt: Date;
+  } = {
+    updatedAt: new Date(),
+  };
+
+  if (params.balanceType === "withdrawable") {
+    walletUpdate.withdrawableBalance = toMoneyString(withdrawableAfter);
+  } else {
+    walletUpdate.bonusBalance = toMoneyString(bonusAfter);
+  }
+  if (params.fundingSource === "locked_balance") {
+    walletUpdate.lockedBalance = toMoneyString(lockedAfter);
+  }
+
   await params.tx
     .update(userWallets)
-    .set({
-      withdrawableBalance: toMoneyString(withdrawableAfter),
-      bonusBalance: toMoneyString(bonusAfter),
-      lockedBalance: toMoneyString(lockedAfter),
-      updatedAt: new Date(),
-    })
+    .set(walletUpdate)
     .where(eq(userWallets.userId, params.userId));
 
   await params.tx.insert(ledgerEntries).values({

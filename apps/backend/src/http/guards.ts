@@ -66,6 +66,7 @@ const freezeErrorMessages: Record<UserFreezeScope, string> = {
   account_lock: "Account locked.",
   withdrawal_lock: "Withdrawals locked.",
   gameplay_lock: "Gameplay locked.",
+  gift_lock: "Gifting locked.",
   topup_lock: "Top-ups locked.",
 };
 

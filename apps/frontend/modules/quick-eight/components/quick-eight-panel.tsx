@@ -106,8 +106,9 @@ export function QuickEightPanel({
   async function refreshBalance() {
     const response = await browserUserApiClient.getWalletBalance();
     if (response.ok) {
-      setBalance(response.data.balance ?? "0");
-      onBalanceChange?.(response.data.balance ?? "0");
+      const withdrawableBalance = response.data.balance.withdrawableBalance;
+      setBalance(withdrawableBalance ?? "0");
+      onBalanceChange?.(withdrawableBalance ?? "0");
     }
   }
 

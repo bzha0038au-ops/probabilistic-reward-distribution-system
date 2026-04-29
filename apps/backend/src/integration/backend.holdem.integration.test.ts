@@ -6,6 +6,7 @@ import {
   handHistories,
   houseAccount,
   holdemTableMessages,
+  economyLedgerEntries,
   ledgerEntries,
   deferredPayouts,
   playModeSessions,
@@ -18,6 +19,7 @@ import {
   systemConfig,
   tableEvents,
   userPlayModes,
+  userAssetBalances,
   userWallets,
 } from '@reward/database';
 import { and, asc, desc, eq } from '@reward/database/orm';
@@ -308,6 +310,23 @@ const readUserWalletSnapshot = async (userId: number) => {
   return expectPresent(wallet);
 };
 
+const readUserBluckSnapshot = async (userId: number) => {
+  const [asset] = await getDb()
+    .select({
+      availableBalance: userAssetBalances.availableBalance,
+      lockedBalance: userAssetBalances.lockedBalance,
+    })
+    .from(userAssetBalances)
+    .where(
+      and(
+        eq(userAssetBalances.userId, userId),
+        eq(userAssetBalances.assetCode, 'B_LUCK'),
+      ),
+    )
+    .limit(1);
+  return expectPresent(asset);
+};
+
 const readHouseBankroll = async () => {
   const [house] = await getDb()
     .select({ houseBankroll: houseAccount.houseBankroll })
@@ -484,14 +503,19 @@ describeIntegrationSuite('backend holdem integration', () => {
       .limit(1);
     expect(wallet).toMatchObject({
       withdrawableBalance: '0.00',
-      bonusBalance: '200.00',
+      bonusBalance: '250.00',
+      lockedBalance: '0.00',
+    });
+
+    const bluck = await readUserBluckSnapshot(user.id);
+    expect(bluck).toMatchObject({
+      availableBalance: '200.00',
       lockedBalance: '50.00',
     });
 
-    const [entry] = await getDb()
+    const legacyEntries = await getDb()
       .select({
-        entryType: ledgerEntries.entryType,
-        metadata: ledgerEntries.metadata,
+        id: ledgerEntries.id,
       })
       .from(ledgerEntries)
       .where(
@@ -499,13 +523,30 @@ describeIntegrationSuite('backend holdem integration', () => {
           eq(ledgerEntries.userId, user.id),
           eq(ledgerEntries.entryType, 'holdem_buy_in'),
         ),
+      );
+    expect(legacyEntries).toHaveLength(0);
+
+    const [entry] = await getDb()
+      .select({
+        assetCode: economyLedgerEntries.assetCode,
+        entryType: economyLedgerEntries.entryType,
+        metadata: economyLedgerEntries.metadata,
+      })
+      .from(economyLedgerEntries)
+      .where(
+        and(
+          eq(economyLedgerEntries.userId, user.id),
+          eq(economyLedgerEntries.entryType, 'holdem_buy_in'),
+        ),
       )
-      .orderBy(desc(ledgerEntries.id))
+      .orderBy(desc(economyLedgerEntries.id))
       .limit(1);
     expect(entry).toMatchObject({
+      assetCode: 'B_LUCK',
       entryType: 'holdem_buy_in',
       metadata: expect.objectContaining({
         balanceType: 'bonus',
+        assetCode: 'B_LUCK',
         tableType: 'casual',
       }),
     });
@@ -741,8 +782,8 @@ describeIntegrationSuite('backend holdem integration', () => {
     const tableId = createResponse.json().data.table.id as number;
 
     const houseBefore = await readHouseBankroll();
-    const walletAfterCreate = await readUserWalletSnapshot(user.id);
-    const lockedBeforeHand = new Decimal(walletAfterCreate.lockedBalance);
+    const bluckAfterCreate = await readUserBluckSnapshot(user.id);
+    const lockedBeforeHand = new Decimal(bluckAfterCreate.lockedBalance);
     expect(lockedBeforeHand.gt(0)).toBe(true);
 
     const startResponse = await getApp().inject({
@@ -758,8 +799,8 @@ describeIntegrationSuite('backend holdem integration', () => {
     });
 
     const houseAfter = await readHouseBankroll();
-    const walletAfterHand = await readUserWalletSnapshot(user.id);
-    const lockedAfterHand = new Decimal(walletAfterHand.lockedBalance);
+    const bluckAfterHand = await readUserBluckSnapshot(user.id);
+    const lockedAfterHand = new Decimal(bluckAfterHand.lockedBalance);
 
     expect(houseAfter.minus(houseBefore).toFixed(2)).toBe(
       lockedBeforeHand.minus(lockedAfterHand).toFixed(2),
@@ -1560,6 +1601,147 @@ describeIntegrationSuite('backend holdem integration', () => {
       .limit(1);
     expect(walletAfterNextCreate).toMatchObject({
       withdrawableBalance: '440.00',
+      lockedBalance: '100.00',
+    });
+
+    const releasedRows = await getDb()
+      .select({
+        amount: deferredPayouts.amount,
+        status: deferredPayouts.status,
+      })
+      .from(deferredPayouts)
+      .where(eq(deferredPayouts.userId, user.id))
+      .orderBy(asc(deferredPayouts.id));
+    expect(releasedRows[0]).toMatchObject({
+      amount: '40.00',
+      status: 'released',
+    });
+  });
+
+  it('defers positive casual holdem profit against B_LUCK and releases it on the next table for deferred_double', async () => {
+    const user = await seedUserWithWallet({
+      email: 'holdem-casual-deferred-double@example.com',
+      withdrawableBalance: '0.00',
+      bonusBalance: '500.00',
+    });
+    await verifyUserContacts(user.id, { email: true, phone: true });
+    const headers = await issueUserHeaders(user);
+
+    const modeResponse = await getApp().inject({
+      method: 'POST',
+      url: '/play-modes/holdem',
+      headers,
+      payload: {
+        type: 'deferred_double',
+      },
+    });
+    expect(modeResponse.statusCode).toBe(200);
+
+    const createResponse = await getApp().inject({
+      method: 'POST',
+      url: '/holdem/tables',
+      headers,
+      payload: {
+        tableName: 'Casual Deferred Double Holdem',
+        buyInAmount: '100.00',
+        tableType: 'casual',
+        maxSeats: 2,
+      },
+    });
+
+    expect(createResponse.statusCode).toBe(201);
+    const tableId = createResponse.json().data.table.id as number;
+
+    await getDb()
+      .update(holdemTableSeats)
+      .set({
+        stackAmount: '140.00',
+      })
+      .where(
+        and(
+          eq(holdemTableSeats.tableId, tableId),
+          eq(holdemTableSeats.userId, user.id),
+        ),
+      );
+    await getDb()
+      .update(userAssetBalances)
+      .set({
+        lockedBalance: '140.00',
+      })
+      .where(
+        and(
+          eq(userAssetBalances.userId, user.id),
+          eq(userAssetBalances.assetCode, 'B_LUCK'),
+        ),
+      );
+
+    const leaveResponse = await getApp().inject({
+      method: 'POST',
+      url: `/holdem/tables/${tableId}/leave`,
+      headers,
+    });
+
+    expect(leaveResponse.statusCode).toBe(200);
+
+    const [session] = await getDb()
+      .select({
+        status: playModeSessions.status,
+        outcome: playModeSessions.outcome,
+        snapshot: playModeSessions.snapshot,
+      })
+      .from(playModeSessions)
+      .where(eq(playModeSessions.userId, user.id))
+      .orderBy(asc(playModeSessions.id))
+      .limit(1);
+    expect(session).toMatchObject({
+      status: 'settled',
+      outcome: 'win',
+      snapshot: expect.objectContaining({
+        type: 'deferred_double',
+        pendingPayoutAmount: '40.00',
+        pendingPayoutCount: 1,
+        lastOutcome: 'win',
+        carryActive: true,
+      }),
+    });
+
+    const bluckAfterLeave = await readUserBluckSnapshot(user.id);
+    expect(bluckAfterLeave).toMatchObject({
+      availableBalance: '500.00',
+      lockedBalance: '40.00',
+    });
+
+    const pendingRows = await getDb()
+      .select({
+        amount: deferredPayouts.amount,
+        status: deferredPayouts.status,
+      })
+      .from(deferredPayouts)
+      .where(eq(deferredPayouts.userId, user.id))
+      .orderBy(asc(deferredPayouts.id));
+    expect(pendingRows).toEqual([
+      expect.objectContaining({
+        amount: '40.00',
+        status: 'pending',
+      }),
+    ]);
+
+    const nextCreateResponse = await getApp().inject({
+      method: 'POST',
+      url: '/holdem/tables',
+      headers,
+      payload: {
+        tableName: 'Casual Deferred Double Follow Up',
+        buyInAmount: '100.00',
+        tableType: 'casual',
+        maxSeats: 2,
+      },
+    });
+    expect(nextCreateResponse.statusCode).toBe(201);
+
+    const bluckAfterNextCreate = await readUserBluckSnapshot(user.id);
+    expect(bluckAfterNextCreate).toMatchObject({
+      availableBalance: '440.00',
       lockedBalance: '100.00',
     });
 

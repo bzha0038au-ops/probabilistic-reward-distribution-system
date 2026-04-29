@@ -7,16 +7,14 @@ Accepted - backfilled on 2026-04-29
 ## Decision Summary
 
 Keep selection strategy as an explicit per-project contract, default to
-`weighted_gacha` for compatibility, implement `epsilon_greedy` as the only
-history-aware strategy today, and reserve `softmax` / `thompson` names without
-silently emulating them.
+`weighted_gacha` for compatibility, and implement `epsilon_greedy`,
+`softmax`, and `thompson` as first-class runtime strategies with explicit
+fairness metadata.
 
 ## Context
 
 Prize-engine projects persist `strategy` plus open-ended `strategyParams`.
-Several strategy names already exist in contracts and admin flows, but only a
-subset is implemented in the backend selector. Future rewrites need the current
-compatibility rules, not just the enum values.
+Future rewrites need the current compatibility rules, not just the enum values.
 
 ## Decision
 
@@ -32,22 +30,29 @@ compatibility rules, not just the enum values.
   - only positive-weight prizes participate
   - `missWeight` is a first-class arm
   - randomness is derived from fairness seed and nonce metadata
-- `epsilon_greedy` is the only implemented history-aware strategy:
+- `epsilon_greedy` is a history-aware strategy:
   - `epsilon` defaults to `0.1` when invalid
   - exploit chooses the highest empirical mean reward
   - explore chooses uniformly across prizes plus the miss arm
-- `softmax` and `thompson` remain reserved names in the contract but must fail
-  fast until a real implementation exists.
+- `softmax` is a temperature-controlled weighted selector:
+  - `temperature` defaults to `1` when invalid
+  - candidate probabilities are derived from exponentiated exploit scores
+  - fairness metadata records the selected arm probability and temperature
+- `thompson` uses deterministic posterior sampling over normalized reward
+  history:
+  - `priorAlpha`, `priorBeta`, and `priorStrength` default to `1`, `1`, and `2`
+  - candidate posteriors are normalized against the current reward-score ceiling
+  - fairness metadata records posterior config and the selected sample score
 - Behavior multipliers and risk decay are overlays on top of the selected
   strategy; they are not separate strategy names.
 
 ## Consequences
 
 - A rewrite must preserve stored strategy names and their current meaning.
-- Contract support is intentionally broader than runtime support; future work
-  can fill in reserved strategies without renaming existing values.
+- Contract, admin configuration, and runtime support must remain aligned.
 - `strategyParams` stays open-ended because the selector already reads more than
-  one concern from it, including `epsilon` and risk-decay tuning keys.
+  one concern from it, including temperature, posterior priors, and risk-decay
+  tuning keys.
 
 ## Current Source Of Truth
 

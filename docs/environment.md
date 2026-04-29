@@ -16,6 +16,10 @@ variables before the app starts.
 ## Backend (`apps/backend/.env`)
 
 - `DATABASE_URL` / `POSTGRES_URL` (required)
+- `DB_POOL_MAX` (optional, backend postgres-js pool size; default `30`)
+- `DB_POOL_IDLE_TIMEOUT_SECONDS` (optional, idle pool connection timeout; default `20`)
+- `DB_POOL_CONNECT_TIMEOUT_SECONDS` (optional, new connection timeout; default `30`)
+- `DB_POOL_MAX_LIFETIME_SECONDS` (optional, pool connection recycle lifetime; default `1800`)
 - `ADMIN_JWT_SECRET` (required)
 - `ADMIN_JWT_SECRET_PREVIOUS` (optional, enables smooth rotation verification)
 - `USER_JWT_SECRET` (required)
@@ -46,6 +50,26 @@ variables before the app starts.
 - `PAYMENT_RECONCILIATION_LOOKBACK_MINUTES`
 - `PAYMENT_RECONCILIATION_PENDING_TIMEOUT_MINUTES`
 - `PAYMENT_RECONCILIATION_MAX_ORDERS_PER_PROVIDER`
+- `APPLE_IAP_BUNDLE_ID`, `APPLE_IAP_ISSUER_ID`, `APPLE_IAP_KEY_ID`
+  (required in production to enable real App Store Server API verification)
+- `APPLE_IAP_PRIVATE_KEY`, `APPLE_IAP_ROOT_CERTIFICATES_PEM`
+  (required in production; use the corresponding `_FILE` variants for multiline
+  secrets and Apple root cert bundles)
+- `APPLE_IAP_APPLE_ID` (required for production App Store notification verification;
+  keep `0` in local/test unless you are verifying production-signed payloads)
+- `APPLE_IAP_ENABLE_ONLINE_CHECKS` (optional; defaults to `true`)
+- `APPLE_IAP_DEFAULT_ENVIRONMENT` (optional; defaults to `production`; use
+  `sandbox` for local StoreKit sandbox-only setups)
+- `GOOGLE_PLAY_PACKAGE_NAME`, `GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL`
+  (required in production to enable Android Publisher purchase verification)
+- `GOOGLE_PLAY_SERVICE_ACCOUNT_PRIVATE_KEY`
+  (required in production; prefer `_FILE` in deployed environments)
+- `GOOGLE_PLAY_OAUTH_TOKEN_URL`
+  (optional; defaults to `https://oauth2.googleapis.com/token`)
+- `GOOGLE_PLAY_API_BASE_URL`
+  (optional; defaults to `https://androidpublisher.googleapis.com`)
+- `GOOGLE_PLAY_RTDN_BEARER_TOKEN`
+  (optional but recommended when Google RTDN is delivered through an authenticated push proxy)
 - `WALLET_RECONCILIATION_ENABLED`, `WALLET_RECONCILIATION_INTERVAL_MS`
 - `WALLET_RECONCILIATION_SLA_HOURS`
 - `WALLET_RECONCILIATION_SLACK_WEBHOOK_URL` (optional Slack incoming webhook for wallet drift alerts)

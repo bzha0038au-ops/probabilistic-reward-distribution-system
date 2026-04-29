@@ -54,6 +54,7 @@ export type AdminNavItemId =
   | "prizes"
   | "changeRequests"
   | "permissions"
+  | "economy"
   | "markets"
   | "finance"
   | "forum"
@@ -187,6 +188,11 @@ const NAV_ITEMS: Record<AdminNavItemId, AdminNavItem> = {
     href: "/permissions",
     labelKey: "workspace.items.permissions",
   },
+  economy: {
+    id: "economy",
+    href: "/economy",
+    labelKey: "workspace.items.economy",
+  },
   markets: {
     id: "markets",
     href: "/markets",
@@ -288,6 +294,9 @@ export const canAccessControlCenter = (admin: AdminAccessSession) =>
 export const canAccessFinance = (admin: AdminAccessSession) =>
   hasAnyPermission(admin, FINANCE_PAGE_PERMISSIONS)
 
+export const canAccessEconomy = (admin: AdminAccessSession) =>
+  canAccessFinance(admin)
+
 export const canAccessForum = (admin: AdminAccessSession) =>
   hasAnyPermission(admin, FORUM_PAGE_PERMISSIONS)
 
@@ -323,6 +332,7 @@ const hasFinanceMutationAccess = (admin: AdminAccessSession) =>
 
 const resolveFirstAccessibleRoute = (admin: AdminAccessSession) => {
   if (canAccessControlCenter(admin)) return NAV_ITEMS.config.href
+  if (canAccessEconomy(admin)) return NAV_ITEMS.economy.href
   if (canAccessFinance(admin)) return NAV_ITEMS.finance.href
   if (canAccessForum(admin)) return NAV_ITEMS.forum.href
   if (canAccessTables(admin)) return NAV_ITEMS.tables.href
@@ -424,7 +434,7 @@ export const buildAdminNavGroups = (
           {
             id: "consumer",
             labelKey: "workspace.groups.consumer",
-            items: [NAV_ITEMS.finance],
+            items: [NAV_ITEMS.finance, NAV_ITEMS.economy],
           },
         ]
       : []
@@ -495,6 +505,7 @@ export const buildAdminNavGroups = (
       labelKey: "workspace.groups.consumer",
       items: [
         canAccessFinance(admin) ? NAV_ITEMS.finance : null,
+        canAccessEconomy(admin) ? NAV_ITEMS.economy : null,
         canAccessForum(admin) ? NAV_ITEMS.forum : null,
         canAccessSecurity(admin) ? NAV_ITEMS.kyc : null,
         canAccessSecurity(admin) ? NAV_ITEMS.users : null,
@@ -567,6 +578,10 @@ export const canAccessAdminPath = (
 
   if (pathname === "/finance" || pathname.startsWith("/finance/")) {
     return canAccessFinance(admin)
+  }
+
+  if (pathname === "/economy" || pathname.startsWith("/economy/")) {
+    return canAccessEconomy(admin)
   }
 
   if (pathname === "/markets" || pathname.startsWith("/markets/")) {

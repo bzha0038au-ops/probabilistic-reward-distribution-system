@@ -34,6 +34,7 @@ import {
   prizes,
   quickEightRounds,
   systemConfig,
+  userAssetBalances,
   userWallets,
   users,
   withdrawals,
@@ -506,6 +507,19 @@ const seedUserWithWallet = async (params: {
     lockedBalance: params.lockedBalance ?? '0.00',
     wageredAmount: params.wageredAmount ?? '0.00',
   });
+
+  await database.insert(userAssetBalances).values([
+    {
+      userId: user.id,
+      assetCode: 'B_LUCK',
+      availableBalance: params.bonusBalance ?? '0.00',
+      lifetimeEarned: params.bonusBalance ?? '0.00',
+    },
+    {
+      userId: user.id,
+      assetCode: 'IAP_VOUCHER',
+    },
+  ]);
 
   await seedWalletLedger({
     userId: user.id,
@@ -1060,6 +1074,8 @@ export const describeIntegrationSuite = (name: string, register: () => void) => 
     }, INTEGRATION_HOOK_TIMEOUT_MS);
 
     beforeEach(async () => {
+      const { awaitHoldemAsyncWorkForTests } = await import('../modules/holdem/service');
+      await awaitHoldemAsyncWorkForTests();
       await resetDatabase();
       resetAuthNotificationCaptures();
       await resetSharedCaches();
@@ -1067,6 +1083,8 @@ export const describeIntegrationSuite = (name: string, register: () => void) => 
     }, INTEGRATION_HOOK_TIMEOUT_MS);
 
     afterAll(async () => {
+      const { awaitHoldemAsyncWorkForTests } = await import('../modules/holdem/service');
+      await awaitHoldemAsyncWorkForTests();
       await teardownRuntime();
     }, INTEGRATION_HOOK_TIMEOUT_MS);
 

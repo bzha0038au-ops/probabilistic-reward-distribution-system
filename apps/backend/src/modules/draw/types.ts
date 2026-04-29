@@ -65,7 +65,6 @@ export type DebitedDrawState = {
   walletAfterDebit: Decimal;
   userPoolBefore: Decimal;
   userPoolAfterDebit: Decimal;
-  bonusBefore: Decimal;
   wageredAfter: Decimal;
   pityStreakBefore: number;
 };
@@ -112,7 +111,6 @@ export type ResolvedDrawOutcome = {
   status: DrawStatus;
   rewardAmount: Decimal;
   prizeId: number | null;
-  bonusAfterReward: Decimal;
   payoutLimitReason: string | null;
 };
 export const DrawUserRowSchema = z.object({
@@ -122,7 +120,6 @@ export const DrawUserRowSchema = z.object({
   last_draw_at: z.union([z.string(), z.date()]).nullable(),
   last_win_at: z.union([z.string(), z.date()]).nullable(),
   withdrawable_balance: z.union([z.string(), z.number()]),
-  bonus_balance: z.union([z.string(), z.number()]),
   wagered_amount: z.union([z.string(), z.number()]),
 });
 

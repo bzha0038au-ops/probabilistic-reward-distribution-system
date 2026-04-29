@@ -131,6 +131,7 @@ export async function registerAdminControlRoutes(protectedRoutes: AppInstance) {
             metadata: {
               changeType: created.changeType,
               summary: created.summary,
+              reviewNotes: created.reason,
             },
           }),
         );
@@ -205,6 +206,7 @@ export async function registerAdminControlRoutes(protectedRoutes: AppInstance) {
             metadata: {
               changeType: created.changeType,
               summary: created.summary,
+              reviewNotes: created.reason,
             },
           }),
         );
@@ -273,6 +275,7 @@ export async function registerAdminControlRoutes(protectedRoutes: AppInstance) {
             metadata: {
               changeType: updated.changeType,
               summary: updated.summary,
+              reviewNotes: updated.reason,
             },
           }),
         );
@@ -326,6 +329,7 @@ export async function registerAdminControlRoutes(protectedRoutes: AppInstance) {
             metadata: {
               changeType: updated.changeType,
               summary: updated.summary,
+              reviewNotes: updated.reason,
             },
           }),
         );
@@ -394,6 +398,7 @@ export async function registerAdminControlRoutes(protectedRoutes: AppInstance) {
             metadata: {
               changeType: updated.changeType,
               summary: updated.summary,
+              reviewNotes: updated.reason,
             },
           }),
         );
@@ -467,6 +472,7 @@ export async function registerAdminControlRoutes(protectedRoutes: AppInstance) {
               fieldDiff: result.audit?.fieldDiff ?? [],
               changeRequestRequiresMfa: updated.requiresMfa,
               publishStepUpRequired: true,
+              reviewNotes: updated.reason,
             },
           }),
         );
@@ -565,6 +571,17 @@ export async function registerAdminControlRoutes(protectedRoutes: AppInstance) {
         );
       }
 
+      const parsed = parseSchema(CircuitBreakerSchema, toObject(request.body));
+      if (!parsed.isValid) {
+        return sendError(
+          reply,
+          400,
+          "Invalid request.",
+          parsed.errors,
+          API_ERROR_CODES.INVALID_REQUEST,
+        );
+      }
+
       try {
         const updated = await resetPaymentProviderCircuitBreaker({
           providerId,
@@ -578,6 +595,7 @@ export async function registerAdminControlRoutes(protectedRoutes: AppInstance) {
             targetId: providerId,
             metadata: {
               providerName: updated.name,
+              reason: parsed.data.reason,
             },
           }),
         );

@@ -16,7 +16,6 @@ import {
   serviceUnavailableError,
 } from "../../shared/errors";
 import {
-  getBonusReleaseConfig,
   getDrawCost,
   getDrawSystemConfig,
   getEconomyConfig,
@@ -171,7 +170,6 @@ const debitDrawCost = async (
 
   const walletBefore = toDecimal(user.withdrawable_balance ?? 0);
   const userPoolBefore = toDecimal(user.user_pool_balance ?? 0);
-  const bonusBefore = toDecimal(user.bonus_balance ?? 0);
   const wageredBefore = toDecimal(user.wagered_amount ?? 0);
   const pityStreakBefore = Number(user.pity_streak ?? 0);
   if (walletBefore.lt(drawCost)) {
@@ -218,78 +216,9 @@ const debitDrawCost = async (
     walletAfterDebit,
     userPoolBefore,
     userPoolAfterDebit,
-    bonusBefore,
     wageredAfter,
     pityStreakBefore,
   };
-};
-
-const applyAutoBonusRelease = async (params: {
-  tx: DbTransaction;
-  userId: number;
-  user: DrawUserRow;
-  bonusAfterReward: Decimal;
-  walletAfterDebit: Decimal;
-  wageredAfter: Decimal;
-}) => {
-  const { tx, userId, user, walletAfterDebit, wageredAfter } = params;
-  let { bonusAfterReward } = params;
-  const bonusReleaseConfig = await getBonusReleaseConfig(tx);
-  if (
-    bonusReleaseConfig.bonusAutoReleaseEnabled &&
-    bonusAfterReward.gt(0) &&
-    bonusReleaseConfig.bonusUnlockWagerRatio.gt(0)
-  ) {
-    const maxRelease = wageredAfter.div(
-      bonusReleaseConfig.bonusUnlockWagerRatio,
-    );
-    const releaseAmount = Decimal.min(
-      bonusAfterReward,
-      maxRelease,
-    ).toDecimalPlaces(2, Decimal.ROUND_FLOOR);
-
-    if (releaseAmount.gt(0)) {
-      const bonusAfterRelease = Decimal.max(
-        bonusAfterReward.minus(releaseAmount),
-        0,
-      );
-      const walletAfterRelease = walletAfterDebit.plus(releaseAmount);
-      const wageredAfterRelease = Decimal.max(
-        wageredAfter.minus(
-          releaseAmount.mul(bonusReleaseConfig.bonusUnlockWagerRatio),
-        ),
-        0,
-      );
-
-      await tx
-        .update(userWallets)
-        .set({
-          withdrawableBalance: toMoneyString(walletAfterRelease),
-          bonusBalance: toMoneyString(bonusAfterRelease),
-          wageredAmount: toMoneyString(wageredAfterRelease),
-          updatedAt: new Date(),
-        })
-        .where(eq(userWallets.userId, user.id));
-
-      await tx.insert(ledgerEntries).values({
-        userId,
-        entryType: "bonus_release_auto",
-        amount: toMoneyString(releaseAmount),
-        balanceBefore: toMoneyString(bonusAfterReward),
-        balanceAfter: toMoneyString(bonusAfterRelease),
-        referenceType: "bonus_release",
-        metadata: {
-          reason: "auto_release",
-          balanceType: "bonus",
-          unlockRatio: toMoneyString(bonusReleaseConfig.bonusUnlockWagerRatio),
-        },
-      });
-
-      bonusAfterReward = bonusAfterRelease;
-    }
-  }
-
-  return bonusAfterReward;
 };
 
 export type ExecuteDrawDependencies = {
@@ -368,7 +297,6 @@ export async function executeDrawInTransaction(
   const outcome = await resolveDrawOutcome({
     tx,
     userId,
-    user,
     drawState,
     selectionState,
     economy: config.economy,
@@ -383,15 +311,6 @@ export async function executeDrawInTransaction(
     drawCost: drawState.drawCost,
     rewardAmount: outcome.rewardAmount,
     prizeId: outcome.prizeId,
-  });
-
-  await applyAutoBonusRelease({
-    tx,
-    userId,
-    user,
-    bonusAfterReward: outcome.bonusAfterReward,
-    walletAfterDebit: drawState.walletAfterDebit,
-    wageredAfter: drawState.wageredAfter,
   });
 
   const pityStreakAfter = await updateUserDrawState({

@@ -29,6 +29,7 @@ import {
   authSessions,
   authTokens,
   deviceFingerprints,
+  economyLedgerEntries,
   freezeRecords,
   jurisdictionRules,
   kycProfiles,
@@ -605,17 +606,18 @@ describeIntegrationSuite('backend auth integration', () => {
 
     const [rewardLedger] = await getDb()
       .select({
-        entryType: ledgerEntries.entryType,
-        metadata: ledgerEntries.metadata,
+        entryType: economyLedgerEntries.entryType,
+        metadata: economyLedgerEntries.metadata,
       })
-      .from(ledgerEntries)
+      .from(economyLedgerEntries)
       .where(
         and(
-          eq(ledgerEntries.userId, referrer.id),
-          eq(ledgerEntries.entryType, 'gamification_reward'),
+          eq(economyLedgerEntries.userId, referrer.id),
+          eq(economyLedgerEntries.assetCode, 'B_LUCK'),
+          eq(economyLedgerEntries.entryType, 'gamification_reward'),
         ),
       )
-      .orderBy(desc(ledgerEntries.id))
+      .orderBy(desc(economyLedgerEntries.id))
       .limit(1);
 
     const rewardMetadata =

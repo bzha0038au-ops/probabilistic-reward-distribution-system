@@ -149,8 +149,8 @@ describe("PredictionMarketPortfolioPage", () => {
     });
 
     const item = await screen.findByTestId("markets-portfolio-item-71");
-    expect(within(item).getByText("Sold")).toBeInTheDocument();
-    expect(within(item).getByText(/^Sold:/)).toBeInTheDocument();
-    expect(item).toHaveTextContent("6.00");
+    expect(within(item).queryByText("Sold")).not.toBeNull();
+    expect(within(item).queryByText(/^Sold:/)).not.toBeNull();
+    expect(item.textContent ?? "").toContain("6.00");
   });
 });

@@ -37,9 +37,13 @@
 
 - `users` stores identity plus long-lived draw state such as `user_pool_balance`,
   `pity_streak`, `last_draw_at`, and `last_win_at`.
-- `user_wallets` stores operational balances: `withdrawable_balance`,
+- `user_wallets` stores legacy operational balances: `withdrawable_balance`,
   `bonus_balance`, `locked_balance`, and `wagered_amount`.
+- `user_asset_balances` stores assetized consumer-economy balances such as
+  `B_LUCK` and `IAP_VOUCHER`, including available vs locked states.
 - `ledger_entries` is the user-facing source of truth for balance history.
+- `economy_ledger_entries` is the user-facing source of truth for assetized
+  consumer-economy balance history.
 - `house_account` holds prize pool, bankroll, reserve, and marketing balances.
 - `house_transactions` mirrors all house-side balance movements.
 
@@ -88,7 +92,8 @@ Operational values are stored in `system_config` with numeric precision:
 3. Load cached probability pool, apply weights/jitter/EV guard, and pick a candidate
 4. Lock the selected prize row and validate eligibility (stock, thresholds, budgets, payout limits)
 5. Decrement stock
-6. Credit reward into `user_wallets.bonus_balance` and write a reward ledger entry
+6. Credit reward into `user_asset_balances(B_LUCK)` and write an
+   `economy_ledger_entries` reward entry
 7. Update `house_account.prize_pool_balance` and persist `house_transactions`
 8. Record draw history with fairness, payout-control, and probability metadata
 

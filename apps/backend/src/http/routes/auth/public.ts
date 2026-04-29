@@ -26,7 +26,6 @@ import {
   revokeOutstandingAuthTokens,
 } from "../../../modules/auth/token-service";
 import { countAuthEventsByIp } from "../../../modules/audit/service";
-import { grantBonus } from "../../../modules/bonus/service";
 import { recordAdminAction } from "../../../modules/admin/audit";
 import {
   verifyAdminMfaBreakGlassCode,
@@ -38,6 +37,7 @@ import {
   getCurrentLegalAcceptanceStateForUser,
   recordLegalAcceptancesInTransaction,
 } from "../../../modules/legal/service";
+import { creditAsset } from "../../../modules/economy/service";
 import {
   ensureUserFreeze,
   isUserFrozen,
@@ -315,12 +315,17 @@ export async function registerAuthPublicRoutes(app: AppInstance) {
           rewardConfig.signupAmount,
         );
         if (budget.allowed) {
-          await grantBonus({
+          await creditAsset({
             userId: user.id,
+            assetCode: "B_LUCK",
             amount: rewardConfig.signupAmount.toString(),
             entryType: "signup_bonus",
             referenceType: "reward_event",
-            metadata: { reason: "signup_bonus" },
+            audit: {
+              sourceApp: "backend.auth",
+              idempotencyKey: `reward:signup:${user.id}`,
+              metadata: { reason: "signup_bonus" },
+            },
           });
         }
       }

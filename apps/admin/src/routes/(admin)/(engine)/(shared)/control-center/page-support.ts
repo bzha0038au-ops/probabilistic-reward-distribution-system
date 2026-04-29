@@ -23,6 +23,14 @@ export interface AnalyticsSummary {
 export interface SystemConfig {
   poolBalance: string
   drawCost: string
+  maintenanceMode: boolean
+  registrationEnabled: boolean
+  loginEnabled: boolean
+  drawEnabled: boolean
+  paymentDepositEnabled: boolean
+  paymentWithdrawEnabled: boolean
+  antiAbuseAutoFreezeEnabled: boolean
+  withdrawRiskNewCardFirstWithdrawalReviewEnabled: boolean
   weightJitterEnabled: boolean
   weightJitterPct: string
   bonusAutoReleaseEnabled: boolean
@@ -194,6 +202,14 @@ export function createConfigForm() {
   return {
     poolBalance: "0",
     drawCost: "0",
+    maintenanceMode: false,
+    registrationEnabled: true,
+    loginEnabled: true,
+    drawEnabled: true,
+    paymentDepositEnabled: true,
+    paymentWithdrawEnabled: true,
+    antiAbuseAutoFreezeEnabled: true,
+    withdrawRiskNewCardFirstWithdrawalReviewEnabled: true,
     weightJitterEnabled: false,
     weightJitterPct: "0.05",
     bonusAutoReleaseEnabled: false,

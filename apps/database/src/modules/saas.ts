@@ -391,15 +391,24 @@ export const saasDrawRecords = pgTable(
     projectPlayerCreatedIdx: index(
       "saas_draw_records_project_player_created_idx",
     ).on(table.projectId, table.playerId, table.createdAt),
+    projectPlayerEnvironmentCreatedIdx: index(
+      "saas_draw_records_project_player_env_created_idx",
+    ).on(table.projectId, table.playerId, table.environment, table.createdAt),
     projectStatusCreatedIdx: index(
       "saas_draw_records_project_status_created_idx",
     ).on(table.projectId, table.status, table.createdAt),
     projectAgentCreatedIdx: index(
       "saas_draw_records_project_agent_created_idx",
     ).on(table.projectId, table.agentId, table.createdAt),
+    projectEnvironmentAgentCreatedIdx: index(
+      "saas_draw_records_project_env_agent_created_idx",
+    ).on(table.projectId, table.environment, table.agentId, table.createdAt),
     projectGroupCreatedIdx: index(
       "saas_draw_records_project_group_created_idx",
     ).on(table.projectId, table.groupId, table.createdAt),
+    projectEnvironmentGroupCreatedIdx: index(
+      "saas_draw_records_project_env_group_created_idx",
+    ).on(table.projectId, table.environment, table.groupId, table.createdAt),
   }),
 );
 

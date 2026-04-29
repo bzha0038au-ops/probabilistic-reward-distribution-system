@@ -11,6 +11,7 @@
     SaasOverview,
     SaasTenantProvisioning,
   } from "@reward/shared-types/saas"
+  import { saasProjectStrategyValues } from "@reward/shared-types/saas"
   import { getContext } from "svelte"
   import { saasActionPolicies } from "./action-policies"
 
@@ -672,8 +673,9 @@
         </div>
         <div class="grid grid-cols-2 gap-3">
           <select class="select select-bordered w-full" name="strategy">
-            <option value="weighted_gacha">weighted_gacha</option>
-            <option value="epsilon_greedy">epsilon_greedy</option>
+            {#each saasProjectStrategyValues as strategy}
+              <option value={strategy}>{strategy}</option>
+            {/each}
           </select>
           <input
             class="input input-bordered w-full"
@@ -1115,7 +1117,9 @@
                     <input
                       class="input input-bordered input-sm w-full"
                       name="baseMonthlyFee"
-                      placeholder={t("saas.tenantsSection.baseMonthlyPlaceholder")}
+                      placeholder={t(
+                        "saas.tenantsSection.baseMonthlyPlaceholder",
+                      )}
                       value={item.billing?.baseMonthlyFee ?? "0"}
                     />
                     <input
@@ -1129,7 +1133,9 @@
                     <input
                       class="input input-bordered input-sm w-full"
                       name="decisionRejectFee"
-                      placeholder={t("saas.tenantsSection.decisionRejectPlaceholder")}
+                      placeholder={t(
+                        "saas.tenantsSection.decisionRejectPlaceholder",
+                      )}
                       value={item.billing?.decisionPricing.reject ??
                         item.billing?.drawFee ??
                         "0.0000"}
@@ -1137,7 +1143,9 @@
                     <input
                       class="input input-bordered input-sm w-full"
                       name="decisionMuteFee"
-                      placeholder={t("saas.tenantsSection.decisionMutePlaceholder")}
+                      placeholder={t(
+                        "saas.tenantsSection.decisionMutePlaceholder",
+                      )}
                       value={item.billing?.decisionPricing.mute ??
                         item.billing?.drawFee ??
                         "0.0000"}
@@ -1145,7 +1153,9 @@
                     <input
                       class="input input-bordered input-sm w-full"
                       name="decisionPayoutFee"
-                      placeholder={t("saas.tenantsSection.decisionPayoutPlaceholder")}
+                      placeholder={t(
+                        "saas.tenantsSection.decisionPayoutPlaceholder",
+                      )}
                       value={item.billing?.decisionPricing.payout ??
                         item.billing?.drawFee ??
                         "0.0000"}
@@ -1307,7 +1317,11 @@
                         )}</span
                       >
                       <form method="post" action="?/unlinkTenant">
-                        <input type="hidden" name="totpCode" value={stepUpCode} />
+                        <input
+                          type="hidden"
+                          name="totpCode"
+                          value={stepUpCode}
+                        />
                         <input type="hidden" name="linkId" value={link.id} />
                         <button class="btn btn-xs btn-ghost text-rose-600"
                           >{t("saas.tenantsSection.unlink")}</button
@@ -1849,7 +1863,9 @@
 
   <section class="grid gap-6 xl:grid-cols-2">
     <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-      <h2 class="text-lg font-semibold">{t("saas.membershipsSection.title")}</h2>
+      <h2 class="text-lg font-semibold">
+        {t("saas.membershipsSection.title")}
+      </h2>
       <div class="mt-4 space-y-2">
         {#each memberships as membership}
           <div
@@ -1860,7 +1876,9 @@
                 {membership.adminEmail ?? `admin#${membership.adminId}`}
               </p>
               <p class="text-slate-500">
-                {tenantName(membership.tenantId)} · {translateRole(membership.role)}
+                {tenantName(membership.tenantId)} · {translateRole(
+                  membership.role,
+                )}
               </p>
             </div>
             <form method="post" action="?/deleteMembership">
@@ -1894,7 +1912,8 @@
                 {translateInviteStatus(invite.status)}
               </p>
               <p class="text-slate-400">
-                {t("saas.invitesSection.expires")} {formatDate(invite.expiresAt)}
+                {t("saas.invitesSection.expires")}
+                {formatDate(invite.expiresAt)}
               </p>
             </div>
             {#if invite.status === "pending"}
@@ -1929,7 +1948,8 @@
                   {apiKey.scopes.join(", ")}
                 </p>
                 <p class="mt-1 text-xs text-slate-400">
-                  {t("saas.apiKeysSection.expires")} {formatDate(apiKey.expiresAt)}
+                  {t("saas.apiKeysSection.expires")}
+                  {formatDate(apiKey.expiresAt)}
                 </p>
                 {#if apiKey.rotatedToApiKeyId}
                   <p class="mt-1 text-xs text-sky-600">
@@ -1943,7 +1963,8 @@
                 {/if}
                 {#if apiKey.lastUsedAt}
                   <p class="mt-1 text-xs text-slate-400">
-                    {t("saas.apiKeysSection.lastUsed")} {formatDate(apiKey.lastUsedAt)}
+                    {t("saas.apiKeysSection.lastUsed")}
+                    {formatDate(apiKey.lastUsedAt)}
                   </p>
                 {/if}
                 {#if apiKey.apiRateLimitUsage}
@@ -2003,7 +2024,9 @@
                     <input
                       class="input input-bordered input-xs w-full"
                       name="reason"
-                      placeholder={t("saas.apiKeysSection.rotationReasonPlaceholder")}
+                      placeholder={t(
+                        "saas.apiKeysSection.rotationReasonPlaceholder",
+                      )}
                     />
                     <button class="btn btn-xs btn-secondary w-full"
                       >{t("saas.apiKeysSection.rotate")}</button
@@ -2020,7 +2043,9 @@
                     <input
                       class="input input-bordered input-xs w-full"
                       name="reason"
-                      placeholder={t("saas.apiKeysSection.revokeReasonPlaceholder")}
+                      placeholder={t(
+                        "saas.apiKeysSection.revokeReasonPlaceholder",
+                      )}
                     />
                     <button class="btn btn-xs btn-ghost text-rose-600 w-full"
                       >{t("saas.apiKeysSection.revoke")}</button
@@ -2103,7 +2128,9 @@
 
   <section class="grid gap-6 xl:grid-cols-2">
     <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-      <h2 class="text-lg font-semibold">{t("saas.billingRunsSection.title")}</h2>
+      <h2 class="text-lg font-semibold">
+        {t("saas.billingRunsSection.title")}
+      </h2>
       <div class="mt-4 space-y-3">
         {#each billingRuns as billingRun}
           <div class="rounded-2xl border border-slate-200 p-4">
@@ -2214,15 +2241,22 @@
           <div class="rounded-2xl border border-slate-200 p-4 text-sm">
             <div class="flex items-center justify-between gap-3">
               <p class="font-medium text-slate-900">{event.eventType}</p>
-              <span class="badge badge-outline">{humanizeCode(event.status)}</span>
+              <span class="badge badge-outline"
+                >{humanizeCode(event.status)}</span
+              >
             </div>
             <p class="mt-1 text-slate-500">
-              {t("saas.webhookQueueSection.event")} {event.eventId}
+              {t("saas.webhookQueueSection.event")}
+              {event.eventId}
             </p>
             <p class="mt-1 text-slate-500">
-              {t("saas.webhookQueueSection.tenant")} {event.tenantId ?? "—"} ·
-              {t("saas.webhookQueueSection.billingRun")} {event.billingRunId ??
-                "—"} · {t("saas.webhookQueueSection.attempts")} {event.attempts}
+              {t("saas.webhookQueueSection.tenant")}
+              {event.tenantId ?? "—"} ·
+              {t("saas.webhookQueueSection.billingRun")}
+              {event.billingRunId ?? "—"} · {t(
+                "saas.webhookQueueSection.attempts",
+              )}
+              {event.attempts}
             </p>
             <p class="mt-1 text-slate-400">
               {t("saas.webhookQueueSection.next")}
@@ -2263,10 +2297,13 @@
                 </p>
                 <p class="text-slate-500">
                   {humanizeCode(delivery.eventType)} ·
-                  {t("saas.outboundDeliveriesSection.event")} {delivery.eventId}
+                  {t("saas.outboundDeliveriesSection.event")}
+                  {delivery.eventId}
                 </p>
               </div>
-              <span class="badge badge-outline">{humanizeCode(delivery.status)}</span>
+              <span class="badge badge-outline"
+                >{humanizeCode(delivery.status)}</span
+              >
             </div>
             <p class="mt-2 text-slate-500">
               {t("saas.outboundDeliveriesSection.webhook")} #{delivery.webhookId}
@@ -2343,8 +2380,10 @@
               {#if usage.decisionType}
                 · {humanizeCode(usage.decisionType)}
               {/if}
-              · {t("saas.recentUsageSection.units")} {usage.units} ·
-              {t("saas.recentUsageSection.amount")} {usage.amount}
+              · {t("saas.recentUsageSection.units")}
+              {usage.units} ·
+              {t("saas.recentUsageSection.amount")}
+              {usage.amount}
               {usage.currency}
             </p>
             <p class="text-slate-400">{formatDate(usage.createdAt)}</p>
@@ -2363,7 +2402,8 @@
   bind:breakGlassCode
   breakGlassLabel={t("login.breakGlassCode")}
   breakGlassPlaceholder={t("login.breakGlassPlaceholder")}
-  confirmLabel={activeBreakGlassPolicy?.confirmLabel ?? t("saas.confirmDialog.confirm")}
+  confirmLabel={activeBreakGlassPolicy?.confirmLabel ??
+    t("saas.confirmDialog.confirm")}
   cancelLabel={t("saas.confirmDialog.cancel")}
   error={breakGlassError}
   stepUpHint={breakGlassStepUpHint}

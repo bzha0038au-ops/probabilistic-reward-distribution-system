@@ -19,6 +19,15 @@ import {
   DrawRequestSchema,
 } from "@reward/shared-types/draw";
 import {
+  CreateGiftRequestSchema,
+  EconomyLedgerQuerySchema,
+  GiftPackCatalogListQuerySchema,
+  GiftPackPurchaseCompleteRequestSchema,
+  GiftListQuerySchema,
+  IapProductListQuerySchema,
+  VerifyIapPurchaseRequestSchema,
+} from "@reward/shared-types/economy";
+import {
   PlayModeGameKeySchema,
   PlayModeRequestSchema,
 } from "@reward/shared-types/play-mode";
@@ -38,8 +47,20 @@ import {
 } from "@reward/shared-types/notification";
 
 import {
+  getGiftEnergyAccount,
+  listEconomyLedgerEntries,
+  listGiftTransfers,
+  transferAssetGift,
+} from "../../modules/economy/service";
+import {
+  listIapProducts,
+  listGiftPackCatalog,
+  completeGiftPackPurchase,
+  verifyIapPurchase,
+} from "../../modules/economy/iap-service";
+import {
   getTransactionHistory,
-  getWalletBalance,
+  getWalletOverview,
 } from "../../modules/wallet/service";
 import {
   executeDraw,
@@ -178,6 +199,7 @@ const financeRateLimit = {
 };
 let userDrawLimiter: ReturnType<typeof createRateLimiter> | null = null;
 let userFinanceLimiter: ReturnType<typeof createRateLimiter> | null = null;
+const DEFAULT_GIFT_ENERGY_COST = 1;
 
 const getUserDrawLimiter = () => {
   if (!userDrawLimiter) {
@@ -292,6 +314,18 @@ const resolveRequestDeviceFingerprint = (request: FastifyRequest) =>
     request.headers as Record<string, unknown>,
     "x-device-fingerprint",
   );
+
+const resolveSourceApp = (request: FastifyRequest) =>
+  readHeaderValue(
+    request.headers as Record<string, unknown>,
+    "x-source-app",
+  ) ??
+  readHeaderValue(
+    request.headers as Record<string, unknown>,
+    "x-client-platform",
+  );
+
+const resolveRequestIp = (request: FastifyRequest) => request.ip ?? null;
 
 const captureUserEntrypointFingerprint = async (
   request: FastifyRequest,
@@ -428,9 +462,169 @@ export async function registerUserRoutes(app: AppInstance) {
 
     protectedRoutes.get("/wallet", async (request, reply) => {
       const user = request.user!;
-      const balance = await getWalletBalance(user.userId);
-      return sendSuccess(reply, { balance });
+      const wallet = await getWalletOverview(user.userId);
+      return sendSuccess(reply, wallet);
     });
+
+    protectedRoutes.get("/economy/ledger", async (request, reply) => {
+      const user = request.user!;
+      const parsed = parseSchema(
+        EconomyLedgerQuerySchema,
+        toObject(request.query),
+      );
+      if (!parsed.isValid) {
+        return sendError(reply, 400, "Invalid request.", parsed.errors);
+      }
+
+      const entries = await listEconomyLedgerEntries(
+        user.userId,
+        {
+          limit: parsed.data.limit,
+          assetCode: parsed.data.assetCode,
+        },
+      );
+      return sendSuccess(reply, entries);
+    });
+
+    protectedRoutes.get("/gift-energy", async (request, reply) => {
+      const user = request.user!;
+      const energy = await getGiftEnergyAccount(user.userId);
+      return sendSuccess(reply, energy);
+    });
+
+    protectedRoutes.get("/gifts", async (request, reply) => {
+      const user = request.user!;
+      const parsed = parseSchema(
+        GiftListQuerySchema,
+        toObject(request.query),
+      );
+      if (!parsed.isValid) {
+        return sendError(reply, 400, "Invalid request.", parsed.errors);
+      }
+
+      const transfers = await listGiftTransfers(user.userId, {
+        direction: parsed.data.direction,
+        limit: parsed.data.limit,
+      });
+      return sendSuccess(reply, transfers);
+    });
+
+    protectedRoutes.post("/gifts", async (request, reply) => {
+      const user = request.user!;
+      const parsed = parseSchema(
+        CreateGiftRequestSchema,
+        toObject(request.body),
+      );
+      if (!parsed.isValid) {
+        return sendError(reply, 400, "Invalid request.", parsed.errors);
+      }
+
+      const transfer = await transferAssetGift({
+        senderUserId: user.userId,
+        receiverUserId: parsed.data.receiverUserId,
+        assetCode: "B_LUCK",
+        amount: parsed.data.amount,
+        energyCost: DEFAULT_GIFT_ENERGY_COST,
+        idempotencyKey: parsed.data.idempotencyKey,
+        audit: {
+          sourceApp: resolveSourceApp(request),
+          deviceFingerprint: resolveRequestDeviceFingerprint(request),
+          metadata: {
+            route: "user_gifts_create",
+            requestIp: resolveRequestIp(request),
+          },
+        },
+      });
+
+      const { replayed: _replayed, ...record } = transfer;
+      return sendSuccess(reply, record, 201);
+    });
+
+    protectedRoutes.get("/iap/products", async (request, reply) => {
+      const parsed = parseSchema(
+        IapProductListQuerySchema,
+        toObject(request.query),
+      );
+      if (!parsed.isValid) {
+        return sendError(reply, 400, "Invalid request.", parsed.errors);
+      }
+
+      const products = await listIapProducts({
+        storeChannel: parsed.data.storeChannel,
+        deliveryType: parsed.data.deliveryType,
+      });
+      return sendSuccess(reply, products);
+    });
+
+    protectedRoutes.get("/gift-packs/catalog", async (request, reply) => {
+      const parsed = parseSchema(
+        GiftPackCatalogListQuerySchema,
+        toObject(request.query),
+      );
+      if (!parsed.isValid) {
+        return sendError(reply, 400, "Invalid request.", parsed.errors);
+      }
+
+      const catalog = await listGiftPackCatalog({
+        storeChannel: parsed.data.storeChannel,
+      });
+      return sendSuccess(reply, catalog);
+    });
+
+    protectedRoutes.post("/iap/purchases/verify", async (request, reply) => {
+      const user = request.user!;
+      const parsed = parseSchema(
+        VerifyIapPurchaseRequestSchema,
+        toObject(request.body),
+      );
+      if (!parsed.isValid) {
+        return sendError(reply, 400, "Invalid request.", parsed.errors);
+      }
+
+      const result = await verifyIapPurchase({
+        userId: user.userId,
+        request: parsed.data,
+        audit: {
+          sourceApp: resolveSourceApp(request),
+          deviceFingerprint: resolveRequestDeviceFingerprint(request),
+          metadata: {
+            route: "user_iap_purchase_verify",
+            requestIp: resolveRequestIp(request),
+          },
+        },
+      });
+
+      return sendSuccess(reply, result, result.replayed ? 200 : 201);
+    });
+
+    protectedRoutes.post(
+      "/gift-packs/purchase/complete",
+      async (request, reply) => {
+        const user = request.user!;
+        const parsed = parseSchema(
+          GiftPackPurchaseCompleteRequestSchema,
+          toObject(request.body),
+        );
+        if (!parsed.isValid) {
+          return sendError(reply, 400, "Invalid request.", parsed.errors);
+        }
+
+        const result = await completeGiftPackPurchase({
+          userId: user.userId,
+          request: parsed.data,
+          audit: {
+            sourceApp: resolveSourceApp(request),
+            deviceFingerprint: resolveRequestDeviceFingerprint(request),
+            metadata: {
+              route: "user_gift_pack_purchase_complete",
+              requestIp: resolveRequestIp(request),
+            },
+          },
+        });
+
+        return sendSuccess(reply, result, result.replayed ? 200 : 201);
+      },
+    );
 
     protectedRoutes.get("/transactions", async (request, reply) => {
       const user = request.user!;

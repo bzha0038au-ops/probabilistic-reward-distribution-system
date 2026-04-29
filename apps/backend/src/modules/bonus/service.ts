@@ -1,20 +1,13 @@
-import { eq, sql } from '@reward/database/orm';
-import Decimal from 'decimal.js';
+import { API_ERROR_CODES } from '@reward/shared-types/api';
+import type { AssetCode } from '@reward/shared-types/economy';
 
 import { db } from '../../db';
-import { ledgerEntries, userWallets } from '@reward/database';
 import type { DbClient, DbTransaction } from '../../db';
-import {
-  conflictError,
-  persistenceError,
-  unprocessableEntityError,
-} from '../../shared/errors';
-import { toJsonbLiteral } from '../../shared/jsonb';
-import { toDecimal, toMoneyString } from '../../shared/money';
-import { readSqlRows } from '../../shared/sql-result';
-import { assertWalletLedgerInvariant } from '../wallet/invariant-service';
+import { conflictError } from '../../shared/errors';
+import { creditAsset } from '../economy/service';
 
 type DbExecutor = DbClient | DbTransaction;
+const EARNED_ASSET_CODE: AssetCode = 'B_LUCK';
 
 export async function grantBonus(
   payload: {
@@ -27,150 +20,35 @@ export async function grantBonus(
   },
   executor: DbExecutor = db
 ) {
-  const run = async (tx: DbExecutor) => {
-    const walletResult = await tx.execute(sql`
-      SELECT user_id,
-             bonus_balance
-      FROM ${userWallets}
-      WHERE ${userWallets.userId} = ${payload.userId}
-      FOR UPDATE
-    `);
-
-    const wallet = readSqlRows<{
-      user_id: number;
-      bonus_balance: string | number;
-    }>(walletResult)[0];
-    if (!wallet) {
-      throw persistenceError('Wallet not found.');
-    }
-
-    const amount = toDecimal(payload.amount);
-    if (amount.lte(0)) {
-      throw unprocessableEntityError('Bonus amount must be greater than 0.');
-    }
-
-    const bonusBefore = toDecimal(wallet.bonus_balance ?? 0);
-    const bonusAfter = bonusBefore.plus(amount);
-
-    await tx
-      .update(userWallets)
-      .set({
-        bonusBalance: toMoneyString(bonusAfter),
-        updatedAt: new Date(),
-      })
-      .where(eq(userWallets.userId, wallet.user_id));
-
-    await tx.insert(ledgerEntries).values({
-      userId: wallet.user_id,
+  return creditAsset(
+    {
+      userId: payload.userId,
+      assetCode: EARNED_ASSET_CODE,
+      amount: payload.amount,
       entryType: payload.entryType,
-      amount: toMoneyString(amount),
-      balanceBefore: toMoneyString(bonusBefore),
-      balanceAfter: toMoneyString(bonusAfter),
       referenceType: payload.referenceType ?? null,
       referenceId: payload.referenceId ?? null,
-      metadata:
-        payload.metadata === undefined || payload.metadata === null
-          ? null
-          : toJsonbLiteral(payload.metadata),
-    });
-
-    return {
-      userId: wallet.user_id,
-      bonusBefore: toMoneyString(bonusBefore),
-      bonusAfter: toMoneyString(bonusAfter),
-    };
-  };
-
-  if (executor === db) {
-    return db.transaction(async (tx) => {
-      const result = await run(tx);
-      await assertWalletLedgerInvariant(tx, payload.userId, {
-        service: 'bonus',
-        operation: 'grantBonus',
-      });
-      return result;
-    });
-  }
-  return run(executor);
+      audit: {
+        sourceApp: 'backend.legacy_bonus',
+        metadata: {
+          ...(payload.metadata ?? {}),
+          legacyBridge: 'grantBonus',
+        },
+      },
+    },
+    executor,
+  );
 }
 
 export async function releaseBonusManual(payload: {
   userId: number;
   amount?: string | number | null;
 }) {
-  return db.transaction(async (tx) => {
-    const walletResult = await tx.execute(sql`
-      SELECT user_id,
-             withdrawable_balance,
-             bonus_balance
-      FROM ${userWallets}
-      WHERE ${userWallets.userId} = ${payload.userId}
-      FOR UPDATE
-    `);
-
-    const wallet = readSqlRows<{
-      user_id: number;
-      withdrawable_balance: string | number;
-      bonus_balance: string | number;
-    }>(walletResult)[0];
-    if (!wallet) {
-      throw persistenceError('Wallet not found.');
-    }
-
-    const bonusBefore = toDecimal(wallet.bonus_balance ?? 0);
-    if (bonusBefore.lte(0)) {
-      throw conflictError('No bonus balance to release.');
-    }
-
-    let releaseAmount =
-      payload.amount !== undefined && payload.amount !== null
-        ? toDecimal(payload.amount)
-        : bonusBefore;
-
-    if (releaseAmount.lte(0)) {
-      throw unprocessableEntityError('Release amount must be greater than 0.');
-    }
-
-    if (releaseAmount.gt(bonusBefore)) {
-      releaseAmount = bonusBefore;
-    }
-
-    const withdrawableBefore = toDecimal(wallet.withdrawable_balance ?? 0);
-    const withdrawableAfter = withdrawableBefore.plus(releaseAmount);
-    const bonusAfter = Decimal.max(bonusBefore.minus(releaseAmount), 0);
-
-    await tx
-      .update(userWallets)
-      .set({
-        withdrawableBalance: toMoneyString(withdrawableAfter),
-        bonusBalance: toMoneyString(bonusAfter),
-        updatedAt: new Date(),
-      })
-      .where(eq(userWallets.userId, wallet.user_id));
-
-    await tx.insert(ledgerEntries).values({
-      userId: wallet.user_id,
-      entryType: 'bonus_release_manual',
-      amount: toMoneyString(releaseAmount),
-      balanceBefore: toMoneyString(bonusBefore),
-      balanceAfter: toMoneyString(bonusAfter),
-      referenceType: 'bonus_release',
-      metadata: { reason: 'manual_release', balanceType: 'bonus' },
-    });
-
-    const result = {
-      userId: wallet.user_id,
-      released: toMoneyString(releaseAmount),
-      bonusBefore: toMoneyString(bonusBefore),
-      bonusAfter: toMoneyString(bonusAfter),
-      withdrawableAfter: toMoneyString(withdrawableAfter),
-    };
-
-    await assertWalletLedgerInvariant(tx, payload.userId, {
-      service: 'bonus',
-      operation: 'releaseBonusManual',
-    });
-
-    return result;
-  });
+  void payload;
+  throw conflictError(
+    'Legacy bonus release is disabled under the B luck economy model.',
+    {
+      code: API_ERROR_CODES.LEGACY_BONUS_RELEASE_DISABLED,
+    },
+  );
 }

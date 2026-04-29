@@ -11,7 +11,6 @@ vi.mock('../../db', () => ({
 }));
 
 vi.mock('../system/service', () => ({
-  getBonusReleaseConfig: vi.fn(),
   getDrawCost: vi.fn(),
   getDrawSystemConfig: vi.fn(),
   getEconomyConfig: vi.fn(),
@@ -57,7 +56,6 @@ import { logger } from '../../shared/logger';
 import { ensureFairnessSeed } from '../fairness/service';
 import { assertKycStakeAllowed } from '../kyc/service';
 import {
-  getBonusReleaseConfig,
   getDrawCost,
   getDrawSystemConfig,
   getEconomyConfig,
@@ -161,7 +159,6 @@ const makeDrawUser = (): DrawUserRow => ({
   last_draw_at: null,
   last_win_at: null,
   withdrawable_balance: '100.00',
-  bonus_balance: '0.00',
   wagered_amount: '0.00',
 });
 
@@ -260,7 +257,6 @@ const makeOutcome = (): ResolvedDrawOutcome => ({
   status: 'won',
   rewardAmount: new Decimal(5),
   prizeId: 7,
-  bonusAfterReward: new Decimal(5),
   payoutLimitReason: null,
 });
 
@@ -302,10 +298,6 @@ describe('executeDrawInTransaction', () => {
 
     mockConfigBundle(config);
     vi.mocked(getDrawCost).mockResolvedValue(new Decimal(10));
-    vi.mocked(getBonusReleaseConfig).mockResolvedValue({
-      bonusAutoReleaseEnabled: true,
-      bonusUnlockWagerRatio: new Decimal(2),
-    });
     vi.mocked(ensureFairnessSeed).mockResolvedValue(fairnessSeed);
     vi.mocked(loadLockedDrawUser).mockResolvedValue(user);
     vi.mocked(prepareDrawSelection).mockResolvedValue(selectionState);
@@ -342,7 +334,19 @@ describe('executeDrawInTransaction', () => {
       expect.objectContaining({
         tx,
         userId: 123,
-        user,
+        drawState: expect.objectContaining({
+          drawCost: new Decimal(10),
+          drawCostBase: new Decimal(10),
+          walletAfterDebit: new Decimal(90),
+          userPoolBefore: new Decimal(0),
+          userPoolAfterDebit: new Decimal(10),
+          wageredAfter: new Decimal(10),
+          pityStreakBefore: 0,
+        }),
+        selectionState,
+        economy: config.economy,
+        poolSystem: config.poolSystem,
+        payoutControl: config.payoutControl,
         now,
       })
     );
@@ -384,9 +388,9 @@ describe('executeDrawInTransaction', () => {
 
     expect(state.insertedWallets).toEqual([{ userId: 123 }]);
     expect(state.wallet).toEqual({
-      withdrawableBalance: '95.00',
+      withdrawableBalance: '90.00',
       bonusBalance: '0.00',
-      wageredAmount: '0.00',
+      wageredAmount: '10.00',
       updatedAt: expect.any(Date),
     });
     expect(state.user).toEqual({
@@ -402,19 +406,6 @@ describe('executeDrawInTransaction', () => {
         balanceAfter: '90.00',
         referenceType: 'draw',
         metadata: { reason: 'draw_cost' },
-      }),
-      expect.objectContaining({
-        userId: 123,
-        entryType: 'bonus_release_auto',
-        amount: '5.00',
-        balanceBefore: '5.00',
-        balanceAfter: '0.00',
-        referenceType: 'bonus_release',
-        metadata: {
-          reason: 'auto_release',
-          balanceType: 'bonus',
-          unlockRatio: '2.00',
-        },
       }),
     ]);
   });

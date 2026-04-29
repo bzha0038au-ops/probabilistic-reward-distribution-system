@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS "holdem_table_seats" (
   "table_id" integer NOT NULL,
   "seat_index" integer NOT NULL,
   "user_id" integer NOT NULL,
+  "linked_group_id" varchar(128),
   "stack_amount" numeric(14, 2) DEFAULT '0' NOT NULL,
   "committed_amount" numeric(14, 2) DEFAULT '0' NOT NULL,
   "total_committed_amount" numeric(14, 2) DEFAULT '0' NOT NULL,
@@ -50,10 +51,10 @@ CREATE INDEX IF NOT EXISTS "holdem_tables_created_idx" ON "holdem_tables" ("crea
 --> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "holdem_table_seats_table_seat_unique" ON "holdem_table_seats" ("table_id","seat_index");
 --> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "holdem_table_seats_user_unique" ON "holdem_table_seats" ("user_id");
+CREATE UNIQUE INDEX IF NOT EXISTS "holdem_table_seats_user_solo_unique" ON "holdem_table_seats" ("user_id") WHERE "linked_group_id" IS NULL;
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "holdem_table_seats_table_status_idx" ON "holdem_table_seats" ("table_id","status","updated_at");
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "holdem_table_seats_status_turn_deadline_idx" ON "holdem_table_seats" ("status","turn_deadline_at");
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "holdem_table_seats_user_table_idx" ON "holdem_table_seats" ("user_id","table_id");
+CREATE UNIQUE INDEX IF NOT EXISTS "holdem_table_seats_user_table_unique" ON "holdem_table_seats" ("user_id","table_id");

@@ -1,0 +1,38 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: reward-digest
+  group_by:
+    - alertname
+    - service
+    - severity
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - matchers:
+        - severity="page"
+      receiver: reward-page
+    - matchers:
+        - severity="ticket"
+      receiver: reward-ticket
+    - matchers:
+        - notification_channel="tg-ticket-chat"
+      receiver: reward-ticket
+
+receivers:
+  - name: reward-page
+    webhook_configs:
+      - url: "http://backend:4000/internal/alert-relay"
+        send_resolved: true
+
+  - name: reward-ticket
+    webhook_configs:
+      - url: "http://backend:4000/internal/alert-relay"
+        send_resolved: true
+
+  - name: reward-digest
+    webhook_configs:
+      - url: "http://backend:4000/internal/alert-relay"
+        send_resolved: true

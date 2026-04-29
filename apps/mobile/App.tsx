@@ -60,8 +60,10 @@ import {
 } from "./src/hooks/use-auth-flow";
 import { useBlackjack } from "./src/hooks/use-blackjack";
 import { useDraw } from "./src/hooks/use-draw";
+import { useEconomy } from "./src/hooks/use-economy";
 import { useFairness } from "./src/hooks/use-fairness";
 import { useHoldem } from "./src/hooks/use-holdem";
+import { useIap } from "./src/hooks/use-iap";
 import { useKycProfile } from "./src/hooks/use-kyc-profile";
 import { usePredictionMarket } from "./src/hooks/use-prediction-market";
 import { useQuickEight } from "./src/hooks/use-quick-eight";
@@ -314,6 +316,7 @@ function NativeApp() {
 
   const {
     balance,
+    wallet,
     refreshingBalance,
     refreshBalance,
     resetWallet,
@@ -817,6 +820,48 @@ function NativeApp() {
     setMessage,
     setError,
     setSubmitting,
+  });
+
+  const {
+    giftEnergy,
+    giftTransfers,
+    ledgerEntries,
+    loadingEconomy,
+    refreshEconomy,
+    sendGift,
+    sendingGift,
+  } = useEconomy({
+    api,
+    authTokenRef,
+    handleUnauthorizedRef,
+    refreshBalance,
+    setError,
+    setMessage,
+    sessionToken: session?.token ?? null,
+  });
+
+  const {
+    connected: iapConnected,
+    giftPackProducts,
+    iapProducts,
+    loadingIapProducts,
+    purchaseGiftPack,
+    purchaseVoucher,
+    purchasingSku,
+    refreshIapProducts,
+    supported: iapSupported,
+    syncPendingStorePurchases,
+    syncingPendingPurchases,
+  } = useIap({
+    api,
+    authTokenRef,
+    handleUnauthorizedRef,
+    refreshBalance,
+    resetFeedback,
+    setError,
+    setMessage,
+    sessionToken: session?.token ?? null,
+    userId: session?.user.id ?? null,
   });
 
   sessionBridgeRef.current = {
@@ -1427,6 +1472,35 @@ function NativeApp() {
               error={error}
               copy={appContent.wallet}
               formattedBalance={formatAmount(balance)}
+              wallet={wallet}
+              refreshingBalance={refreshingBalance}
+              giftEnergy={giftEnergy}
+              giftTransfers={giftTransfers}
+              ledgerEntries={ledgerEntries}
+              loadingEconomy={loadingEconomy}
+              sendingGift={sendingGift}
+              loadingIapProducts={loadingIapProducts}
+              purchasingSku={purchasingSku}
+              syncingPendingPurchases={syncingPendingPurchases}
+              iapProducts={iapProducts}
+              giftPackProducts={giftPackProducts}
+              supportedIap={iapSupported}
+              connectedStore={iapConnected}
+              formatAmount={formatAmount}
+              formatDateTime={(value) =>
+                formatOptionalTimestamp(value ?? null) ?? "-"
+              }
+              onRefreshBalance={() => void refreshBalance()}
+              onRefreshEconomy={() => void refreshEconomy()}
+              onRefreshIapProducts={() => void refreshIapProducts()}
+              onSyncPendingPurchases={() => void syncPendingStorePurchases()}
+              onSendGift={(receiverUserId, amount) =>
+                sendGift({ receiverUserId, amount })
+              }
+              onPurchaseVoucher={(sku) => void purchaseVoucher(sku)}
+              onPurchaseGiftPack={(sku, recipientUserId) =>
+                purchaseGiftPack(sku, recipientUserId)
+              }
             />
           )}
         </AppStack.Screen>

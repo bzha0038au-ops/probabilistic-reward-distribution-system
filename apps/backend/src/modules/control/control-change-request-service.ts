@@ -21,15 +21,20 @@ import {
   readActiveLegalPublicationAuditState,
 } from "../legal/service";
 import {
+  setAntiAbuseConfig,
   getBlackjackConfig,
   setAuthFailureConfig,
   setBlackjackConfig,
   setBonusReleaseConfig,
   setDrawCost,
+  setDrawSystemControls,
   setGamificationRewardConfig,
+  setPaymentConfig,
   setPoolBalance,
   setRandomizationConfig,
   setSaasUsageAlertConfig,
+  setSystemFlagsConfig,
+  setWithdrawalRiskConfig,
 } from "../system/service";
 import {
   mapChangeRequestRecord,
@@ -60,6 +65,17 @@ import type {
 } from "./service";
 
 type ConfigChangeRequestRow = typeof configChangeRequests.$inferSelect;
+
+const HIGH_RISK_SYSTEM_CONFIG_KEYS = new Set<keyof SystemConfigDraftPayload>([
+  "maintenanceMode",
+  "registrationEnabled",
+  "loginEnabled",
+  "drawEnabled",
+  "paymentDepositEnabled",
+  "paymentWithdrawEnabled",
+  "antiAbuseAutoFreezeEnabled",
+  "withdrawRiskNewCardFirstWithdrawalReviewEnabled",
+]);
 
 const readChangeRequest = async (
   executor: DbExecutor,
@@ -103,6 +119,31 @@ const assertConfirmationPhrase = (payload: {
     throw conflictError(`Second confirmation required. Enter "${expected}".`, {
       code: API_ERROR_CODES.SECOND_CONFIRMATION_REQUIRED,
     });
+  }
+};
+
+const hasHighRiskSystemConfigChange = (payload: SystemConfigDraftPayload) =>
+  Object.entries(payload).some(
+    ([key, value]) =>
+      value !== undefined &&
+      HIGH_RISK_SYSTEM_CONFIG_KEYS.has(key as keyof SystemConfigDraftPayload),
+  );
+
+const assertHighRiskReviewNotes = (payload: {
+  values: SystemConfigDraftPayload;
+  reason?: string | null;
+}) => {
+  if (!hasHighRiskSystemConfigChange(payload.values)) {
+    return;
+  }
+
+  if (normalizeReason(payload.reason) === null) {
+    throw unprocessableEntityError(
+      "Review notes are required for high-risk runtime control changes.",
+      {
+        code: API_ERROR_CODES.FIELD_INVALID,
+      },
+    );
   }
 };
 
@@ -173,6 +214,30 @@ const applySystemConfigDraft = async (
     }
     await setDrawCost(executor, drawCost);
   }
+
+  await setSystemFlagsConfig(executor, {
+    maintenanceMode: payload.maintenanceMode,
+    registrationEnabled: payload.registrationEnabled,
+    loginEnabled: payload.loginEnabled,
+  });
+
+  await setDrawSystemControls(executor, {
+    drawEnabled: payload.drawEnabled,
+  });
+
+  await setPaymentConfig(executor, {
+    depositEnabled: payload.paymentDepositEnabled,
+    withdrawEnabled: payload.paymentWithdrawEnabled,
+  });
+
+  await setAntiAbuseConfig(executor, {
+    autoFreezeEnabled: payload.antiAbuseAutoFreezeEnabled,
+  });
+
+  await setWithdrawalRiskConfig(executor, {
+    newCardFirstWithdrawalReviewEnabled:
+      payload.withdrawRiskNewCardFirstWithdrawalReviewEnabled,
+  });
 
   await setRandomizationConfig(executor, {
     weightJitterEnabled: payload.weightJitterEnabled,
@@ -873,7 +938,9 @@ export async function createSystemConfigDraft(payload: {
   values: SystemConfigDraftPayload;
   reason?: string | null;
 }) {
+  assertHighRiskReviewNotes(payload);
   const normalizedReason = normalizeReason(payload.reason);
+  const requiresMfa = hasHighRiskSystemConfigChange(payload.values);
   const [created] = await db
     .insert(configChangeRequests)
     .values({
@@ -884,7 +951,7 @@ export async function createSystemConfigDraft(payload: {
       changePayload: payload.values as Record<string, unknown>,
       reason: normalizedReason,
       requiresSecondConfirmation: true,
-      requiresMfa: false,
+      requiresMfa,
       createdByAdminId: payload.adminId,
     })
     .returning();

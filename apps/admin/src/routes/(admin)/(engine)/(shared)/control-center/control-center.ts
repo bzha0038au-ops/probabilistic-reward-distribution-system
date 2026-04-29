@@ -237,6 +237,17 @@ export const controlCenterActions = {
     const payload = {
       poolBalance: toNumberString(formData.get("poolBalance")),
       drawCost: toNumberString(formData.get("drawCost")),
+      maintenanceMode: formData.get("maintenanceMode") === "on",
+      registrationEnabled: formData.get("registrationEnabled") === "on",
+      loginEnabled: formData.get("loginEnabled") === "on",
+      drawEnabled: formData.get("drawEnabled") === "on",
+      paymentDepositEnabled: formData.get("paymentDepositEnabled") === "on",
+      paymentWithdrawEnabled: formData.get("paymentWithdrawEnabled") === "on",
+      antiAbuseAutoFreezeEnabled:
+        formData.get("antiAbuseAutoFreezeEnabled") === "on",
+      withdrawRiskNewCardFirstWithdrawalReviewEnabled:
+        formData.get("withdrawRiskNewCardFirstWithdrawalReviewEnabled") ===
+        "on",
       weightJitterEnabled: formData.get("weightJitterEnabled") === "on",
       weightJitterPct: toNumberString(formData.get("weightJitterPct")),
       bonusAutoReleaseEnabled: formData.get("bonusAutoReleaseEnabled") === "on",
@@ -507,11 +518,15 @@ export const controlCenterActions = {
     const formData = await request.formData()
     const providerId = parseOptionalNumber(formData.get("providerId"))
     const totpCode = parseTotpCode(formData.get("totpCode"))
+    const reason = parseOptionalString(formData.get("resetReason"))
     if (!providerId) {
       return fail(400, { error: "Missing payment provider id." })
     }
     if (!totpCode) {
       return fail(400, { error: "Admin MFA code is required." })
+    }
+    if (!reason) {
+      return fail(400, { error: "Reset reason is required." })
     }
 
     const response = await apiRequest(
@@ -521,7 +536,7 @@ export const controlCenterActions = {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ totpCode }),
+        body: JSON.stringify({ totpCode, reason }),
       },
     )
 
@@ -536,37 +551,12 @@ export const controlCenterActions = {
     return { success: true }
   },
   bonusRelease: async ({ request, fetch, cookies }) => {
-    const formData = await request.formData()
-    const userId = formData.get("userId")?.toString().trim()
-    const amount = formData.get("amount")?.toString().trim()
-    const totpCode = parseTotpCode(formData.get("totpCode"))
-
-    if (!userId) {
-      return fail(400, { error: "User id is required." })
-    }
-    if (!totpCode) {
-      return fail(400, { error: "Admin MFA code is required." })
-    }
-
-    const payload = {
-      userId: Number(userId),
-      amount: amount ? amount : undefined,
-      totpCode,
-    }
-
-    const response = await apiRequest(fetch, cookies, "/admin/bonus-release", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+    void request
+    void fetch
+    void cookies
+    return fail(409, {
+      error: "Legacy bonus release is disabled under the B luck economy model.",
     })
-
-    if (!response.ok) {
-      return fail(response.status, {
-        error: response.error?.message ?? "Failed to release bonus.",
-      })
-    }
-
-    return { success: true }
   },
   startMfaEnrollment: async ({ fetch, cookies }) => {
     const response = await apiRequest(fetch, cookies, "/admin/mfa/enrollment", {

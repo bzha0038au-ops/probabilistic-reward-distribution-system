@@ -82,7 +82,6 @@ const makeParams = (overrides: Record<string, unknown> = {}) => ({
   selectionState: makeSelectionState(),
   drawState: {
     drawCost: new Decimal(10),
-    bonusBefore: new Decimal(2),
     userPoolAfterDebit: new Decimal(10),
   },
   economy: {
@@ -129,7 +128,6 @@ describe('resolvePayoutPolicy', () => {
     if (result.terminal) {
       expect(result.outcome.status).toBe('miss');
       expect(result.outcome.rewardAmount.eq(0)).toBe(true);
-      expect(result.outcome.bonusAfterReward.eq(2)).toBe(true);
       expect(result.outcome.payoutLimitReason).toBeNull();
     }
     expect(mockedLoadLockedPrize).not.toHaveBeenCalled();

@@ -141,7 +141,12 @@ describe("PredictionMarketDetailPage", () => {
     );
     browserUserApiClientMock.getWalletBalance.mockResolvedValue(
       ok({
-        balance: "50.00",
+        balance: {
+          withdrawableBalance: "50.00",
+          bonusBalance: "0.00",
+          lockedBalance: "0.00",
+          totalBalance: "50.00",
+        },
       }),
     );
   });
@@ -165,7 +170,7 @@ describe("PredictionMarketDetailPage", () => {
         browserUserApiClientMock.placePredictionPosition,
       ).not.toHaveBeenCalled();
     });
-    expect(screen.getByTestId("market-form-error")).toHaveTextContent(
+    expect(screen.getByTestId("market-form-error").textContent).toContain(
       messages.markets.validationStakeBalance,
     );
   });
@@ -192,12 +197,22 @@ describe("PredictionMarketDetailPage", () => {
     browserUserApiClientMock.getWalletBalance
       .mockResolvedValueOnce(
         ok({
-          balance: "50.00",
+          balance: {
+            withdrawableBalance: "50.00",
+            bonusBalance: "0.00",
+            lockedBalance: "0.00",
+            totalBalance: "50.00",
+          },
         }),
       )
       .mockResolvedValueOnce(
         ok({
-          balance: "35.00",
+          balance: {
+            withdrawableBalance: "35.00",
+            bonusBalance: "0.00",
+            lockedBalance: "0.00",
+            totalBalance: "35.00",
+          },
         }),
       );
     browserUserApiClientMock.placePredictionPosition.mockResolvedValue(
@@ -224,13 +239,15 @@ describe("PredictionMarketDetailPage", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId("market-position-101")).toBeInTheDocument();
+      expect(screen.queryByTestId("market-position-101")).not.toBeNull();
     });
 
-    expect(screen.getByTestId("market-notice")).toHaveTextContent(
+    expect(screen.getByTestId("market-notice").textContent).toContain(
       messages.markets.positionPlaced,
     );
-    expect(screen.getByLabelText("Stake amount")).toHaveValue("");
+    expect(
+      (screen.getByLabelText("Stake amount") as HTMLInputElement).value,
+    ).toBe("");
   });
 
   it("sells an open position, refreshes the balance, and removes the sell action", async () => {
@@ -269,12 +286,22 @@ describe("PredictionMarketDetailPage", () => {
     browserUserApiClientMock.getWalletBalance
       .mockResolvedValueOnce(
         ok({
-          balance: "50.00",
+          balance: {
+            withdrawableBalance: "50.00",
+            bonusBalance: "0.00",
+            lockedBalance: "0.00",
+            totalBalance: "50.00",
+          },
         }),
       )
       .mockResolvedValueOnce(
         ok({
-          balance: "65.00",
+          balance: {
+            withdrawableBalance: "65.00",
+            bonusBalance: "0.00",
+            lockedBalance: "0.00",
+            totalBalance: "65.00",
+          },
         }),
       );
     browserUserApiClientMock.sellPredictionPosition.mockResolvedValue(
@@ -296,16 +323,16 @@ describe("PredictionMarketDetailPage", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId("market-notice")).toHaveTextContent(
+      expect(screen.getByTestId("market-notice").textContent).toContain(
         messages.markets.positionSold,
       );
     });
 
-    expect(screen.getByTestId("market-position-101")).toHaveTextContent("Sold");
-    expect(
-      screen.queryByTestId("market-sell-position-button-101"),
-    ).not.toBeInTheDocument();
-    expect(screen.getByTestId("market-available-balance")).toHaveTextContent(
+    expect(screen.getByTestId("market-position-101").textContent).toContain(
+      "Sold",
+    );
+    expect(screen.queryByTestId("market-sell-position-button-101")).toBeNull();
+    expect(screen.getByTestId("market-available-balance").textContent).toContain(
       "65.00",
     );
   });

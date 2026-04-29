@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { saasProjectStrategyValues } from "@reward/shared-types/saas"
 
 const { apiRequest } = vi.hoisted(() => ({
   apiRequest: vi.fn(),
@@ -140,6 +141,51 @@ describe("saas page server", () => {
       },
     )
     expect(result).toEqual({ topUpCreated: true })
+  })
+
+  it("forwards every configured project strategy when creating a project", async () => {
+    for (const strategy of saasProjectStrategyValues) {
+      apiRequest.mockResolvedValueOnce({
+        ok: true,
+        data: { id: 18, strategy },
+      })
+
+      const result = await actions.createProject({
+        request: makeRequest({
+          tenantId: "7",
+          slug: `project-${strategy}`,
+          name: `Project ${strategy}`,
+          environment: "sandbox",
+          status: "active",
+          currency: "USD",
+          drawCost: "0",
+          prizePoolBalance: "0",
+          strategy,
+          strategyParams: '{"temperature":0.25}',
+          fairnessEpochSeconds: "3600",
+          maxDrawCount: "1",
+          missWeight: "0",
+          apiRateLimitBurst: "120",
+          apiRateLimitHourly: "3600",
+          apiRateLimitDaily: "86400",
+          totpCode: "123456",
+        }),
+        fetch: vi.fn(),
+        cookies: {},
+        locals: { locale: "en" },
+      } as never)
+
+      const [, , path, init] = apiRequest.mock.calls.at(-1) ?? []
+      const payload = JSON.parse(String(init?.body ?? "{}")) as {
+        strategy?: string
+        strategyParams?: Record<string, unknown>
+      }
+
+      expect(path).toBe("/admin/saas/projects")
+      expect(payload.strategy).toBe(strategy)
+      expect(payload.strategyParams).toEqual({ temperature: 0.25 })
+      expect(result).toEqual({ projectCreated: true })
+    }
   })
 
   it("submits tenant risk-envelope changes as change-request drafts", async () => {

@@ -508,6 +508,14 @@ describeIntegrationSuite('backend community integration', () => {
       });
 
       expect(walletResponse.statusCode).toBe(200);
+      expect(walletResponse.json().data).toMatchObject({
+        balance: {
+          withdrawableBalance: expect.any(String),
+          bonusBalance: expect.any(String),
+          lockedBalance: expect.any(String),
+          totalBalance: expect.any(String),
+        },
+      });
 
       const drawResponse = await getApp().inject({
         method: 'POST',

@@ -125,8 +125,11 @@ const clearPendingPayoutSnapshot = (
   snapshot: PlayModeSnapshot,
 ): PlayModeSnapshot => ({
   ...snapshot,
+  carryActive: false,
   pendingPayoutAmount: "0.00",
   pendingPayoutCount: 0,
+  snowballCarryAmount: "0.00",
+  snowballEnvelopeAmount: "0.00",
 });
 
 const refreshSnapshotAfterPendingRelease = async (params: {
@@ -415,6 +418,8 @@ export const executeDrawPlayWithMode = async (
         outcome: settled.playMode.lastOutcome ?? "miss",
         settledSnapshot: settled.playMode,
         netPayoutAmount: toMoneyString(totalReward),
+        // Legacy play-mode schema still calls this "bonus", but draw maps it
+        // to the B_LUCK asset in deferred-payouts.
         balanceType: "bonus",
         sessionId: session?.id ?? null,
         sourceReferenceType: "draw_record",

@@ -240,10 +240,10 @@ export async function deleteSaasOutboundWebhook(
 }
 
 export async function enqueueRewardCompletedWebhookDeliveries(
-  tx: DbTransaction,
   input: RewardCompletedWebhookInput,
+  dbExecutor: Pick<typeof db, "select" | "insert"> | DbTransaction = db,
 ) {
-  const webhooks = await tx
+  const webhooks = await dbExecutor
     .select()
     .from(saasOutboundWebhooks)
     .where(
@@ -263,7 +263,7 @@ export async function enqueueRewardCompletedWebhookDeliveries(
   const payload = buildRewardCompletedPayload(input);
   const now = new Date();
 
-  await tx
+  await dbExecutor
     .insert(saasOutboundWebhookDeliveries)
     .values(
       subscribed.map((webhook) => ({

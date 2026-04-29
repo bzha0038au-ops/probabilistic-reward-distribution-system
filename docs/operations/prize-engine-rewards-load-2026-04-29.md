@@ -1,136 +1,196 @@
-# Prize Engine `/v1/engine/rewards` Load Results (2026-04-29)
+# Prize Engine `/v1/engine/rewards` Load Results (Updated 2026-04-30)
 
 ## Scope
 
 Target route: `POST /v1/engine/rewards`
 
-Goals:
+Current optimization pass focused on the single-tenant hot path first:
 
-- capture real latency under load: `P50 / P95 / P99`
-- capture failure modes instead of only happy-path throughput
-- validate envelope-cap fallback still returns `mute` + zero reward under stress
+- shrink transaction work that sits inside settlement
+- delay `FOR UPDATE` acquisition on `prize` until after envelope and billing mute decisions
+- remove the extra `FOR UPDATE` read on `player` and settle with `UPDATE ... RETURNING`
+- replace settlement-time `project` and `prize` pre-lock reads with conditional atomic updates and miss fallback
+- move non-settlement side effects post-commit (`saas_usage_events`, outbound webhook enqueue, group-correlation insert, tenant onboarding finalize)
+- move draw-record snapshot patching post-commit so settlement does not do a second `saas_draw_records` update
+- raise the backend `postgres-js` pool from the old hardcoded `max: 10` to configurable defaults centered on `DB_POOL_MAX=30`
+- add `saas_draw_records` indexes for hot replay and observability access paths
 
-Harness:
+The scenario ids still carry the historical `1k/5k` names. Actual offered load is controlled by the `LOAD_*_QPS` env vars below.
+
+## Harness
 
 - entrypoint: `pnpm test:load:prize-engine`
 - data plane: ephemeral Postgres via `tests/support/test-harness.ts`
 - backend surface: `apps/backend/src/prize-engine-load-server.ts`
 - load driver: `tests/load/prize-engine-smoke.ts`
-- steady-state mode: reusable `agent/player` rows are pre-seeded in Postgres, then measured requests reuse stable actor IDs with fresh `idempotencyKey` values so the overload runs measure the hot path instead of one-time actor creation
-- note: overload numbers below were rerun after fixing teardown so timed-out client disconnects no longer end with route-level `CONNECTION_CLOSED` noise or a child-process `postgres` null-socket crash
+- backend pool config used for all runs below:
+  - `DB_POOL_MAX=30`
+  - `DB_POOL_IDLE_TIMEOUT_SECONDS=20`
+  - `DB_POOL_CONNECT_TIMEOUT_SECONDS=30`
+  - `DB_POOL_MAX_LIFETIME_SECONDS=1800`
 
 ## Commands Used
 
-Sanity smoke before overload:
-
-```bash
-env \
-  LOAD_SINGLE_TENANT_QPS=20 \
-  LOAD_MULTI_TENANT_QPS=40 \
-  LOAD_CAP_FALLBACK_QPS=20 \
-  LOAD_DURATION_SECONDS=3 \
-  LOAD_WARMUP_SECONDS=1 \
-  LOAD_REQUEST_TIMEOUT_SECONDS=5 \
-  LOAD_SINGLE_TENANT_CONNECTIONS=32 \
-  LOAD_MULTI_TENANT_CONNECTIONS=64 \
-  LOAD_CAP_FALLBACK_CONNECTIONS=32 \
-  LOAD_MULTI_TENANT_PROJECTS=4 \
-  pnpm test:load:prize-engine
-```
-
-Overload measurements:
+Single-tenant 100 / 120 QPS:
 
 ```bash
 env \
   LOAD_SCENARIO_IDS=single_tenant_1k_qps \
-  LOAD_DURATION_SECONDS=1 \
+  LOAD_DURATION_SECONDS=3 \
   LOAD_WARMUP_SECONDS=1 \
-  LOAD_REQUEST_TIMEOUT_SECONDS=2 \
-  LOAD_POST_RUN_DRAIN_SECONDS=1 \
+  LOAD_REQUEST_TIMEOUT_SECONDS=5 \
+  LOAD_POST_RUN_DRAIN_SECONDS=5 \
+  LOAD_SINGLE_TENANT_QPS=100 \
+  LOAD_SINGLE_TENANT_CONNECTIONS=64 \
+  DB_POOL_MAX=30 \
   pnpm test:load:prize-engine
 ```
+
+```bash
+env \
+  LOAD_SCENARIO_IDS=single_tenant_1k_qps \
+  LOAD_DURATION_SECONDS=3 \
+  LOAD_WARMUP_SECONDS=1 \
+  LOAD_REQUEST_TIMEOUT_SECONDS=5 \
+  LOAD_POST_RUN_DRAIN_SECONDS=5 \
+  LOAD_SINGLE_TENANT_QPS=120 \
+  LOAD_SINGLE_TENANT_CONNECTIONS=80 \
+  DB_POOL_MAX=30 \
+  pnpm test:load:prize-engine
+```
+
+Single-tenant 150 / 180 / 240 QPS:
+
+```bash
+env \
+  LOAD_SCENARIO_IDS=single_tenant_1k_qps \
+  LOAD_DURATION_SECONDS=3 \
+  LOAD_WARMUP_SECONDS=1 \
+  LOAD_REQUEST_TIMEOUT_SECONDS=5 \
+  LOAD_POST_RUN_DRAIN_SECONDS=5 \
+  LOAD_SINGLE_TENANT_QPS=150 \
+  LOAD_SINGLE_TENANT_CONNECTIONS=96 \
+  DB_POOL_MAX=30 \
+  pnpm test:load:prize-engine
+```
+
+```bash
+env \
+  LOAD_SCENARIO_IDS=single_tenant_1k_qps \
+  LOAD_DURATION_SECONDS=3 \
+  LOAD_WARMUP_SECONDS=1 \
+  LOAD_REQUEST_TIMEOUT_SECONDS=5 \
+  LOAD_POST_RUN_DRAIN_SECONDS=5 \
+  LOAD_SINGLE_TENANT_QPS=180 \
+  LOAD_SINGLE_TENANT_CONNECTIONS=112 \
+  DB_POOL_MAX=30 \
+  pnpm test:load:prize-engine
+```
+
+```bash
+env \
+  LOAD_SCENARIO_IDS=single_tenant_1k_qps \
+  LOAD_DURATION_SECONDS=3 \
+  LOAD_WARMUP_SECONDS=1 \
+  LOAD_REQUEST_TIMEOUT_SECONDS=5 \
+  LOAD_POST_RUN_DRAIN_SECONDS=5 \
+  LOAD_SINGLE_TENANT_QPS=240 \
+  LOAD_SINGLE_TENANT_CONNECTIONS=144 \
+  DB_POOL_MAX=30 \
+  pnpm test:load:prize-engine
+```
+
+Multi-tenant 120 QPS:
 
 ```bash
 env \
   LOAD_SCENARIO_IDS=multi_tenant_5k_qps \
-  LOAD_DURATION_SECONDS=1 \
+  LOAD_DURATION_SECONDS=3 \
   LOAD_WARMUP_SECONDS=1 \
-  LOAD_REQUEST_TIMEOUT_SECONDS=2 \
-  LOAD_POST_RUN_DRAIN_SECONDS=1 \
-  LOAD_MULTI_TENANT_PROJECTS=20 \
+  LOAD_REQUEST_TIMEOUT_SECONDS=5 \
+  LOAD_POST_RUN_DRAIN_SECONDS=5 \
+  LOAD_MULTI_TENANT_PROJECTS=6 \
+  LOAD_MULTI_TENANT_QPS=120 \
+  LOAD_MULTI_TENANT_CONNECTIONS=96 \
+  DB_POOL_MAX=30 \
   pnpm test:load:prize-engine
 ```
+
+Envelope-cap mute fallback 120 QPS:
 
 ```bash
 env \
   LOAD_SCENARIO_IDS=envelope_cap_mute_fallback \
-  LOAD_DURATION_SECONDS=1 \
+  LOAD_DURATION_SECONDS=3 \
   LOAD_WARMUP_SECONDS=1 \
-  LOAD_REQUEST_TIMEOUT_SECONDS=2 \
-  LOAD_POST_RUN_DRAIN_SECONDS=1 \
+  LOAD_REQUEST_TIMEOUT_SECONDS=5 \
+  LOAD_POST_RUN_DRAIN_SECONDS=5 \
+  LOAD_CAP_FALLBACK_QPS=120 \
+  LOAD_CAP_FALLBACK_CONNECTIONS=80 \
+  DB_POOL_MAX=30 \
   pnpm test:load:prize-engine
 ```
 
-## Sanity Smoke
+## Baseline Results
 
-These runs prove the harness and semantics are correct before overload:
+### Single-Tenant Hot Path
 
-| Scenario | Target | Connections | Success QPS | P50 | P95 | P99 | Notes |
-| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| single tenant payout | 20 QPS | 32 | 20.20 | 15.81 ms | 17.20 ms | 18.16 ms | all 60 requests persisted as payout |
-| multi-tenant payout | 40 QPS | 64 | 40.13 | 12.09 ms | 12.98 ms | 19.13 ms | all 120 requests persisted as payout |
-| envelope cap fallback | 20 QPS | 32 | 20.20 | 15.97 ms | 17.90 ms | 19.42 ms | all 60 requests persisted as `mute` + zero reward |
+| Scenario | Offered QPS | Connections | Success | Dropped | Timeouts | P50 | P95 | P99 | Result |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| single tenant | 100 | 64 | 300 / 300 | 0 | 0 | 9.97 ms | 13.33 ms | 16.41 ms | stable |
+| single tenant | 120 | 80 | 360 / 360 | 0 | 0 | 10.99 ms | 14.13 ms | 17.22 ms | stable |
+| single tenant | 150 | 96 | 450 / 450 | 0 | 0 | 26.06 ms | 263.52 ms | 469.37 ms | no failures, but high-latency knee |
+| single tenant | 180 | 112 | 540 / 540 | 0 | 0 | 14.53 ms | 325.30 ms | 508.34 ms | no failures, but sustained tail inflation |
+| single tenant | 240 | 144 | 702 / 720 | 18 | 0 | 305.87 ms | 806.34 ms | 823.01 ms | dispatch-limited, beyond practical steady-state |
 
-## Overload Results
+### Multi-Tenant Comparison
 
-Definitions used below:
+| Scenario | Offered QPS | Projects | Connections | Success | Dropped | Timeouts | P50 | P95 | P99 | Result |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| multi tenant | 120 | 6 | 96 | 360 / 360 | 0 | 0 | 6.88 ms | 9.67 ms | 12.35 ms | stable |
 
-- `sent`: requests scheduled by the load driver during the 1 second load window
-- `completed`: requests that actually started and reached a terminal client outcome
-- `success`: HTTP `2xx` plus response envelope `ok=true`
-- `dropped`: request never dispatched before the 1 second load window closed
-- `timeouts`: request dispatched, but client-side timeout hit before a full response
-- `persisted rows`: rows written to `saas_draw_records` after the scenario baseline
+### Zero-Reward Fast Path
 
-| Scenario | Offered Target | Actor Pool | Conns | Sent | Completed | Success | Success QPS | Completed QPS | Dropped | Timeouts | P50 | P95 | P99 | Persisted Rows |
-| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `single_tenant_1k_qps` | 1000 QPS | 192 | 96 | 1000 | 96 | 0 | 0.00 | 45.93 | 904 | 96 | 2000.66 ms | 2002.02 ms | 2003.07 ms | 0 |
-| `multi_tenant_5k_qps` | 5000 QPS | 520 | 256 | 5000 | 256 | 0 | 0.00 | 124.88 | 4744 | 256 | 2002.06 ms | 2006.26 ms | 2007.66 ms | 0 |
-| `envelope_cap_mute_fallback` | 1000 QPS | 192 | 96 | 1000 | 96 | 0 | 0.00 | 45.93 | 904 | 96 | 2000.87 ms | 2001.80 ms | 2004.17 ms | 0 |
+| Scenario | Offered QPS | Connections | Success | Dropped | Timeouts | P50 | P95 | P99 | Result |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| envelope cap mute fallback | 120 | 80 | 360 / 360 | 0 | 0 | 11.01 ms | 13.60 ms | 16.62 ms | stable after skipping no-op project balance writes |
 
-## Interpreting The Numbers
+## What Changed Versus The Previous Hot Path
 
-- The latency distribution still collapses against the timeout wall in all three overload runs. This remains the strongest signal that the route saturates long before the offered `1k / 5k` target.
-- These numbers are now closer to real steady-state behavior because the measured window no longer pays the one-time `ensureProjectAgent` / `ensureProjectPlayer` creation cost.
-- Successful throughput is effectively zero under these overload windows: `0.00 QPS` in all three reruns.
-- Completed terminal outcomes still plateau far below offered load even before counting dropped requests: about `45.93 QPS` for single-tenant, `124.88 QPS` for multi-tenant, and `45.93 QPS` for cap-fallback.
-- `multi_tenant_5k_qps` still does better than single-tenant, but remains orders of magnitude below the offered target and still produces zero successful completions within the `2s` timeout budget.
+- Stable single-tenant throughput moved again:
+  - prior stable ceiling after the first pass: about `90 QPS`
+  - current clean baseline after atomic settlement updates: `120 QPS`
+- The single-tenant saturation knee moved materially upward:
+  - `100 QPS` and `120 QPS` are now clean
+  - `150-180 QPS` do not fail, but tail latency inflates into the `~260-500ms` range
+  - `240 QPS` is where dispatch-side backlog finally starts showing up
+- Multi-tenant distribution is clearly no longer the first bottleneck:
+  - `120 QPS` across `6` projects stays clean with `P95 9.67ms`
+  - the same optimization pass also improved the `mute` fast path by removing no-op project-balance writes when both `drawCost` and `rewardAmount` are zero
 
-Inference from source plus the observed plateau:
+## Interpretation
 
-- The hot path is still dominated by a small database pool (`apps/backend/src/db.ts` uses `max: 10`) plus a long multi-table transaction in `apps/backend/src/modules/saas/prize-engine-service.ts`.
-- This rerun already includes two safe hotspot cuts: project locking now happens at settlement instead of transaction entry, and `agent/group` advisory locks are only taken when the corresponding constraint limits are active.
-- Even after those cuts, the remaining `FOR UPDATE` sections on tenant risk envelope, player, prize, and settlement-phase project state still collapse into the timeout wall before any successful response survives.
+- The current first bottleneck is still the single-tenant settlement hotspot, not tenant isolation.
+- The remaining pressure is concentrated on the rows every settled reward must still serialize through:
+  - `saas_projects` pool balance
+  - the selected `saas_project_prizes` row when the prize mix is narrow
+  - `saas_players` for repeated player writes
+- Raising the backend pool from `10` to `30` was necessary, but the bigger gain came from changing the settlement write shape:
+  - no explicit `FOR UPDATE` read on `player`
+  - no explicit `FOR UPDATE` read on `project`
+  - no explicit `FOR UPDATE` read on `prize`
+  - no second synchronous `saas_draw_records` update for snapshots
+- The route now behaves more like a bounded write pipeline and less like a long, lock-heavy critical section.
 
-## Failure Modes Observed
+## Recommended Next Pass
 
-- Client-side timeout dominates overload. Once the route is saturated, the first wave of in-flight requests spends almost the entire budget near or beyond the `2s` ceiling.
-- Client-side dispatch deadline drops dominate the remainder. The load driver cannot even start most of the offered requests inside the `1s` load window once the connection budget is exhausted.
-- Under the steady-state rerun, overload no longer leaves partial survivors in `saas_draw_records`; all three scenarios finished with `0` persisted rows beyond the preflight baseline.
-- The harness now exits cleanly after overload. Timed-out client disconnects no longer surface route-level `CONNECTION_CLOSED` logging, and the backend child no longer ends with the earlier `postgres` null-socket teardown crash.
+- Keep working the single-tenant hotspot before spending time on broader multi-tenant isolation mechanics.
+- The next practical step is to turn the new latency knee into explicit admission control:
+  - keep a `120 QPS` class as the current safe single-tenant baseline
+  - treat `150-180 QPS` as the zone where project-scoped queueing or concurrency caps become worth enforcing
+  - widen prize-row fan-out for tenants whose traffic concentrates on a single prize row
+- After any queueing/admission-control change, rerun the same ladder at `120 / 150 / 180 / 240` for single-tenant and `120 / 150` for multi-tenant so the comparison stays apples-to-apples.
 
-## Envelope Cap Fallback Result
+## Test Harness Note
 
-The fallback behavior still validates correctly in preflight:
-
-- the preflight response returned `rewardAmount = 0.00`
-- the preflight response returned `status = miss`
-- the preflight response returned `envelope.mode = mute`
-
-Under the overload rerun itself, the route produced `0` persisted rows. That means the system saturated before any fallback-path write completed, but it also did not produce any positive payout or cap-rule violation.
-
-## Recommended Follow-Up
-
-- Treat the current reward path as overload-unsafe for the offered `1k / 5k` targets even on the steady-state hot path.
-- The next hotspot to split is tenant-level locking and synchronous in-transaction usage-event persistence; the safe project-lock deferral and conditional scope-lock change were not enough on their own.
-- If business validation requires observing cap-fallback writes under stress, rerun with a longer client timeout window. At the current `1s` load window plus `2s` timeout budget, overload saturates before any write survives.
+On degraded runs that intentionally push requests into client timeouts, the local Node 25 plus `postgres-js` harness can emit a shutdown-time `socket.write` null-reference after the JSON summary is already printed. Treat that as a teardown artifact of the local load harness, not as route-level settlement corruption. The successful runs above completed cleanly and persisted the expected `saas_draw_records`.

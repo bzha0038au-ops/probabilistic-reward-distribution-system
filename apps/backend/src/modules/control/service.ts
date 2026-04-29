@@ -43,6 +43,14 @@ export type PaymentProviderExecutionMode = "manual" | "automated";
 export type SystemConfigDraftPayload = {
   poolBalance?: string | number;
   drawCost?: string | number;
+  maintenanceMode?: boolean;
+  registrationEnabled?: boolean;
+  loginEnabled?: boolean;
+  drawEnabled?: boolean;
+  paymentDepositEnabled?: boolean;
+  paymentWithdrawEnabled?: boolean;
+  antiAbuseAutoFreezeEnabled?: boolean;
+  withdrawRiskNewCardFirstWithdrawalReviewEnabled?: boolean;
   weightJitterEnabled?: boolean;
   weightJitterPct?: string | number;
   bonusAutoReleaseEnabled?: boolean;
@@ -168,6 +176,14 @@ export type PublishControlChangeRequestResult = {
 export type ControlSystemConfig = {
   poolBalance: string;
   drawCost: string;
+  maintenanceMode: boolean;
+  registrationEnabled: boolean;
+  loginEnabled: boolean;
+  drawEnabled: boolean;
+  paymentDepositEnabled: boolean;
+  paymentWithdrawEnabled: boolean;
+  antiAbuseAutoFreezeEnabled: boolean;
+  withdrawRiskNewCardFirstWithdrawalReviewEnabled: boolean;
   weightJitterEnabled: boolean;
   weightJitterPct: string;
   bonusAutoReleaseEnabled: boolean;

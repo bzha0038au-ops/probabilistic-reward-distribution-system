@@ -17,6 +17,7 @@ export const userFreezeScopeValues = [
   "account_lock",
   "withdrawal_lock",
   "gameplay_lock",
+  "gift_lock",
   "topup_lock",
 ] as const;
 
