@@ -57,6 +57,10 @@ export function DealerFeed(props: {
   events: DealerEvent[];
   ruleLabel?: string;
 }) {
+  const latestEvent = props.events[props.events.length - 1] ?? null;
+  const historyEvents =
+    latestEvent === null ? [] : props.events.slice(0, props.events.length - 1);
+
   return (
     <div
       className={cn(
@@ -64,28 +68,57 @@ export function DealerFeed(props: {
         props.className,
       )}
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-cyan-300/30 bg-cyan-300/10 text-sm font-semibold uppercase tracking-[0.28em] text-cyan-100">
-            AI
+      <div className="flex items-start gap-4">
+        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[1.4rem] border border-cyan-300/30 bg-cyan-300/10 text-sm font-semibold uppercase tracking-[0.28em] text-cyan-100 shadow-[0_16px_32px_rgba(8,145,178,0.18)]">
+          AI
+        </div>
+        <div className="min-w-0 flex-1 space-y-3">
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-100/80">
+                {props.title}
+              </p>
+              <p className="text-sm font-semibold text-white">{props.dealerLabel}</p>
+            </div>
+            {props.events.length > 0 ? (
+              <span className="rounded-full border border-white/10 px-3 py-1 text-[11px] uppercase tracking-[0.24em] text-slate-400">
+                {props.events.length}
+              </span>
+            ) : null}
           </div>
-          <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-100/80">
-              {props.title}
-            </p>
-            <p className="text-sm font-semibold text-white">{props.dealerLabel}</p>
+
+          <div className="relative rounded-[1.6rem] border border-cyan-300/25 bg-cyan-300/10 px-4 py-4 text-cyan-50 shadow-[0_18px_40px_rgba(8,145,178,0.16)] before:absolute before:-left-2 before:top-5 before:h-4 before:w-4 before:rotate-45 before:border-b before:border-l before:border-cyan-300/25 before:bg-cyan-300/10 before:content-['']">
+            {latestEvent ? (
+              <>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-inherit">
+                    {props.dealerLabel}
+                  </p>
+                  <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.24em] opacity-70">
+                    <span>
+                      {latestEvent.source === "llm"
+                        ? (props.aiLabel ?? "AI")
+                        : (props.ruleLabel ?? "Rule")}
+                    </span>
+                    {formatDealerTimestamp(latestEvent.createdAt) ? (
+                      <span>{formatDealerTimestamp(latestEvent.createdAt)}</span>
+                    ) : null}
+                  </div>
+                </div>
+                <p className="mt-2 text-sm leading-6 text-inherit">
+                  {fallbackDealerText(latestEvent)}
+                </p>
+              </>
+            ) : (
+              <p className="text-sm leading-6 text-cyan-50/80">{props.emptyLabel}</p>
+            )}
           </div>
         </div>
-        {props.events.length > 0 ? (
-          <span className="rounded-full border border-white/10 px-3 py-1 text-[11px] uppercase tracking-[0.24em] text-slate-400">
-            {props.events.length}
-          </span>
-        ) : null}
       </div>
 
-      <div className="mt-4 space-y-3">
-        {props.events.length > 0 ? (
-          props.events.map((event) => (
+      {historyEvents.length > 0 ? (
+        <div className="mt-4 space-y-3">
+          {historyEvents.map((event) => (
             <div
               key={event.id}
               className={cn(
@@ -117,13 +150,9 @@ export function DealerFeed(props: {
                 );
               })()}
             </div>
-          ))
-        ) : (
-          <div className="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-sm text-slate-400">
-            {props.emptyLabel}
-          </div>
-        )}
-      </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

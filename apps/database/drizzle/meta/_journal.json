@@ -673,6 +673,20 @@
       "when": 1777582800000,
       "tag": "0096_notification_push_devices",
       "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "6",
+      "when": 1777651200000,
+      "tag": "0097_play_mode_session_hierarchy",
+      "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "6",
+      "when": 1777654800000,
+      "tag": "0098_deferred_payouts",
+      "breakpoints": true
     }
   ]
 }

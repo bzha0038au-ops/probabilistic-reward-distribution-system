@@ -24,6 +24,7 @@ const buildSelectedTable = (): HoldemTableResponse => ({
   table: {
     id: 7,
     name: "Realtime Holdem",
+    linkedGroup: null,
     tableType: "cash",
     status: "active",
     rakePolicy: null,
@@ -47,6 +48,7 @@ const buildSelectedTable = (): HoldemTableResponse => ({
         seatIndex: 0,
         userId: 42,
         displayName: "Hero",
+        isBot: false,
         turnDeadlineAt: null,
         stackAmount: "96.00",
         committedAmount: "4.00",
@@ -71,6 +73,7 @@ const buildSelectedTable = (): HoldemTableResponse => ({
         seatIndex: 1,
         userId: 52,
         displayName: "Villain",
+        isBot: false,
         turnDeadlineAt: null,
         timeBankRemainingMs: 30000,
         stackAmount: "96.00",
@@ -96,6 +99,7 @@ const buildSelectedTable = (): HoldemTableResponse => ({
         seatIndex: 2,
         userId: null,
         displayName: null,
+        isBot: false,
         turnDeadlineAt: null,
         stackAmount: "0.00",
         committedAmount: "0.00",
@@ -117,6 +121,7 @@ const buildSelectedTable = (): HoldemTableResponse => ({
         seatIndex: 3,
         userId: null,
         displayName: null,
+        isBot: false,
         turnDeadlineAt: null,
         stackAmount: "0.00",
         committedAmount: "0.00",
@@ -138,6 +143,7 @@ const buildSelectedTable = (): HoldemTableResponse => ({
         seatIndex: 4,
         userId: null,
         displayName: null,
+        isBot: false,
         turnDeadlineAt: null,
         stackAmount: "0.00",
         committedAmount: "0.00",
@@ -159,6 +165,7 @@ const buildSelectedTable = (): HoldemTableResponse => ({
         seatIndex: 5,
         userId: null,
         displayName: null,
+        isBot: false,
         turnDeadlineAt: null,
         stackAmount: "0.00",
         committedAmount: "0.00",
@@ -195,14 +202,17 @@ const buildSelectedTable = (): HoldemTableResponse => ({
     createdAt: "2026-04-28T09:00:00.000Z",
     updatedAt: "2026-04-28T09:01:00.000Z",
   },
+  tables: [],
 });
 
 const buildLobby = (): HoldemTablesResponse => ({
   currentTableId: 7,
+  activeTableIds: [7],
   tables: [
     {
       id: 7,
       name: "Realtime Holdem",
+      linkedGroup: null,
       tableType: "cash",
       status: "active",
       rakePolicy: null,
@@ -224,6 +234,7 @@ const buildRealtimeUpdate = (): HoldemRealtimeUpdate => ({
   table: {
     id: 7,
     name: "Realtime Holdem",
+    linkedGroup: null,
     tableType: "cash",
     status: "active",
     rakePolicy: null,
@@ -254,6 +265,7 @@ const buildRealtimeUpdate = (): HoldemRealtimeUpdate => ({
         seatIndex: 0,
         userId: 42,
         displayName: "Hero",
+        isBot: false,
         turnDeadlineAt: null,
         stackAmount: "99.00",
         committedAmount: "1.00",
@@ -275,6 +287,7 @@ const buildRealtimeUpdate = (): HoldemRealtimeUpdate => ({
         seatIndex: 1,
         userId: 52,
         displayName: "Villain",
+        isBot: false,
         turnDeadlineAt: "2026-04-28T09:02:00.000Z",
         timeBankRemainingMs: 30000,
         stackAmount: "98.00",
@@ -317,6 +330,7 @@ const buildRealtimeUpdate = (): HoldemRealtimeUpdate => ({
 const buildPrivateRealtimeUpdate = (): HoldemRealtimePrivateUpdate => ({
   table: {
     ...buildSelectedTable().table,
+    linkedGroup: null,
     handNumber: 4,
     stage: "preflop",
     communityCards: [],

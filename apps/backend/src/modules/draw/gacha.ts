@@ -213,7 +213,11 @@ const resolveBatchClientNonce = (
   return `${base.slice(0, maxBaseLength)}${suffix}`;
 };
 
-const classifyDrawPlayModeOutcome = (
+const resolveExecutionCountMultiplier = (
+  playMode: import("@reward/shared-types/play-mode").PlayModeSnapshot,
+) => (playMode.type === "dual_bet" ? 1 : playMode.appliedMultiplier);
+
+export const classifyDrawPlayModeOutcome = (
   records: DrawRecordSnapshot[],
 ): PlayModeOutcome =>
   records.some((record) => record.status === "won") ? "win" : "miss";
@@ -318,7 +322,8 @@ export const executeResolvedDrawPlayInTransaction = async (
     getDrawSystemConfig(tx),
     getProbabilityControlConfig(tx),
   ]);
-  const effectiveCount = requestedCount * activePlayMode.appliedMultiplier;
+  const effectiveCount =
+    requestedCount * resolveExecutionCountMultiplier(activePlayMode);
 
   const maxBatchCount = normalizeMaxBatchCount(drawSystem.maxDrawPerRequest);
   if (effectiveCount > maxBatchCount) {

@@ -4,6 +4,7 @@ import {
   HoldemBestHandSchema,
   HoldemCardSchema,
   HoldemFairnessSchema,
+  HoldemLinkedGroupSchema,
   HoldemTableEmojiSchema,
   HoldemTableMessageKindSchema,
   HoldemTournamentPayoutSchema,
@@ -58,6 +59,16 @@ export const HoldemSeatTournamentMetadataSchema = z
   .nullable()
   .default(null);
 
+export const HoldemSeatBotMetadataSchema = z
+  .object({
+    enabled: z.boolean().default(true),
+    displayName: z.string().trim().min(1).max(64),
+    behaviorVersion: z.string().trim().min(1).max(32).default("casual-v1"),
+    ownerUserId: z.number().int().positive().nullable().default(null),
+  })
+  .nullable()
+  .default(null);
+
 export const HoldemSeatMetadataSchema = z
   .object({
     sittingOut: z.boolean().default(false),
@@ -65,6 +76,7 @@ export const HoldemSeatMetadataSchema = z
     timeBankRemainingMs: z.number().int().nonnegative().default(0),
     winner: z.boolean().default(false),
     bestHand: HoldemBestHandSchema.nullable().default(null),
+    bot: HoldemSeatBotMetadataSchema,
     tournament: HoldemSeatTournamentMetadataSchema,
   })
   .default({
@@ -73,6 +85,7 @@ export const HoldemSeatMetadataSchema = z
     timeBankRemainingMs: 0,
     winner: false,
     bestHand: null,
+    bot: null,
     tournament: null,
   });
 
@@ -95,6 +108,7 @@ export const HoldemTableTournamentMetadataSchema = z
 
 export const HoldemTableMetadataSchema = z.object({
   tableType: HoldemTableTypeSchema.default("cash"),
+  linkedGroup: HoldemLinkedGroupSchema.nullable().default(null),
   rakePolicy: HoldemTableRakePolicySchema.nullable().default(null),
   tournament: HoldemTableTournamentMetadataSchema,
   handNumber: z.number().int().nonnegative().default(0),
@@ -178,6 +192,7 @@ export const HoldemTableMessageRowsSchema = z.array(HoldemTableMessageRowSchema)
 
 export type HoldemTableMetadata = z.infer<typeof HoldemTableMetadataSchema>;
 export type HoldemSeatMetadata = z.infer<typeof HoldemSeatMetadataSchema>;
+export type HoldemSeatBotMetadata = z.infer<typeof HoldemSeatBotMetadataSchema>;
 export type HoldemTableRow = z.infer<typeof HoldemTableRowSchema>;
 export type HoldemSeatRow = z.infer<typeof HoldemSeatRowSchema>;
 export type HoldemTableMessageRow = z.infer<typeof HoldemTableMessageRowSchema>;
@@ -244,7 +259,19 @@ export const toTableState = (
 export const toJsonbLiteral = (value: unknown) =>
   sql.raw(`'${JSON.stringify(value).replace(/'/g, "''")}'::jsonb`);
 
-export const resolveSeatDisplayName = (userId: number, userEmail?: string | null) => {
+export const isBotSeat = (seat: Pick<HoldemSeatState, "metadata">) =>
+  seat.metadata.bot?.enabled === true;
+
+export const resolveSeatDisplayName = (
+  userId: number,
+  userEmail?: string | null,
+  seatMetadata?: HoldemSeatMetadata | null,
+) => {
+  const botDisplayName = seatMetadata?.bot?.displayName?.trim();
+  if (botDisplayName) {
+    return botDisplayName;
+  }
+
   const email = userEmail?.trim();
   if (!email) {
     return `User ${userId}`;

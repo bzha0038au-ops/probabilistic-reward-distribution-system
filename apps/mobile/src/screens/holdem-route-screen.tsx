@@ -705,6 +705,15 @@ export function HoldemRouteScreen(props: HoldemRouteScreenProps) {
   const [clockNowMs, setClockNowMs] = useState(() => Date.now());
   const [chatDraft, setChatDraft] = useState("");
   const activeTable = props.selectedHoldemTable?.table ?? null;
+  const effectiveBuyInPreview = (() => {
+    const numericBuyIn = Number(props.holdemBuyInAmount || "0");
+    const multiplier = props.holdemPlayMode?.appliedMultiplier ?? 1;
+    if (!Number.isFinite(numericBuyIn) || multiplier <= 1) {
+      return null;
+    }
+
+    return props.formatAmount((numericBuyIn * multiplier).toFixed(2));
+  })();
   const activeSummary =
     activeTable === null
       ? null
@@ -886,6 +895,7 @@ export function HoldemRouteScreen(props: HoldemRouteScreenProps) {
 
       <PlayModeSelector
         copy={props.playModeCopy}
+        gameKey="holdem"
         snapshot={props.holdemPlayMode}
         disabled={props.updatingHoldemPlayMode || props.actingHoldem !== null}
         onSelect={props.onChangeHoldemPlayMode}
@@ -982,6 +992,11 @@ export function HoldemRouteScreen(props: HoldemRouteScreenProps) {
                     HOLDEM_CONFIG.maximumBuyIn,
                   )}
             </Text>
+            {effectiveBuyInPreview ? (
+              <Text style={props.styles.gachaHint}>
+                {props.screenCopy.effectiveBuyInPreview(effectiveBuyInPreview)}
+              </Text>
+            ) : null}
           </View>
 
           {props.holdemCreateTableType === "tournament" ? (

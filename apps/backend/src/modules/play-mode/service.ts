@@ -1,5 +1,5 @@
-import { playModeSessions, userPlayModes } from "@reward/database";
-import { and, desc, eq, sql } from "@reward/database/orm";
+import { deferredPayouts, playModeSessions, userPlayModes } from "@reward/database";
+import { and, desc, eq, inArray, sql } from "@reward/database/orm";
 import {
   PlayModeGameKeySchema,
   PlayModeRequestSchema,
@@ -22,6 +22,10 @@ type DbExecutor = DbClient | DbTransaction;
 const playModeSessionStatusValues = ["active", "settled", "cancelled"] as const;
 const PlayModeSessionStatusSchema = z.enum(playModeSessionStatusValues);
 type PlayModeSessionStatus = z.infer<typeof PlayModeSessionStatusSchema>;
+const deferredPayoutStatusValues = ["pending", "released", "cancelled"] as const;
+const DeferredPayoutStatusSchema = z.enum(deferredPayoutStatusValues);
+const DeferredPayoutBalanceTypeSchema = z.enum(["bonus", "withdrawable"]);
+export type DeferredPayoutBalanceType = z.infer<typeof DeferredPayoutBalanceTypeSchema>;
 
 const MAX_SNOWBALL_MULTIPLIER = 5;
 
@@ -36,6 +40,7 @@ const UserPlayModeRowsSchema = z.array(UserPlayModeRowSchema);
 
 const PlayModeSessionRowSchema = z.object({
   id: z.number().int().positive(),
+  parentSessionId: z.number().int().positive().nullable().optional(),
   gameKey: PlayModeGameKeySchema,
   mode: PlayModeTypeSchema,
   status: PlayModeSessionStatusSchema,
@@ -45,11 +50,31 @@ const PlayModeSessionRowSchema = z.object({
     .optional(),
   referenceType: z.string().nullable().optional(),
   referenceId: z.number().int().nullable().optional(),
+  executionIndex: z.number().int().nonnegative().optional(),
   snapshot: z.unknown(),
   metadata: z.unknown().nullable().optional(),
 });
 
 const PlayModeSessionRowsSchema = z.array(PlayModeSessionRowSchema);
+export type PlayModeSessionRow = z.infer<typeof PlayModeSessionRowSchema>;
+
+const DeferredPayoutRowSchema = z.object({
+  id: z.number().int().positive(),
+  userId: z.number().int().positive(),
+  gameKey: PlayModeGameKeySchema,
+  mode: PlayModeTypeSchema,
+  status: DeferredPayoutStatusSchema,
+  balanceType: DeferredPayoutBalanceTypeSchema,
+  amount: z.union([z.string(), z.number()]),
+  sourceSessionId: z.number().int().positive().nullable().optional(),
+  sourceReferenceType: z.string().nullable().optional(),
+  sourceReferenceId: z.number().int().nullable().optional(),
+  triggerReferenceType: z.string().nullable().optional(),
+  triggerReferenceId: z.number().int().nullable().optional(),
+  metadata: z.unknown().nullable().optional(),
+});
+const DeferredPayoutRowsSchema = z.array(DeferredPayoutRowSchema);
+export type DeferredPayoutRow = z.infer<typeof DeferredPayoutRowSchema>;
 
 const STATIC_MODE_MULTIPLIERS: Record<PlayModeType, number> = {
   standard: 1,
@@ -62,6 +87,14 @@ const clampMultiplier = (value: unknown, fallback: number) => {
   const parsed = Math.floor(Number(value ?? fallback));
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
+
+const hasPendingPayout = (snapshot: PlayModeSnapshot) =>
+  snapshot.pendingPayoutCount > 0 ||
+  snapshot.pendingPayoutAmount !== "0.00" ||
+  snapshot.snowballCarryAmount !== "0.00" ||
+  snapshot.snowballEnvelopeAmount !== "0.00";
+
+export const hasPendingPlayModePayout = hasPendingPayout;
 
 const parseStoredSnapshotValue = (value: unknown) => {
   if (typeof value !== "string") {
@@ -86,6 +119,10 @@ export const createDefaultPlayModeSnapshot = (
     streak: 0,
     lastOutcome: null,
     carryActive: false,
+    pendingPayoutAmount: "0.00",
+    pendingPayoutCount: 0,
+    snowballCarryAmount: "0.00",
+    snowballEnvelopeAmount: "0.00",
   };
 };
 
@@ -136,9 +173,12 @@ export const resolveRequestedPlayMode = (params: {
   return {
     ...storedSnapshot,
     type,
-    appliedMultiplier,
-    nextMultiplier: appliedMultiplier,
-    carryActive: appliedMultiplier > 1,
+    appliedMultiplier: 1,
+    nextMultiplier:
+      type === "snowball"
+        ? clampMultiplier(storedSnapshot.nextMultiplier, 1)
+        : 1,
+    carryActive: hasPendingPayout(storedSnapshot),
   };
 };
 
@@ -164,71 +204,68 @@ export const resolveSettledPlayMode = (params: {
   }
 
   if (snapshot.type === "deferred_double") {
-    if (outcome === "lose" || outcome === "miss") {
-      return {
-        type: "deferred_double",
-        appliedMultiplier: snapshot.appliedMultiplier,
-        nextMultiplier: 2,
-        streak: snapshot.streak + 1,
-        lastOutcome: outcome,
-        carryActive: true,
-      };
-    }
-
-    if (outcome === "push") {
-      return {
-        type: "deferred_double",
-        appliedMultiplier: snapshot.appliedMultiplier,
-        nextMultiplier: snapshot.appliedMultiplier,
-        streak: snapshot.streak,
-        lastOutcome: outcome,
-        carryActive: snapshot.appliedMultiplier > 1,
-      };
-    }
-
     return {
       type: "deferred_double",
-      appliedMultiplier: snapshot.appliedMultiplier,
+      appliedMultiplier: 1,
       nextMultiplier: 1,
       streak: 0,
       lastOutcome: outcome,
-      carryActive: false,
+      carryActive: hasPendingPayout(snapshot),
+      pendingPayoutAmount: snapshot.pendingPayoutAmount,
+      pendingPayoutCount: snapshot.pendingPayoutCount,
+      snowballCarryAmount: snapshot.snowballCarryAmount,
+      snowballEnvelopeAmount: snapshot.snowballEnvelopeAmount,
     };
   }
 
+  const nextStreak =
+    outcome === "win"
+      ? snapshot.streak + 1
+      : outcome === "push"
+        ? snapshot.streak
+        : 0;
+
   if (outcome === "win") {
-    const nextMultiplier = Math.min(
-      snapshot.appliedMultiplier + 1,
-      MAX_SNOWBALL_MULTIPLIER,
-    );
     return {
       type: "snowball",
-      appliedMultiplier: snapshot.appliedMultiplier,
-      nextMultiplier,
-      streak: snapshot.streak + 1,
+      appliedMultiplier: 1,
+      nextMultiplier: Math.min(Math.max(1, nextStreak + 1), MAX_SNOWBALL_MULTIPLIER),
+      streak: nextStreak,
       lastOutcome: outcome,
-      carryActive: nextMultiplier > 1,
+      carryActive: hasPendingPayout(snapshot),
+      pendingPayoutAmount: snapshot.pendingPayoutAmount,
+      pendingPayoutCount: snapshot.pendingPayoutCount,
+      snowballCarryAmount: snapshot.snowballCarryAmount,
+      snowballEnvelopeAmount: snapshot.snowballEnvelopeAmount,
     };
   }
 
   if (outcome === "push") {
     return {
       type: "snowball",
-      appliedMultiplier: snapshot.appliedMultiplier,
-      nextMultiplier: snapshot.appliedMultiplier,
-      streak: snapshot.streak,
+      appliedMultiplier: 1,
+      nextMultiplier: Math.min(Math.max(1, nextStreak + 1), MAX_SNOWBALL_MULTIPLIER),
+      streak: nextStreak,
       lastOutcome: outcome,
-      carryActive: snapshot.appliedMultiplier > 1,
+      carryActive: hasPendingPayout(snapshot),
+      pendingPayoutAmount: snapshot.pendingPayoutAmount,
+      pendingPayoutCount: snapshot.pendingPayoutCount,
+      snowballCarryAmount: snapshot.snowballCarryAmount,
+      snowballEnvelopeAmount: snapshot.snowballEnvelopeAmount,
     };
   }
 
   return {
     type: "snowball",
-    appliedMultiplier: snapshot.appliedMultiplier,
+    appliedMultiplier: 1,
     nextMultiplier: 1,
     streak: 0,
     lastOutcome: outcome,
-    carryActive: false,
+    carryActive: hasPendingPayout(snapshot),
+    pendingPayoutAmount: snapshot.pendingPayoutAmount,
+    pendingPayoutCount: snapshot.pendingPayoutCount,
+    snowballCarryAmount: snapshot.snowballCarryAmount,
+    snowballEnvelopeAmount: snapshot.snowballEnvelopeAmount,
   };
 };
 
@@ -247,6 +284,28 @@ const parsePlayModeSessionRows = (result: unknown) => {
   }
   return parsed.data;
 };
+
+const parseDeferredPayoutRows = (result: unknown) => {
+  const parsed = parseSchema(DeferredPayoutRowsSchema, readSqlRows(result));
+  if (!parsed.isValid) {
+    return [];
+  }
+  return parsed.data;
+};
+
+const selectPlayModeSessionColumns = sql`
+  id,
+  parent_session_id AS "parentSessionId",
+  game_key AS "gameKey",
+  mode,
+  status,
+  outcome,
+  reference_type AS "referenceType",
+  reference_id AS "referenceId",
+  execution_index AS "executionIndex",
+  snapshot,
+  metadata
+`;
 
 const loadLatestSnapshotForMode = async (
   db: DbExecutor,
@@ -337,19 +396,23 @@ export const startPlayModeSession = async (params: {
   gameKey: PlayModeGameKey;
   mode: PlayModeType;
   snapshot: PlayModeSnapshot;
+  parentSessionId?: number | null;
   referenceType?: string | null;
   referenceId?: number | null;
+  executionIndex?: number;
   metadata?: Record<string, unknown> | null;
 }) => {
   const [session] = await params.tx
     .insert(playModeSessions)
     .values({
+      parentSessionId: params.parentSessionId ?? null,
       userId: params.userId,
       gameKey: params.gameKey,
       mode: params.mode,
       status: "active",
       referenceType: params.referenceType ?? null,
       referenceId: params.referenceId ?? null,
+      executionIndex: params.executionIndex ?? 0,
       snapshot: params.snapshot,
       metadata: params.metadata ?? null,
     })
@@ -365,11 +428,21 @@ export const loadActivePlayModeSession = async (
   params: {
     userId: number;
     gameKey: PlayModeGameKey;
+    parentSessionId?: number | null;
     referenceType?: string | null;
     referenceId?: number | null;
+    includeChildSessions?: boolean;
     lock?: boolean;
   },
 ) => {
+  const parentSessionClause =
+    params.includeChildSessions
+      ? sql``
+      : params.parentSessionId === undefined
+      ? sql`AND parent_session_id IS NULL`
+      : params.parentSessionId === null
+        ? sql`AND parent_session_id IS NULL`
+        : sql`AND parent_session_id = ${params.parentSessionId}`;
   const referenceTypeClause =
     params.referenceType === undefined
       ? sql``
@@ -381,19 +454,12 @@ export const loadActivePlayModeSession = async (
   const lockClause = params.lock === false ? sql`` : sql`FOR UPDATE`;
 
   const result = await tx.execute(sql`
-    SELECT id,
-           game_key AS "gameKey",
-           mode,
-           status,
-           outcome,
-           reference_type AS "referenceType",
-           reference_id AS "referenceId",
-           snapshot,
-           metadata
+    SELECT ${selectPlayModeSessionColumns}
     FROM ${playModeSessions}
     WHERE user_id = ${params.userId}
       AND game_key = ${params.gameKey}
       AND status = ${"active"}
+      ${parentSessionClause}
       ${referenceTypeClause}
       ${referenceIdClause}
     ORDER BY started_at DESC, id DESC
@@ -403,6 +469,45 @@ export const loadActivePlayModeSession = async (
 
   const rows = parsePlayModeSessionRows(result);
   return rows[0] ?? null;
+};
+
+export const loadPlayModeSessionById = async (
+  tx: DbTransaction,
+  params: {
+    sessionId: number;
+    lock?: boolean;
+  },
+) => {
+  const lockClause = params.lock === false ? sql`` : sql`FOR UPDATE`;
+  const result = await tx.execute(sql`
+    SELECT ${selectPlayModeSessionColumns}
+    FROM ${playModeSessions}
+    WHERE id = ${params.sessionId}
+    LIMIT 1
+    ${lockClause}
+  `);
+
+  const rows = parsePlayModeSessionRows(result);
+  return rows[0] ?? null;
+};
+
+export const loadPlayModeSessionsByParent = async (
+  tx: DbTransaction,
+  params: {
+    parentSessionId: number;
+    lock?: boolean;
+  },
+) => {
+  const lockClause = params.lock === false ? sql`` : sql`FOR UPDATE`;
+  const result = await tx.execute(sql`
+    SELECT ${selectPlayModeSessionColumns}
+    FROM ${playModeSessions}
+    WHERE parent_session_id = ${params.parentSessionId}
+    ORDER BY execution_index ASC, started_at ASC, id ASC
+    ${lockClause}
+  `);
+
+  return parsePlayModeSessionRows(result);
 };
 
 export const updatePlayModeSessionReference = async (params: {
@@ -495,6 +600,129 @@ export const cancelPlayModeSession = async (params: {
       updatedAt: new Date(),
     })
     .where(eq(playModeSessions.id, params.sessionId));
+};
+
+export const loadDeferredPayoutRows = async (
+  tx: DbTransaction,
+  params: {
+    userId: number;
+    gameKey: PlayModeGameKey;
+    mode: PlayModeType;
+    status?: z.infer<typeof DeferredPayoutStatusSchema>;
+    lock?: boolean;
+  },
+) => {
+  const statusClause =
+    params.status === undefined ? sql`` : sql`AND status = ${params.status}`;
+  const lockClause = params.lock === false ? sql`` : sql`FOR UPDATE`;
+
+  const result = await tx.execute(sql`
+    SELECT
+      id,
+      user_id AS "userId",
+      game_key AS "gameKey",
+      mode,
+      status,
+      balance_type AS "balanceType",
+      amount,
+      source_session_id AS "sourceSessionId",
+      source_reference_type AS "sourceReferenceType",
+      source_reference_id AS "sourceReferenceId",
+      trigger_reference_type AS "triggerReferenceType",
+      trigger_reference_id AS "triggerReferenceId",
+      metadata
+    FROM ${deferredPayouts}
+    WHERE user_id = ${params.userId}
+      AND game_key = ${params.gameKey}
+      AND mode = ${params.mode}
+      ${statusClause}
+    ORDER BY created_at ASC, id ASC
+    ${lockClause}
+  `);
+
+  return parseDeferredPayoutRows(result);
+};
+
+export const createDeferredPayout = async (params: {
+  tx: DbTransaction;
+  userId: number;
+  gameKey: PlayModeGameKey;
+  mode: PlayModeType;
+  balanceType: DeferredPayoutBalanceType;
+  amount: string;
+  sourceSessionId?: number | null;
+  sourceReferenceType?: string | null;
+  sourceReferenceId?: number | null;
+  metadata?: Record<string, unknown> | null;
+}) => {
+  const [row] = await params.tx
+    .insert(deferredPayouts)
+    .values({
+      userId: params.userId,
+      gameKey: params.gameKey,
+      mode: params.mode,
+      status: "pending",
+      balanceType: params.balanceType,
+      amount: params.amount,
+      sourceSessionId: params.sourceSessionId ?? null,
+      sourceReferenceType: params.sourceReferenceType ?? null,
+      sourceReferenceId: params.sourceReferenceId ?? null,
+      metadata: params.metadata ?? null,
+    })
+    .returning({
+      id: deferredPayouts.id,
+    });
+
+  return row?.id ?? null;
+};
+
+export const markDeferredPayoutsReleased = async (params: {
+  tx: DbTransaction;
+  payoutIds: number[];
+  triggerReferenceType?: string | null;
+  triggerReferenceId?: number | null;
+  metadataPatch?: Record<string, unknown> | null;
+}) => {
+  if (params.payoutIds.length === 0) {
+    return;
+  }
+
+  const rows = await params.tx
+    .select({
+      id: deferredPayouts.id,
+      metadata: deferredPayouts.metadata,
+    })
+    .from(deferredPayouts)
+    .where(inArray(deferredPayouts.id, params.payoutIds));
+
+  const metadataById = new Map(
+    rows.map((row) => [row.id, row.metadata] as const),
+  );
+  const releasedAt = new Date();
+  for (const payoutId of params.payoutIds) {
+    const existingMetadata = metadataById.get(payoutId);
+    await params.tx
+      .update(deferredPayouts)
+      .set({
+        status: "released",
+        triggerReferenceType: params.triggerReferenceType ?? null,
+        triggerReferenceId: params.triggerReferenceId ?? null,
+        releasedAt,
+        updatedAt: releasedAt,
+        metadata:
+          params.metadataPatch === undefined
+            ? existingMetadata ?? null
+            : {
+                ...((existingMetadata &&
+                  typeof existingMetadata === "object" &&
+                  !Array.isArray(existingMetadata)
+                  ? existingMetadata
+                  : {}) as Record<string, unknown>),
+                ...params.metadataPatch,
+              },
+      })
+      .where(eq(deferredPayouts.id, payoutId));
+  }
 };
 
 export const loadUserPlayModeSnapshot = async (

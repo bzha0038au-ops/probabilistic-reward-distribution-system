@@ -1,10 +1,13 @@
 import { createHash } from 'node:crypto';
+import Decimal from 'decimal.js';
 
 import {
   freezeRecords,
   handHistories,
+  houseAccount,
   holdemTableMessages,
   ledgerEntries,
+  deferredPayouts,
   playModeSessions,
   holdemTableSeats,
   holdemTables,
@@ -268,6 +271,99 @@ const seedVerifiedHoldemUserSession = async (params: {
   };
 };
 
+const waitForHoldemTable = async (params: {
+  tableId: number;
+  headers: Record<string, string>;
+  predicate: (table: Record<string, unknown>) => boolean;
+  attempts?: number;
+}) => {
+  const attempts = params.attempts ?? 30;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const tableResponse = await getApp().inject({
+      method: 'GET',
+      url: `/holdem/tables/${params.tableId}`,
+      headers: params.headers,
+    });
+    expect(tableResponse.statusCode).toBe(200);
+    const table = tableResponse.json().data.table as Record<string, unknown>;
+    if (params.predicate(table)) {
+      return table;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+
+  throw new Error(`Timed out waiting for holdem table ${params.tableId}.`);
+};
+
+const readUserWalletSnapshot = async (userId: number) => {
+  const [wallet] = await getDb()
+    .select({
+      withdrawableBalance: userWallets.withdrawableBalance,
+      bonusBalance: userWallets.bonusBalance,
+      lockedBalance: userWallets.lockedBalance,
+    })
+    .from(userWallets)
+    .where(eq(userWallets.userId, userId))
+    .limit(1);
+  return expectPresent(wallet);
+};
+
+const readHouseBankroll = async () => {
+  const [house] = await getDb()
+    .select({ houseBankroll: houseAccount.houseBankroll })
+    .from(houseAccount)
+    .limit(1);
+  return new Decimal(house?.houseBankroll ?? '0.00');
+};
+
+const playHoldemHandToSettlement = async (params: {
+  tableId: number;
+  headers: Record<string, string>;
+}) => {
+  for (let step = 0; step < 12; step += 1) {
+    const table = await waitForHoldemTable({
+      tableId: params.tableId,
+      headers: params.headers,
+      predicate: (nextTable) =>
+        nextTable.status === 'waiting' ||
+        nextTable.pendingActorSeatIndex === nextTable.heroSeatIndex,
+    });
+
+    if (table.status === 'waiting') {
+      return table;
+    }
+
+    const availableActions = table.availableActions as { actions?: string[] } | null;
+    const actions = Array.isArray(availableActions?.actions)
+      ? availableActions.actions
+      : [];
+    const action = actions.includes('check')
+      ? 'check'
+      : actions.includes('call')
+        ? 'call'
+        : actions.includes('fold')
+          ? 'fold'
+          : actions.includes('all_in')
+            ? 'all_in'
+            : null;
+    if (!action) {
+      throw new Error(`No supported holdem action remained for table ${params.tableId}.`);
+    }
+
+    const actionResponse = await getApp().inject({
+      method: 'POST',
+      url: `/holdem/tables/${params.tableId}/action`,
+      headers: params.headers,
+      payload: {
+        action,
+      },
+    });
+    expect(actionResponse.statusCode).toBe(200);
+  }
+
+  throw new Error(`Timed out settling holdem hand ${params.tableId}.`);
+};
+
 const rigStartedHoldemCards = async (params: {
   tableId: number;
   boardCards: Array<{ rank: string; suit: string }>;
@@ -485,6 +581,189 @@ describeIntegrationSuite('backend holdem integration', () => {
         },
       },
     });
+  });
+
+  it('creates casual holdem bot seats without funding bot wallets and auto-returns action to the human seat', async () => {
+    const { headers } = await seedVerifiedHoldemUserSession({
+      email: 'holdem-casual-bot-owner@example.com',
+      withdrawableBalance: '0.00',
+      bonusBalance: '500.00',
+    });
+
+    const createResponse = await getApp().inject({
+      method: 'POST',
+      url: '/holdem/tables',
+      headers,
+      payload: {
+        tableName: 'Casual Bot Table',
+        buyInAmount: '50.00',
+        tableType: 'casual',
+        maxSeats: 6,
+        botCount: 5,
+      },
+    });
+    expect(createResponse.statusCode).toBe(201);
+
+    const createdTable = createResponse.json().data.table as {
+      id: number;
+      heroSeatIndex: number | null;
+      seats: Array<{
+        seatIndex: number;
+        userId: number | null;
+        isBot: boolean;
+      }>;
+    };
+    const botUserIds = createdTable.seats
+      .filter((seat) => seat.isBot && seat.userId !== null)
+      .map((seat) => seat.userId as number);
+
+    expect(createdTable.seats.filter((seat) => seat.isBot)).toHaveLength(5);
+    expect(botUserIds).toHaveLength(5);
+
+    const allBotWallets = await Promise.all(
+      botUserIds.map(async (botUserId) =>
+        getDb()
+          .select({
+            withdrawableBalance: userWallets.withdrawableBalance,
+            bonusBalance: userWallets.bonusBalance,
+            lockedBalance: userWallets.lockedBalance,
+          })
+          .from(userWallets)
+          .where(eq(userWallets.userId, botUserId))
+          .limit(1),
+      ),
+    );
+    expect(allBotWallets.flat()).toHaveLength(5);
+    allBotWallets.flat().forEach((wallet) => {
+      expect(wallet).toMatchObject({
+        withdrawableBalance: '0.00',
+        bonusBalance: '0.00',
+        lockedBalance: '0.00',
+      });
+    });
+
+    const startResponse = await getApp().inject({
+      method: 'POST',
+      url: `/holdem/tables/${createdTable.id}/start`,
+      headers,
+    });
+    expect(startResponse.statusCode).toBe(200);
+
+    const heroSeatIndex =
+      (startResponse.json().data.table.heroSeatIndex as number | null) ??
+      createdTable.heroSeatIndex;
+    expect(heroSeatIndex).not.toBeNull();
+
+    const advancedTable = await waitForHoldemTable({
+      tableId: createdTable.id,
+      headers,
+      predicate: (table) =>
+        table.status === 'active' &&
+        table.pendingActorSeatIndex === heroSeatIndex &&
+        Array.isArray(table.seats) &&
+        (table.seats as Array<{ isBot: boolean; lastAction: string | null }>).some(
+          (seat) => seat.isBot && seat.lastAction !== null,
+        ),
+    });
+
+    expect(advancedTable).toMatchObject({
+      status: 'active',
+      pendingActorSeatIndex: heroSeatIndex,
+      availableActions: expect.any(Object),
+    });
+  });
+
+  it('adds bot seats to a waiting casual holdem table through the bot seat route', async () => {
+    const { headers } = await seedVerifiedHoldemUserSession({
+      email: 'holdem-casual-add-bots@example.com',
+      withdrawableBalance: '0.00',
+      bonusBalance: '500.00',
+    });
+
+    const createResponse = await getApp().inject({
+      method: 'POST',
+      url: '/holdem/tables',
+      headers,
+      payload: {
+        tableName: 'Casual Add Bots Table',
+        buyInAmount: '50.00',
+        tableType: 'casual',
+        maxSeats: 6,
+      },
+    });
+    expect(createResponse.statusCode).toBe(201);
+    const tableId = createResponse.json().data.table.id as number;
+
+    const addBotsResponse = await getApp().inject({
+      method: 'POST',
+      url: `/holdem/tables/${tableId}/bots`,
+      headers,
+      payload: {
+        count: 5,
+        buyInAmount: '50.00',
+      },
+    });
+    expect(addBotsResponse.statusCode).toBe(200);
+    expect(addBotsResponse.json().data.table.seats).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          isBot: true,
+        }),
+      ]),
+    );
+    expect(
+      addBotsResponse
+        .json()
+        .data.table.seats.filter((seat: { isBot: boolean }) => seat.isBot),
+    ).toHaveLength(5);
+  });
+
+  it('settles casual bot hands against the house bankroll instead of minting player locked balance', async () => {
+    const { user, headers } = await seedVerifiedHoldemUserSession({
+      email: 'holdem-casual-bot-bankroll@example.com',
+      withdrawableBalance: '0.00',
+      bonusBalance: '500.00',
+    });
+
+    const createResponse = await getApp().inject({
+      method: 'POST',
+      url: '/holdem/tables',
+      headers,
+      payload: {
+        tableName: 'Casual Bot Bankroll Table',
+        buyInAmount: '50.00',
+        tableType: 'casual',
+        maxSeats: 2,
+        botCount: 1,
+      },
+    });
+    expect(createResponse.statusCode).toBe(201);
+    const tableId = createResponse.json().data.table.id as number;
+
+    const houseBefore = await readHouseBankroll();
+    const walletAfterCreate = await readUserWalletSnapshot(user.id);
+    const lockedBeforeHand = new Decimal(walletAfterCreate.lockedBalance);
+    expect(lockedBeforeHand.gt(0)).toBe(true);
+
+    const startResponse = await getApp().inject({
+      method: 'POST',
+      url: `/holdem/tables/${tableId}/start`,
+      headers,
+    });
+    expect(startResponse.statusCode).toBe(200);
+
+    await playHoldemHandToSettlement({
+      tableId,
+      headers,
+    });
+
+    const houseAfter = await readHouseBankroll();
+    const walletAfterHand = await readUserWalletSnapshot(user.id);
+    const lockedAfterHand = new Decimal(walletAfterHand.lockedBalance);
+
+    expect(houseAfter.minus(houseBefore).toFixed(2)).toBe(
+      lockedBeforeHand.minus(lockedAfterHand).toFixed(2),
+    );
   });
 
   it('creates a holdem tournament with pooled prize metadata and withdrawable buy-ins', async () => {
@@ -998,7 +1277,7 @@ describeIntegrationSuite('backend holdem integration', () => {
     });
   });
 
-  it('applies holdem dual_bet as a buy-in wrapper without changing the table engine', async () => {
+  it('opens two linked holdem tables for dual_bet without changing the table engine', async () => {
     const user = await seedUserWithWallet({
       email: 'holdem-dual-bet@example.com',
       withdrawableBalance: '500.00',
@@ -1039,6 +1318,33 @@ describeIntegrationSuite('backend holdem integration', () => {
     });
 
     expect(createResponse.statusCode).toBe(201);
+    expect(createResponse.json()).toMatchObject({
+      ok: true,
+      data: {
+        table: {
+          linkedGroup: expect.objectContaining({
+            executionIndex: 1,
+            executionCount: 2,
+          }),
+        },
+        tables: [
+          expect.objectContaining({
+            name: 'Dual Bet Holdem [1/2]',
+            linkedGroup: expect.objectContaining({
+              executionIndex: 1,
+              executionCount: 2,
+            }),
+          }),
+          expect.objectContaining({
+            name: 'Dual Bet Holdem [2/2]',
+            linkedGroup: expect.objectContaining({
+              executionIndex: 2,
+              executionCount: 2,
+            }),
+          }),
+        ],
+      },
+    });
 
     const [wallet] = await getDb()
       .select({
@@ -1053,27 +1359,63 @@ describeIntegrationSuite('backend holdem integration', () => {
       lockedBalance: '200.00',
     });
 
-    const [session] = await getDb()
+    const sessions = await getDb()
       .select({
+        id: playModeSessions.id,
+        parentSessionId: playModeSessions.parentSessionId,
+        referenceId: playModeSessions.referenceId,
+        executionIndex: playModeSessions.executionIndex,
         status: playModeSessions.status,
         mode: playModeSessions.mode,
         metadata: playModeSessions.metadata,
       })
       .from(playModeSessions)
       .where(eq(playModeSessions.userId, user.id))
-      .orderBy(asc(playModeSessions.id))
-      .limit(1);
-    expect(session).toMatchObject({
+      .orderBy(asc(playModeSessions.id));
+    expect(sessions).toHaveLength(3);
+    expect(sessions[0]).toMatchObject({
+      parentSessionId: null,
       status: 'active',
       mode: 'dual_bet',
       metadata: expect.objectContaining({
         baseBuyInAmount: '100.00',
-        effectiveBuyInAmount: '200.00',
+        effectiveBuyInAmount: '100.00',
       }),
+    });
+    expect(sessions[1]).toMatchObject({
+      parentSessionId: sessions[0]?.id ?? null,
+      executionIndex: 1,
+      status: 'active',
+      mode: 'dual_bet',
+      metadata: expect.objectContaining({
+        effectiveBuyInAmount: '100.00',
+      }),
+    });
+    expect(sessions[2]).toMatchObject({
+      parentSessionId: sessions[0]?.id ?? null,
+      executionIndex: 2,
+      status: 'active',
+      mode: 'dual_bet',
+      metadata: expect.objectContaining({
+        effectiveBuyInAmount: '100.00',
+      }),
+    });
+
+    const lobbyResponse = await getApp().inject({
+      method: 'GET',
+      url: '/holdem/tables',
+      headers,
+    });
+    expect(lobbyResponse.statusCode).toBe(200);
+    expect(lobbyResponse.json()).toMatchObject({
+      ok: true,
+      data: {
+        activeTableIds: [sessions[1]?.referenceId, sessions[2]?.referenceId],
+      },
     });
   });
 
-  it('settles holdem deferred_double sessions on cash-out and arms the next multiplier after a loss', async () => {
+  it('defers positive holdem profit and releases it on the next table for deferred_double', async () => {
     const user = await seedUserWithWallet({
       email: 'holdem-deferred-double@example.com',
       withdrawableBalance: '500.00',
@@ -1107,7 +1449,7 @@ describeIntegrationSuite('backend holdem integration', () => {
     await getDb()
       .update(holdemTableSeats)
       .set({
-        stackAmount: '40.00',
+        stackAmount: '140.00',
       })
       .where(
         and(
@@ -1118,7 +1460,7 @@ describeIntegrationSuite('backend holdem integration', () => {
     await getDb()
       .update(userWallets)
       .set({
-        lockedBalance: '40.00',
+        lockedBalance: '140.00',
       })
       .where(eq(userWallets.userId, user.id));
 
@@ -1142,14 +1484,43 @@ describeIntegrationSuite('backend holdem integration', () => {
       .limit(1);
     expect(session).toMatchObject({
       status: 'settled',
-      outcome: 'lose',
+      outcome: 'win',
       snapshot: expect.objectContaining({
         type: 'deferred_double',
-        nextMultiplier: 2,
-        lastOutcome: 'lose',
+        pendingPayoutAmount: '40.00',
+        pendingPayoutCount: 1,
+        lastOutcome: 'win',
         carryActive: true,
       }),
     });
+
+    const [walletAfterLeave] = await getDb()
+      .select({
+        withdrawableBalance: userWallets.withdrawableBalance,
+        lockedBalance: userWallets.lockedBalance,
+      })
+      .from(userWallets)
+      .where(eq(userWallets.userId, user.id))
+      .limit(1);
+    expect(walletAfterLeave).toMatchObject({
+      withdrawableBalance: '500.00',
+      lockedBalance: '40.00',
+    });
+
+    const pendingRows = await getDb()
+      .select({
+        amount: deferredPayouts.amount,
+        status: deferredPayouts.status,
+      })
+      .from(deferredPayouts)
+      .where(eq(deferredPayouts.userId, user.id))
+      .orderBy(asc(deferredPayouts.id));
+    expect(pendingRows).toEqual([
+      expect.objectContaining({
+        amount: '40.00',
+        status: 'pending',
+      }),
+    ]);
 
     const [storedMode] = await getDb()
       .select({
@@ -1162,9 +1533,47 @@ describeIntegrationSuite('backend holdem integration', () => {
     expect(storedMode).toMatchObject({
       mode: 'deferred_double',
       state: expect.objectContaining({
-        nextMultiplier: 2,
-        lastOutcome: 'lose',
+        pendingPayoutAmount: '40.00',
+        pendingPayoutCount: 1,
+        lastOutcome: 'win',
       }),
+    });
+
+    const nextCreateResponse = await getApp().inject({
+      method: 'POST',
+      url: '/holdem/tables',
+      headers,
+      payload: {
+        tableName: 'Deferred Double Follow Up',
+        buyInAmount: '100.00',
+      },
+    });
+    expect(nextCreateResponse.statusCode).toBe(201);
+
+    const [walletAfterNextCreate] = await getDb()
+      .select({
+        withdrawableBalance: userWallets.withdrawableBalance,
+        lockedBalance: userWallets.lockedBalance,
+      })
+      .from(userWallets)
+      .where(eq(userWallets.userId, user.id))
+      .limit(1);
+    expect(walletAfterNextCreate).toMatchObject({
+      withdrawableBalance: '440.00',
+      lockedBalance: '100.00',
+    });
+
+    const releasedRows = await getDb()
+      .select({
+        amount: deferredPayouts.amount,
+        status: deferredPayouts.status,
+      })
+      .from(deferredPayouts)
+      .where(eq(deferredPayouts.userId, user.id))
+      .orderBy(asc(deferredPayouts.id));
+    expect(releasedRows[0]).toMatchObject({
+      amount: '40.00',
+      status: 'released',
     });
   });
 
@@ -1574,6 +1983,196 @@ describeIntegrationSuite('backend holdem integration', () => {
         }),
       ]),
     );
+  });
+
+  it('starts a solo casual holdem hand and settles it through showdown', async () => {
+    const { user, headers } = await seedVerifiedHoldemUserSession({
+      email: 'holdem-solo-casual@example.com',
+      withdrawableBalance: '0.00',
+      bonusBalance: '250.00',
+    });
+
+    const createResponse = await getApp().inject({
+      method: 'POST',
+      url: '/holdem/tables',
+      headers,
+      payload: {
+        tableName: 'Solo Casual Holdem',
+        buyInAmount: '50.00',
+        tableType: 'casual',
+        maxSeats: 2,
+      },
+    });
+    expect(createResponse.statusCode).toBe(201);
+    const tableId = createResponse.json().data.table.id as number;
+
+    const tablesResponse = await getApp().inject({
+      method: 'GET',
+      url: '/holdem/tables',
+      headers,
+    });
+    expect(tablesResponse.statusCode).toBe(200);
+    expect(tablesResponse.json().data.tables).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: tableId,
+          tableType: 'casual',
+          canStart: true,
+        }),
+      ]),
+    );
+
+    const startResponse = await getApp().inject({
+      method: 'POST',
+      url: `/holdem/tables/${tableId}/start`,
+      headers,
+      payload: {},
+    });
+    expect(startResponse.statusCode).toBe(200);
+    let currentTable = startResponse.json().data.table as {
+      status: string;
+      stage: string | null;
+      pendingActorSeatIndex: number | null;
+      smallBlindSeatIndex: number | null;
+      bigBlindSeatIndex: number | null;
+      revealedSeatIndexes: number[];
+      winnerSeatIndexes: number[];
+      fairness: {
+        revealSeed: string | null;
+      } | null;
+      availableActions: {
+        actions: string[];
+      } | null;
+      seats: Array<{
+        seatIndex: number;
+        userId: number | null;
+        isDealer: boolean;
+      }>;
+      recentHands: Array<{
+        roundId: string | null;
+        handNumber: number;
+        winnerSeatIndexes: number[];
+        potAmount: string;
+      }>;
+    };
+    const heroSeat = expectPresent(
+      currentTable.seats.find((seat) => seat.userId === user.id),
+    );
+
+    expect(currentTable).toMatchObject({
+      status: 'active',
+      stage: 'preflop',
+      pendingActorSeatIndex: heroSeat.seatIndex,
+      availableActions: {
+        actions: ['check'],
+      },
+    });
+    expect(heroSeat.isDealer).toBe(true);
+
+    for (const expectedStage of ['flop', 'turn', 'river']) {
+      const actionResponse = await getApp().inject({
+        method: 'POST',
+        url: `/holdem/tables/${tableId}/action`,
+        headers,
+        payload: {
+          action: 'check',
+        },
+      });
+      expect(actionResponse.statusCode).toBe(200);
+      currentTable = actionResponse.json().data.table as typeof currentTable;
+      expect(currentTable).toMatchObject({
+        status: 'active',
+        stage: expectedStage,
+        pendingActorSeatIndex: heroSeat.seatIndex,
+      });
+      expect(currentTable.availableActions?.actions).toEqual(['check']);
+    }
+
+    const settledResponse = await getApp().inject({
+      method: 'POST',
+      url: `/holdem/tables/${tableId}/action`,
+      headers,
+      payload: {
+        action: 'check',
+      },
+    });
+    expect(settledResponse.statusCode).toBe(200);
+    currentTable = settledResponse.json().data.table as typeof currentTable;
+
+    expect(currentTable).toMatchObject({
+      status: 'waiting',
+      stage: 'showdown',
+      pendingActorSeatIndex: null,
+      fairness: {
+        revealSeed: expect.any(String),
+      },
+    });
+    expect(
+      currentTable.seats.find((seat) => seat.userId === user.id),
+    ).toMatchObject({
+      seatIndex: heroSeat.seatIndex,
+      isDealer: true,
+      winner: true,
+      bestHand: expect.objectContaining({
+        label: expect.any(String),
+      }),
+    });
+    expect(currentTable.recentHands).toHaveLength(1);
+    expect(currentTable.recentHands[0]).toMatchObject({
+      winnerSeatIndexes: [heroSeat.seatIndex],
+      potAmount: '0.00',
+      roundId: expect.stringMatching(/^holdem:\d+$/),
+    });
+
+    const recentHand = expectPresent(currentTable.recentHands[0]);
+    const handHistoryId = Number(recentHand.roundId?.split(':')[1] ?? 0);
+    expect(handHistoryId).toBeGreaterThan(0);
+
+    const storedRoundEvents = await getDb()
+      .select({
+        eventType: roundEvents.eventType,
+      })
+      .from(roundEvents)
+      .where(
+        and(
+          eq(roundEvents.roundType, 'holdem'),
+          eq(roundEvents.roundEntityId, handHistoryId),
+        ),
+      )
+      .orderBy(asc(roundEvents.eventIndex));
+
+    const roundEventTypes = storedRoundEvents.map((event) => event.eventType);
+    expect(roundEventTypes).toEqual(
+      expect.arrayContaining([
+        'hand_started',
+        'hole_cards_dealt',
+        'board_revealed',
+        'showdown_resolved',
+        'fairness_revealed',
+        'hand_settled',
+      ]),
+    );
+    expect(roundEventTypes).not.toContain('hand_won_by_fold');
+
+    const historyResponse = await getApp().inject({
+      method: 'GET',
+      url: `/hand-history/${encodeURIComponent(expectPresent(recentHand.roundId))}`,
+      headers,
+    });
+    expect(historyResponse.statusCode).toBe(200);
+    const historyPayload = historyResponse.json();
+    expect(
+      historyPayload.data.events.map((event: { type: string }) => event.type),
+    ).toEqual(
+      expect.arrayContaining([
+        'showdown_resolved',
+        'fairness_revealed',
+        'hand_settled',
+      ]),
+    );
+    expect(
+      historyPayload.data.events.map((event: { type: string }) => event.type),
+    ).not.toContain('hand_won_by_fold');
   });
 
   it('persists holdem table chat and emoji messages in table order', async () => {

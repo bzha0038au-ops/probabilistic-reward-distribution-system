@@ -373,13 +373,16 @@ const buildTableEngineDealerEvent = (params: {
   tableId: number;
   roundId: number;
   phase: string;
-  actionCode: string;
-  text: string;
+  kind?: DealerEvent['kind'];
+  actionCode?: string | null;
+  pace?: DealerEvent['pace'];
+  seatIndex?: number | null;
+  text?: string | null;
   source?: DealerEvent['source'];
   metadata?: Record<string, unknown> | null;
 }) =>
   buildDealerEvent({
-    kind: 'action',
+    kind: params.kind ?? 'action',
     source: params.source ?? 'rule',
     gameType: 'table_engine',
     tableId: params.tableId,
@@ -387,13 +390,118 @@ const buildTableEngineDealerEvent = (params: {
     roundId: `table_round:${params.roundId}`,
     referenceId: params.roundId,
     phase: params.phase,
-    actionCode: params.actionCode,
-    text: params.text,
+    seatIndex: params.seatIndex ?? null,
+    actionCode: params.actionCode ?? null,
+    pace: params.pace ?? null,
+    text: params.text ?? null,
     metadata: params.metadata ?? null,
   });
 
+const mapDealerEventToRoundEventType = (event: DealerEvent) => {
+  switch (event.kind) {
+    case 'message':
+      return 'dealer_message';
+    case 'pace_hint':
+      return 'dealer_pace_hint';
+    case 'action':
+      return 'dealer_action';
+  }
+};
+
 const publishTableEngineDealerEvent = (tableId: number, event: DealerEvent) => {
   publishDealerRealtimeToTopic(buildTableEngineRealtimeTopic(tableId), event);
+};
+
+const publishTableEngineDealerEvents = (tableId: number, events: DealerEvent[]) => {
+  for (const event of events) {
+    publishTableEngineDealerEvent(tableId, event);
+  }
+};
+
+const insertDealerRoundEvents = async (params: {
+  tx: DbTransaction;
+  tableId: number;
+  roundId: number;
+  phase: string;
+  events: DealerEvent[];
+}) => {
+  for (const event of params.events) {
+    await insertRoundEvent({
+      tx: params.tx,
+      tableId: params.tableId,
+      roundId: params.roundId,
+      phase: params.phase,
+      eventType: mapDealerEventToRoundEventType(event),
+      actor: 'dealer',
+      payload: {
+        dealerEvent: event,
+      },
+    });
+  }
+};
+
+const buildTableEngineDealerPhaseHook = (params: {
+  definition: TableDefinition;
+  tableId: number;
+  roundId: number;
+  roundNumber: number;
+  phase: string;
+  occupiedSeatCount: number;
+  fromPhase?: string | null;
+  actionCode: 'phase_opened' | 'phase_advanced';
+}) => {
+  const phaseDefinition = params.definition.phases.find(
+    (entry) => entry.key === params.phase,
+  );
+  if (!phaseDefinition) {
+    throw internalInvariantError(`Unknown phase "${params.phase}" in dealer hook.`);
+  }
+
+  const sharedMetadata = {
+    roundNumber: params.roundNumber,
+    fromPhase: params.fromPhase ?? null,
+    toPhase: params.phase,
+    occupiedSeatCount: params.occupiedSeatCount,
+    usesTimeBank: phaseDefinition.usesTimeBank,
+    durationMs: phaseDefinition.durationMs ?? null,
+  } satisfies Record<string, unknown>;
+
+  const syncEvents = [
+    buildTableEngineDealerEvent({
+      tableId: params.tableId,
+      roundId: params.roundId,
+      phase: params.phase,
+      actionCode: params.actionCode,
+      text:
+        params.actionCode === 'phase_opened'
+          ? `${params.phase} phase is open. Dealer flow is live.`
+          : `${params.phase} phase begins.`,
+      metadata: sharedMetadata,
+    }),
+    buildTableEngineDealerEvent({
+      tableId: params.tableId,
+      roundId: params.roundId,
+      phase: params.phase,
+      kind: 'pace_hint',
+      actionCode: 'phase_pace_hint',
+      pace: phaseDefinition.usesTimeBank
+        ? params.occupiedSeatCount <= params.definition.minSeats
+          ? 'expedite'
+          : 'normal'
+        : 'pause',
+      text: phaseDefinition.usesTimeBank
+        ? params.occupiedSeatCount <= params.definition.minSeats
+          ? 'Short-handed table. Keep decisions moving on the clock.'
+          : 'Action is live. Stay on the clock for this phase.'
+        : `${phaseDefinition.label} is resolving before action reopens.`,
+      metadata: sharedMetadata,
+    }),
+  ];
+
+  return {
+    syncEvents,
+    languageSummary: sharedMetadata,
+  };
 };
 
 const emitAsyncTableEngineDealerLanguageEvent = (params: {
@@ -1205,44 +1313,36 @@ export async function openRound(params: {
       },
     });
 
-    const dealerRuleEvent = buildTableEngineDealerEvent({
+    const dealerHook = buildTableEngineDealerPhaseHook({
+      definition,
       tableId: table.id,
       roundId: round.id,
+      roundNumber: round.roundNumber,
       phase: round.phase,
+      occupiedSeatCount: occupiedSeats.length,
       actionCode: 'phase_opened',
-      text: `${round.phase} is open. Dealer flow is live.`,
-      metadata: {
-        roundNumber: round.roundNumber,
-      },
     });
-    await insertRoundEvent({
+    await insertDealerRoundEvents({
       tx,
       tableId: table.id,
       roundId: round.id,
       phase: round.phase,
-      eventType: 'dealer_action',
-      actor: 'dealer',
-      payload: {
-        dealerEvent: dealerRuleEvent,
-      },
+      events: dealerHook.syncEvents,
     });
 
     return {
-      dealerRuleEvent,
+      dealerEvents: dealerHook.syncEvents,
+      dealerLanguageSummary: dealerHook.languageSummary,
       round,
     };
   });
 
-  publishTableEngineDealerEvent(result.round.tableId, result.dealerRuleEvent);
+  publishTableEngineDealerEvents(result.round.tableId, result.dealerEvents);
   emitAsyncTableEngineDealerLanguageEvent({
     tableId: result.round.tableId,
     roundId: result.round.id,
     phase: result.round.phase,
-    summary: {
-      roundNumber: result.round.roundNumber,
-      phase: result.round.phase,
-      actionCode: 'phase_opened',
-    },
+    summary: result.dealerLanguageSummary,
   });
 
   return result.round;
@@ -1359,44 +1459,41 @@ export async function advanceRoundPhase(params: {
     });
 
     const nextRound = mapRoundRow(updatedRound);
-    const dealerRuleEvent = buildTableEngineDealerEvent({
+    const tableSeats = await loadSeatsForTable(tx, table.id);
+    const occupiedSeatCount = tableSeats.filter(
+      (seat) => seat.status === 'occupied',
+    ).length;
+    const dealerHook = buildTableEngineDealerPhaseHook({
+      definition,
       tableId: table.id,
       roundId: round.id,
+      roundNumber: nextRound.roundNumber,
       phase: nextPhase,
+      occupiedSeatCount,
+      fromPhase: round.phase,
       actionCode: 'phase_advanced',
-      text: `${nextPhase} phase begins.`,
-      metadata: {
-        fromPhase: round.phase,
-        toPhase: nextPhase,
-      },
     });
-    await insertRoundEvent({
+    await insertDealerRoundEvents({
       tx,
       tableId: table.id,
       roundId: round.id,
       phase: nextPhase,
-      eventType: 'dealer_action',
-      actor: 'dealer',
-      payload: {
-        dealerEvent: dealerRuleEvent,
-      },
+      events: dealerHook.syncEvents,
     });
 
     return {
-      dealerRuleEvent,
+      dealerEvents: dealerHook.syncEvents,
+      dealerLanguageSummary: dealerHook.languageSummary,
       round: nextRound,
     };
   });
 
-  publishTableEngineDealerEvent(result.round.tableId, result.dealerRuleEvent);
+  publishTableEngineDealerEvents(result.round.tableId, result.dealerEvents);
   emitAsyncTableEngineDealerLanguageEvent({
     tableId: result.round.tableId,
     roundId: result.round.id,
     phase: result.round.phase,
-    summary: {
-      phase: result.round.phase,
-      actionCode: 'phase_advanced',
-    },
+    summary: result.dealerLanguageSummary,
   });
 
   return result.round;

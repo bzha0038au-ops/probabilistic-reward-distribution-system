@@ -9,6 +9,7 @@ import {
   HoldemCreateTableRequestSchema,
   HoldemJoinTableRequestSchema,
   HoldemRealtimeObservationsRequestSchema,
+  HoldemTableBotsRequestSchema,
   HoldemTableMessageRequestSchema,
   HoldemSeatModeRequestSchema,
   HoldemTableActionRequestSchema,
@@ -51,6 +52,7 @@ import {
   getBlackjackOverview,
 } from "../../modules/blackjack/service";
 import {
+  addHoldemBots,
   actOnHoldem,
   createHoldemTableMessage,
   getHoldemTable,
@@ -1005,6 +1007,7 @@ export async function registerUserRoutes(app: AppInstance) {
             buyInAmount: parsed.data.buyInAmount,
             tableType: parsed.data.tableType,
             maxSeats: parsed.data.maxSeats,
+            botCount: parsed.data.botCount,
             tournament: parsed.data.tournament,
           });
           return sendSuccess(reply, result, 201);
@@ -1063,6 +1066,41 @@ export async function registerUserRoutes(app: AppInstance) {
             error,
             "Holdem table join failed",
           );
+        }
+      },
+    );
+
+    protectedRoutes.post(
+      "/holdem/tables/:tableId/bots",
+      {
+        config: { rateLimit: drawRateLimit },
+        preHandler: [
+          enforceUserDrawLimit,
+          requireGameplayAccess,
+          requireExistingHoldemTableKycAccess,
+          requireVerifiedDrawUser,
+        ],
+      },
+      async (request, reply) => {
+        const user = request.user!;
+        const tableId = parsePositiveInt(request.params, "tableId");
+        if (!tableId) {
+          return sendError(reply, 400, "Invalid holdem table id.");
+        }
+
+        const parsed = parseSchema(
+          HoldemTableBotsRequestSchema,
+          toObject(request.body),
+        );
+        if (!parsed.isValid) {
+          return sendError(reply, 400, "Invalid request.", parsed.errors);
+        }
+
+        try {
+          const result = await addHoldemBots(user.userId, tableId, parsed.data);
+          return sendSuccess(reply, result);
+        } catch (error) {
+          return sendErrorForException(reply, error, "Holdem bot add failed");
         }
       },
     );

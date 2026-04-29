@@ -67,6 +67,7 @@ const buildOpenSeat = (
   seatIndex,
   userId: null,
   displayName: null,
+  isBot: false,
   connectionState: null,
   disconnectGraceExpiresAt: null,
   seatLeaseExpiresAt: null,
@@ -147,6 +148,7 @@ const patchSelectedHoldemTable = (params: {
       seatIndex: publicSeat.seatIndex,
       userId: publicSeat.userId,
       displayName: publicSeat.displayName,
+      isBot: publicSeat.isBot,
       connectionState: publicSeat.connectionState,
       disconnectGraceExpiresAt: publicSeat.disconnectGraceExpiresAt,
       seatLeaseExpiresAt: publicSeat.seatLeaseExpiresAt,
@@ -180,6 +182,7 @@ const patchSelectedHoldemTable = (params: {
       ...currentTable,
       id: publicTable.id,
       name: publicTable.name,
+      linkedGroup: publicTable.linkedGroup,
       tableType: publicTable.tableType,
       status: publicTable.status,
       rakePolicy: publicTable.rakePolicy,
@@ -208,6 +211,41 @@ const patchSelectedHoldemTable = (params: {
       recentHands: publicTable.recentHands,
       updatedAt: publicTable.updatedAt,
     },
+    tables: [
+      {
+        ...currentTable,
+        id: publicTable.id,
+        name: publicTable.name,
+        linkedGroup: publicTable.linkedGroup,
+        tableType: publicTable.tableType,
+        status: publicTable.status,
+        rakePolicy: publicTable.rakePolicy,
+        tournament: publicTable.tournament,
+        handNumber: publicTable.handNumber,
+        stage: publicTable.stage,
+        smallBlind: publicTable.smallBlind,
+        bigBlind: publicTable.bigBlind,
+        minimumBuyIn: publicTable.minimumBuyIn,
+        maximumBuyIn: publicTable.maximumBuyIn,
+        maxSeats: publicTable.maxSeats,
+        communityCards: publicTable.communityCards.map((card) => ({
+          rank: card.rank,
+          suit: card.suit,
+          hidden: false,
+        })),
+        pots: publicTable.pots,
+        seats,
+        pendingActorSeatIndex: publicTable.pendingActorSeatIndex,
+        pendingActorDeadlineAt: publicTable.pendingActorDeadlineAt,
+        pendingActorTimeBankStartsAt: publicTable.pendingActorTimeBankStartsAt,
+        pendingActorTimeoutAction: publicTable.pendingActorTimeoutAction,
+        availableActions: null,
+        fairness: publicTable.fairness,
+        dealerEvents: currentTable.dealerEvents,
+        recentHands: publicTable.recentHands,
+        updatedAt: publicTable.updatedAt,
+      },
+    ],
   } satisfies HoldemTableResponse;
 };
 
@@ -219,6 +257,7 @@ const patchLobbyTableSummary = (params: {
   const summary = {
     id: update.table.id,
     name: update.table.name,
+    linkedGroup: update.table.linkedGroup,
     tableType: update.table.tableType,
     status: update.table.status,
     rakePolicy: update.table.rakePolicy,
@@ -248,6 +287,7 @@ const patchLobbyTableSummary = (params: {
 
   return {
     currentTableId: tables.currentTableId,
+    activeTableIds: tables.activeTableIds,
     tables: nextTables,
   } satisfies HoldemTablesResponse;
 };
@@ -299,6 +339,7 @@ export const applyHoldemPrivateRealtimeUpdate = (params: {
   params.selectedHoldemTableId === params.update.table.id
     ? {
         table: params.update.table,
+        tables: [params.update.table],
       }
     : params.selectedHoldemTable;
 

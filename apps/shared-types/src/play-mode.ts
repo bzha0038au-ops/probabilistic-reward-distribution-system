@@ -36,6 +36,10 @@ export const PlayModeSnapshotSchema = z.object({
   streak: z.number().int().nonnegative(),
   lastOutcome: PlayModeOutcomeSchema.nullable(),
   carryActive: z.boolean(),
+  pendingPayoutAmount: z.string().default("0.00"),
+  pendingPayoutCount: z.number().int().nonnegative().default(0),
+  snowballCarryAmount: z.string().default("0.00"),
+  snowballEnvelopeAmount: z.string().default("0.00"),
 });
 export type PlayModeSnapshot = z.infer<typeof PlayModeSnapshotSchema>;
 

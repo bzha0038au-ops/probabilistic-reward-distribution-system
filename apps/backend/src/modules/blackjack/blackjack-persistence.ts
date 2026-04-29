@@ -70,14 +70,26 @@ export const loadLockedBlackjackUser = async (
 
 export const loadBlackjackGameRows = async (
   executor: DbExecutor,
-  params: { userId: number; settledOnly?: boolean; lock?: boolean },
+  params: {
+    userId: number;
+    settledOnly?: boolean;
+    lock?: boolean;
+    limit?: number | null;
+  },
 ) => {
   const { userId, settledOnly = false, lock = false } = params;
   const statusCondition = settledOnly
     ? sql`AND status <> 'active'`
     : sql`AND status = 'active'`;
   const lockClause = lock ? sql`FOR UPDATE` : sql``;
-  const limit = settledOnly ? sql`LIMIT ${MAX_RECENT_GAMES}` : sql`LIMIT 1`;
+  const resolvedLimit =
+    params.limit === undefined
+      ? settledOnly
+        ? MAX_RECENT_GAMES
+        : 1
+      : params.limit;
+  const limitClause =
+    resolvedLimit === null ? sql`` : sql`LIMIT ${resolvedLimit}`;
 
   const result = await executor.execute(sql`
     SELECT id,
@@ -99,7 +111,7 @@ export const loadBlackjackGameRows = async (
     WHERE user_id = ${userId}
       ${statusCondition}
     ORDER BY created_at DESC
-    ${limit}
+    ${limitClause}
     ${lockClause}
   `);
 
@@ -136,6 +148,7 @@ export const persistGameState = async (
     table: game.metadata.table,
     actionHistory: game.metadata.actionHistory,
     playMode: game.metadata.playMode,
+    linkedGroup: game.metadata.linkedGroup,
     playerHands: game.metadata.playerHands,
     activeHandIndex: game.metadata.activeHandIndex,
     dealerEvents: game.metadata.dealerEvents,
@@ -165,12 +178,15 @@ export const persistGameState = async (
 
 const buildBlackjackDealerRuleEvent = (params: {
   game: BlackjackGameState;
-  actionCode: string;
-  text: string;
+  kind?: DealerEvent["kind"];
+  actionCode?: string | null;
+  pace?: DealerEvent["pace"];
+  seatIndex?: number | null;
+  text?: string | null;
   metadata?: Record<string, unknown> | null;
 }) =>
   buildDealerEvent({
-    kind: "action",
+    kind: params.kind ?? "action",
     source: "rule",
     gameType: "blackjack",
     tableId: null,
@@ -178,8 +194,10 @@ const buildBlackjackDealerRuleEvent = (params: {
     roundId: `${BLACKJACK_ROUND_TYPE}:${params.game.id}`,
     referenceId: params.game.id,
     phase: params.game.status === "active" ? "active" : "settlement",
-    actionCode: params.actionCode,
-    text: params.text,
+    seatIndex: params.seatIndex ?? null,
+    actionCode: params.actionCode ?? null,
+    pace: params.pace ?? null,
+    text: params.text ?? null,
     metadata: params.metadata ?? null,
   });
 
@@ -276,6 +294,14 @@ export const settleGameByStatus = async (params: {
   const dealerFeedEvents = [
     buildBlackjackDealerRuleEvent({
       game,
+      actionCode: "dealer_reveal_hole_card",
+      text: "Dealer reveals the hole card.",
+      metadata: {
+        dealerCards: game.dealerCards,
+      },
+    }),
+    buildBlackjackDealerRuleEvent({
+      game,
       actionCode:
         status === "dealer_blackjack" ? "dealer_blackjack" : "hand_settled",
       text:
@@ -285,6 +311,13 @@ export const settleGameByStatus = async (params: {
       metadata: {
         status,
       },
+    }),
+    buildBlackjackDealerRuleEvent({
+      game,
+      kind: "pace_hint",
+      actionCode: "settlement_pause",
+      pace: "pause",
+      text: "Dealer is resolving the hand.",
     }),
   ];
   appendBlackjackDealerEvents(game, dealerFeedEvents);
@@ -374,6 +407,15 @@ export const settleResolvedHands = async (params: {
   game.metadata.activeHandIndex = null;
   const playerTotals = summarizePlayerTotals(game);
   const dealerFeedEvents = [
+    buildBlackjackDealerRuleEvent({
+      game,
+      actionCode: "dealer_reveal_hole_card",
+      text: "Dealer reveals the hole card.",
+      metadata: {
+        dealerCards: game.dealerCards,
+        dealerTotal: dealerScore.total,
+      },
+    }),
     ...dealerEvents.map((event) =>
       buildBlackjackDealerRuleEvent({
         game,
@@ -393,6 +435,13 @@ export const settleResolvedHands = async (params: {
         total: dealerScore.total,
         soft: dealerScore.soft,
       },
+    }),
+    buildBlackjackDealerRuleEvent({
+      game,
+      kind: "pace_hint",
+      actionCode: "settlement_pause",
+      pace: "pause",
+      text: "Dealer is resolving the hand.",
     }),
     buildBlackjackDealerRuleEvent({
       game,
@@ -488,6 +537,7 @@ export const insertInitialGame = async (params: {
   config: BlackjackConfig;
   fairness: BlackjackFairness;
   playMode: import("@reward/shared-types/play-mode").PlayModeSnapshot;
+  linkedGroup?: import("./game").ResolvedBlackjackLinkedGroup | null;
 }) => {
   await params.tx.execute(sql`
     INSERT INTO ${blackjackGames} (
@@ -522,6 +572,7 @@ export const insertInitialGame = async (params: {
           fairness: params.fairness,
         }),
         playMode: params.playMode,
+        linkedGroup: params.linkedGroup ?? null,
         playerHands: [
           {
             cards: params.playerCards,

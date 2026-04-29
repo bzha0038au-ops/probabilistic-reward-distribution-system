@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import Decimal from "decimal.js";
 import { z } from "zod";
 import { API_ERROR_CODES } from "@reward/shared-types/api";
@@ -17,9 +18,12 @@ import {
   buildHoldemRealtimeTableTopic,
   HOLDEM_CONFIG,
   HOLDEM_DEFAULT_CASUAL_MAX_SEATS,
+  HOLDEM_MAX_BOT_PLAYERS,
   HOLDEM_TABLE_MESSAGE_LIMIT,
   type HoldemAction,
   type HoldemCreateTableRequest,
+  type HoldemLinkedGroup,
+  type HoldemTableBotsRequest,
   type HoldemTableMessage,
   type HoldemTableMessageRequest,
   type HoldemTableMessagesResponse,
@@ -46,6 +50,7 @@ import {
 import { getConfigView, type AppConfig } from "../../shared/config";
 import { logger } from "../../shared/logger";
 import { toDecimal, toMoneyString } from "../../shared/money";
+import { hashPassword } from "../auth/password";
 import { ensureFairnessSeed } from "../fairness/service";
 import { appendRoundEvents } from "../hand-history/service";
 import { HOLDEM_ROUND_TYPE, buildRoundId } from "../hand-history/round-id";
@@ -75,11 +80,14 @@ import {
 } from "../system/keys";
 import {
   loadActivePlayModeSession,
+  loadPlayModeSessionById,
+  loadPlayModeSessionsByParent,
   lockUserPlayModeState,
   resolveSettledPlayMode,
   saveUserPlayModeState,
   settlePlayModeSession,
 } from "../play-mode/service";
+import { applySettledPlayModePayoutPolicy } from "../play-mode/deferred-payouts";
 import {
   buildHoldemRealtimeFanout,
   publishHoldemRealtimeTableMessage,
@@ -92,6 +100,7 @@ import {
   actOnHoldemTable,
   canUserLeaveTable,
   clearTableAfterCashout,
+  resolveHoldemActionAvailability,
   resolveHoldemTimeoutAction,
   serializeHoldemRealtimeTable,
   serializeHoldemTable,
@@ -106,6 +115,7 @@ import {
   HoldemSeatRowsSchema,
   HoldemTableRowsSchema,
   type DbExecutor,
+  isBotSeat,
   parseSqlRows,
   resolveSeatPresenceState,
   resolveSeatDisplayName,
@@ -114,6 +124,7 @@ import {
   toTableState,
   type HoldemTableState,
 } from "./model";
+import { evaluateBestHoldemHand } from "./evaluator";
 
 const LockedWalletRowSchema = z.object({
   userId: z.number().int().positive(),
@@ -134,6 +145,22 @@ const DEFAULT_HOLDEM_DISCONNECT_GRACE_SECONDS = 30;
 const DEFAULT_HOLDEM_SEAT_LEASE_SECONDS = 300;
 const DEFAULT_HOLDEM_TIME_BANK_MS = 30_000;
 const DEFAULT_HOLDEM_TOURNAMENT_STARTING_STACK_AMOUNT = "1000.00";
+const HOLDEM_BOT_BEHAVIOR_VERSION = "casual-v1";
+const HOLD_EM_BOT_RUNNER_MAX_ACTIONS = 24;
+const HOLD_EM_BOT_NAME_POOL = [
+  "Atlas",
+  "Nova",
+  "Echo",
+  "Blaze",
+  "Mira",
+  "Kite",
+  "Onyx",
+  "Jade",
+  "Sable",
+  "Pico",
+  "Vega",
+  "Rook",
+] as const;
 
 type HoldemTurnConfig = AppConfig & {
   holdemTurnTimeoutMs: number;
@@ -152,6 +179,7 @@ type HoldemTimeBankPolicy = {
 };
 
 const holdemTurnConfig = getConfigView<HoldemTurnConfig>();
+const activeHoldemBotRunnerTableIds = new Set<number>();
 
 const defaultTableName = () => `Hold'em ${new Date().toISOString().slice(11, 19)}`;
 
@@ -174,7 +202,96 @@ const HoldemPlayModeSessionMetadataSchema = z.object({
   effectiveBuyInAmount: z.string().optional(),
   tableId: z.number().int().positive().optional(),
   tableName: z.string().optional(),
+  groupId: z.string().nullable().optional(),
+  executionIndex: z.number().int().positive().optional(),
+  executionCount: z.number().int().positive().optional(),
 });
+
+const resolveHoldemSessionSnapshot = (
+  value: unknown,
+  fallback: import("@reward/shared-types/play-mode").PlayModeSnapshot,
+) => {
+  const parsed = PlayModeSnapshotSchema.safeParse(value);
+  return parsed.success ? parsed.data : fallback;
+};
+
+const maybeFinalizeGroupedHoldemPlayMode = async (params: {
+  tx: DbTransaction;
+  userId: number;
+  parentSessionId: number;
+  fallbackSnapshot: import("@reward/shared-types/play-mode").PlayModeSnapshot;
+}) => {
+  const parentSession = await loadPlayModeSessionById(params.tx, {
+    sessionId: params.parentSessionId,
+  });
+  if (!parentSession) {
+    return null;
+  }
+
+  const childSessions = await loadPlayModeSessionsByParent(params.tx, {
+    parentSessionId: params.parentSessionId,
+  });
+  if (childSessions.length === 0 || childSessions.some((session) => session.status === "active")) {
+    return null;
+  }
+
+  let totalEffectiveBuyInAmount = toDecimal(0);
+  let totalCashOutAmount = toDecimal(0);
+  for (const session of childSessions) {
+    const metadataParsed = HoldemPlayModeSessionMetadataSchema.safeParse(
+      session.metadata ?? {},
+    );
+    const effectiveBuyInRaw = metadataParsed.success
+      ? metadataParsed.data.effectiveBuyInAmount
+      : null;
+    const cashOutRaw =
+      metadataParsed.success && typeof session.metadata === "object" && session.metadata
+        ? Reflect.get(session.metadata, "cashOutAmount")
+        : null;
+    if (typeof effectiveBuyInRaw !== "string" || typeof cashOutRaw !== "string") {
+      return null;
+    }
+
+    totalEffectiveBuyInAmount = totalEffectiveBuyInAmount.plus(effectiveBuyInRaw);
+    totalCashOutAmount = totalCashOutAmount.plus(cashOutRaw);
+  }
+
+  const parentSnapshot = resolveHoldemSessionSnapshot(
+    parentSession.snapshot,
+    params.fallbackSnapshot,
+  );
+  const outcome = resolveHoldemPlayModeOutcome(
+    totalCashOutAmount,
+    totalEffectiveBuyInAmount,
+  );
+  const settledSnapshot = resolveSettledPlayMode({
+    snapshot: parentSnapshot,
+    outcome,
+  });
+
+  await settlePlayModeSession({
+    tx: params.tx,
+    sessionId: parentSession.id,
+    snapshot: settledSnapshot,
+    outcome,
+    metadata: {
+      totalEffectiveBuyInAmount: toMoneyString(totalEffectiveBuyInAmount),
+      totalCashOutAmount: toMoneyString(totalCashOutAmount),
+      childSessionCount: childSessions.length,
+    },
+  });
+
+  const storedPlayMode = await lockUserPlayModeState(params.tx, params.userId, "holdem");
+  if (storedPlayMode) {
+    await saveUserPlayModeState({
+      tx: params.tx,
+      rowId: storedPlayMode.id,
+      snapshot: settledSnapshot,
+    });
+  }
+
+  return settledSnapshot;
+};
 
 const resolveHoldemPlayModeOutcome = (
   cashOutAmount: ReturnType<typeof toDecimal>,
@@ -195,12 +312,14 @@ const settleHoldemPlayModeSessionIfPresent = async (params: {
   userId: number;
   tableId: number;
   cashOutAmount: ReturnType<typeof toDecimal>;
+  balanceType: "bonus" | "withdrawable";
 }) => {
   const activeSession = await loadActivePlayModeSession(params.tx, {
     userId: params.userId,
     gameKey: "holdem",
     referenceType: HOLDEM_REFERENCE_TYPE,
     referenceId: params.tableId,
+    includeChildSessions: true,
   });
   if (!activeSession) {
     return null;
@@ -226,20 +345,25 @@ const settleHoldemPlayModeSessionIfPresent = async (params: {
     snapshot: snapshotParsed.data,
     outcome,
   });
-
-  const storedPlayMode = await lockUserPlayModeState(params.tx, params.userId, "holdem");
-  if (storedPlayMode) {
-    await saveUserPlayModeState({
-      tx: params.tx,
-      rowId: storedPlayMode.id,
-      snapshot: settledSnapshot,
-    });
-  }
+  const adjustedSnapshot = await applySettledPlayModePayoutPolicy({
+    tx: params.tx,
+    userId: params.userId,
+    gameKey: "holdem",
+    outcome,
+    settledSnapshot,
+    netPayoutAmount: toMoneyString(
+      Decimal.max(params.cashOutAmount.minus(effectiveBuyInAmount), 0),
+    ),
+    balanceType: params.balanceType,
+    sessionId: activeSession.id,
+    sourceReferenceType: HOLDEM_REFERENCE_TYPE,
+    sourceReferenceId: params.tableId,
+  });
 
   await settlePlayModeSession({
     tx: params.tx,
     sessionId: activeSession.id,
-    snapshot: settledSnapshot,
+    snapshot: adjustedSnapshot,
     outcome,
     referenceType: HOLDEM_REFERENCE_TYPE,
     referenceId: params.tableId,
@@ -249,7 +373,30 @@ const settleHoldemPlayModeSessionIfPresent = async (params: {
     },
   });
 
-  return settledSnapshot;
+  if (!activeSession.parentSessionId) {
+    const storedPlayMode = await lockUserPlayModeState(
+      params.tx,
+      params.userId,
+      "holdem",
+    );
+    if (storedPlayMode) {
+      await saveUserPlayModeState({
+        tx: params.tx,
+        rowId: storedPlayMode.id,
+        snapshot: adjustedSnapshot,
+      });
+    }
+    return adjustedSnapshot;
+  }
+
+  return (
+    (await maybeFinalizeGroupedHoldemPlayMode({
+      tx: params.tx,
+      userId: params.userId,
+      parentSessionId: activeSession.parentSessionId,
+      fallbackSnapshot: snapshotParsed.data,
+    })) ?? snapshotParsed.data
+  );
 };
 
 type HoldemTournamentMetadata = NonNullable<
@@ -363,6 +510,41 @@ const ensureSeatTournamentMetadata = (
   return tournament;
 };
 
+const resolveHoldemBotDisplayName = (
+  existingBotCount: number,
+  seatIndex: number,
+) => {
+  const name = HOLD_EM_BOT_NAME_POOL[existingBotCount % HOLD_EM_BOT_NAME_POOL.length];
+  return `Bot ${name ?? `Seat ${seatIndex + 1}`}`;
+};
+
+const createHoldemBotUser = async (tx: DbTransaction, displayName: string) => {
+  const emailSlug = displayName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 24);
+  const [user] = await tx
+    .insert(users)
+    .values({
+      email: `${emailSlug || "holdem-bot"}-${randomUUID()}@bots.reward.local`,
+      passwordHash: hashPassword(randomUUID()),
+      role: "user",
+      birthDate: null,
+      registrationCountryCode: null,
+      countryTier: "unknown",
+      countryResolvedAt: null,
+      userPoolBalance: "0",
+    })
+    .returning();
+  if (!user) {
+    throw conflictError("Failed to provision a holdem bot user.");
+  }
+
+  await tx.insert(userWallets).values({ userId: user.id }).onConflictDoNothing();
+  return user;
+};
+
 const upsertTournamentStanding = (
   tournament: HoldemTournamentMetadata,
   standing: HoldemTournamentStanding,
@@ -384,7 +566,11 @@ const buildTournamentStandingForSeat = (
   const tournamentSeat = ensureSeatTournamentMetadata(seat);
   return {
     userId: seat.userId,
-    displayName: resolveSeatDisplayName(seat.userId, seat.userEmail),
+    displayName: resolveSeatDisplayName(
+      seat.userId,
+      seat.userEmail,
+      seat.metadata,
+    ),
     seatIndex: seat.seatIndex,
     stackAmount: toMoneyString(seat.stackAmount),
     active: toDecimal(seat.stackAmount).gt(0) && tournamentSeat.finishingPlace === null,
@@ -520,6 +706,82 @@ const buildHoldemRoundId = (handHistoryId: number) =>
 const buildHoldemRiskTableId = (tableId: number) => `holdem:${tableId}`;
 const buildHoldemTableRef = (tableId: number) => `holdem:${tableId}`;
 
+const countHumanSeats = (state: HoldemTableState) =>
+  state.seats.filter((seat) => !isBotSeat(seat)).length;
+
+const countBotSeats = (state: HoldemTableState) =>
+  state.seats.filter((seat) => isBotSeat(seat)).length;
+
+const assertHoldemBotTableInvariant = (state: HoldemTableState) => {
+  if (countBotSeats(state) === 0) {
+    return;
+  }
+
+  if (state.metadata.tableType !== "casual") {
+    throw internalInvariantError("Seat-level holdem bots are only allowed on casual tables.");
+  }
+};
+
+const resolveCreateBotCount = (
+  params: Pick<HoldemCreateTableRequest, "botCount" | "maxSeats" | "tableType">,
+) => {
+  const requested = params.botCount ?? 0;
+  if (requested <= 0) {
+    return 0;
+  }
+  const tableType = params.tableType ?? "cash";
+  if (tableType !== "casual") {
+    throw badRequestError("Seat-level bots are only available on casual holdem tables.");
+  }
+  return requested;
+};
+
+const assertBotSeatMutationAllowed = (params: {
+  state: HoldemTableState;
+  requestedCount: number;
+}) => {
+  assertHoldemBotTableInvariant(params.state);
+  if (params.state.metadata.tableType !== "casual") {
+    throw conflictError("Seat-level bots are only available on casual holdem tables.");
+  }
+  if (params.state.status !== "waiting") {
+    throw conflictError("Add or remove holdem bots only while the table is waiting.");
+  }
+  if (params.requestedCount < 1 || params.requestedCount > HOLDEM_MAX_BOT_PLAYERS) {
+    throw badRequestError("Invalid holdem bot seat count.");
+  }
+  if (countHumanSeats(params.state) <= 0) {
+    throw conflictError("At least one human seat is required before adding holdem bots.");
+  }
+  const openSeatCount = Math.max(0, params.state.maxSeats - params.state.seats.length);
+  if (params.requestedCount > openSeatCount) {
+    throw conflictError("Not enough open seats remain for the requested holdem bots.");
+  }
+};
+
+const countHoldemActiveSeats = (state: HoldemTableState) =>
+  state.seats.filter((seat) => seat.status === "active").length;
+
+const resolveSettledHoldemEventType = (state: HoldemTableState) =>
+  state.metadata.revealedSeatIndexes.length > 1 ||
+  (state.metadata.revealedSeatIndexes.length === 1 &&
+    state.metadata.resolvedPots.length === 0)
+    ? "showdown_resolved"
+    : "hand_won_by_fold";
+
+const resolveHoldemDealerPromptPace = (params: {
+  state: HoldemTableState;
+  seat: HoldemTableState["seats"][number];
+}) => {
+  if (countHoldemActiveSeats(params.state) <= 2) {
+    return "expedite" as const;
+  }
+
+  return params.seat.metadata.timeBankRemainingMs <= 10_000
+    ? ("expedite" as const)
+    : ("normal" as const);
+};
+
 const mapDealerEventToHoldemEventType = (event: DealerEvent) => {
   switch (event.kind) {
     case "action":
@@ -573,7 +835,7 @@ const buildHoldemDealerEvent = (params: {
 
 const listHoldemActiveParticipantUserIds = (state: HoldemTableState) =>
   state.seats
-    .filter((seat) => seat.status === "active")
+    .filter((seat) => seat.status === "active" && !isBotSeat(seat))
     .map((seat) => seat.userId)
     .filter((userId): userId is number => Number.isInteger(userId) && userId > 0)
     .sort((left, right) => left - right);
@@ -893,7 +1155,11 @@ const buildParticipantSummaries = (params: {
       return {
         seatIndex: seat.seatIndex,
         userId: seat.userId,
-        displayName: resolveSeatDisplayName(seat.userId, seat.userEmail),
+        displayName: resolveSeatDisplayName(
+          seat.userId,
+          seat.userEmail,
+          seat.metadata,
+        ),
         contributionAmount: toMoneyString(contributionAmount),
         payoutAmount: toMoneyString(payoutAmount),
         stackBefore: toMoneyString(stackBefore),
@@ -1254,13 +1520,55 @@ const buildHoldemTransitionDealerEvents = (params: {
   beforeState: HoldemTableState;
   afterState: HoldemTableState;
   handHistoryId: number;
+  action?: HoldemAction;
+  timedOut?: boolean;
+  timeBankConsumedMs?: number;
 }) => {
   const events: DealerEvent[] = [];
   const beforeBoardCount = params.beforeState.metadata.communityCards.length;
   const afterBoardCount = params.afterState.metadata.communityCards.length;
+  const beforeStage = params.beforeState.metadata.stage;
+  const afterStage = params.afterState.metadata.stage;
 
   if (
-    params.afterState.metadata.stage !== null &&
+    params.timedOut &&
+    params.action &&
+    params.beforeState.metadata.pendingActorSeatIndex !== null
+  ) {
+    events.push(
+      buildHoldemDealerEvent({
+        state: params.afterState,
+        handHistoryId: params.handHistoryId,
+        kind: "action",
+        actionCode: "timeout_forced_action",
+        seatIndex: params.beforeState.metadata.pendingActorSeatIndex,
+        text: `Seat #${params.beforeState.metadata.pendingActorSeatIndex + 1} timed out. Dealer applies ${params.action}.`,
+        metadata: {
+          action: params.action,
+          timeBankConsumedMs: params.timeBankConsumedMs ?? 0,
+        },
+      }),
+    );
+  }
+
+  if (afterStage !== null && beforeStage !== afterStage) {
+    events.push(
+      buildHoldemDealerEvent({
+        state: params.afterState,
+        handHistoryId: params.handHistoryId,
+        kind: "action",
+        actionCode: "stage_opened",
+        text: `Dealer opens the ${afterStage}.`,
+        metadata: {
+          fromStage: beforeStage,
+          stage: afterStage,
+        },
+      }),
+    );
+  }
+
+  if (
+    afterStage !== null &&
     afterBoardCount > beforeBoardCount
   ) {
     const newCards = params.afterState.metadata.communityCards
@@ -1275,6 +1583,21 @@ const buildHoldemTransitionDealerEvents = (params: {
         text: `Dealer reveals ${newCards.join(" ")} on the ${params.afterState.metadata.stage}.`,
         metadata: {
           boardCards: params.afterState.metadata.communityCards,
+        },
+      }),
+    );
+  } else if (beforeStage !== afterStage) {
+    events.push(
+      buildHoldemDealerEvent({
+        state: params.afterState,
+        handHistoryId: params.handHistoryId,
+        kind: "pace_hint",
+        actionCode: "phase_resolving",
+        pace: "pause",
+        text: "Dealer is resolving the street before action reopens.",
+        metadata: {
+          fromStage: beforeStage,
+          stage: afterStage,
         },
       }),
     );
@@ -1295,6 +1618,16 @@ const buildHoldemTransitionDealerEvents = (params: {
         },
       }),
     );
+    events.push(
+      buildHoldemDealerEvent({
+        state: params.afterState,
+        handHistoryId: params.handHistoryId,
+        kind: "pace_hint",
+        actionCode: "settlement_pause",
+        pace: "pause",
+        text: "Dealer is settling the pot before the next hand.",
+      }),
+    );
   } else {
     const nextSeat = getPendingActorSeat(params.afterState);
     if (nextSeat) {
@@ -1304,9 +1637,15 @@ const buildHoldemTransitionDealerEvents = (params: {
           handHistoryId: params.handHistoryId,
           kind: "pace_hint",
           actionCode: "prompt_next_actor",
-          pace: "normal",
+          pace: resolveHoldemDealerPromptPace({
+            state: params.afterState,
+            seat: nextSeat,
+          }),
           seatIndex: nextSeat.seatIndex,
-          text: `Action is on seat #${nextSeat.seatIndex + 1}.`,
+          text:
+            countHoldemActiveSeats(params.afterState) <= 2
+              ? `Short-handed table. Action is on seat #${nextSeat.seatIndex + 1}.`
+              : `Action is on seat #${nextSeat.seatIndex + 1}.`,
           metadata: {
             turnDeadlineAt: nextSeat.turnDeadlineAt,
           },
@@ -1368,7 +1707,11 @@ const recordHandStartedEvents = async (params: {
     .map((seat) => ({
       seatIndex: seat.seatIndex,
       userId: seat.userId,
-      displayName: resolveSeatDisplayName(seat.userId, seat.userEmail),
+      displayName: resolveSeatDisplayName(
+        seat.userId,
+        seat.userEmail,
+        seat.metadata,
+      ),
     }));
   const blindSeats = params.state.seats.filter(
     (seat) => seat.lastAction === "Small blind" || seat.lastAction === "Big blind",
@@ -1541,10 +1884,7 @@ const recordHandTransitionEvents = async (params: {
   if (isSettledHoldemState(params.afterState)) {
     const roundId = buildHoldemRoundId(params.handHistoryId);
     events.push({
-      type:
-        params.afterState.metadata.revealedSeatIndexes.length > 1
-          ? "showdown_resolved"
-          : "hand_won_by_fold",
+      type: resolveSettledHoldemEventType(params.afterState),
       actor: "system",
       payload: {
         roundId,
@@ -1706,12 +2046,8 @@ const recordTableTransitionEvents = async (params: {
   }
 
   if (isSettledHoldemState(params.afterState)) {
-    const settledEventType =
-      params.afterState.metadata.revealedSeatIndexes.length > 1
-        ? "showdown_resolved"
-        : "hand_won_by_fold";
     events.push({
-      eventType: settledEventType,
+      eventType: resolveSettledHoldemEventType(params.afterState),
       actor: "system",
       handHistoryId: params.handHistoryId,
       phase: params.afterState.metadata.stage,
@@ -1834,6 +2170,9 @@ const persistHoldemTransition = async (params: {
     beforeState: params.beforeState,
     afterState: params.afterState,
     handHistoryId,
+    action: params.action,
+    timedOut: params.timedOut,
+    timeBankConsumedMs: params.timeBankConsumedMs,
   });
   const dealerTableEvents = await persistHoldemDealerEvents({
     tx: params.tx,
@@ -1889,6 +2228,13 @@ const persistHoldemTransition = async (params: {
       })),
     });
     persistedTableEvents = [...persistedTableEvents, ...autoCashOutEvents];
+  }
+  if (countHumanSeats(params.afterState) === 0) {
+    await removeBotSeats({
+      tx: params.tx,
+      state: params.afterState,
+      predicate: () => true,
+    });
   }
   await persistTableState(params.tx, params.afterState);
 
@@ -2115,6 +2461,302 @@ const processExpiredHoldemTurn = (
   };
 };
 
+const HOLD_EM_BOT_RANK_STRENGTH: Record<string, number> = {
+  "2": 2,
+  "3": 3,
+  "4": 4,
+  "5": 5,
+  "6": 6,
+  "7": 7,
+  "8": 8,
+  "9": 9,
+  "10": 10,
+  J: 11,
+  Q: 12,
+  K: 13,
+  A: 14,
+};
+
+const HOLD_EM_BOT_HAND_CATEGORY_STRENGTH: Record<string, number> = {
+  high_card: 18,
+  one_pair: 42,
+  two_pair: 64,
+  three_of_a_kind: 76,
+  straight: 84,
+  flush: 88,
+  full_house: 92,
+  four_of_a_kind: 96,
+  straight_flush: 99,
+};
+
+const resolveHoldemBotPreflopStrength = (
+  seat: HoldemTableState["seats"][number],
+) => {
+  const [firstCard, secondCard] = seat.holeCards;
+  if (!firstCard || !secondCard) {
+    return 35;
+  }
+  const firstRank = HOLD_EM_BOT_RANK_STRENGTH[firstCard.rank] ?? 0;
+  const secondRank = HOLD_EM_BOT_RANK_STRENGTH[secondCard.rank] ?? 0;
+  const highRank = Math.max(firstRank, secondRank);
+  const lowRank = Math.min(firstRank, secondRank);
+  const gap = highRank - lowRank;
+  let score = 18 + highRank * 2 + lowRank;
+
+  if (firstCard.rank === secondCard.rank) {
+    score += 28 + highRank * 2;
+  }
+  if (firstCard.suit === secondCard.suit) {
+    score += 6;
+  }
+  if (gap <= 1) {
+    score += 4;
+  }
+  if (highRank >= 11 && lowRank >= 10) {
+    score += 8;
+  }
+  if (highRank === 14 && lowRank >= 10) {
+    score += 6;
+  }
+
+  return Math.min(score, 98);
+};
+
+const resolveHoldemBotStrength = (state: HoldemTableState, seat: HoldemTableState["seats"][number]) => {
+  if (state.metadata.communityCards.length < 3) {
+    return resolveHoldemBotPreflopStrength(seat);
+  }
+
+  const bestHand = evaluateBestHoldemHand([
+    ...seat.holeCards,
+    ...state.metadata.communityCards,
+  ]);
+  return HOLD_EM_BOT_HAND_CATEGORY_STRENGTH[bestHand.category] ?? 20;
+};
+
+const resolveHoldemBotBetAmount = (params: {
+  availability: NonNullable<ReturnType<typeof resolveHoldemActionAvailability>>;
+  aggression: number;
+}) => {
+  const minimumBetTo = toDecimal(params.availability.minimumBetTo);
+  const maximumRaiseTo = params.availability.maximumRaiseTo
+    ? toDecimal(params.availability.maximumRaiseTo)
+    : minimumBetTo;
+  const desiredAmount = minimumBetTo.mul(params.aggression >= 85 ? 3 : 2);
+  return toMoneyString(
+    Decimal.min(
+      maximumRaiseTo,
+      Decimal.max(minimumBetTo, desiredAmount),
+    ),
+  );
+};
+
+const resolveHoldemBotRaiseAmount = (params: {
+  availability: NonNullable<ReturnType<typeof resolveHoldemActionAvailability>>;
+  aggression: number;
+}) => {
+  const minimumRaiseTo = params.availability.minimumRaiseTo
+    ? toDecimal(params.availability.minimumRaiseTo)
+    : null;
+  const maximumRaiseTo = params.availability.maximumRaiseTo
+    ? toDecimal(params.availability.maximumRaiseTo)
+    : null;
+  if (!minimumRaiseTo || !maximumRaiseTo) {
+    return null;
+  }
+  const desiredAmount =
+    params.aggression >= 90
+      ? minimumRaiseTo.plus(toDecimal(params.availability.currentBet))
+      : minimumRaiseTo;
+  return toMoneyString(
+    Decimal.min(
+      maximumRaiseTo,
+      Decimal.max(minimumRaiseTo, desiredAmount),
+    ),
+  );
+};
+
+const resolveAutomatedHoldemBotAction = (params: {
+  state: HoldemTableState;
+  seat: HoldemTableState["seats"][number];
+}) => {
+  const availability = resolveHoldemActionAvailability(
+    params.state,
+    params.seat.seatIndex,
+  );
+  if (!availability) {
+    throw conflictError("No holdem action is available for the pending bot seat.");
+  }
+
+  const toCall = toDecimal(availability.toCall);
+  const stack = toDecimal(params.seat.stackAmount);
+  const strength = resolveHoldemBotStrength(params.state, params.seat);
+  const callPressure =
+    stack.plus(toCall).gt(0)
+      ? toCall.div(stack.plus(toCall)).toNumber()
+      : 1;
+
+  if (toCall.eq(0)) {
+    if (availability.actions.includes("bet") && strength >= 68) {
+      return {
+        action: "bet" as const,
+        amount: resolveHoldemBotBetAmount({
+          availability,
+          aggression: strength,
+        }),
+      };
+    }
+    return {
+      action: "check" as const,
+    };
+  }
+
+  if (
+    strength >= 92 &&
+    availability.actions.includes("all_in") &&
+    (callPressure >= 0.2 || stack.lte(toCall.mul(2)))
+  ) {
+    return {
+      action: "all_in" as const,
+    };
+  }
+
+  if (strength >= 74 && availability.actions.includes("raise")) {
+    return {
+      action: "raise" as const,
+      amount: resolveHoldemBotRaiseAmount({
+        availability,
+        aggression: strength,
+      }) ?? availability.minimumRaiseTo ?? undefined,
+    };
+  }
+
+  if (strength < 26 && availability.actions.includes("fold")) {
+    return {
+      action: "fold" as const,
+    };
+  }
+
+  if (strength < 42 && callPressure >= 0.28 && availability.actions.includes("fold")) {
+    return {
+      action: "fold" as const,
+    };
+  }
+
+  if (availability.actions.includes("call")) {
+    return {
+      action: "call" as const,
+    };
+  }
+
+  if (availability.actions.includes("check")) {
+    return {
+      action: "check" as const,
+    };
+  }
+
+  if (availability.actions.includes("fold")) {
+    return {
+      action: "fold" as const,
+    };
+  }
+
+  if (availability.actions.includes("all_in")) {
+    return {
+      action: "all_in" as const,
+    };
+  }
+
+  throw conflictError("Unable to resolve an automated holdem bot action.");
+};
+
+const runAutomatedHoldemBotTurns = async (tableId: number) => {
+  if (activeHoldemBotRunnerTableIds.has(tableId)) {
+    return;
+  }
+  activeHoldemBotRunnerTableIds.add(tableId);
+
+  try {
+    for (
+      let actionCount = 0;
+      actionCount < HOLD_EM_BOT_RUNNER_MAX_ACTIONS;
+      actionCount += 1
+    ) {
+      const transition = await db.transaction(async (tx) => {
+        const state = await loadTableState(tx, tableId, { lock: true });
+        if (!state) {
+          return null;
+        }
+        assertHoldemBotTableInvariant(state);
+
+        const pendingSeat = getPendingActorSeat(state);
+        if (!pendingSeat || !isBotSeat(pendingSeat) || state.status !== "active") {
+          return null;
+        }
+
+        const previousStacks = new Map(
+          state.seats.map((seat) => [seat.userId, toDecimal(seat.stackAmount)] as const),
+        );
+        const lockedWallets = await loadLockedWalletRows(
+          tx,
+          state.seats.map((seat) => seat.userId),
+        );
+        const beforeState = cloneTableState(state);
+        const timeout = processExpiredHoldemTurn(state, new Date());
+        if (timeout) {
+          return persistHoldemTransition({
+            tx,
+            beforeState,
+            afterState: state,
+            previousStacks,
+            lockedWallets,
+            action: timeout.action,
+            actingUserId: pendingSeat.userId,
+            timedOut: true,
+            timeBankConsumedMs: timeout.timeBankConsumedMs,
+          });
+        }
+
+        const decision = resolveAutomatedHoldemBotAction({
+          state,
+          seat: pendingSeat,
+        });
+        actOnHoldemSeat(state, {
+          seatIndex: pendingSeat.seatIndex,
+          action: decision.action,
+          amount: decision.amount,
+        });
+        return persistHoldemTransition({
+          tx,
+          beforeState,
+          afterState: state,
+          previousStacks,
+          lockedWallets,
+          action: decision.action,
+          actingUserId: pendingSeat.userId,
+        });
+      });
+
+      if (!transition) {
+        break;
+      }
+
+      publishHoldemDealerTransition(tableId, transition);
+    }
+  } catch (error) {
+    logger.warning("holdem bot runner failed", {
+      err: error,
+      tableId,
+    });
+  } finally {
+    activeHoldemBotRunnerTableIds.delete(tableId);
+  }
+};
+
+const scheduleAutomatedHoldemBotTurns = (tableId: number) => {
+  void runAutomatedHoldemBotTurns(tableId);
+};
+
 const ensureWalletRows = async (
   tx: DbTransaction,
   userIds: number[],
@@ -2294,7 +2936,188 @@ const findUserSeat = async (executor: DbExecutor, userId: number) => {
   return seat ?? null;
 };
 
-const persistTableState = async (tx: DbTransaction, state: HoldemTableState) => {
+const findUserSeats = async (executor: DbExecutor, userId: number) =>
+  loadSeatRows(executor, { userId });
+
+const assertHoldemSeatCapacity = async (params: {
+  executor: DbExecutor;
+  userId: number;
+  maxExistingSeatCount: number;
+}) => {
+  const seats = await findUserSeats(params.executor, params.userId);
+  if (seats.length <= params.maxExistingSeatCount) {
+    return seats;
+  }
+
+  if (params.maxExistingSeatCount <= 0) {
+    throw conflictError("Leave your current holdem table before opening another.");
+  }
+
+  throw conflictError("This play mode already has the maximum active holdem tables.");
+};
+
+const seatHoldemBots = async (params: {
+  tx: DbTransaction;
+  state: HoldemTableState;
+  count: number;
+  buyInAmount: ReturnType<typeof toDecimal>;
+  ownerUserId: number;
+}) => {
+  assertBotSeatMutationAllowed({
+    state: params.state,
+    requestedCount: params.count,
+  });
+  const buyInAmountString = toMoneyString(params.buyInAmount);
+  assertBuyInWithinRange(params.buyInAmount, params.state);
+  const presencePolicy = await loadHoldemSeatPresencePolicy(params.tx);
+  const timeBankPolicy = await loadHoldemTimeBankPolicy(params.tx);
+  const now = new Date();
+  const disconnectGraceExpiresAt = new Date(
+    now.getTime() + presencePolicy.disconnectGraceSeconds * 1_000,
+  );
+  const seatLeaseExpiresAt = new Date(
+    now.getTime() + presencePolicy.seatLeaseSeconds * 1_000,
+  );
+  const occupiedSeatIndexes = new Set(params.state.seats.map((seat) => seat.seatIndex));
+  const nextOpenSeatIndexes = Array.from(
+    { length: params.state.maxSeats },
+    (_, index) => index,
+  ).filter((seatIndex) => !occupiedSeatIndexes.has(seatIndex));
+
+  if (nextOpenSeatIndexes.length < params.count) {
+    throw conflictError("Not enough open seats remain for the requested holdem bots.");
+  }
+
+  const botEvents: HoldemTableEventInput[] = [];
+  const existingBotCount = countBotSeats(params.state);
+  for (let index = 0; index < params.count; index += 1) {
+    const seatIndex = nextOpenSeatIndexes[index];
+    if (seatIndex === undefined) {
+      throw internalInvariantError("Failed to resolve an open holdem bot seat.");
+    }
+    const displayName = resolveHoldemBotDisplayName(existingBotCount + index, seatIndex);
+    const botUser = await createHoldemBotUser(params.tx, displayName);
+    await params.tx.insert(holdemTableSeats).values({
+      tableId: params.state.id,
+      seatIndex,
+      userId: botUser.id,
+      stackAmount: buyInAmountString,
+      committedAmount: "0.00",
+      totalCommittedAmount: "0.00",
+      status: "waiting",
+      presenceHeartbeatAt: now,
+      disconnectGraceExpiresAt,
+      seatLeaseExpiresAt,
+      autoCashOutPending: false,
+      holeCards: [],
+      lastAction: null,
+      metadata: {
+        sittingOut: false,
+        sitOutSource: null,
+        timeBankRemainingMs: timeBankPolicy.defaultTimeBankMs,
+        winner: false,
+        bestHand: null,
+        bot: {
+          enabled: true,
+          displayName,
+          behaviorVersion: HOLDEM_BOT_BEHAVIOR_VERSION,
+          ownerUserId: params.ownerUserId,
+        },
+        tournament: null,
+      },
+    });
+    params.state.seats.push({
+      id: Number.NaN,
+      tableId: params.state.id,
+      seatIndex,
+      userId: botUser.id,
+      userEmail: botUser.email,
+      stackAmount: buyInAmountString,
+      committedAmount: "0.00",
+      totalCommittedAmount: "0.00",
+      status: "waiting",
+      presenceHeartbeatAt: now,
+      disconnectGraceExpiresAt,
+      seatLeaseExpiresAt,
+      autoCashOutPending: false,
+      turnDeadlineAt: null,
+      holeCards: [],
+      lastAction: null,
+      metadata: {
+        sittingOut: false,
+        sitOutSource: null,
+        timeBankRemainingMs: timeBankPolicy.defaultTimeBankMs,
+        winner: false,
+        bestHand: null,
+        bot: {
+          enabled: true,
+          displayName,
+          behaviorVersion: HOLDEM_BOT_BEHAVIOR_VERSION,
+          ownerUserId: params.ownerUserId,
+        },
+        tournament: null,
+      },
+      createdAt: now,
+      updatedAt: now,
+    });
+    botEvents.push({
+      eventType: "seat_joined",
+      actor: "system",
+      userId: botUser.id,
+      seatIndex,
+      payload: {
+        tableName: params.state.name,
+        buyInAmount: buyInAmountString,
+        stackAmount: buyInAmountString,
+        occupiedSeatCount: params.state.seats.length,
+        tableType: params.state.metadata.tableType,
+        balanceType: "bot_virtual_stack",
+        isBot: true,
+        displayName,
+      },
+    });
+  }
+
+  params.state.seats.sort((left, right) => left.seatIndex - right.seatIndex);
+  const refreshedState = await loadTableState(params.tx, params.state.id, { lock: true });
+  if (!refreshedState) {
+    throw notFoundError("Holdem table not found.");
+  }
+  params.state.seats = refreshedState.seats;
+  params.state.updatedAt = refreshedState.updatedAt;
+  params.state.metadata = refreshedState.metadata;
+  return botEvents;
+};
+
+const removeBotSeats = async (params: {
+  tx: DbTransaction;
+  state: HoldemTableState;
+  predicate: (seat: HoldemTableState["seats"][number]) => boolean;
+}) => {
+  const botSeats = params.state.seats.filter(
+    (seat) => isBotSeat(seat) && params.predicate(seat),
+  );
+  if (botSeats.length === 0) {
+    return [];
+  }
+
+  for (const seat of botSeats) {
+    await params.tx.delete(holdemTableSeats).where(eq(holdemTableSeats.id, seat.id));
+  }
+  const removedSeatIds = new Set(botSeats.map((seat) => seat.id));
+  params.state.seats = params.state.seats.filter((seat) => !removedSeatIds.has(seat.id));
+  clearTableAfterCashout(params.state);
+  if (params.state.status === "waiting") {
+    params.state.metadata.activeHandHistoryId = null;
+  }
+  return botSeats;
+};
+
+export const persistTableState = async (
+  tx: DbTransaction,
+  state: HoldemTableState,
+) => {
+  assertHoldemBotTableInvariant(state);
   const now = new Date();
   const nowIso = now.toISOString();
   syncHoldemTurnDeadlines(state, now);
@@ -2643,6 +3466,9 @@ const removeSeatAndCashOut = async (params: {
   if (!seat) {
     throw conflictError("You are not seated at this holdem table.");
   }
+  if (isBotSeat(seat)) {
+    throw conflictError("Bot seats cannot use human cash-out flows.");
+  }
 
   const wallet = params.lockedWallets.get(seat.userId);
   if (!wallet) {
@@ -2666,6 +3492,7 @@ const removeSeatAndCashOut = async (params: {
     userId: seat.userId,
     tableId: params.state.id,
     cashOutAmount: stackAmount,
+    balanceType: resolveHoldemFundingSource(params.state.metadata.tableType),
   });
 
   params.state.seats = params.state.seats.filter((entry) => entry.id !== seat.id);
@@ -2714,6 +3541,7 @@ const removeTournamentSeatAndRefund = async (params: {
     userId: seat.userId,
     tableId: params.state.id,
     cashOutAmount: refundAmount,
+    balanceType: "withdrawable",
   });
 
   params.state.seats = params.state.seats.filter((entry) => entry.id !== seat.id);
@@ -2943,6 +3771,7 @@ const settleTournamentAfterHand = async (params: {
         userId: standing.userId,
         tableId: params.state.id,
         cashOutAmount: toDecimal(standing.prizeAmount ?? 0),
+        balanceType: "withdrawable",
       });
     }
 
@@ -3004,6 +3833,17 @@ const settlePendingSeatCashOuts = async (params: {
   }> = [];
 
   for (const seat of [...params.state.seats]) {
+    if (isBotSeat(seat)) {
+      if (toDecimal(seat.stackAmount).lte(0)) {
+        await removeBotSeats({
+          tx: params.tx,
+          state: params.state,
+          predicate: (entry) => entry.id === seat.id,
+        });
+      }
+      continue;
+    }
+
     if (!seat.autoCashOutPending || !canUserLeaveTable(params.state, seat.userId)) {
       continue;
     }
@@ -3050,6 +3890,10 @@ const syncSettledLockedBalances = async (params: {
     ] as const),
   );
   for (const seat of state.seats) {
+    if (isBotSeat(seat)) {
+      continue;
+    }
+
     const previousStack = previousStacks.get(seat.userId) ?? toDecimal(0);
     const grossSeat =
       grossSettledState?.seats.find((entry) => entry.seatIndex === seat.seatIndex) ?? seat;
@@ -3142,6 +3986,31 @@ const syncSettledLockedBalances = async (params: {
     wallet.lockedBalance = toMoneyString(lockedBefore);
   }
 
+  const botNetDelta = state.seats.reduce((total, seat) => {
+    if (!isBotSeat(seat)) {
+      return total;
+    }
+
+    const previousStack = previousStacks.get(seat.userId) ?? toDecimal(0);
+    return total.plus(toDecimal(seat.stackAmount).minus(previousStack));
+  }, toDecimal(0));
+
+  if (botNetDelta.eq(0) === false) {
+    await applyHouseBankrollDelta(tx, botNetDelta, {
+      entryType: "holdem_bot_bankroll_result",
+      referenceType: HOLDEM_REFERENCE_TYPE,
+      referenceId: state.id,
+      metadata: {
+        handNumber: state.metadata.handNumber,
+        handHistoryId,
+        roundId,
+        tableName: state.name,
+        tableType: state.metadata.tableType,
+        botSeatCount: countBotSeats(state),
+      },
+    });
+  }
+
   if (
     appliedRake &&
     toDecimal(appliedRake.totalRakeAmount).gt(0)
@@ -3170,10 +4039,62 @@ const loadSerializedTable = async (
   if (!state) {
     throw notFoundError("Holdem table not found.");
   }
-  return {
-    table: serializeHoldemTable(state, userId),
-  };
+  const linkedTableIds = state.metadata.linkedGroup?.tableIds ?? [];
+  if (linkedTableIds.length <= 1) {
+    return buildHoldemTableResponse(serializeHoldemTable(state, userId));
+  }
+
+  const groupedStates: HoldemTableState[] = [];
+  for (const linkedTableId of linkedTableIds) {
+    if (linkedTableId === state.id) {
+      groupedStates.push(state);
+      continue;
+    }
+
+    const linkedState = await loadTableState(executor, linkedTableId);
+    if (linkedState) {
+      groupedStates.push(linkedState);
+    }
+  }
+
+  groupedStates.sort((left, right) => {
+    const leftPrimaryTableId = left.metadata.linkedGroup?.primaryTableId ?? left.id;
+    const rightPrimaryTableId = right.metadata.linkedGroup?.primaryTableId ?? right.id;
+    if (leftPrimaryTableId !== rightPrimaryTableId) {
+      return leftPrimaryTableId - rightPrimaryTableId;
+    }
+
+    const leftExecutionIndex = left.metadata.linkedGroup?.executionIndex ?? 1;
+    const rightExecutionIndex = right.metadata.linkedGroup?.executionIndex ?? 1;
+    if (leftExecutionIndex !== rightExecutionIndex) {
+      return leftExecutionIndex - rightExecutionIndex;
+    }
+
+    return left.id - right.id;
+  });
+
+  const tables = groupedStates.map((groupedState) =>
+    serializeHoldemTable(groupedState, userId),
+  );
+  const primaryTableId = state.metadata.linkedGroup?.primaryTableId ?? state.id;
+  const primaryTable =
+    tables.find((table) => table.id === primaryTableId) ??
+    tables.find((table) => table.id === state.id) ??
+    tables[0];
+  if (!primaryTable) {
+    throw notFoundError("Holdem table not found.");
+  }
+
+  return buildHoldemTableResponse(primaryTable, tables);
 };
+
+const buildHoldemTableResponse = (
+  table: HoldemTableResponse["table"],
+  tables: HoldemTableResponse["tables"] = [table],
+): HoldemTableResponse => ({
+  table,
+  tables,
+});
 
 const loadSerializedTableMessages = async (
   executor: DbExecutor,
@@ -3237,6 +4158,7 @@ export async function processExpiredHoldemTurnForTable(tableId: number) {
 
   if (result?.transition) {
     publishHoldemDealerTransition(tableId, result.transition);
+    scheduleAutomatedHoldemBotTurns(tableId);
   }
 
   return result?.timeout ?? null;
@@ -3255,6 +4177,13 @@ export async function processExpiredHoldemPresenceForTable(tableId: number) {
     let changed = false;
 
     for (const seat of state.seats) {
+      if (isBotSeat(seat)) {
+        seat.autoCashOutPending = false;
+        seat.metadata.sittingOut = false;
+        seat.metadata.sitOutSource = null;
+        continue;
+      }
+
       if (!shouldProcessAutoCashOuts && seat.autoCashOutPending) {
         seat.autoCashOutPending = false;
         changed = true;
@@ -3309,7 +4238,9 @@ export async function processExpiredHoldemPresenceForTable(tableId: number) {
       (!shouldProcessAutoCashOuts ||
         !state.seats.some(
           (seat) =>
-            seat.autoCashOutPending && canUserLeaveTable(state, seat.userId),
+            !isBotSeat(seat) &&
+            seat.autoCashOutPending &&
+            canUserLeaveTable(state, seat.userId),
         ))
     ) {
       return null;
@@ -3326,6 +4257,16 @@ export async function processExpiredHoldemPresenceForTable(tableId: number) {
           lockedWallets,
         })
       : [];
+    if (countHumanSeats(state) === 0) {
+      const removedBots = await removeBotSeats({
+        tx,
+        state,
+        predicate: () => true,
+      });
+      if (removedBots.length > 0) {
+        changed = true;
+      }
+    }
 
     if (autoCashOuts.length > 0) {
       changed = true;
@@ -3440,19 +4381,39 @@ export async function listHoldemTables(
 ): Promise<HoldemTablesResponse> {
   const tableRows = await loadTableRows(db);
   const tables = [];
-  let currentTableId: number | null = null;
+  const activeTables: Array<{
+    id: number;
+    primaryTableId: number;
+    executionIndex: number;
+  }> = [];
 
   for (const tableRow of tableRows) {
     const seatRows = await loadSeatRows(db, { tableId: tableRow.id });
     const state = toTableState(tableRow, seatRows);
     if (state.seats.some((seat) => seat.userId === userId)) {
-      currentTableId = state.id;
+      activeTables.push({
+        id: state.id,
+        primaryTableId: state.metadata.linkedGroup?.primaryTableId ?? state.id,
+        executionIndex: state.metadata.linkedGroup?.executionIndex ?? 1,
+      });
     }
     tables.push(serializeHoldemTableSummary(state, userId));
   }
 
+  activeTables.sort((left, right) => {
+    if (left.primaryTableId !== right.primaryTableId) {
+      return left.primaryTableId - right.primaryTableId;
+    }
+    if (left.executionIndex !== right.executionIndex) {
+      return left.executionIndex - right.executionIndex;
+    }
+    return left.id - right.id;
+  });
+  const activeTableIds = activeTables.map((entry) => entry.id);
+
   return {
-    currentTableId,
+    currentTableId: activeTableIds[0] ?? null,
+    activeTableIds,
     tables,
   };
 }
@@ -3635,7 +4596,7 @@ export async function setHoldemSeatMode(
     if (seat.metadata.sittingOut === params.sittingOut) {
       return {
         response: {
-          table: serializeHoldemTable(state, userId),
+          ...buildHoldemTableResponse(serializeHoldemTable(state, userId)),
         },
         fanout: null,
       };
@@ -3679,7 +4640,7 @@ export async function setHoldemSeatMode(
 
     return {
       response: {
-        table: serializeHoldemTable(state, userId),
+        ...buildHoldemTableResponse(serializeHoldemTable(state, userId)),
       },
       fanout: buildRealtimeUpdate({
         state,
@@ -3695,199 +4656,235 @@ export async function setHoldemSeatMode(
   return result.response;
 }
 
+export const createHoldemTableInTransaction = async (
+  tx: DbTransaction,
+  userId: number,
+  params: Pick<
+    HoldemCreateTableRequest,
+    "tableName" | "buyInAmount" | "tableType" | "maxSeats" | "botCount" | "tournament"
+  >,
+  options?: {
+    linkedGroup?: HoldemLinkedGroup | null;
+    maxExistingSeatCount?: number;
+  },
+) => {
+  await assertHoldemSeatCapacity({
+    executor: tx,
+    userId,
+    maxExistingSeatCount: options?.maxExistingSeatCount ?? 0,
+  });
+
+  const tableType = resolveHoldemCreateTableType(params);
+  const botCount = resolveCreateBotCount({
+    botCount: params.botCount,
+    maxSeats: params.maxSeats,
+    tableType,
+  });
+  if (tableType !== "tournament" && params.tournament) {
+    throw badRequestError("Tournament config requires a tournament table type.");
+  }
+  const maxSeats = resolveHoldemCreateMaxSeats(params);
+  if (botCount > Math.max(0, maxSeats - 1)) {
+    throw badRequestError("Holdem bot count exceeds the available seats at this table.");
+  }
+  const buyInAmount = parseAmount(params.buyInAmount, "buy-in");
+  const buyInAmountString = toMoneyString(buyInAmount);
+  const tournamentStartingStackAmount =
+    tableType === "tournament"
+      ? resolveTournamentStartingStackAmount(params.tournament)
+      : null;
+  const tournamentMetadata =
+    tableType === "tournament"
+      ? {
+          status: "registering" as const,
+          buyInAmount: buyInAmountString,
+          startingStackAmount: tournamentStartingStackAmount,
+          prizePoolAmount: "0.00",
+          registeredCount: 0,
+          payoutPlaces: params.tournament?.payoutPlaces ?? null,
+          allowRebuy: false,
+          allowCashOut: false,
+          completedAt: null,
+          standings: [],
+          payouts: [],
+        }
+      : null;
+  const minimumBuyIn =
+    tableType === "tournament" ? buyInAmountString : HOLDEM_CONFIG.minimumBuyIn;
+  const maximumBuyIn =
+    tableType === "tournament" ? buyInAmountString : HOLDEM_CONFIG.maximumBuyIn;
+  assertBuyInWithinRange(buyInAmount, {
+    minimumBuyIn,
+    maximumBuyIn,
+  });
+  const lockedWallets = await loadLockedWalletRows(tx, [userId]);
+  const wallet = lockedWallets.get(userId);
+  if (!wallet) {
+    throw notFoundError("Wallet not found.");
+  }
+  const rakePolicy = isCashTableType(tableType)
+    ? await loadHoldemRakePolicy(tx)
+    : null;
+  const balanceType = resolveHoldemFundingSource(tableType);
+  const presencePolicy = await loadHoldemSeatPresencePolicy(tx);
+  const timeBankPolicy = await loadHoldemTimeBankPolicy(tx);
+  const now = new Date();
+  const disconnectGraceExpiresAt = new Date(
+    now.getTime() + presencePolicy.disconnectGraceSeconds * 1_000,
+  );
+  const seatLeaseExpiresAt = new Date(
+    now.getTime() + presencePolicy.seatLeaseSeconds * 1_000,
+  );
+
+  const [createdTable] = await tx
+    .insert(holdemTables)
+    .values({
+      name: params.tableName?.trim() || defaultTableName(),
+      status: "waiting",
+      smallBlind: HOLDEM_CONFIG.smallBlind,
+      bigBlind: HOLDEM_CONFIG.bigBlind,
+      minimumBuyIn,
+      maximumBuyIn,
+      maxSeats,
+      metadata: {
+        linkedGroup: options?.linkedGroup ?? null,
+        tableType,
+        rakePolicy,
+        tournament: tournamentMetadata,
+      },
+    })
+    .returning();
+  if (!createdTable) {
+    throw conflictError("Failed to create holdem table.");
+  }
+
+  if (tableType === "tournament") {
+    await applyTournamentBuyInToWallet({
+      tx,
+      wallet,
+      amount: buyInAmount,
+      tableId: createdTable.id,
+      tableName: createdTable.name,
+      seatIndex: 0,
+    });
+  } else {
+    await applyBuyInToWallet({
+      tx,
+      wallet,
+      amount: buyInAmount,
+      tableId: createdTable.id,
+      tableName: createdTable.name,
+      seatIndex: 0,
+      tableType,
+      balanceType,
+    });
+  }
+
+  await tx.insert(holdemTableSeats).values({
+    tableId: createdTable.id,
+    seatIndex: 0,
+    userId,
+    stackAmount: tournamentStartingStackAmount ?? buyInAmountString,
+    committedAmount: "0.00",
+    totalCommittedAmount: "0.00",
+    status: "waiting",
+    presenceHeartbeatAt: now,
+    disconnectGraceExpiresAt,
+    seatLeaseExpiresAt,
+    autoCashOutPending: false,
+    holeCards: [],
+    lastAction: null,
+    metadata: {
+      timeBankRemainingMs: timeBankPolicy.defaultTimeBankMs,
+      tournament:
+        tableType === "tournament"
+          ? {
+              entryBuyInAmount: buyInAmountString,
+              registeredAt: now,
+              eliminatedAt: null,
+              finishingPlace: null,
+              prizeAmount: null,
+            }
+          : null,
+    },
+  });
+
+  const state = await loadTableState(tx, createdTable.id, { lock: true });
+  if (!state) {
+    throw notFoundError("Holdem table not found.");
+  }
+  const botSeatEvents =
+    botCount > 0
+      ? await seatHoldemBots({
+          tx,
+          state,
+          count: botCount,
+          buyInAmount,
+          ownerUserId: userId,
+        })
+      : [];
+
+  const persistedTableEvents = await appendTableEvents({
+    tx,
+    tableId: createdTable.id,
+    events: [
+      {
+        eventType: "table_created",
+        actor: "player",
+        userId,
+        seatIndex: 0,
+        payload: {
+          tableName: createdTable.name,
+          tableType,
+          rakePolicy,
+          smallBlind: createdTable.smallBlind,
+          bigBlind: createdTable.bigBlind,
+          minimumBuyIn: createdTable.minimumBuyIn,
+          maximumBuyIn: createdTable.maximumBuyIn,
+          maxSeats: createdTable.maxSeats,
+          balanceType,
+          linkedGroup: options?.linkedGroup ?? null,
+        },
+      },
+      {
+        eventType: "seat_joined",
+        actor: "player",
+        userId,
+        seatIndex: 0,
+        payload: {
+          tableName: createdTable.name,
+          buyInAmount: buyInAmountString,
+          stackAmount: tournamentStartingStackAmount ?? buyInAmountString,
+        },
+      },
+      ...botSeatEvents,
+    ],
+  });
+  if (isTournamentTable(state)) {
+    syncTournamentStandings(state);
+    await persistTableState(tx, state);
+  }
+
+  return {
+    state,
+    response: buildHoldemTableResponse(serializeHoldemTable(state, userId)),
+    fanout: buildRealtimeUpdate({
+      state,
+      tableEvents: persistedTableEvents,
+    }),
+  };
+};
+
 export async function createHoldemTable(
   userId: number,
   params: Pick<
     HoldemCreateTableRequest,
-    "tableName" | "buyInAmount" | "tableType" | "maxSeats" | "tournament"
+    "tableName" | "buyInAmount" | "tableType" | "maxSeats" | "botCount" | "tournament"
   >,
 ): Promise<HoldemTableResponse> {
-  const result = await db.transaction(async (tx) => {
-    const existingSeat = await findUserSeat(tx, userId);
-    if (existingSeat) {
-      throw conflictError("Leave your current holdem table before opening another.");
-    }
-
-    const tableType = resolveHoldemCreateTableType(params);
-    if (tableType !== "tournament" && params.tournament) {
-      throw badRequestError("Tournament config requires a tournament table type.");
-    }
-    const maxSeats = resolveHoldemCreateMaxSeats(params);
-    const buyInAmount = parseAmount(params.buyInAmount, "buy-in");
-    const buyInAmountString = toMoneyString(buyInAmount);
-    const tournamentStartingStackAmount =
-      tableType === "tournament"
-        ? resolveTournamentStartingStackAmount(params.tournament)
-        : null;
-    const tournamentMetadata =
-      tableType === "tournament"
-        ? {
-            status: "registering" as const,
-            buyInAmount: buyInAmountString,
-            startingStackAmount: tournamentStartingStackAmount,
-            prizePoolAmount: "0.00",
-            registeredCount: 0,
-            payoutPlaces: params.tournament?.payoutPlaces ?? null,
-            allowRebuy: false,
-            allowCashOut: false,
-            completedAt: null,
-            standings: [],
-            payouts: [],
-          }
-        : null;
-    const minimumBuyIn =
-      tableType === "tournament" ? buyInAmountString : HOLDEM_CONFIG.minimumBuyIn;
-    const maximumBuyIn =
-      tableType === "tournament" ? buyInAmountString : HOLDEM_CONFIG.maximumBuyIn;
-    assertBuyInWithinRange(buyInAmount, {
-      minimumBuyIn,
-      maximumBuyIn,
-    });
-    const lockedWallets = await loadLockedWalletRows(tx, [userId]);
-    const wallet = lockedWallets.get(userId);
-    if (!wallet) {
-      throw notFoundError("Wallet not found.");
-    }
-    const rakePolicy = isCashTableType(tableType)
-      ? await loadHoldemRakePolicy(tx)
-      : null;
-    const balanceType = resolveHoldemFundingSource(tableType);
-    const presencePolicy = await loadHoldemSeatPresencePolicy(tx);
-    const timeBankPolicy = await loadHoldemTimeBankPolicy(tx);
-    const now = new Date();
-    const disconnectGraceExpiresAt = new Date(
-      now.getTime() + presencePolicy.disconnectGraceSeconds * 1_000,
-    );
-    const seatLeaseExpiresAt = new Date(
-      now.getTime() + presencePolicy.seatLeaseSeconds * 1_000,
-    );
-
-    const [createdTable] = await tx
-      .insert(holdemTables)
-      .values({
-        name: params.tableName?.trim() || defaultTableName(),
-        status: "waiting",
-        smallBlind: HOLDEM_CONFIG.smallBlind,
-        bigBlind: HOLDEM_CONFIG.bigBlind,
-        minimumBuyIn,
-        maximumBuyIn,
-        maxSeats,
-        metadata: {
-          tableType,
-          rakePolicy,
-          tournament: tournamentMetadata,
-        },
-      })
-      .returning();
-    if (!createdTable) {
-      throw conflictError("Failed to create holdem table.");
-    }
-
-    if (tableType === "tournament") {
-      await applyTournamentBuyInToWallet({
-        tx,
-        wallet,
-        amount: buyInAmount,
-        tableId: createdTable.id,
-        tableName: createdTable.name,
-        seatIndex: 0,
-      });
-    } else {
-      await applyBuyInToWallet({
-        tx,
-        wallet,
-        amount: buyInAmount,
-        tableId: createdTable.id,
-        tableName: createdTable.name,
-        seatIndex: 0,
-        tableType,
-        balanceType,
-      });
-    }
-
-    await tx.insert(holdemTableSeats).values({
-      tableId: createdTable.id,
-      seatIndex: 0,
-      userId,
-      stackAmount: tournamentStartingStackAmount ?? buyInAmountString,
-      committedAmount: "0.00",
-      totalCommittedAmount: "0.00",
-      status: "waiting",
-      presenceHeartbeatAt: now,
-      disconnectGraceExpiresAt,
-      seatLeaseExpiresAt,
-      autoCashOutPending: false,
-      holeCards: [],
-      lastAction: null,
-      metadata: {
-        timeBankRemainingMs: timeBankPolicy.defaultTimeBankMs,
-        tournament:
-          tableType === "tournament"
-            ? {
-                entryBuyInAmount: buyInAmountString,
-                registeredAt: now,
-                eliminatedAt: null,
-                finishingPlace: null,
-                prizeAmount: null,
-              }
-            : null,
-      },
-    });
-
-    const persistedTableEvents = await appendTableEvents({
-      tx,
-      tableId: createdTable.id,
-      events: [
-        {
-          eventType: "table_created",
-          actor: "player",
-          userId,
-          seatIndex: 0,
-          payload: {
-            tableName: createdTable.name,
-            tableType,
-            rakePolicy,
-            smallBlind: createdTable.smallBlind,
-            bigBlind: createdTable.bigBlind,
-            minimumBuyIn: createdTable.minimumBuyIn,
-            maximumBuyIn: createdTable.maximumBuyIn,
-            maxSeats: createdTable.maxSeats,
-            balanceType,
-          },
-        },
-        {
-          eventType: "seat_joined",
-          actor: "player",
-          userId,
-          seatIndex: 0,
-          payload: {
-            tableName: createdTable.name,
-            buyInAmount: buyInAmountString,
-            stackAmount: tournamentStartingStackAmount ?? buyInAmountString,
-          },
-        },
-      ],
-    });
-
-    const state = await loadTableState(tx, createdTable.id, { lock: true });
-    if (!state) {
-      throw notFoundError("Holdem table not found.");
-    }
-    if (isTournamentTable(state)) {
-      syncTournamentStandings(state);
-      await persistTableState(tx, state);
-    }
-
-    return {
-      response: {
-        table: serializeHoldemTable(state, userId),
-      },
-      fanout: buildRealtimeUpdate({
-        state,
-        tableEvents: persistedTableEvents,
-      }),
-    };
-  });
+  const result = await db.transaction(async (tx) =>
+    createHoldemTableInTransaction(tx, userId, params),
+  );
 
   publishHoldemRealtimeUpdate(result.fanout);
   return result.response;
@@ -4031,10 +5028,58 @@ export async function joinHoldemTable(
 
     return {
       response: {
-        table: serializeHoldemTable(nextState, userId),
+        ...buildHoldemTableResponse(serializeHoldemTable(nextState, userId)),
       },
       fanout: buildRealtimeUpdate({
         state: nextState,
+        tableEvents: persistedTableEvents,
+      }),
+    };
+  });
+
+  publishHoldemRealtimeUpdate(result.fanout);
+  return result.response;
+}
+
+export async function addHoldemBots(
+  userId: number,
+  tableId: number,
+  params: HoldemTableBotsRequest,
+): Promise<HoldemTableResponse> {
+  const result = await db.transaction(async (tx) => {
+    const state = await loadTableState(tx, tableId, { lock: true });
+    if (!state) {
+      throw notFoundError("Holdem table not found.");
+    }
+    const requestingSeat = state.seats.find((seat) => seat.userId === userId) ?? null;
+    if (!requestingSeat) {
+      throw conflictError("You must be seated to add holdem bot players.");
+    }
+    if (isBotSeat(requestingSeat)) {
+      throw conflictError("Bot seats cannot manage holdem bot players.");
+    }
+
+    const buyInAmount = parseAmount(params.buyInAmount, "buy-in");
+    const botSeatEvents = await seatHoldemBots({
+      tx,
+      state,
+      count: params.count,
+      buyInAmount,
+      ownerUserId: userId,
+    });
+    const persistedTableEvents = await appendTableEvents({
+      tx,
+      tableId: state.id,
+      events: botSeatEvents,
+    });
+    await persistTableState(tx, state);
+
+    return {
+      response: {
+        ...buildHoldemTableResponse(serializeHoldemTable(state, userId)),
+      },
+      fanout: buildRealtimeUpdate({
+        state,
         tableEvents: persistedTableEvents,
       }),
     };
@@ -4097,6 +5142,14 @@ export async function leaveHoldemTable(
         .where(eq(holdemTables.id, state.id));
     }
 
+    if (countHumanSeats(state) === 0) {
+      await removeBotSeats({
+        tx,
+        state,
+        predicate: () => true,
+      });
+    }
+
     const persistedTableEvents = await appendTableEvents({
       tx,
       tableId: state.id,
@@ -4117,7 +5170,7 @@ export async function leaveHoldemTable(
 
     return {
       response: {
-        table: serializeHoldemTable(state, userId),
+        ...buildHoldemTableResponse(serializeHoldemTable(state, userId)),
       },
       fanout: buildRealtimeUpdate({
         state,
@@ -4237,6 +5290,17 @@ export async function startHoldemTableHand(
           handNumber: state.metadata.handNumber,
         },
       }),
+      buildHoldemDealerEvent({
+        state,
+        handHistoryId,
+        kind: "action",
+        actionCode: "stage_opened",
+        text: "Dealer opens the preflop.",
+        metadata: {
+          handNumber: state.metadata.handNumber,
+          stage: state.metadata.stage,
+        },
+      }),
       ...(nextSeat
         ? [
             buildHoldemDealerEvent({
@@ -4244,9 +5308,15 @@ export async function startHoldemTableHand(
               handHistoryId,
               kind: "pace_hint",
               actionCode: "prompt_next_actor",
-              pace: "normal",
+              pace: resolveHoldemDealerPromptPace({
+                state,
+                seat: nextSeat,
+              }),
               seatIndex: nextSeat.seatIndex,
-              text: `Action is on seat #${nextSeat.seatIndex + 1}.`,
+              text:
+                countHoldemActiveSeats(state) <= 2
+                  ? `Short-handed table. Action is on seat #${nextSeat.seatIndex + 1}.`
+                  : `Action is on seat #${nextSeat.seatIndex + 1}.`,
               metadata: {
                 turnDeadlineAt: nextSeat.turnDeadlineAt,
               },
@@ -4273,7 +5343,7 @@ export async function startHoldemTableHand(
     await persistTableState(tx, state);
     return {
       response: {
-        table: serializeHoldemTable(state, userId),
+        ...buildHoldemTableResponse(serializeHoldemTable(state, userId)),
       },
       collusionCapture: {
         tableId: state.id,
@@ -4311,6 +5381,7 @@ export async function startHoldemTableHand(
     },
   });
   await recordHoldemCollusionSignals(result.collusionCapture);
+  scheduleAutomatedHoldemBotTurns(tableId);
   return result.response;
 }
 
@@ -4383,13 +5454,14 @@ export async function actOnHoldem(
     return {
       kind: "success" as const,
       response: {
-        table: serializeHoldemTable(state, userId),
+        ...buildHoldemTableResponse(serializeHoldemTable(state, userId)),
       },
       transition,
     };
   });
 
   publishHoldemDealerTransition(tableId, result.transition);
+  scheduleAutomatedHoldemBotTurns(tableId);
   if (result.kind === "timeout") {
     throw conflictError("Holdem turn timed out and the default action was applied.", {
       code: API_ERROR_CODES.HOLDEM_TURN_EXPIRED,

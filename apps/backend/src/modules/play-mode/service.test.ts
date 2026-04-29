@@ -32,59 +32,35 @@ describe("play mode service", () => {
     });
   });
 
-  it("arms deferred_double after a loss and applies it on the next request", () => {
-    const initial = resolveRequestedPlayMode({
-      requestedMode: { type: "deferred_double" },
-    });
-    const settled = resolveSettledPlayMode({
-      snapshot: initial,
-      outcome: "lose",
-    });
-
-    expect(settled).toMatchObject({
-      type: "deferred_double",
-      appliedMultiplier: 1,
-      nextMultiplier: 2,
-      carryActive: true,
-      lastOutcome: "lose",
-    });
-
-    const next = resolveRequestedPlayMode({
-      storedMode: settled.type,
-      storedState: settled,
-    });
-
-    expect(next).toMatchObject({
-      type: "deferred_double",
-      appliedMultiplier: 2,
-      nextMultiplier: 2,
-      carryActive: true,
-    });
-  });
-
-  it("restores deferred_double from stringified storage payloads", () => {
+  it("keeps deferred_double at x1 and restores pending payout carry from storage", () => {
     const next = resolveRequestedPlayMode({
       storedMode: "deferred_double",
       storedState: JSON.stringify({
         type: "deferred_double",
         appliedMultiplier: 1,
         nextMultiplier: 2,
-        streak: 1,
+        streak: 0,
         lastOutcome: "lose",
-        carryActive: true,
+        carryActive: false,
+        pendingPayoutAmount: "18.50",
+        pendingPayoutCount: 2,
+        snowballCarryAmount: "0.00",
+        snowballEnvelopeAmount: "0.00",
       }),
     });
 
     expect(next).toMatchObject({
       type: "deferred_double",
-      appliedMultiplier: 2,
-      nextMultiplier: 2,
+      appliedMultiplier: 1,
+      nextMultiplier: 1,
       carryActive: true,
+      pendingPayoutAmount: "18.50",
+      pendingPayoutCount: 2,
       lastOutcome: "lose",
     });
   });
 
-  it("increments and resets snowball multipliers as outcomes change", () => {
+  it("increments and resets snowball streaks without applying stake multipliers", () => {
     const initial = resolveRequestedPlayMode({
       requestedMode: { type: "snowball" },
     });
@@ -110,18 +86,21 @@ describe("play mode service", () => {
 
     expect(afterFirstWin).toMatchObject({
       type: "snowball",
+      appliedMultiplier: 1,
       nextMultiplier: 2,
       streak: 1,
-      carryActive: true,
+      carryActive: false,
     });
     expect(afterSecondWin).toMatchObject({
       type: "snowball",
+      appliedMultiplier: 1,
       nextMultiplier: 3,
       streak: 2,
-      carryActive: true,
+      carryActive: false,
     });
     expect(afterMiss).toMatchObject({
       type: "snowball",
+      appliedMultiplier: 1,
       nextMultiplier: 1,
       streak: 0,
       carryActive: false,
@@ -137,6 +116,10 @@ describe("play mode service", () => {
       streak: 0,
       lastOutcome: null,
       carryActive: false,
+      pendingPayoutAmount: "0.00",
+      pendingPayoutCount: 0,
+      snowballCarryAmount: "0.00",
+      snowballEnvelopeAmount: "0.00",
     });
   });
 });

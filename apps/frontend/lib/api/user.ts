@@ -30,6 +30,7 @@ import type {
   HoldemJoinTableRequest,
   HoldemPresenceResponse,
   HoldemSeatModeRequest,
+  HoldemTableBotsRequest,
   HoldemTableMessage,
   HoldemTableMessageRequest,
   HoldemTableMessagesResponse,
@@ -369,6 +370,17 @@ export function createUserApiClient(runtime: UserApiRuntime) {
         body: JSON.stringify(payload),
         cache: "no-store",
       });
+    },
+    addHoldemBots(tableId: number, payload: HoldemTableBotsRequest) {
+      return request<HoldemTableResponse>(
+        `${USER_API_ROUTES.holdemTables}/${tableId}/bots`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          cache: "no-store",
+        },
+      );
     },
     joinHoldemTable(tableId: number, payload: HoldemJoinTableRequest) {
       return request<HoldemTableResponse>(

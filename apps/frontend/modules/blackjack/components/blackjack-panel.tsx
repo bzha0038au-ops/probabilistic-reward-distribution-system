@@ -7,7 +7,6 @@ import type {
   BlackjackCardView,
   BlackjackGame,
   BlackjackGameStatus,
-  BlackjackMutationResponse,
   BlackjackOverviewResponse,
 } from "@reward/shared-types/blackjack";
 import { BLACKJACK_CONFIG } from "@reward/shared-types/blackjack";
@@ -73,6 +72,7 @@ const copy = {
     standSoft17: "Stand on all 17s",
     singleHand: "One active table at a time",
     stake: "Stake amount",
+    effectiveStake: "Total stake",
     start: "Start hand",
     starting: "Opening hand...",
     dealer: "Dealer",
@@ -101,6 +101,8 @@ const copy = {
     you: "You",
     dealerFeedTitle: "Dealer commentary",
     dealerFeedEmpty: "The dealer will narrate the hand here once the cards are moving.",
+    dealerAiTag: "AI",
+    dealerRuleTag: "Rule",
   },
   "zh-CN": {
     title: "二十一点",
@@ -122,6 +124,7 @@ const copy = {
     standSoft17: "所有 17 点停牌",
     singleHand: "同一时间仅允许一局进行中",
     stake: "下注金额",
+    effectiveStake: "总下注",
     start: "开始发牌",
     starting: "正在开局...",
     dealer: "庄家",
@@ -150,6 +153,8 @@ const copy = {
     you: "你",
     dealerFeedTitle: "荷官播报",
     dealerFeedEmpty: "发牌后，智能荷官会在这里播报动作、节奏和简短解说。",
+    dealerAiTag: "AI",
+    dealerRuleTag: "规则",
   },
 } as const;
 
@@ -433,28 +438,47 @@ const appendDealerEventToOverview = (params: {
   currentOverview: BlackjackOverviewResponse | null;
   event: DealerEvent;
 }) => {
-  if (!params.currentOverview?.activeGame) {
+  if (!params.currentOverview) {
     return params.currentOverview;
   }
 
-  const activeGame = params.currentOverview.activeGame;
-  const matchesActiveGame =
-    params.event.referenceId === activeGame.id ||
-    params.event.tableRef === activeGame.table.tableId ||
-    params.event.tableRef === `blackjack:${activeGame.id}`;
-  if (!matchesActiveGame) {
+  const activeGames =
+    params.currentOverview.activeGames.length > 0
+      ? params.currentOverview.activeGames
+      : params.currentOverview.activeGame
+        ? [params.currentOverview.activeGame]
+        : [];
+  if (activeGames.length === 0) {
+    return params.currentOverview;
+  }
+
+  let updated = false;
+  const nextActiveGames = activeGames.map((game) => {
+    const matchesActiveGame =
+      params.event.referenceId === game.id ||
+      params.event.tableRef === game.table.tableId ||
+      params.event.tableRef === `blackjack:${game.id}`;
+    if (!matchesActiveGame) {
+      return game;
+    }
+
+    updated = true;
+    return {
+      ...game,
+      dealerEvents: applyDealerEventFeed({
+        currentEvents: game.dealerEvents,
+        event: params.event,
+      }),
+    };
+  });
+  if (!updated) {
     return params.currentOverview;
   }
 
   return {
     ...params.currentOverview,
-    activeGame: {
-      ...activeGame,
-      dealerEvents: applyDealerEventFeed({
-        currentEvents: activeGame.dealerEvents,
-        event: params.event,
-      }),
-    },
+    activeGames: nextActiveGames,
+    activeGame: nextActiveGames[0] ?? null,
   } satisfies BlackjackOverviewResponse;
 };
 
@@ -473,11 +497,19 @@ export function BlackjackPanel({
   const [stakeAmount, setStakeAmount] = useState(BLACKJACK_CONFIG.minStake);
   const [loading, setLoading] = useState(false);
   const [updatingPlayMode, setUpdatingPlayMode] = useState(false);
-  const [actingAction, setActingAction] = useState<
-    BlackjackAction | "start" | null
-  >(null);
+  const [actingAction, setActingAction] = useState<{
+    gameId: number | null;
+    action: BlackjackAction | "start";
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const currentConfig = overview?.config ?? BLACKJACK_CONFIG;
+  const activeGames = overview
+    ? overview.activeGames.length > 0
+      ? overview.activeGames
+      : overview.activeGame
+        ? [overview.activeGame]
+        : []
+    : [];
   const effectiveStakePreview = (() => {
     const numericStake = Number(stakeAmount || "0");
     if (!Number.isFinite(numericStake)) {
@@ -594,7 +626,7 @@ export function BlackjackPanel({
     }
 
     setLoading(true);
-    setActingAction("start");
+    setActingAction({ gameId: null, action: "start" });
     setError(null);
 
     const response = await browserUserApiClient.startBlackjack({
@@ -612,19 +644,16 @@ export function BlackjackPanel({
     setActingAction(null);
   }
 
-  async function handleAction(action: BlackjackAction) {
-    if (!overview?.activeGame) {
+  async function handleAction(gameId: number, action: BlackjackAction) {
+    if (!activeGames.some((game) => game.id === gameId)) {
       return;
     }
 
     setLoading(true);
-    setActingAction(action);
+    setActingAction({ gameId, action });
     setError(null);
 
-    const response = await browserUserApiClient.actOnBlackjack(
-      overview.activeGame.id,
-      { action },
-    );
+    const response = await browserUserApiClient.actOnBlackjack(gameId, { action });
 
     if (!response.ok) {
       setError(response.error?.message ?? t("draw.errorFallback"));
@@ -702,15 +731,16 @@ export function BlackjackPanel({
         </div>
 
         <PlayModeSwitcher
+          gameKey="blackjack"
           snapshot={overview?.playMode ?? null}
-          disabled={loading || disabled || Boolean(overview?.activeGame)}
+          disabled={loading || disabled || activeGames.length > 0}
           loading={updatingPlayMode}
           onSelect={(type) => void handleChangePlayMode(type)}
         />
       </CardHeader>
 
       <CardContent className="space-y-5">
-        {!overview?.activeGame ? (
+        {activeGames.length === 0 ? (
           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
               <div className="max-w-xs flex-1 space-y-2">
@@ -730,7 +760,7 @@ export function BlackjackPanel({
                 </p>
                 {effectiveStakePreview ? (
                   <p className="text-xs text-emerald-300/90">
-                    Effective stake: {effectiveStakePreview}
+                    {c.effectiveStake}: {effectiveStakePreview}
                   </p>
                 ) : null}
               </div>
@@ -739,83 +769,101 @@ export function BlackjackPanel({
                 disabled={loading || disabled}
                 className="sm:min-w-[10rem]"
               >
-                {actingAction === "start" ? c.starting : c.start}
+                {actingAction?.action === "start" ? c.starting : c.start}
               </Button>
             </div>
             <p className="mt-4 text-sm text-slate-400">{c.noActive}</p>
           </div>
         ) : (
-          <div className="space-y-4">
-            <div
-              className={cn(
-                "inline-flex rounded-full border px-3 py-1 text-xs font-semibold",
-                statusTone[overview.activeGame.status],
-              )}
-            >
-              {getStatusLabel(locale, overview.activeGame.status)}
-            </div>
-
-            <TableBlock locale={locale} game={overview.activeGame} />
-
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
-              <HandBlock
-                locale={locale}
-                label={c.dealer}
-                hand={overview.activeGame.dealerHand}
-              />
-              <div className="space-y-4">
-                {overview.activeGame.playerHands.map((hand) => (
-                  <PlayerHandBlock
-                    key={`${overview.activeGame?.id}-${hand.index}`}
-                    locale={locale}
-                    hand={hand}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {overview.activeGame.availableActions.length > 0 ? (
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-                <p className="text-sm font-medium text-slate-100">
-                  {c.actions}
-                </p>
-                <div className="mt-3 flex flex-wrap gap-3">
-                  {overview.activeGame.availableActions.map((action) => (
-                    <Button
-                      key={action}
-                      type="button"
-                      onClick={() => void handleAction(action)}
-                      disabled={loading || disabled}
-                      variant={action === "double" ? "outline" : "default"}
-                      className={
-                        action === "double"
-                          ? "border-slate-700 bg-slate-950 text-slate-100 hover:bg-slate-900"
-                          : undefined
-                      }
-                    >
-                      {actingAction === action
-                        ? c.acting
-                        : action === "hit"
-                          ? c.hit
-                          : action === "stand"
-                            ? c.stand
-                            : action === "double"
-                              ? c.double
-                              : c.split}
-                    </Button>
-                  ))}
+          <div className="space-y-6">
+            {activeGames.map((game) => (
+              <div
+                key={game.id}
+                className="space-y-4 rounded-3xl border border-slate-800 bg-slate-900/40 p-4"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  {game.linkedGroup ? (
+                    <span className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300">
+                      {c.hand} {game.linkedGroup.executionIndex}/
+                      {game.linkedGroup.executionCount}
+                    </span>
+                  ) : null}
+                  <div
+                    className={cn(
+                      "inline-flex rounded-full border px-3 py-1 text-xs font-semibold",
+                      statusTone[game.status],
+                    )}
+                  >
+                    {getStatusLabel(locale, game.status)}
+                  </div>
                 </div>
+
+                <TableBlock locale={locale} game={game} />
+
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+                  <HandBlock
+                    locale={locale}
+                    label={c.dealer}
+                    hand={game.dealerHand}
+                  />
+                  <div className="space-y-4">
+                    {game.playerHands.map((hand) => (
+                      <PlayerHandBlock
+                        key={`${game.id}-${hand.index}`}
+                        locale={locale}
+                        hand={hand}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {game.availableActions.length > 0 ? (
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                    <p className="text-sm font-medium text-slate-100">
+                      {c.actions}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-3">
+                      {game.availableActions.map((action) => (
+                        <Button
+                          key={`${game.id}-${action}`}
+                          type="button"
+                          onClick={() => void handleAction(game.id, action)}
+                          disabled={loading || disabled}
+                          variant={action === "double" ? "outline" : "default"}
+                          className={
+                            action === "double"
+                              ? "border-slate-700 bg-slate-950 text-slate-100 hover:bg-slate-900"
+                              : undefined
+                          }
+                        >
+                          {actingAction?.gameId === game.id &&
+                          actingAction.action === action
+                            ? c.acting
+                            : action === "hit"
+                              ? c.hit
+                              : action === "stand"
+                                ? c.stand
+                                : action === "double"
+                                  ? c.double
+                                  : c.split}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                <DealerFeed
+                  aiLabel={c.dealerAiTag}
+                  dealerLabel={c.aiDealer}
+                  emptyLabel={c.dealerFeedEmpty}
+                  events={game.dealerEvents}
+                  ruleLabel={c.dealerRuleTag}
+                  title={c.dealerFeedTitle}
+                />
               </div>
-            ) : null}
+            ))}
           </div>
         )}
-
-        <DealerFeed
-          dealerLabel={c.aiDealer}
-          emptyLabel={c.dealerFeedEmpty}
-          events={overview?.activeGame?.dealerEvents ?? []}
-          title={c.dealerFeedTitle}
-        />
 
         {disabledReason ? (
           <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">

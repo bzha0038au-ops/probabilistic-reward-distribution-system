@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { appendDealerFeedEvent, buildDealerEvent } from "./service";
+import {
+  appendDealerFeedEvent,
+  assertDealerRngIsolation,
+  buildDealerEvent,
+} from "./service";
 
 describe("dealer bot service", () => {
   it("caps the dealer feed to the newest 12 events", () => {
@@ -41,5 +45,13 @@ describe("dealer bot service", () => {
 
     expect(twice).toHaveLength(1);
     expect(twice[0]?.id).toBe(event.id);
+  });
+
+  it("rejects dealer contexts that expose RNG internals", () => {
+    expect(() =>
+      assertDealerRngIsolation("dealer test context", {
+        deck: ["AS", "KH"],
+      }),
+    ).toThrow(/forbidden RNG field/i);
   });
 });

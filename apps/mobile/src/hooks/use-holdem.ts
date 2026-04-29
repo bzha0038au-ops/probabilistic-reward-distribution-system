@@ -378,6 +378,7 @@ export function useHoldem(options: UseHoldemOptions) {
           const candidates = [
             preferredTableId,
             current,
+            response.data.activeTableIds[0] ?? null,
             response.data.currentTableId,
             response.data.tables[0]?.id ?? null,
           ];
@@ -828,27 +829,30 @@ export function useHoldem(options: UseHoldemOptions) {
   ]);
 
   useEffect(() => {
-    const currentTableId = holdemTables?.currentTableId ?? null;
-    if (!enabled || !authTokenRef.current || currentTableId === null) {
+    const activeTableIds = holdemTables?.activeTableIds ?? [];
+    if (!enabled || !authTokenRef.current || activeTableIds.length === 0) {
       return;
     }
 
     let cancelled = false;
 
     const touchPresence = async () => {
-      const response = await api.touchHoldemTablePresence(currentTableId);
-      if (cancelled) {
-        return;
-      }
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          await handleUnauthorized();
+      for (const tableId of activeTableIds) {
+        const response = await api.touchHoldemTablePresence(tableId);
+        if (cancelled) {
           return;
         }
 
-        if (response.status !== 409) {
-          setError(response.error?.message ?? "Hold'em presence refresh failed.");
+        if (!response.ok) {
+          if (response.status === 401) {
+            await handleUnauthorized();
+            return;
+          }
+
+          if (response.status !== 409) {
+            setError(response.error?.message ?? "Hold'em presence refresh failed.");
+            return;
+          }
         }
       }
     };
@@ -867,7 +871,7 @@ export function useHoldem(options: UseHoldemOptions) {
     authTokenRef,
     enabled,
     handleUnauthorized,
-    holdemTables?.currentTableId,
+    holdemTables?.activeTableIds,
     setError,
   ]);
 
@@ -979,9 +983,14 @@ export function useHoldem(options: UseHoldemOptions) {
     holdemRealtimeClientRef.current = client;
     client.syncTopics([
       HOLDEM_REALTIME_LOBBY_TOPIC,
-      ...(selectedHoldemTableIdRef.current !== null
-        ? [buildHoldemRealtimeTableTopic(selectedHoldemTableIdRef.current)]
-        : []),
+      ...new Set(
+        [
+          ...(holdemTablesRef.current?.activeTableIds ?? []),
+          ...(selectedHoldemTableIdRef.current !== null
+            ? [selectedHoldemTableIdRef.current]
+            : []),
+        ].map((tableId) => buildHoldemRealtimeTableTopic(tableId)),
+      ),
     ]);
     client.start();
 
@@ -1010,11 +1019,14 @@ export function useHoldem(options: UseHoldemOptions) {
 
     holdemRealtimeClientRef.current?.syncTopics([
       HOLDEM_REALTIME_LOBBY_TOPIC,
-      ...(selectedHoldemTableId !== null
-        ? [buildHoldemRealtimeTableTopic(selectedHoldemTableId)]
-        : []),
+      ...new Set(
+        [
+          ...(holdemTables?.activeTableIds ?? []),
+          ...(selectedHoldemTableId !== null ? [selectedHoldemTableId] : []),
+        ].map((tableId) => buildHoldemRealtimeTableTopic(tableId)),
+      ),
     ]);
-  }, [enabled, selectedHoldemTableId]);
+  }, [enabled, selectedHoldemTableId, holdemTables?.activeTableIds]);
 
   useEffect(() => {
     if (!enabled) {

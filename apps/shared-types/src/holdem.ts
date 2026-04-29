@@ -96,6 +96,7 @@ export const HOLDEM_DEFAULT_PRESENCE_HEARTBEAT_MS = 10_000;
 export const HOLDEM_TABLE_MESSAGE_MAX_LENGTH = 180;
 export const HOLDEM_TABLE_MESSAGE_LIMIT = 40;
 export const HOLDEM_MIN_PLAYERS = 2;
+export const HOLDEM_MAX_BOT_PLAYERS = 8;
 export const HOLDEM_REALTIME_LOBBY_TOPIC = "public:holdem:lobby";
 export const HOLDEM_REALTIME_LOBBY_EVENT = "holdem.lobby.updated";
 export const HOLDEM_REALTIME_TABLE_EVENT = "holdem.table.updated";
@@ -196,6 +197,15 @@ export const HoldemFairnessSchema = z.object({
 });
 export type HoldemFairness = z.infer<typeof HoldemFairnessSchema>;
 
+export const HoldemLinkedGroupSchema = z.object({
+  groupId: z.string(),
+  primaryTableId: z.number().int().positive().nullable().default(null),
+  tableIds: z.array(z.number().int().positive()).max(2).default([]),
+  executionIndex: z.number().int().positive(),
+  executionCount: z.number().int().positive(),
+});
+export type HoldemLinkedGroup = z.infer<typeof HoldemLinkedGroupSchema>;
+
 export const HoldemBestHandSchema = z.object({
   category: HoldemHandCategorySchema,
   label: z.string(),
@@ -207,6 +217,7 @@ export const HoldemSeatViewSchema = z.object({
   seatIndex: z.number().int().nonnegative(),
   userId: z.number().int().positive().nullable(),
   displayName: z.string().nullable(),
+  isBot: z.boolean().default(false),
   connectionState: HoldemSeatPresenceStateSchema.nullable(),
   disconnectGraceExpiresAt: DateLikeSchema.nullable(),
   seatLeaseExpiresAt: DateLikeSchema.nullable(),
@@ -343,6 +354,7 @@ export const HoldemRealtimePublicSeatSchema = z.object({
   seatIndex: z.number().int().nonnegative(),
   userId: z.number().int().positive().nullable(),
   displayName: z.string().nullable(),
+  isBot: z.boolean().default(false),
   connectionState: HoldemSeatPresenceStateSchema.nullable(),
   disconnectGraceExpiresAt: z.string().datetime().nullable(),
   seatLeaseExpiresAt: z.string().datetime().nullable(),
@@ -371,6 +383,7 @@ export type HoldemRealtimePublicSeat = z.infer<
 export const HoldemRealtimePublicTableSchema = z.object({
   id: z.number().int().positive(),
   name: z.string(),
+  linkedGroup: HoldemLinkedGroupSchema.nullable().default(null),
   tableType: HoldemTableTypeSchema,
   status: HoldemTableStatusSchema,
   rakePolicy: HoldemTableRakePolicySchema.nullable(),
@@ -446,6 +459,7 @@ export type HoldemRealtimeTableMessage = z.infer<
 export const HoldemTableSummarySchema = z.object({
   id: z.number().int().positive(),
   name: z.string(),
+  linkedGroup: HoldemLinkedGroupSchema.nullable().default(null),
   tableType: HoldemTableTypeSchema,
   status: HoldemTableStatusSchema,
   rakePolicy: HoldemTableRakePolicySchema.nullable(),
@@ -465,6 +479,7 @@ export type HoldemTableSummary = z.infer<typeof HoldemTableSummarySchema>;
 export const HoldemTableSchema = z.object({
   id: z.number().int().positive(),
   name: z.string(),
+  linkedGroup: HoldemLinkedGroupSchema.nullable().default(null),
   tableType: HoldemTableTypeSchema,
   status: HoldemTableStatusSchema,
   rakePolicy: HoldemTableRakePolicySchema.nullable(),
@@ -495,12 +510,14 @@ export type HoldemTable = z.infer<typeof HoldemTableSchema>;
 
 export const HoldemTablesResponseSchema = z.object({
   currentTableId: z.number().int().positive().nullable(),
+  activeTableIds: z.array(z.number().int().positive()).default([]),
   tables: z.array(HoldemTableSummarySchema),
 });
 export type HoldemTablesResponse = z.infer<typeof HoldemTablesResponseSchema>;
 
 export const HoldemTableResponseSchema = z.object({
   table: HoldemTableSchema,
+  tables: z.array(HoldemTableSchema).min(1),
 });
 export type HoldemTableResponse = z.infer<typeof HoldemTableResponseSchema>;
 
@@ -584,10 +601,19 @@ export const HoldemCreateTableRequestSchema = z.object({
   buyInAmount: z.string().min(1).max(32),
   tableType: HoldemTableTypeSchema.optional(),
   maxSeats: z.number().int().min(HOLDEM_MIN_PLAYERS).max(9).optional(),
+  botCount: z.number().int().min(0).max(HOLDEM_MAX_BOT_PLAYERS).optional(),
   tournament: HoldemTournamentCreateConfigSchema.optional(),
 });
 export type HoldemCreateTableRequest = z.infer<
   typeof HoldemCreateTableRequestSchema
+>;
+
+export const HoldemTableBotsRequestSchema = z.object({
+  count: z.number().int().min(1).max(HOLDEM_MAX_BOT_PLAYERS),
+  buyInAmount: z.string().min(1).max(32),
+});
+export type HoldemTableBotsRequest = z.infer<
+  typeof HoldemTableBotsRequestSchema
 >;
 
 export const HoldemJoinTableRequestSchema = z.object({

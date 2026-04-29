@@ -133,6 +133,7 @@ export function GachaRouteScreen(props: GachaRouteScreenProps) {
       >
         <PlayModeSelector
           copy={props.playModeCopy}
+          gameKey="draw"
           snapshot={props.drawCatalog?.playMode ?? null}
           disabled={
             props.submitting ||

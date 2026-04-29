@@ -153,6 +153,15 @@ export const BlackjackFairnessSchema = z.object({
 });
 export type BlackjackFairness = z.infer<typeof BlackjackFairnessSchema>;
 
+export const BlackjackLinkedGroupSchema = z.object({
+  groupId: z.string().min(1).max(128),
+  primaryGameId: z.number().int().positive().nullable().default(null),
+  gameIds: z.array(z.number().int().positive()).default([]),
+  executionIndex: z.number().int().positive(),
+  executionCount: z.number().int().positive(),
+});
+export type BlackjackLinkedGroup = z.infer<typeof BlackjackLinkedGroupSchema>;
+
 export const BlackjackConfigSchema = z.object({
   minStake: z.string(),
   maxStake: z.string(),
@@ -238,6 +247,7 @@ export const BlackjackGameSchema = z.object({
   availableActions: z.array(BlackjackActionSchema),
   fairness: BlackjackFairnessSchema,
   playMode: PlayModeSnapshotSchema,
+  linkedGroup: BlackjackLinkedGroupSchema.nullable().default(null),
   dealerEvents: DealerFeedSchema.default([]),
   createdAt: DateLikeSchema,
   settledAt: DateLikeSchema.nullable(),
@@ -253,6 +263,7 @@ export const BlackjackOverviewResponseSchema = z.object({
     epochSeconds: z.number().int(),
     commitHash: z.string(),
   }),
+  activeGames: z.array(BlackjackGameSchema).default([]),
   activeGame: BlackjackGameSchema.nullable(),
   recentGames: z.array(BlackjackGameSummarySchema),
 });
@@ -277,6 +288,7 @@ export type BlackjackActionRequest = z.infer<
 export const BlackjackMutationResponseSchema = z.object({
   balance: z.string(),
   playMode: PlayModeSnapshotSchema,
+  games: z.array(BlackjackGameSchema).min(1),
   game: BlackjackGameSchema,
 });
 export type BlackjackMutationResponse = z.infer<

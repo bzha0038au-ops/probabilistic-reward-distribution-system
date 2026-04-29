@@ -26,6 +26,7 @@ const browserUserApiClientMock = vi.hoisted(() => ({
   reportHoldemRealtimeObservations: vi.fn(),
   touchHoldemTablePresence: vi.fn(),
   createHoldemTable: vi.fn(),
+  addHoldemBots: vi.fn(),
   joinHoldemTable: vi.fn(),
   leaveHoldemTable: vi.fn(),
   setHoldemSeatMode: vi.fn(),
@@ -116,10 +117,12 @@ const baseFairness = {
 
 const buildLobby = (): HoldemTablesResponse => ({
   currentTableId: 7,
+  activeTableIds: [7],
   tables: [
     {
       id: 7,
       name: "Alpha Table",
+      linkedGroup: null,
       tableType: "cash",
       status: "active",
       rakePolicy: null,
@@ -144,6 +147,7 @@ const buildTableResponse = (
   table: {
     id: 7,
     name: "Alpha Table",
+    linkedGroup: null,
     tableType: "cash",
     status: "active",
     rakePolicy: null,
@@ -168,6 +172,7 @@ const buildTableResponse = (
         seatIndex: 0,
         userId: 42,
         displayName: "Hero",
+        isBot: false,
         stackAmount: "96.00",
         committedAmount: "4.00",
         totalCommittedAmount: "4.00",
@@ -191,6 +196,7 @@ const buildTableResponse = (
         seatIndex: 1,
         userId: 52,
         displayName: "Villain",
+        isBot: false,
         stackAmount: "96.00",
         committedAmount: "4.00",
         totalCommittedAmount: "4.00",
@@ -214,6 +220,7 @@ const buildTableResponse = (
         seatIndex: index + 2,
         userId: null,
         displayName: null,
+        isBot: false,
         stackAmount: "0.00",
         committedAmount: "0.00",
         totalCommittedAmount: "0.00",
@@ -250,6 +257,7 @@ const buildTableResponse = (
     updatedAt: "2026-04-28T09:01:00.000Z",
     ...overrides,
   },
+  tables: [],
 });
 
 function renderHoldemPanel() {
@@ -299,6 +307,15 @@ describe("HoldemPanel", () => {
           rakePolicy: null,
           maxSeats: 2,
           heroSeatIndex: 0,
+        }),
+      ),
+    );
+    browserUserApiClientMock.addHoldemBots.mockResolvedValue(
+      ok(
+        buildTableResponse(["fold", "check"], {
+          id: 7,
+          tableType: "casual",
+          status: "waiting",
         }),
       ),
     );
@@ -425,6 +442,28 @@ describe("HoldemPanel", () => {
         buyInAmount: "40.00",
         tableType: "casual",
         maxSeats: 2,
+        botCount: 0,
+      });
+    });
+  });
+
+  it("submits a casual bot count when opening a bot table", async () => {
+    const user = userEvent.setup();
+    renderHoldemPanel();
+
+    const botCountInput = await screen.findByTestId("holdem-create-bot-count-input");
+    await user.clear(botCountInput);
+    await user.type(botCountInput, "5");
+    await user.click(screen.getByTestId("holdem-create-max-seats-6"));
+    await user.click(screen.getByRole("button", { name: "Create and sit" }));
+
+    await waitFor(() => {
+      expect(browserUserApiClientMock.createHoldemTable).toHaveBeenCalledWith({
+        tableName: undefined,
+        buyInAmount: "40.00",
+        tableType: "casual",
+        maxSeats: 6,
+        botCount: 5,
       });
     });
   });

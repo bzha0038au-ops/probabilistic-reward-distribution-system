@@ -45,6 +45,16 @@ export type CommunitySubmissionGuardResult = {
   queuedReport: CommunityAutomatedModerationReport | null;
 };
 
+export type AutomatedCommunityTextModerationResult = {
+  normalizedContent: string;
+  moderationScore: number;
+  reviewRequired: boolean;
+  autoHidden: boolean;
+  moderationReason: string | null;
+  moderationSource: "automated_signal" | null;
+  queuedReport: CommunityAutomatedModerationReport | null;
+};
+
 const KYC_TIER_RANK: Record<KycTier, number> = {
   tier_0: 0,
   tier_1: 1,
@@ -487,6 +497,72 @@ const buildQueuedReport = (signals: CommunitySignal[]) => {
   };
 };
 
+const buildAutomatedTextModerationResult = (params: {
+  normalizedContent: string;
+  signals: CommunitySignal[];
+}): AutomatedCommunityTextModerationResult => {
+  const moderationScore = aggregateSignalScore(params.signals);
+  const queueThreshold = clampScore(getConfig().communityModerationQueueThreshold);
+  const autoHideThreshold = clampScore(
+    getConfig().communityModerationAutoHideThreshold,
+  );
+  const reviewRequired = moderationScore >= queueThreshold;
+  const autoHidden = moderationScore >= autoHideThreshold;
+
+  if (!reviewRequired) {
+    return {
+      normalizedContent: params.normalizedContent,
+      moderationScore,
+      reviewRequired: false,
+      autoHidden: false,
+      moderationReason: null,
+      moderationSource: null,
+      queuedReport: null,
+    };
+  }
+
+  const report = buildQueuedReport(params.signals);
+  return {
+    normalizedContent: params.normalizedContent,
+    moderationScore,
+    reviewRequired: true,
+    autoHidden,
+    moderationReason: report.moderationReason,
+    moderationSource: "automated_signal",
+    queuedReport: {
+      source: "automated_signal",
+      reason: report.moderationReason,
+      detail: report.detail,
+      metadata: {
+        ...report.metadata,
+        autoHidden,
+      },
+    },
+  };
+};
+
+export const screenAutomatedCommunityText = (
+  content: string,
+): AutomatedCommunityTextModerationResult => {
+  const normalizedContent = normalizeWhitespace(content);
+  if (normalizedContent.length === 0) {
+    return {
+      normalizedContent,
+      moderationScore: 0,
+      reviewRequired: false,
+      autoHidden: false,
+      moderationReason: null,
+      moderationSource: null,
+      queuedReport: null,
+    };
+  }
+
+  return buildAutomatedTextModerationResult({
+    normalizedContent,
+    signals: runHeuristicSignals(normalizedContent),
+  });
+};
+
 const collectSignals = async (content: string) => {
   const signals = runHeuristicSignals(content);
   const config = getConfig();
@@ -512,6 +588,28 @@ const collectSignals = async (content: string) => {
 
   return signals;
 };
+
+export async function moderateAutomatedCommunityText(
+  content: string,
+): Promise<AutomatedCommunityTextModerationResult> {
+  const normalizedContent = normalizeWhitespace(content);
+  if (normalizedContent.length === 0) {
+    return {
+      normalizedContent,
+      moderationScore: 0,
+      reviewRequired: false,
+      autoHidden: false,
+      moderationReason: null,
+      moderationSource: null,
+      queuedReport: null,
+    };
+  }
+
+  return buildAutomatedTextModerationResult({
+    normalizedContent,
+    signals: await collectSignals(normalizedContent),
+  });
+}
 
 export async function guardCommunitySubmission(params: {
   userId: number;

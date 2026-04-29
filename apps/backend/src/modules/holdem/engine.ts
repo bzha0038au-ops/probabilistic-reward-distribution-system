@@ -26,6 +26,7 @@ import {
 import { toDecimal, toMoneyString } from "../../shared/money";
 import { evaluateBestHoldemHand, compareHoldemBestHands } from "./evaluator";
 import {
+  isBotSeat,
   resolveSeatPresenceState,
   resolveSeatDisplayName,
   type HoldemSeatState,
@@ -138,6 +139,15 @@ const isSeatEligibleForHand = (seat: HoldemSeatState) =>
 const listEligibleSeats = (state: HoldemTableState) =>
   sortSeatsByIndex(state.seats).filter(isSeatEligibleForHand);
 
+const listEligibleHumanSeats = (state: HoldemTableState) =>
+  listEligibleSeats(state).filter((seat) => !isBotSeat(seat));
+
+const resolveMinimumRequiredPlayers = (state: HoldemTableState) =>
+  state.metadata.tableType === "casual" ? 1 : HOLDEM_MIN_PLAYERS;
+
+const isSoloHoldemState = (state: HoldemTableState) =>
+  state.metadata.tableType === "casual" && listEligibleSeats(state).length === 1;
+
 const listNonFoldedSeats = (state: HoldemTableState) =>
   sortSeatsByIndex(state.seats).filter(
     (seat) => seat.status !== "folded" && isSeatInHand(seat),
@@ -213,7 +223,7 @@ const firstSeatIndex = (orderedSeatIndexes: number[]) => orderedSeatIndexes[0] ?
 
 const resolveNextDealerSeatIndex = (state: HoldemTableState) => {
   const eligibleSeatIndexes = listEligibleSeats(state).map((seat) => seat.seatIndex);
-  if (eligibleSeatIndexes.length < HOLDEM_MIN_PLAYERS) {
+  if (eligibleSeatIndexes.length < resolveMinimumRequiredPlayers(state)) {
     return null;
   }
 
@@ -230,8 +240,15 @@ const resolveBlindSeats = (
   dealerSeatIndex: number,
 ) => {
   const eligibleSeatIndexes = listEligibleSeats(state).map((seat) => seat.seatIndex);
-  if (eligibleSeatIndexes.length < HOLDEM_MIN_PLAYERS) {
+  if (eligibleSeatIndexes.length < resolveMinimumRequiredPlayers(state)) {
     throw conflictError("At least two funded seats are required to start a hand.");
+  }
+
+  if (eligibleSeatIndexes.length === 1) {
+    return {
+      smallBlindSeatIndex: null,
+      bigBlindSeatIndex: null,
+    };
   }
 
   if (eligibleSeatIndexes.length === 2) {
@@ -519,7 +536,7 @@ const formatPotWinners = (state: HoldemTableState, seatIndexes: number[]) =>
     if (!seat) {
       return `Seat ${seatIndex + 1}`;
     }
-    return resolveSeatDisplayName(seat.userId, seat.userEmail);
+    return resolveSeatDisplayName(seat.userId, seat.userEmail, seat.metadata);
   });
 
 const distributeAmountAcrossSeatIndexes = (
@@ -689,8 +706,21 @@ const settleShowdown = (state: HoldemTableState) => {
     };
   });
 
+  const soloShowdownWinnerSeatIndexes =
+    resolvedPots.length === 0 && showdownSeats.length === 1
+      ? [showdownSeats[0]!.seatIndex]
+      : [];
+  for (const seatIndex of soloShowdownWinnerSeatIndexes) {
+    const seat = findSeatByIndex(state, seatIndex);
+    if (seat) {
+      seat.metadata.winner = true;
+    }
+  }
+
   const allWinnerSeatIndexes = [...new Set(
-    resolvedPots.flatMap((pot) => pot.winnerSeatIndexes),
+    resolvedPots.length === 0
+      ? soloShowdownWinnerSeatIndexes
+      : resolvedPots.flatMap((pot) => pot.winnerSeatIndexes),
   )];
   const totalPotAmount = resolvedPots.reduce(
     (sum, pot) => sum.plus(pot.amount),
@@ -759,7 +789,7 @@ const resolveTerminalAndStreetProgression = (
   currentStage: HoldemStreet,
 ) => {
   while (state.status === "active") {
-    if (listNonFoldedSeats(state).length <= 1) {
+    if (!isSoloHoldemState(state) && listNonFoldedSeats(state).length <= 1) {
       settleByFold(state, currentStage);
       return;
     }
@@ -818,6 +848,7 @@ export const resolveHoldemActionAvailability = (
   const minimumRaiseTo = currentBet.gt(0)
     ? currentBet.plus(lastFullRaiseAmount(state))
     : minimumBetTo;
+  const soloHand = isSoloHoldemState(state);
 
   const actions: HoldemAction[] = [];
   if (toCall.gt(0)) {
@@ -826,15 +857,25 @@ export const resolveHoldemActionAvailability = (
     actions.push("check");
   }
 
-  if (stack.gt(0) && currentBet.eq(0) && maximumRaiseTo.gte(minimumBetTo)) {
+  if (
+    !soloHand &&
+    stack.gt(0) &&
+    currentBet.eq(0) &&
+    maximumRaiseTo.gte(minimumBetTo)
+  ) {
     actions.push("bet");
   }
 
-  if (stack.gt(0) && currentBet.gt(0) && maximumRaiseTo.gte(minimumRaiseTo)) {
+  if (
+    !soloHand &&
+    stack.gt(0) &&
+    currentBet.gt(0) &&
+    maximumRaiseTo.gte(minimumRaiseTo)
+  ) {
     actions.push("raise");
   }
 
-  if (stack.gt(0)) {
+  if (!soloHand && stack.gt(0)) {
     actions.push("all_in");
   }
 
@@ -1004,8 +1045,12 @@ export const startHoldemHand = (
   }
 
   const eligibleSeats = listEligibleSeats(state);
-  if (eligibleSeats.length < HOLDEM_MIN_PLAYERS) {
+  const eligibleHumanSeats = eligibleSeats.filter((seat) => !isBotSeat(seat));
+  if (eligibleSeats.length < resolveMinimumRequiredPlayers(state)) {
     throw conflictError("At least two funded seats are required to start a hand.");
+  }
+  if (eligibleHumanSeats.length === 0) {
+    throw conflictError("At least one human seat is required to start a hand.");
   }
 
   const dealerSeatIndex = resolveNextDealerSeatIndex(state);
@@ -1016,7 +1061,10 @@ export const startHoldemHand = (
     state,
     dealerSeatIndex,
   );
-  const dealOrder = resolveDealOrder(state, smallBlindSeatIndex);
+  const dealOrder = resolveDealOrder(
+    state,
+    smallBlindSeatIndex ?? dealerSeatIndex,
+  );
 
   for (const seat of state.seats) {
     seat.committedAmount = "0.00";
@@ -1072,22 +1120,20 @@ export const startHoldemHand = (
 
   const smallBlindSeat = findSeatByIndex(state, smallBlindSeatIndex);
   const bigBlindSeat = findSeatByIndex(state, bigBlindSeatIndex);
-  if (!smallBlindSeat || !bigBlindSeat) {
-    throw internalInvariantError("Blind seat state is missing.");
+  if (smallBlindSeat && bigBlindSeat) {
+    postFromStack(smallBlindSeat, smallBlindAmount(state));
+    smallBlindSeat.lastAction = "Small blind";
+    postFromStack(bigBlindSeat, bigBlindAmount(state));
+    bigBlindSeat.lastAction = "Big blind";
+
+    state.metadata.currentBet = toMoneyString(
+      Decimal.max(seatCommitted(bigBlindSeat), seatCommitted(smallBlindSeat)),
+    );
   }
-
-  postFromStack(smallBlindSeat, smallBlindAmount(state));
-  smallBlindSeat.lastAction = "Small blind";
-  postFromStack(bigBlindSeat, bigBlindAmount(state));
-  bigBlindSeat.lastAction = "Big blind";
-
-  state.metadata.currentBet = toMoneyString(
-    Decimal.max(seatCommitted(bigBlindSeat), seatCommitted(smallBlindSeat)),
-  );
   setActedSeats(state, []);
   state.metadata.pendingActorSeatIndex = resolveNextActionableSeatIndex(
     state,
-    bigBlindSeatIndex,
+    bigBlindSeatIndex ?? dealerSeatIndex,
   );
   resolveTerminalAndStreetProgression(state, "preflop");
 };
@@ -1294,8 +1340,13 @@ const buildRealtimeSeatSnapshot = (
   return {
     seatIndex: seat.seatIndex,
     userId: seat.userId,
-    displayName: resolveSeatDisplayName(seat.userId, seat.userEmail),
-    connectionState: resolveSeatPresenceState(seat),
+    displayName: resolveSeatDisplayName(
+      seat.userId,
+      seat.userEmail,
+      seat.metadata,
+    ),
+    isBot: isBotSeat(seat),
+    connectionState: isBotSeat(seat) ? "connected" : resolveSeatPresenceState(seat),
     disconnectGraceExpiresAt: seat.disconnectGraceExpiresAt
       ? new Date(seat.disconnectGraceExpiresAt).toISOString()
       : null,
@@ -1330,7 +1381,11 @@ const canStartHoldemTable = (state: HoldemTableState) => {
     return false;
   }
 
-  return state.status === "waiting" && listEligibleSeats(state).length >= HOLDEM_MIN_PLAYERS;
+  return (
+    state.status === "waiting" &&
+    listEligibleSeats(state).length >= resolveMinimumRequiredPlayers(state) &&
+    listEligibleHumanSeats(state).length > 0
+  );
 };
 
 export const serializeHoldemRealtimeTable = (
@@ -1344,6 +1399,7 @@ export const serializeHoldemRealtimeTable = (
   return {
     id: state.id,
     name: state.name,
+    linkedGroup: state.metadata.linkedGroup,
     tableType: state.metadata.tableType,
     status: state.status,
     rakePolicy: state.metadata.rakePolicy,
@@ -1407,6 +1463,7 @@ export const serializeHoldemTable = (
         seatIndex,
         userId: null,
         displayName: null,
+        isBot: false,
         connectionState: null,
         disconnectGraceExpiresAt: null,
         seatLeaseExpiresAt: null,
@@ -1433,8 +1490,13 @@ export const serializeHoldemTable = (
     return {
       seatIndex,
       userId: seat.userId,
-      displayName: resolveSeatDisplayName(seat.userId, seat.userEmail),
-      connectionState: resolveSeatPresenceState(seat),
+      displayName: resolveSeatDisplayName(
+        seat.userId,
+        seat.userEmail,
+        seat.metadata,
+      ),
+      isBot: isBotSeat(seat),
+      connectionState: isBotSeat(seat) ? "connected" : resolveSeatPresenceState(seat),
       disconnectGraceExpiresAt: toIsoStringOrNull(seat.disconnectGraceExpiresAt),
       seatLeaseExpiresAt: toIsoStringOrNull(seat.seatLeaseExpiresAt),
       autoCashOutPending: seat.autoCashOutPending ?? false,
@@ -1460,6 +1522,7 @@ export const serializeHoldemTable = (
   return {
     id: state.id,
     name: state.name,
+    linkedGroup: state.metadata.linkedGroup,
     tableType: state.metadata.tableType,
     status: state.status,
     rakePolicy: state.metadata.rakePolicy,
@@ -1511,6 +1574,7 @@ export const serializeHoldemTableSummary = (
 ): HoldemTableSummary => ({
   id: state.id,
   name: state.name,
+  linkedGroup: state.metadata.linkedGroup,
   tableType: state.metadata.tableType,
   status: state.status,
   rakePolicy: state.metadata.rakePolicy,

@@ -174,13 +174,29 @@ type BlackjackRouteScreenProps = {
   onChangeBlackjackPlayMode: (type: PlayModeType) => void;
   onStartBlackjack: () => void;
   onRefreshBlackjackOverview: () => void;
-  onBlackjackAction: (action: BlackjackAction) => void;
+  onBlackjackAction: (gameId: number, action: BlackjackAction) => void;
   blackjackStatusLabels: Record<BlackjackGameStatus, string>;
 };
 
 export function BlackjackRouteScreen(props: BlackjackRouteScreenProps) {
-  const activeGame = props.blackjackOverview?.activeGame ?? null;
+  const activeGames = props.blackjackOverview
+    ? props.blackjackOverview.activeGames.length > 0
+      ? props.blackjackOverview.activeGames
+      : props.blackjackOverview.activeGame
+        ? [props.blackjackOverview.activeGame]
+        : []
+    : [];
+  const activeGame = activeGames[0] ?? null;
   const blackjackConfig = props.blackjackOverview?.config ?? BLACKJACK_CONFIG;
+  const effectiveStakePreview = (() => {
+    const numericStake = Number(props.blackjackStakeAmount || "0");
+    const multiplier = props.blackjackOverview?.playMode.appliedMultiplier ?? 1;
+    if (!Number.isFinite(numericStake) || multiplier <= 1) {
+      return null;
+    }
+
+    return props.formatAmount((numericStake * multiplier).toFixed(2));
+  })();
 
   const getPlayerHandStateLabel = (
     state: BlackjackGame["playerHands"][number]["state"],
@@ -373,11 +389,12 @@ export function BlackjackRouteScreen(props: BlackjackRouteScreenProps) {
 
       <PlayModeSelector
         copy={props.playModeCopy}
+        gameKey="blackjack"
         snapshot={props.blackjackOverview?.playMode ?? null}
         disabled={
           props.loadingBlackjack ||
           props.updatingBlackjackPlayMode ||
-          Boolean(props.blackjackOverview?.activeGame)
+          activeGames.length > 0
         }
         onSelect={props.onChangeBlackjackPlayMode}
       />
@@ -481,7 +498,7 @@ export function BlackjackRouteScreen(props: BlackjackRouteScreenProps) {
           eyebrow={props.fairnessEyebrow}
         />
 
-        {!activeGame ? (
+        {activeGames.length === 0 ? (
           <View style={styles.blackjackControls}>
             <View style={props.styles.field}>
               <Text style={props.styles.fieldLabel}>
@@ -503,6 +520,11 @@ export function BlackjackRouteScreen(props: BlackjackRouteScreenProps) {
                   props.formatAmount(blackjackConfig.maxStake),
                 )}
               </Text>
+              {effectiveStakePreview ? (
+                <Text style={props.styles.gachaHint}>
+                  {props.screenCopy.effectiveStakePreview(effectiveStakePreview)}
+                </Text>
+              ) : null}
             </View>
             <View style={props.styles.inlineActions}>
               <ActionButton
@@ -539,83 +561,95 @@ export function BlackjackRouteScreen(props: BlackjackRouteScreenProps) {
           </View>
         ) : (
           <View style={styles.blackjackRouteStack}>
-            <View style={props.styles.badgeRow}>
-              <View style={[props.styles.badge, props.styles.badgeSuccess]}>
-                <Text style={props.styles.badgeText}>
-                  {props.blackjackStatusLabels[activeGame.status]}
-                </Text>
-              </View>
-              <View style={[props.styles.badge, props.styles.badgeMuted]}>
-                <Text style={props.styles.badgeText}>
-                  Stake {props.formatAmount(activeGame.totalStake)}
-                </Text>
-              </View>
-              <View style={[props.styles.badge, props.styles.badgeMuted]}>
-                <Text style={props.styles.badgeText}>
-                  Payout {props.formatAmount(activeGame.payoutAmount)}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.blackjackTableCard}>
-              <Text style={styles.blackjackHandTitle}>
-                {props.screenCopy.tableTitle}
-              </Text>
-              <Text style={styles.blackjackHistoryBody}>
-                {props.screenCopy.tableId} {activeGame.table.tableId}
-              </Text>
-              <View style={props.styles.badgeRow}>
-                {activeGame.table.seats.map((seat) => (
-                  <View
-                    key={`${activeGame.table.tableId}-${seat.participantId}-${seat.seatIndex}`}
-                    style={[
-                      props.styles.badge,
-                      seat.role === "dealer"
-                        ? props.styles.badgeSuccess
-                        : props.styles.badgeMuted,
-                    ]}
-                  >
+            {activeGames.map((game) => (
+              <View key={game.id} style={styles.blackjackRouteStack}>
+                <View style={props.styles.badgeRow}>
+                  {game.linkedGroup ? (
+                    <View style={[props.styles.badge, props.styles.badgeMuted]}>
+                      <Text style={props.styles.badgeText}>
+                        {props.screenCopy.hand} {game.linkedGroup.executionIndex}/
+                        {game.linkedGroup.executionCount}
+                      </Text>
+                    </View>
+                  ) : null}
+                  <View style={[props.styles.badge, props.styles.badgeSuccess]}>
                     <Text style={props.styles.badgeText}>
-                      {getTableSeatLabel(seat)}
+                      {props.blackjackStatusLabels[game.status]}
                     </Text>
                   </View>
-                ))}
-              </View>
-            </View>
+                  <View style={[props.styles.badge, props.styles.badgeMuted]}>
+                    <Text style={props.styles.badgeText}>
+                      Stake {props.formatAmount(game.totalStake)}
+                    </Text>
+                  </View>
+                  <View style={[props.styles.badge, props.styles.badgeMuted]}>
+                    <Text style={props.styles.badgeText}>
+                      Payout {props.formatAmount(game.payoutAmount)}
+                    </Text>
+                  </View>
+                </View>
 
-            <View style={styles.blackjackHandsGrid}>
-              {renderHand(props.screenCopy.dealerHand, activeGame.dealerHand)}
-              <View style={styles.blackjackHandsGrid}>
-                {activeGame.playerHands.map((hand) => renderPlayerHand(hand))}
-              </View>
-            </View>
+                <View style={styles.blackjackTableCard}>
+                  <Text style={styles.blackjackHandTitle}>
+                    {props.screenCopy.tableTitle}
+                  </Text>
+                  <Text style={styles.blackjackHistoryBody}>
+                    {props.screenCopy.tableId} {game.table.tableId}
+                  </Text>
+                  <View style={props.styles.badgeRow}>
+                    {game.table.seats.map((seat) => (
+                      <View
+                        key={`${game.table.tableId}-${seat.participantId}-${seat.seatIndex}`}
+                        style={[
+                          props.styles.badge,
+                          seat.role === "dealer"
+                            ? props.styles.badgeSuccess
+                            : props.styles.badgeMuted,
+                        ]}
+                      >
+                        <Text style={props.styles.badgeText}>
+                          {getTableSeatLabel(seat)}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
 
-            <View style={props.styles.inlineActions}>
-              {activeGame.availableActions.map((action) => (
-                <ActionButton
-                  key={action}
-                  label={
-                    props.actingBlackjack === action
-                      ? props.screenCopy.settling
-                      : action === "hit"
-                        ? props.screenCopy.hit
-                        : action === "stand"
-                          ? props.screenCopy.stand
-                          : action === "double"
-                            ? props.screenCopy.double
-                            : props.screenCopy.split
-                  }
-                  onPress={() => props.onBlackjackAction(action)}
-                  disabled={
-                    props.actingBlackjack !== null ||
-                    props.loadingBlackjack ||
-                    !props.emailVerified
-                  }
-                  variant={action === "double" ? "secondary" : "primary"}
-                  compact
-                />
-              ))}
-            </View>
+                <View style={styles.blackjackHandsGrid}>
+                  {renderHand(props.screenCopy.dealerHand, game.dealerHand)}
+                  <View style={styles.blackjackHandsGrid}>
+                    {game.playerHands.map((hand) => renderPlayerHand(hand))}
+                  </View>
+                </View>
+
+                <View style={props.styles.inlineActions}>
+                  {game.availableActions.map((action) => (
+                    <ActionButton
+                      key={`${game.id}-${action}`}
+                      label={
+                        props.actingBlackjack === action
+                          ? props.screenCopy.settling
+                          : action === "hit"
+                            ? props.screenCopy.hit
+                            : action === "stand"
+                              ? props.screenCopy.stand
+                              : action === "double"
+                                ? props.screenCopy.double
+                                : props.screenCopy.split
+                      }
+                      onPress={() => props.onBlackjackAction(game.id, action)}
+                      disabled={
+                        props.actingBlackjack !== null ||
+                        props.loadingBlackjack ||
+                        !props.emailVerified
+                      }
+                      variant={action === "double" ? "secondary" : "primary"}
+                      compact
+                    />
+                  ))}
+                </View>
+              </View>
+            ))}
           </View>
         )}
 

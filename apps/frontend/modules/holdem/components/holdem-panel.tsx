@@ -79,11 +79,16 @@ const copy = {
     tableName: "Table name",
     tableNamePlaceholder: "Optional public table name",
     seats: "Seats",
+    botPlayers: "Bot seats",
+    botBuyIn: "Bot buy-in",
     buyIn: "Buy-in",
+    effectiveBuyIn: "Effective buy-in",
     tournamentStartingStack: "Starting stack",
     tournamentPayoutPlaces: "Payout places",
     casualTableHint:
       "Casual tables use bonus balance, do not charge rake, and do not require KYC.",
+    casualBotHint:
+      "Seat-level bots are casual-only. They occupy real opponent seats, never control dealing randomness, and auto-act until action returns to a human seat.",
     cashTableHint: "Cash tables use withdrawable balance and the live rake policy.",
     tournamentTableHint:
       "Tournament tables freeze buy-ins into a pooled prize pool, seat every entry with the same starting stack, and only settle prizes after elimination order is final.",
@@ -129,6 +134,7 @@ const copy = {
     hero: "You",
     openSeat: "Open seat",
     dealer: "Dealer",
+    bot: "Bot",
     smallBlind: "SB",
     bigBlind: "BB",
     turn: "Turn",
@@ -171,9 +177,13 @@ const copy = {
     tableChatSending: "Sending...",
     tableChatReactions: "Reactions",
     tableChatSeatOnly: "Only seated players can chat or send table reactions.",
+    addBots: "Add bots",
+    addBotsBusy: "Seating bots...",
     dealerFeedTitle: "Dealer commentary",
     dealerFeedEmpty: "The dealer will call the rhythm here once the hand starts moving.",
     dealerHost: "AI dealer",
+    dealerAiTag: "AI",
+    dealerRuleTag: "Rule",
     replayStartedAt: "Started",
     replaySettledAt: "Settled",
     stagePreflop: "Preflop",
@@ -207,10 +217,15 @@ const copy = {
     tableName: "桌名",
     tableNamePlaceholder: "可选，公开桌名称",
     seats: "人数",
+    botPlayers: "人机席位",
+    botBuyIn: "人机买入",
     buyIn: "买入金额",
+    effectiveBuyIn: "实际买入",
     tournamentStartingStack: "起始筹码",
     tournamentPayoutPlaces: "派奖名次",
     casualTableHint: "娱乐局使用奖励余额买入，不抽水，且不要求 KYC。",
+    casualBotHint:
+      "seat 级人机仅限娱乐局。它们占真实对手位，不控制发牌随机性，并会自动行动直到轮回真人。",
     cashTableHint: "现金桌使用可提现余额买入，并应用实时抽水策略。",
     tournamentTableHint:
       "锦标赛会把买入汇总进奖池，所有参赛者统一起始筹码，直到淘汰名次确定后才统一派奖。",
@@ -256,6 +271,7 @@ const copy = {
     hero: "你",
     openSeat: "空位",
     dealer: "庄位",
+    bot: "人机",
     smallBlind: "小盲",
     bigBlind: "大盲",
     turn: "行动中",
@@ -297,9 +313,13 @@ const copy = {
     tableChatSending: "发送中...",
     tableChatReactions: "快捷表情",
     tableChatSeatOnly: "只有已入座玩家可以发送桌内聊天和表情。",
+    addBots: "加入人机",
+    addBotsBusy: "正在安排人机...",
     dealerFeedTitle: "荷官播报",
     dealerFeedEmpty: "牌局一旦转起来，智能荷官会在这里报节奏、播动作、补一句解说。",
     dealerHost: "智能荷官",
+    dealerAiTag: "AI",
+    dealerRuleTag: "规则",
     replayStartedAt: "开始时间",
     replaySettledAt: "结算时间",
     stagePreflop: "翻牌前",
@@ -500,6 +520,9 @@ function SeatCard(props: {
           <p className="text-sm font-semibold text-white">{title}</p>
           {!isOpen ? (
             <div className="flex flex-wrap gap-2">
+              {props.seat.isBot ? (
+                <SeatBadge active>{props.c.bot}</SeatBadge>
+              ) : null}
               <SeatBadge active={props.seat.isDealer}>{props.c.dealer}</SeatBadge>
               <SeatBadge active={props.seat.isSmallBlind}>
                 {props.c.smallBlind}
@@ -591,6 +614,7 @@ const updateSelectedTableDealerFeed = (params: {
         event: params.event,
       }),
     },
+    tables: params.currentTable.tables,
   } satisfies HoldemTableResponse;
 };
 
@@ -608,12 +632,15 @@ export function HoldemPanel() {
   const [createTableType, setCreateTableType] =
     useState<(typeof createableHoldemTableTypes)[number]>("casual");
   const [createMaxSeats, setCreateMaxSeats] = useState<number>(2);
+  const [createBotCount, setCreateBotCount] = useState("0");
   const [createBuyIn, setCreateBuyIn] = useState(HOLDEM_CONFIG.minimumBuyIn);
   const [createTournamentStartingStack, setCreateTournamentStartingStack] =
     useState(DEFAULT_HOLDEM_TOURNAMENT_STARTING_STACK_AMOUNT);
   const [createTournamentPayoutPlaces, setCreateTournamentPayoutPlaces] =
     useState(DEFAULT_HOLDEM_TOURNAMENT_PAYOUT_PLACES);
   const [joinBuyIn, setJoinBuyIn] = useState(HOLDEM_CONFIG.minimumBuyIn);
+  const [tableBotCount, setTableBotCount] = useState("1");
+  const [tableBotBuyIn, setTableBotBuyIn] = useState(HOLDEM_CONFIG.minimumBuyIn);
   const [actionAmount, setActionAmount] = useState(HOLDEM_CONFIG.bigBlind);
   const [chatDraft, setChatDraft] = useState("");
   const [loadingLobby, setLoadingLobby] = useState(true);
@@ -653,6 +680,9 @@ export function HoldemPanel() {
   const activeTable = selectedTable?.table ?? null;
   const activeSummary =
     tables?.tables.find((table) => table.id === selectedTableId) ?? null;
+  const openSeatCount = activeTable
+    ? activeTable.seats.filter((seat) => seat.userId === null).length
+    : 0;
   const heroSeated = activeTable?.heroSeatIndex !== null && activeTable !== null;
   const heroSeat =
     activeTable && activeTable.heroSeatIndex !== null
@@ -801,7 +831,13 @@ export function HoldemPanel() {
         if (preferredTableId !== undefined) {
           return preferredTableId;
         }
-        return current ?? response.data.currentTableId ?? response.data.tables[0]?.id ?? null;
+        return (
+          current ??
+          response.data.activeTableIds[0] ??
+          response.data.currentTableId ??
+          response.data.tables[0]?.id ??
+          null
+        );
       });
     });
     return response.data;
@@ -967,22 +1003,40 @@ export function HoldemPanel() {
   }, [activeTable?.id]);
 
   useEffect(() => {
-    const currentTableId = tables?.currentTableId ?? null;
-    if (currentTableId === null) {
+    if (createTableType !== "casual") {
+      setCreateBotCount("0");
+    }
+  }, [createTableType]);
+
+  useEffect(() => {
+    if (!activeTable) {
+      return;
+    }
+    if (activeTable.tableType === "casual") {
+      setTableBotBuyIn(activeTable.minimumBuyIn);
+    }
+  }, [activeTable?.id, activeTable?.minimumBuyIn, activeTable?.tableType]);
+
+  useEffect(() => {
+    const activeTableIds = tables?.activeTableIds ?? [];
+    if (activeTableIds.length === 0) {
       return;
     }
 
     let cancelled = false;
 
     const touchPresence = async () => {
-      const response =
-        await browserUserApiClient.touchHoldemTablePresence(currentTableId);
-      if (cancelled) {
-        return;
-      }
+      for (const tableId of activeTableIds) {
+        const response =
+          await browserUserApiClient.touchHoldemTablePresence(tableId);
+        if (cancelled) {
+          return;
+        }
 
-      if (!response.ok && response.status !== 409) {
-        setError(response.error.message);
+        if (!response.ok && response.status !== 409) {
+          setError(response.error.message);
+          return;
+        }
       }
     };
 
@@ -995,7 +1049,7 @@ export function HoldemPanel() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [tables?.currentTableId]);
+  }, [tables?.activeTableIds]);
 
   useEffect(() => {
     let disposed = false;
@@ -1130,9 +1184,14 @@ export function HoldemPanel() {
     holdemRealtimeClientRef.current = client;
     client.syncTopics([
       HOLDEM_REALTIME_LOBBY_TOPIC,
-      ...(selectedTableIdRef.current !== null
-        ? [buildHoldemRealtimeTableTopic(selectedTableIdRef.current)]
-        : []),
+      ...new Set(
+        [
+          ...(tablesRef.current?.activeTableIds ?? []),
+          ...(selectedTableIdRef.current !== null
+            ? [selectedTableIdRef.current]
+            : []),
+        ].map((tableId) => buildHoldemRealtimeTableTopic(tableId)),
+      ),
     ]);
     client.start();
 
@@ -1149,11 +1208,14 @@ export function HoldemPanel() {
   useEffect(() => {
     holdemRealtimeClientRef.current?.syncTopics([
       HOLDEM_REALTIME_LOBBY_TOPIC,
-      ...(selectedTableId !== null
-        ? [buildHoldemRealtimeTableTopic(selectedTableId)]
-        : []),
+      ...new Set(
+        [
+          ...(tables?.activeTableIds ?? []),
+          ...(selectedTableId !== null ? [selectedTableId] : []),
+        ].map((tableId) => buildHoldemRealtimeTableTopic(tableId)),
+      ),
     ]);
-  }, [selectedTableId]);
+  }, [selectedTableId, tables?.activeTableIds]);
 
   useEffect(() => {
     if (!selectedReplayRoundId) {
@@ -1311,6 +1373,7 @@ export function HoldemPanel() {
         </CardHeader>
         <CardContent className="space-y-5">
           <PlayModeSwitcher
+            gameKey="holdem"
             snapshot={holdemPlayMode}
             disabled={busyAction !== null || heroSeated}
             loading={updatingPlayMode}
@@ -1389,6 +1452,23 @@ export function HoldemPanel() {
                 </div>
               </div>
 
+              {createTableType === "casual" ? (
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+                    {c.botPlayers}
+                  </p>
+                  <Input
+                    value={createBotCount}
+                    onChange={(event) => setCreateBotCount(event.target.value)}
+                    inputMode="numeric"
+                    aria-label={c.botPlayers}
+                    className="border-white/10 bg-white/[0.04] text-white"
+                    data-testid="holdem-create-bot-count-input"
+                  />
+                  <p className="mt-2 text-xs text-slate-400">{c.casualBotHint}</p>
+                </div>
+              ) : null}
+
               <Input
                 value={createName}
                 onChange={(event) => setCreateName(event.target.value)}
@@ -1443,7 +1523,7 @@ export function HoldemPanel() {
               ) : null}
               {scaledBuyIn(createBuyIn) ? (
                 <p className="text-xs text-emerald-100/80">
-                  Effective buy-in: {scaledBuyIn(createBuyIn)}
+                  {c.effectiveBuyIn}: {scaledBuyIn(createBuyIn)}
                 </p>
               ) : null}
               <Button
@@ -1456,6 +1536,18 @@ export function HoldemPanel() {
                       buyInAmount: createBuyIn.trim(),
                       tableType: createTableType,
                       maxSeats: createMaxSeats,
+                      botCount:
+                        createTableType === "casual"
+                          ? (() => {
+                              const parsed = Number.parseInt(
+                                createBotCount.trim(),
+                                10,
+                              );
+                              return Number.isFinite(parsed) && parsed >= 0
+                                ? parsed
+                                : undefined;
+                            })()
+                          : undefined,
                       tournament:
                         createTableType === "tournament"
                           ? {
@@ -1696,7 +1788,7 @@ export function HoldemPanel() {
                   </div>
                   {scaledBuyIn(joinBuyIn) ? (
                     <p className="mt-3 text-xs text-emerald-100/80">
-                      Effective buy-in: {scaledBuyIn(joinBuyIn)}
+                      {c.effectiveBuyIn}: {scaledBuyIn(joinBuyIn)}
                     </p>
                   ) : null}
 
@@ -1776,6 +1868,54 @@ export function HoldemPanel() {
                       </>
                     )}
                   </div>
+
+                  {heroSeated &&
+                  activeTable.tableType === "casual" &&
+                  activeTable.status === "waiting" &&
+                  openSeatCount > 0 ? (
+                    <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.26em] text-slate-400">
+                        {c.botPlayers}
+                      </p>
+                      <p className="mt-2 text-xs text-slate-400">{c.casualBotHint}</p>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <Input
+                          value={tableBotCount}
+                          onChange={(event) => setTableBotCount(event.target.value)}
+                          inputMode="numeric"
+                          aria-label={c.botPlayers}
+                          className="border-white/10 bg-white/[0.04] text-white"
+                          data-testid="holdem-add-bot-count-input"
+                        />
+                        <Input
+                          value={tableBotBuyIn}
+                          onChange={(event) => setTableBotBuyIn(event.target.value)}
+                          inputMode="decimal"
+                          aria-label={c.botBuyIn}
+                          className="border-white/10 bg-white/[0.04] text-white"
+                          data-testid="holdem-add-bot-buyin-input"
+                        />
+                      </div>
+                      <Button
+                        className="mt-3 rounded-full bg-fuchsia-300 text-slate-950 hover:bg-fuchsia-200"
+                        disabled={busyAction === "addBots"}
+                        onClick={() =>
+                          activeTable &&
+                          void runTableMutation("addBots", () =>
+                            browserUserApiClient.addHoldemBots(activeTable.id, {
+                              count: Math.max(
+                                1,
+                                Number.parseInt(tableBotCount.trim(), 10) || 1,
+                              ),
+                              buyInAmount: tableBotBuyIn.trim(),
+                            }),
+                          )
+                        }
+                      >
+                        {busyAction === "addBots" ? c.addBotsBusy : c.addBots}
+                      </Button>
+                    </div>
+                  ) : null}
 
                   {heroSeat ? (
                     <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-slate-300">
@@ -1861,9 +2001,11 @@ export function HoldemPanel() {
                 <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
                   <div className="space-y-5">
                     <DealerFeed
+                      aiLabel={c.dealerAiTag}
                       dealerLabel={c.dealerHost}
                       emptyLabel={c.dealerFeedEmpty}
                       events={activeTable.dealerEvents}
+                      ruleLabel={c.dealerRuleTag}
                       title={c.dealerFeedTitle}
                     />
 

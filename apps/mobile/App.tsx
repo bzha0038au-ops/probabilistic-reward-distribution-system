@@ -1808,7 +1808,9 @@ function NativeApp() {
               onChangeStakeAmount={setBlackjackStakeAmount}
               onStartBlackjack={() => void startBlackjack()}
               onRefreshBlackjackOverview={() => void refreshBlackjackOverview()}
-              onBlackjackAction={(action) => void actOnBlackjack(action)}
+              onBlackjackAction={(gameId, action) =>
+                void actOnBlackjack(gameId, action)
+              }
               blackjackStatusLabels={blackjackStatusLabels}
             />
           )}

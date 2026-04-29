@@ -51,6 +51,7 @@ const buildSeat = (params: {
       timeBankRemainingMs: 0,
       winner: false,
       bestHand: null,
+      bot: null,
       tournament: null,
     },
     createdAt: tableCreatedAt,
@@ -68,6 +69,7 @@ const buildTable = (seats: HoldemSeatState[]): HoldemTableState => ({
   maxSeats: 6,
   metadata: {
     tableType: "cash",
+    linkedGroup: null,
     rakePolicy: null,
     tournament: null,
     handNumber: 0,
@@ -214,6 +216,80 @@ describe("holdem engine", () => {
       revealSeed: handSeed,
     });
     expect(state.metadata.fairnessSeed).toBeNull();
+  });
+
+  it("lets a solo casual hand check through every street and settle at showdown", () => {
+    const state = buildTable([
+      buildSeat({
+        id: 1,
+        tableId: 41,
+        seatIndex: 0,
+        userId: 10,
+        userEmail: "alice@example.com",
+        stackAmount: "100.00",
+      }),
+    ]);
+    state.metadata.tableType = "casual";
+    state.maxSeats = 2;
+
+    startHoldemHand(state, {
+      fairnessSeed: {
+        seed: "solo-seed-1",
+        epoch: 7,
+        epochSeconds: 60,
+        commitHash: "d".repeat(64),
+      },
+    });
+
+    expect(state.status).toBe("active");
+    expect(state.metadata.stage).toBe("preflop");
+    expect(state.metadata.dealerSeatIndex).toBe(0);
+    expect(state.metadata.smallBlindSeatIndex).toBeNull();
+    expect(state.metadata.bigBlindSeatIndex).toBeNull();
+    expect(state.metadata.pendingActorSeatIndex).toBe(0);
+    expect(resolveHoldemActionAvailability(state, 0)).toMatchObject({
+      actions: ["check"],
+      toCall: "0.00",
+      currentBet: "0.00",
+    });
+
+    actOnHoldemSeat(state, {
+      seatIndex: 0,
+      action: "check",
+    });
+    expect(state.metadata.stage).toBe("flop");
+
+    actOnHoldemSeat(state, {
+      seatIndex: 0,
+      action: "check",
+    });
+    expect(state.metadata.stage).toBe("turn");
+
+    actOnHoldemSeat(state, {
+      seatIndex: 0,
+      action: "check",
+    });
+    expect(state.metadata.stage).toBe("river");
+
+    actOnHoldemSeat(state, {
+      seatIndex: 0,
+      action: "check",
+    });
+
+    expect(state.status).toBe("waiting");
+    expect(state.metadata.stage).toBe("showdown");
+    expect(state.metadata.revealedSeatIndexes).toEqual([0]);
+    expect(state.metadata.winnerSeatIndexes).toEqual([0]);
+    expect(state.metadata.resolvedPots).toEqual([]);
+    expect(state.seats[0]?.metadata.winner).toBe(true);
+    expect(state.seats[0]?.metadata.bestHand).not.toBeNull();
+    expect(state.metadata.fairness?.revealSeed).toBeTruthy();
+    expect(state.metadata.recentHands[0]).toMatchObject({
+      handNumber: 1,
+      potAmount: "0.00",
+      winnerSeatIndexes: [0],
+      winnerLabels: ["alice"],
+    });
   });
 
   it("settles main and side pots to the correct winners at showdown", () => {

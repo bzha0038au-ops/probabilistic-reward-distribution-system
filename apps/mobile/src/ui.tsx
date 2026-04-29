@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type {
+  PlayModeGameKey,
   PlayModeSnapshot,
   PlayModeType,
 } from '@reward/shared-types/play-mode';
@@ -148,13 +149,18 @@ export type PlayModeCopy = {
   currentLabel: string;
   nextLabel: string;
   streakLabel: string;
+  pendingLabel: string;
+  carryLabel: string;
+  envelopeLabel: string;
   carryActive: string;
   carryIdle: string;
   modes: Record<PlayModeType, string>;
+  descriptions: Record<PlayModeGameKey, Record<PlayModeType, string>>;
 };
 
 export type PlayModeSelectorProps = {
   copy: PlayModeCopy;
+  gameKey: PlayModeGameKey;
   snapshot: PlayModeSnapshot | null;
   onSelect: (type: PlayModeType) => void;
   disabled?: boolean;
@@ -167,15 +173,34 @@ export function PlayModeSelector(props: PlayModeSelectorProps) {
       <Text style={styles.playModeSubtitle}>{props.copy.subtitle}</Text>
       {props.snapshot ? (
         <View style={styles.playModeMetaRow}>
-          <Text style={styles.playModeMetaText}>
-            {props.copy.currentLabel}: x{props.snapshot.appliedMultiplier}
-          </Text>
-          <Text style={styles.playModeMetaText}>
-            {props.copy.nextLabel}: x{props.snapshot.nextMultiplier}
-          </Text>
+          {props.snapshot.type === 'standard' || props.snapshot.type === 'dual_bet' ? (
+            <>
+              <Text style={styles.playModeMetaText}>
+                {props.copy.currentLabel}: x{props.snapshot.appliedMultiplier}
+              </Text>
+              <Text style={styles.playModeMetaText}>
+                {props.copy.nextLabel}: x{props.snapshot.nextMultiplier}
+              </Text>
+            </>
+          ) : null}
           <Text style={styles.playModeMetaText}>
             {props.copy.streakLabel}: {props.snapshot.streak}
           </Text>
+          {props.snapshot.pendingPayoutCount > 0 ? (
+            <Text style={styles.playModeMetaText}>
+              {props.copy.pendingLabel}: {props.snapshot.pendingPayoutAmount}
+            </Text>
+          ) : null}
+          {props.snapshot.snowballCarryAmount !== '0.00' ? (
+            <Text style={styles.playModeMetaText}>
+              {props.copy.carryLabel}: {props.snapshot.snowballCarryAmount}
+            </Text>
+          ) : null}
+          {props.snapshot.snowballEnvelopeAmount !== '0.00' ? (
+            <Text style={styles.playModeMetaText}>
+              {props.copy.envelopeLabel}: {props.snapshot.snowballEnvelopeAmount}
+            </Text>
+          ) : null}
           <Text style={styles.playModeMetaText}>
             {props.snapshot.carryActive
               ? props.copy.carryActive
@@ -210,6 +235,14 @@ export function PlayModeSelector(props: PlayModeSelectorProps) {
                 ]}
               >
                 {props.copy.modes[mode]}
+              </Text>
+              <Text
+                style={[
+                  styles.playModeChipDescription,
+                  active ? styles.playModeChipDescriptionActive : null,
+                ]}
+              >
+                {props.copy.descriptions[props.gameKey][mode]}
               </Text>
             </Pressable>
           );
@@ -308,12 +341,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   playModeChip: {
-    borderRadius: 999,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: mobilePalette.border,
     backgroundColor: mobilePalette.panel,
+    minWidth: '47%',
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 10,
   },
   playModeChipActive: {
     borderColor: mobilePalette.accent,
@@ -328,6 +362,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   playModeChipLabelActive: {
+    color: mobileSurfaceTheme.primaryTextOnAccent,
+  },
+  playModeChipDescription: {
+    color: mobilePalette.textMuted,
+    fontSize: 11,
+    lineHeight: 15,
+    marginTop: 4,
+  },
+  playModeChipDescriptionActive: {
     color: mobileSurfaceTheme.primaryTextOnAccent,
   },
   field: {

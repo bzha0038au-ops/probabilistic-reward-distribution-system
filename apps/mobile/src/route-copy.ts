@@ -408,6 +408,7 @@ const routeCopy = {
         tournamentStartingStack: 'Starting stack',
         tournamentPayoutPlaces: 'Payout places',
         buyInRange: (min: string, max: string) => `Min ${min} / Max ${max}`,
+        effectiveBuyInPreview: (amount: string) => `Effective buy-in ${amount}`,
         casualTableHint:
           'Casual tables use bonus balance, do not charge rake, and do not require KYC.',
         cashTableHint: 'Cash tables use withdrawable balance and the live rake policy.',
@@ -560,6 +561,7 @@ const routeCopy = {
         stakeAmount: 'Stake amount',
         stakeHint: (min: string, max: string) =>
           `Enter a stake between ${min} and ${max}, then open one active hand at a time.`,
+        effectiveStakePreview: (stake: string) => `Total stake ${stake}`,
         startHand: 'Start hand',
         dealing: 'Dealing...',
         refreshHand: 'Refresh hand',
@@ -954,6 +956,7 @@ const routeCopy = {
         tournamentStartingStack: '起始筹码',
         tournamentPayoutPlaces: '派奖名次',
         buyInRange: (min: string, max: string) => `最小 ${min} / 最大 ${max}`,
+        effectiveBuyInPreview: (amount: string) => `实际买入 ${amount}`,
         casualTableHint: '娱乐局使用奖励余额买入，不抽水，且不要求 KYC。',
         cashTableHint: '现金桌使用可提现余额买入，并应用实时抽水策略。',
         tournamentTableHint:
@@ -1101,6 +1104,7 @@ const routeCopy = {
         stakeAmount: '下注金额',
         stakeHint: (min: string, max: string) =>
           `请输入 ${min} 到 ${max} 之间的下注金额，然后每次只开一手牌。`,
+        effectiveStakePreview: (stake: string) => `总下注 ${stake}`,
         startHand: '开始发牌',
         dealing: '发牌中...',
         refreshHand: '刷新牌局',

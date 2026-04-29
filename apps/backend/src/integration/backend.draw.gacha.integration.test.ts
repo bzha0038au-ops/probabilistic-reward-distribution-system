@@ -9,9 +9,15 @@ import {
   setConfigNumber,
   verifyUserContacts,
 } from './integration-test-support';
-import { eq } from '@reward/database/orm';
+import { asc, eq } from '@reward/database/orm';
 import { expect } from 'vitest';
-import { drawRecords, prizes, userPlayModes, userWallets } from '@reward/database';
+import {
+  drawRecords,
+  playModeSessions,
+  prizes,
+  userPlayModes,
+  userWallets,
+} from '@reward/database';
 
 describeIntegrationSuite('backend draw gacha integration', () => {
   it(
@@ -186,13 +192,20 @@ describeIntegrationSuite('backend draw gacha integration', () => {
       },
     });
     expect(payload.data.results).toHaveLength(2);
+    expect(payload.data.results[0]?.fairness).toMatchObject({
+      clientNonce: 'leg-1/2:integration-draw-dual-bet:1/1',
+    });
+    expect(payload.data.results[1]?.fairness).toMatchObject({
+      clientNonce: 'leg-2/2:integration-draw-dual-bet:1/1',
+    });
 
     const storedRecords = await getDb()
       .select({
         metadata: drawRecords.metadata,
       })
       .from(drawRecords)
-      .where(eq(drawRecords.userId, user.id));
+      .where(eq(drawRecords.userId, user.id))
+      .orderBy(asc(drawRecords.id));
     expect(storedRecords).toHaveLength(2);
     expect(storedRecords[0]?.metadata).toMatchObject({
       playMode: {
@@ -200,6 +213,85 @@ describeIntegrationSuite('backend draw gacha integration', () => {
         appliedMultiplier: 2,
       },
     });
+    expect(storedRecords[0]?.metadata).toMatchObject({
+      fairness: {
+        clientNonce: 'leg-1/2:integration-draw-dual-bet:1/1',
+      },
+    });
+    expect(storedRecords[1]?.metadata).toMatchObject({
+      fairness: {
+        clientNonce: 'leg-2/2:integration-draw-dual-bet:1/1',
+      },
+    });
+
+    const [wallet] = await getDb()
+      .select({
+        withdrawableBalance: userWallets.withdrawableBalance,
+        wageredAmount: userWallets.wageredAmount,
+      })
+      .from(userWallets)
+      .where(eq(userWallets.userId, user.id))
+      .limit(1);
+    expect(wallet).toMatchObject({
+      withdrawableBalance: '80.00',
+      wageredAmount: '20.00',
+    });
+
+    const sessions = await getDb()
+      .select({
+        id: playModeSessions.id,
+        parentSessionId: playModeSessions.parentSessionId,
+        executionIndex: playModeSessions.executionIndex,
+        status: playModeSessions.status,
+        mode: playModeSessions.mode,
+        metadata: playModeSessions.metadata,
+      })
+      .from(playModeSessions)
+      .where(eq(playModeSessions.userId, user.id));
+    expect(sessions).toHaveLength(3);
+    const parentSession = sessions.find((session) => session.parentSessionId === null);
+    expect(parentSession).toMatchObject({
+      executionIndex: 0,
+      status: 'settled',
+      mode: 'dual_bet',
+      metadata: expect.objectContaining({
+        requestedCount: 1,
+        actualCount: 2,
+        totalCost: '20.00',
+        totalReward: '10.00',
+        wageringRequirementDelta: '20.00',
+        wrapperExecutionCount: 2,
+      }),
+    });
+    expect((parentSession?.metadata as { legs?: unknown[] } | null)?.legs).toHaveLength(2);
+    expect(
+      sessions
+        .filter((session) => session.parentSessionId === parentSession?.id)
+        .sort((left, right) => left.executionIndex - right.executionIndex),
+    ).toMatchObject([
+      expect.objectContaining({
+        executionIndex: 1,
+        status: 'settled',
+        metadata: expect.objectContaining({
+          totalCost: '10.00',
+          totalReward: '5.00',
+          wageringRequirementDelta: '10.00',
+          clientNonce: 'leg-1/2:integration-draw-dual-bet',
+          wrapperExecutionIndex: 1,
+        }),
+      }),
+      expect.objectContaining({
+        executionIndex: 2,
+        status: 'settled',
+        metadata: expect.objectContaining({
+          totalCost: '10.00',
+          totalReward: '5.00',
+          wageringRequirementDelta: '10.00',
+          clientNonce: 'leg-2/2:integration-draw-dual-bet',
+          wrapperExecutionIndex: 2,
+        }),
+      }),
+    ]);
 
     const [storedMode] = await getDb()
       .select({
@@ -218,8 +310,80 @@ describeIntegrationSuite('backend draw gacha integration', () => {
     });
   });
 
+  it('POST /draw/play rolls back the whole dual_bet wrapper when the second leg fails', async () => {
+    try {
+      const { user, prize } = await seedDrawScenario({
+        email: 'draw-dual-bet-rollback@example.com',
+      });
+      await verifyUserContacts(user.id, { email: true });
+      await setConfigNumber('draw_system.max_draw_per_request', '10');
+      await setConfigNumber('draw_system.cooldown_seconds', '60');
+      await getDb()
+        .update(prizes)
+        .set({ stock: 10 })
+        .where(eq(prizes.id, prize.id));
+      await invalidatePoolCache();
+      const { token } = await getCreateUserSessionToken()({
+        userId: user.id,
+        email: user.email,
+        role: 'user',
+      });
+
+      const response = await getApp().inject({
+        method: 'POST',
+        url: '/draw/play',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        payload: {
+          count: 1,
+          clientNonce: 'integration-draw-dual-bet-rollback',
+          playMode: {
+            type: 'dual_bet',
+          },
+        },
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json()).toMatchObject({
+        ok: false,
+        error: {
+          message: 'Draw cooldown active.',
+        },
+      });
+
+      const [wallet] = await getDb()
+        .select({
+          withdrawableBalance: userWallets.withdrawableBalance,
+          wageredAmount: userWallets.wageredAmount,
+        })
+        .from(userWallets)
+        .where(eq(userWallets.userId, user.id))
+        .limit(1);
+      expect(wallet).toMatchObject({
+        withdrawableBalance: '100.00',
+        wageredAmount: '0.00',
+      });
+
+      const storedRecords = await getDb()
+        .select({ id: drawRecords.id })
+        .from(drawRecords)
+        .where(eq(drawRecords.userId, user.id));
+      expect(storedRecords).toHaveLength(0);
+
+      const sessions = await getDb()
+        .select({ id: playModeSessions.id })
+        .from(playModeSessions)
+        .where(eq(playModeSessions.userId, user.id));
+      expect(sessions).toHaveLength(0);
+    } finally {
+      await setConfigNumber('draw_system.cooldown_seconds', '0');
+    }
+  });
+
   it(
-    'POST /draw/play carries deferred_double state across requests without changing the draw engine',
+    'POST /draw/play defers draw rewards until the next request without changing the draw engine',
     { timeout: 30000 },
     async () => {
       const { user, prize } = await seedDrawScenario({
@@ -232,7 +396,7 @@ describeIntegrationSuite('backend draw gacha integration', () => {
         .update(prizes)
         .set({
           stock: 10,
-          userPoolThreshold: '999.00',
+          userPoolThreshold: '0.00',
         })
         .where(eq(prizes.id, prize.id));
       await invalidatePoolCache();
@@ -251,7 +415,7 @@ describeIntegrationSuite('backend draw gacha integration', () => {
         },
         payload: {
           count: 1,
-          clientNonce: 'integration-draw-deferred-double-miss',
+          clientNonce: 'integration-draw-deferred-double-win',
           playMode: {
             type: 'deferred_double',
           },
@@ -265,27 +429,29 @@ describeIntegrationSuite('backend draw gacha integration', () => {
         requestedCount: 1,
         count: 1,
         totalCost: '10.00',
-        totalReward: '0.00',
-        winCount: 0,
+        totalReward: '5.00',
+        winCount: 1,
         endingBalance: '90.00',
         playMode: {
           type: 'deferred_double',
           appliedMultiplier: 1,
-          nextMultiplier: 2,
-          lastOutcome: 'miss',
+          nextMultiplier: 1,
+          lastOutcome: 'win',
           carryActive: true,
+          pendingPayoutAmount: '5.00',
+          pendingPayoutCount: 1,
         },
       });
       expect(firstPayload.data.results).toHaveLength(1);
       expect(firstPayload.data.results[0]).toMatchObject({
-        status: 'miss',
+        status: 'won',
       });
 
       await getDb()
         .update(prizes)
         .set({
           stock: 10,
-          userPoolThreshold: '0.00',
+          userPoolThreshold: '999.00',
         })
         .where(eq(prizes.id, prize.id));
       await invalidatePoolCache();
@@ -299,7 +465,7 @@ describeIntegrationSuite('backend draw gacha integration', () => {
         },
         payload: {
           count: 1,
-          clientNonce: 'integration-draw-deferred-double-win',
+          clientNonce: 'integration-draw-deferred-double-miss',
           playMode: {
             type: 'deferred_double',
           },
@@ -311,32 +477,34 @@ describeIntegrationSuite('backend draw gacha integration', () => {
       expect(secondPayload.ok).toBe(true);
       expect(secondPayload.data).toMatchObject({
         requestedCount: 1,
-        count: 2,
-        totalCost: '20.00',
-        totalReward: '10.00',
-        winCount: 2,
-        endingBalance: '70.00',
+        count: 1,
+        totalCost: '10.00',
+        totalReward: '0.00',
+        winCount: 0,
+        endingBalance: '80.00',
         playMode: {
           type: 'deferred_double',
-          appliedMultiplier: 2,
+          appliedMultiplier: 1,
           nextMultiplier: 1,
-          lastOutcome: 'win',
+          lastOutcome: 'miss',
           carryActive: false,
+          pendingPayoutAmount: '0.00',
+          pendingPayoutCount: 0,
         },
       });
-      expect(secondPayload.data.results).toHaveLength(2);
+      expect(secondPayload.data.results).toHaveLength(1);
       expect(secondPayload.data.results[0]).toMatchObject({
-        status: 'won',
-        fairness: {
-          clientNonce: 'integration-draw-deferred-double-win:1/2',
-        },
+        status: 'miss',
       });
-      expect(secondPayload.data.results[1]).toMatchObject({
-        status: 'won',
-        fairness: {
-          clientNonce: 'integration-draw-deferred-double-win:2/2',
-        },
-      });
+
+      const [walletAfterRelease] = await getDb()
+        .select({
+          bonusBalance: userWallets.bonusBalance,
+        })
+        .from(userWallets)
+        .where(eq(userWallets.userId, user.id))
+        .limit(1);
+      expect(walletAfterRelease?.bonusBalance).toBe('5.00');
 
       const catalogResponse = await getApp().inject({
         method: 'GET',
@@ -353,7 +521,7 @@ describeIntegrationSuite('backend draw gacha integration', () => {
           playMode: {
             type: 'deferred_double',
             nextMultiplier: 1,
-            lastOutcome: 'win',
+            lastOutcome: 'miss',
             carryActive: false,
           },
         },
@@ -362,7 +530,7 @@ describeIntegrationSuite('backend draw gacha integration', () => {
   );
 
   it(
-    'POST /draw/play snowballs consecutive wins and resets after a miss',
+    'POST /draw/play carries snowball rewards across wins and releases them after a miss',
     { timeout: 30000 },
     async () => {
       const { user, prize } = await seedDrawScenario({
@@ -418,6 +586,9 @@ describeIntegrationSuite('backend draw gacha integration', () => {
           streak: 1,
           lastOutcome: 'win',
           carryActive: true,
+          pendingPayoutAmount: '5.00',
+          pendingPayoutCount: 1,
+          snowballCarryAmount: '5.00',
         },
       });
 
@@ -442,18 +613,21 @@ describeIntegrationSuite('backend draw gacha integration', () => {
       expect(secondPayload.ok).toBe(true);
       expect(secondPayload.data).toMatchObject({
         requestedCount: 1,
-        count: 2,
-        totalCost: '20.00',
-        totalReward: '10.00',
-        winCount: 2,
-        endingBalance: '70.00',
+        count: 1,
+        totalCost: '10.00',
+        totalReward: '5.00',
+        winCount: 1,
+        endingBalance: '80.00',
         playMode: {
           type: 'snowball',
-          appliedMultiplier: 2,
+          appliedMultiplier: 1,
           nextMultiplier: 3,
           streak: 2,
           lastOutcome: 'win',
           carryActive: true,
+          pendingPayoutAmount: '10.00',
+          pendingPayoutCount: 2,
+          snowballCarryAmount: '10.00',
         },
       });
 
@@ -487,21 +661,33 @@ describeIntegrationSuite('backend draw gacha integration', () => {
       expect(thirdPayload.ok).toBe(true);
       expect(thirdPayload.data).toMatchObject({
         requestedCount: 1,
-        count: 3,
-        totalCost: '30.00',
+        count: 1,
+        totalCost: '10.00',
         totalReward: '0.00',
         winCount: 0,
-        endingBalance: '40.00',
+        endingBalance: '70.00',
         playMode: {
           type: 'snowball',
-          appliedMultiplier: 3,
+          appliedMultiplier: 1,
           nextMultiplier: 1,
           streak: 0,
           lastOutcome: 'miss',
           carryActive: false,
+          pendingPayoutAmount: '0.00',
+          pendingPayoutCount: 0,
+          snowballCarryAmount: '0.00',
         },
       });
-      expect(thirdPayload.data.results).toHaveLength(3);
+      expect(thirdPayload.data.results).toHaveLength(1);
+
+      const [walletAfterSnowballRelease] = await getDb()
+        .select({
+          bonusBalance: userWallets.bonusBalance,
+        })
+        .from(userWallets)
+        .where(eq(userWallets.userId, user.id))
+        .limit(1);
+      expect(walletAfterSnowballRelease?.bonusBalance).toBe('10.00');
 
       const [storedMode] = await getDb()
         .select({

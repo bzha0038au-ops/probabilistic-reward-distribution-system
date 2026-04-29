@@ -370,6 +370,7 @@ export const serializeBlackjackGame = (
     availableActions: getAvailableActions(game, walletBalance),
     fairness: game.metadata.fairness,
     playMode: game.metadata.playMode,
+    linkedGroup: game.metadata.linkedGroup,
     dealerEvents: game.metadata.dealerEvents,
     createdAt: game.createdAt,
     settledAt: game.settledAt ?? null,

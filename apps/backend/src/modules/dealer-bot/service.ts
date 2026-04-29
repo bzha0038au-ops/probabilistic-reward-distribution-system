@@ -13,6 +13,10 @@ import { toDecimal, toMoneyString } from "../../shared/money";
 import { publishRealtimeToTopic, publishRealtimeToUser } from "../../realtime";
 import { createRateLimiter } from "../../shared/rate-limit";
 import {
+  moderateAutomatedCommunityText,
+  screenAutomatedCommunityText,
+} from "../community/anti-spam-service";
+import {
   consumeRewardEnvelopeStates,
   evaluateRewardEnvelopeDecision,
   loadLockedRewardEnvelopeStates,
@@ -57,7 +61,16 @@ const DEFAULT_LANGUAGE_CALL_COST = "0.0025";
 
 const rateLimiters = new Map<number, ReturnType<typeof createRateLimiter>>();
 
-type DealerLanguageProvider = "disabled" | "mock" | "openai";
+const DEALER_RNG_FORBIDDEN_TOKENS = [
+  "\"deck\"",
+  "\"deckdigest\"",
+  "\"fairnessseed\"",
+  "\"revealseed\"",
+  "\"rng\"",
+  "\"commithash\"",
+] as const;
+
+export type DealerLanguageProviderName = "disabled" | "mock" | "openai";
 
 export type DealerLanguageContext = {
   scenario: string;
@@ -75,7 +88,7 @@ export type DealerLanguageContext = {
 type DealerBotConfig = {
   enabled: boolean;
   locale: string;
-  languageProvider: DealerLanguageProvider;
+  languageProvider: DealerLanguageProviderName;
   tableRateLimitCount: number;
   tableRateLimitWindowMs: number;
   budgetTenantId: number | null;
@@ -86,6 +99,14 @@ type DealerBotConfig = {
   openAiTimeoutMs: number;
   blockedTerms: string[];
 };
+
+export interface DealerLanguageProvider {
+  name: Exclude<DealerLanguageProviderName, "disabled">;
+  generateText: (params: {
+    config: DealerBotConfig;
+    context: DealerLanguageContext;
+  }) => Promise<string | null>;
+}
 
 const getRateLimiter = (windowMs: number) => {
   const existing = rateLimiters.get(windowMs);
@@ -105,7 +126,7 @@ const getRateLimiter = (windowMs: number) => {
 const normalizeLocale = (value: string) =>
   value.trim().toLowerCase() === "zh-cn" ? "zh-CN" : "en";
 
-const normalizeProvider = (value: string): DealerLanguageProvider => {
+const normalizeProvider = (value: string): DealerLanguageProviderName => {
   switch (value.trim().toLowerCase()) {
     case "disabled":
       return "disabled";
@@ -265,23 +286,18 @@ const readDealerBotConfig = async (): Promise<DealerBotConfig> => {
   };
 };
 
-const assertDealerContextInvariant = (context: DealerLanguageContext) => {
-  const serialized = JSON.stringify(context.summary).toLowerCase();
-  for (const forbiddenToken of [
-    "\"deck\"",
-    "\"fairnessseed\"",
-    "\"revealseed\"",
-    "\"rng\"",
-  ]) {
+export const assertDealerRngIsolation = (label: string, value: unknown) => {
+  const serialized = JSON.stringify(value).toLowerCase();
+  for (const forbiddenToken of DEALER_RNG_FORBIDDEN_TOKENS) {
     if (serialized.includes(forbiddenToken)) {
       throw new Error(
-        `Dealer bot context contains forbidden RNG field ${forbiddenToken}.`,
+        `${label} contains forbidden RNG field ${forbiddenToken}.`,
       );
     }
   }
 };
 
-const moderateDealerText = (text: string, blockedTerms: string[]) => {
+const sanitizeDealerTextSync = (text: string, blockedTerms: string[]) => {
   const normalized = text.replace(/\s+/g, " ").trim();
   if (normalized.length === 0) {
     return null;
@@ -298,7 +314,38 @@ const moderateDealerText = (text: string, blockedTerms: string[]) => {
     }
   }
 
+  try {
+    const moderation = screenAutomatedCommunityText(normalized);
+    if (moderation.reviewRequired) {
+      return null;
+    }
+  } catch {
+    // Pure helper/unit-test paths may not load the full runtime config tree.
+    // Skip the optional sync moderation layer in that case.
+  }
+
   return normalized.slice(0, 280);
+};
+
+const moderateDealerGeneratedText = async (
+  text: string,
+  blockedTerms: string[],
+) => {
+  const normalized = sanitizeDealerTextSync(text, blockedTerms);
+  if (!normalized) {
+    return null;
+  }
+
+  const moderation = await moderateAutomatedCommunityText(normalized);
+  if (moderation.reviewRequired) {
+    logger.warning("dealer bot generated text blocked by automated moderation", {
+      reason: moderation.moderationReason,
+      queuedReport: moderation.queuedReport,
+    });
+    return null;
+  }
+
+  return normalized;
 };
 
 const buildMockDealerMessage = (context: DealerLanguageContext) => {
@@ -428,6 +475,28 @@ const callOpenAiDealerLanguageProvider = async (
   }
 };
 
+const mockDealerLanguageProvider = {
+  name: "mock",
+  async generateText({ context }) {
+    return buildMockDealerMessage(context);
+  },
+} satisfies DealerLanguageProvider;
+
+const openAiDealerLanguageProvider = {
+  name: "openai",
+  async generateText({ config, context }) {
+    return callOpenAiDealerLanguageProvider(config, context);
+  },
+} satisfies DealerLanguageProvider;
+
+const dealerLanguageProviders = {
+  mock: mockDealerLanguageProvider,
+  openai: openAiDealerLanguageProvider,
+} satisfies Record<
+  Exclude<DealerLanguageProviderName, "disabled">,
+  DealerLanguageProvider
+>;
+
 const generateDealerLanguageText = async (
   config: DealerBotConfig,
   context: DealerLanguageContext,
@@ -436,11 +505,15 @@ const generateDealerLanguageText = async (
     return null;
   }
 
-  if (config.languageProvider === "openai") {
-    return callOpenAiDealerLanguageProvider(config, context);
+  const provider = dealerLanguageProviders[config.languageProvider];
+  if (!provider) {
+    return null;
   }
 
-  return buildMockDealerMessage(context);
+  return provider.generateText({
+    config,
+    context,
+  });
 };
 
 const consumeDealerLanguageBudget = async (config: DealerBotConfig) => {
@@ -518,7 +591,10 @@ export const buildDealerEvent = (params: {
     seatIndex: params.seatIndex ?? null,
     actionCode: params.actionCode ?? null,
     pace: params.pace ?? null,
-    text: params.text ?? null,
+    text:
+      typeof params.text === "string"
+        ? sanitizeDealerTextSync(params.text, DEFAULT_BLOCKED_TERMS)
+        : null,
     metadata: params.metadata ?? null,
     createdAt: params.createdAt ?? new Date(),
   });
@@ -534,7 +610,7 @@ export const maybeGenerateDealerLanguageEvent = async (
     return null;
   }
 
-  assertDealerContextInvariant(context);
+  assertDealerRngIsolation("dealer language context", context);
 
   const config = await readDealerBotConfig();
   if (!config.enabled || config.languageProvider === "disabled") {
@@ -561,7 +637,10 @@ export const maybeGenerateDealerLanguageEvent = async (
     return null;
   }
 
-  const moderated = moderateDealerText(generated, config.blockedTerms);
+  const moderated = await moderateDealerGeneratedText(
+    generated,
+    config.blockedTerms,
+  );
   if (!moderated) {
     return null;
   }

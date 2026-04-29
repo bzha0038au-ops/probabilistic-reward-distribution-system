@@ -345,6 +345,7 @@ export function DrawPanel({
       <CardContent className="relative z-10 grid gap-6 p-6 xl:grid-cols-[minmax(0,1.18fr)_minmax(320px,0.82fr)]">
         <div className="space-y-4">
           <PlayModeSwitcher
+            gameKey="draw"
             snapshot={drawCatalog?.playMode ?? null}
             disabled={drawDisabled || playingDrawCount !== null}
             loading={updatingPlayMode}

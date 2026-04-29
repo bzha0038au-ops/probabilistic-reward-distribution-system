@@ -15,6 +15,7 @@ import {
   blackjackGames,
   houseAccount,
   ledgerEntries,
+  playModeSessions,
   roundEvents,
   userPlayModes,
   userWallets,
@@ -799,23 +800,59 @@ describeIntegrationSuite('backend blackjack integration', () => {
   );
 
   it(
-    'POST /blackjack/start applies dual_bet as a product wrapper without changing blackjack actions',
+    'POST /blackjack/start opens two linked games for dual_bet and settles play mode after both hands finish',
     { timeout: 30000 },
     async () => {
       const user = await seedBlackjackScenario({
         email: 'blackjack-dual-bet@example.com',
       });
       await verifyUserContacts(user.id, { email: true });
+      const { ensureFairnessSeed } = await import('../modules/fairness/service');
+      const { drawBlackjackDeck, scoreBlackjackCards } = await import(
+        '../modules/blackjack/service'
+      );
+      const fairnessSeed = await ensureFairnessSeed(getDb());
 
-      const clientNonce = await findBlackjackClientNonce({
-        userId: user.id,
-        prefix: 'integration-blackjack-dual-bet',
-        predicate: (preview, { scoreBlackjackCards }) => {
-          const playerScore = scoreBlackjackCards([preview.deck[0], preview.deck[2]]);
-          const dealerScore = scoreBlackjackCards([preview.deck[1], preview.deck[3]]);
-          return !playerScore.blackjack && !dealerScore.blackjack;
-        },
-      });
+      let clientNonce: string | null = null;
+      for (let attempt = 0; attempt < 10000; attempt += 1) {
+        const candidate = `integration-blackjack-dual-bet-${attempt}`;
+        const firstPreview = drawBlackjackDeck({
+          seed: fairnessSeed.seed,
+          userId: user.id,
+          clientNonce: `leg-1/2:${candidate}`,
+        });
+        const secondPreview = drawBlackjackDeck({
+          seed: fairnessSeed.seed,
+          userId: user.id,
+          clientNonce: `leg-2/2:${candidate}`,
+        });
+        const firstPlayerScore = scoreBlackjackCards([
+          firstPreview.deck[0],
+          firstPreview.deck[2],
+        ]);
+        const firstDealerScore = scoreBlackjackCards([
+          firstPreview.deck[1],
+          firstPreview.deck[3],
+        ]);
+        const secondPlayerScore = scoreBlackjackCards([
+          secondPreview.deck[0],
+          secondPreview.deck[2],
+        ]);
+        const secondDealerScore = scoreBlackjackCards([
+          secondPreview.deck[1],
+          secondPreview.deck[3],
+        ]);
+        if (
+          !firstPlayerScore.blackjack &&
+          !firstDealerScore.blackjack &&
+          !secondPlayerScore.blackjack &&
+          !secondDealerScore.blackjack
+        ) {
+          clientNonce = candidate;
+          break;
+        }
+      }
+      expect(clientNonce).not.toBeNull();
 
       const { token } = await getCreateUserSessionToken()({
         userId: user.id,
@@ -849,22 +886,121 @@ describeIntegrationSuite('backend blackjack integration', () => {
           appliedMultiplier: 2,
           nextMultiplier: 2,
         },
-        game: {
-          stakeAmount: '20.00',
-          totalStake: '20.00',
+      });
+      expect(startPayload.data.games).toHaveLength(2);
+      expect(
+        startPayload.data.games.map((game: { linkedGroup: { executionIndex: number } | null }) =>
+          game.linkedGroup?.executionIndex
+        )
+      ).toEqual([1, 2]);
+      expect(
+        startPayload.data.games.map((game: { stakeAmount: string; totalStake: string; status: string }) => ({
+          stakeAmount: game.stakeAmount,
+          totalStake: game.totalStake,
+          status: game.status,
+        }))
+      ).toEqual([
+        {
+          stakeAmount: '10.00',
+          totalStake: '10.00',
           status: 'active',
-          playMode: {
-            type: 'dual_bet',
-            appliedMultiplier: 2,
-            nextMultiplier: 2,
-          },
         },
+        {
+          stakeAmount: '10.00',
+          totalStake: '10.00',
+          status: 'active',
+        },
+      ]);
+      const primaryGameId = Number(startPayload.data.games[0].id);
+      const secondaryGameId = Number(startPayload.data.games[1].id);
+      expect(startPayload.data.game.id).toBe(primaryGameId);
+      expect(startPayload.data.games[0].linkedGroup).toMatchObject({
+        executionIndex: 1,
+        executionCount: 2,
+        primaryGameId,
+        gameIds: [primaryGameId, secondaryGameId],
+      });
+      expect(startPayload.data.games[1].linkedGroup).toMatchObject({
+        executionIndex: 2,
+        executionCount: 2,
+        primaryGameId,
+        gameIds: [primaryGameId, secondaryGameId],
       });
 
-      const gameId = Number(startPayload.data.game.id);
-      const settleResponse = await getApp().inject({
+      const stakeEntries = await getDb()
+        .select({
+          referenceId: ledgerEntries.referenceId,
+          amount: ledgerEntries.amount,
+          entryType: ledgerEntries.entryType,
+        })
+        .from(ledgerEntries)
+        .where(
+          and(
+            eq(ledgerEntries.userId, user.id),
+            eq(ledgerEntries.entryType, 'blackjack_stake'),
+          )
+        )
+        .orderBy(asc(ledgerEntries.id));
+      expect(stakeEntries).toEqual([
+        {
+          referenceId: primaryGameId,
+          amount: '-10.00',
+          entryType: 'blackjack_stake',
+        },
+        {
+          referenceId: secondaryGameId,
+          amount: '-10.00',
+          entryType: 'blackjack_stake',
+        },
+      ]);
+
+      const activeSessions = await getDb()
+        .select({
+          id: playModeSessions.id,
+          parentSessionId: playModeSessions.parentSessionId,
+          status: playModeSessions.status,
+          executionIndex: playModeSessions.executionIndex,
+          referenceId: playModeSessions.referenceId,
+        })
+        .from(playModeSessions)
+        .where(eq(playModeSessions.userId, user.id))
+        .orderBy(asc(playModeSessions.id));
+      expect(activeSessions).toHaveLength(3);
+      expect(activeSessions[0]).toMatchObject({
+        parentSessionId: null,
+        status: 'active',
+        executionIndex: 0,
+        referenceId: null,
+      });
+      expect(activeSessions[1]).toMatchObject({
+        parentSessionId: activeSessions[0]?.id ?? null,
+        status: 'active',
+        executionIndex: 1,
+        referenceId: primaryGameId,
+      });
+      expect(activeSessions[2]).toMatchObject({
+        parentSessionId: activeSessions[0]?.id ?? null,
+        status: 'active',
+        executionIndex: 2,
+        referenceId: secondaryGameId,
+      });
+
+      const overviewResponse = await getApp().inject({
+        method: 'GET',
+        url: '/blackjack',
+        headers: {
+          authorization: `Bearer ${token}`,
+        },
+      });
+      expect(overviewResponse.statusCode).toBe(200);
+      const overviewPayload = overviewResponse.json();
+      expect(overviewPayload.ok).toBe(true);
+      expect(overviewPayload.data.activeGames).toHaveLength(2);
+      expect(overviewPayload.data.activeGame.id).toBe(primaryGameId);
+
+      const settleFirstResponse = await getApp().inject({
         method: 'POST',
-        url: `/blackjack/${gameId}/action`,
+        url: `/blackjack/${primaryGameId}/action`,
         headers: {
           authorization: `Bearer ${token}`,
           'content-type': 'application/json',
@@ -874,27 +1010,47 @@ describeIntegrationSuite('backend blackjack integration', () => {
         },
       });
 
-      expect(settleResponse.statusCode).toBe(200);
-      const settlePayload = settleResponse.json();
-      expect(settlePayload.ok).toBe(true);
-      expect(settlePayload.data).toMatchObject({
-        playMode: {
-          type: 'dual_bet',
-          appliedMultiplier: 2,
-          nextMultiplier: 2,
-        },
-        game: {
-          id: gameId,
-          totalStake: '20.00',
-          playMode: {
-            type: 'dual_bet',
-            appliedMultiplier: 2,
-            nextMultiplier: 2,
-          },
+      expect(settleFirstResponse.statusCode).toBe(200);
+      const settleFirstPayload = settleFirstResponse.json();
+      expect(settleFirstPayload.ok).toBe(true);
+      expect(settleFirstPayload.data.game.id).toBe(primaryGameId);
+      expect(settleFirstPayload.data.game.status).not.toBe('active');
+      expect(settleFirstPayload.data.playMode).toMatchObject({
+        type: 'dual_bet',
+        lastOutcome: null,
+      });
+
+      const midOverviewResponse = await getApp().inject({
+        method: 'GET',
+        url: '/blackjack',
+        headers: {
+          authorization: `Bearer ${token}`,
         },
       });
-      expect(settlePayload.data.game.status).not.toBe('active');
-      expect(settlePayload.data.playMode.lastOutcome).not.toBeNull();
+      expect(midOverviewResponse.statusCode).toBe(200);
+      const midOverviewPayload = midOverviewResponse.json();
+      expect(midOverviewPayload.ok).toBe(true);
+      expect(midOverviewPayload.data.activeGames).toHaveLength(1);
+      expect(midOverviewPayload.data.activeGame.id).toBe(secondaryGameId);
+      expect(midOverviewPayload.data.playMode.lastOutcome).toBeNull();
+
+      const settleSecondResponse = await getApp().inject({
+        method: 'POST',
+        url: `/blackjack/${secondaryGameId}/action`,
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        payload: {
+          action: 'stand',
+        },
+      });
+      expect(settleSecondResponse.statusCode).toBe(200);
+      const settleSecondPayload = settleSecondResponse.json();
+      expect(settleSecondPayload.ok).toBe(true);
+      expect(settleSecondPayload.data.game.id).toBe(secondaryGameId);
+      expect(settleSecondPayload.data.game.status).not.toBe('active');
+      expect(settleSecondPayload.data.playMode.lastOutcome).not.toBeNull();
 
       const [storedMode] = await getDb()
         .select({
@@ -909,13 +1065,29 @@ describeIntegrationSuite('backend blackjack integration', () => {
         state: expect.objectContaining({
           type: 'dual_bet',
           nextMultiplier: 2,
+          lastOutcome: settleSecondPayload.data.playMode.lastOutcome,
         }),
       });
+
+      const settledSessions = await getDb()
+        .select({
+          parentSessionId: playModeSessions.parentSessionId,
+          status: playModeSessions.status,
+          executionIndex: playModeSessions.executionIndex,
+          referenceId: playModeSessions.referenceId,
+        })
+        .from(playModeSessions)
+        .where(eq(playModeSessions.userId, user.id))
+        .orderBy(asc(playModeSessions.id));
+      expect(settledSessions).toHaveLength(3);
+      expect(settledSessions.every((session) => session.status === 'settled')).toBe(
+        true
+      );
     }
   );
 
   it(
-    'POST /blackjack/start snowballs consecutive wins across hands without changing blackjack engine rules',
+    'POST /blackjack/start carries snowball rewards across wins without changing blackjack engine rules',
     { timeout: 30000 },
     async () => {
       const user = await seedBlackjackScenario({
@@ -1014,6 +1186,7 @@ describeIntegrationSuite('backend blackjack integration', () => {
       const firstSettlePayload = firstSettleResponse.json();
       expect(firstSettlePayload.ok).toBe(true);
       expect(firstSettlePayload.data).toMatchObject({
+        balance: '100.00',
         playMode: {
           type: 'snowball',
           appliedMultiplier: 1,
@@ -1021,6 +1194,9 @@ describeIntegrationSuite('backend blackjack integration', () => {
           streak: 1,
           lastOutcome: 'win',
           carryActive: true,
+          pendingPayoutAmount: '10.00',
+          pendingPayoutCount: 1,
+          snowballCarryAmount: '10.00',
         },
         game: {
           status: 'player_win',
@@ -1052,19 +1228,23 @@ describeIntegrationSuite('backend blackjack integration', () => {
       const secondStartPayload = secondStartResponse.json();
       expect(secondStartPayload.ok).toBe(true);
       expect(secondStartPayload.data).toMatchObject({
+        balance: '90.00',
         playMode: {
           type: 'snowball',
-          appliedMultiplier: 2,
+          appliedMultiplier: 1,
           nextMultiplier: 2,
           carryActive: true,
+          pendingPayoutAmount: '10.00',
+          pendingPayoutCount: 1,
+          snowballCarryAmount: '10.00',
         },
         game: {
           status: 'active',
-          stakeAmount: '20.00',
-          totalStake: '20.00',
+          stakeAmount: '10.00',
+          totalStake: '10.00',
           playMode: {
             type: 'snowball',
-            appliedMultiplier: 2,
+            appliedMultiplier: 1,
             nextMultiplier: 2,
           },
         },
@@ -1087,19 +1267,23 @@ describeIntegrationSuite('backend blackjack integration', () => {
       const secondSettlePayload = secondSettleResponse.json();
       expect(secondSettlePayload.ok).toBe(true);
       expect(secondSettlePayload.data).toMatchObject({
+        balance: '100.00',
         playMode: {
           type: 'snowball',
-          appliedMultiplier: 2,
+          appliedMultiplier: 1,
           nextMultiplier: 3,
           streak: 2,
           lastOutcome: 'win',
           carryActive: true,
+          pendingPayoutAmount: '20.00',
+          pendingPayoutCount: 2,
+          snowballCarryAmount: '20.00',
         },
         game: {
           status: 'player_win',
           playMode: {
             type: 'snowball',
-            appliedMultiplier: 2,
+            appliedMultiplier: 1,
             nextMultiplier: 3,
           },
         },
@@ -1123,6 +1307,9 @@ describeIntegrationSuite('backend blackjack integration', () => {
             streak: 2,
             lastOutcome: 'win',
             carryActive: true,
+            pendingPayoutAmount: '20.00',
+            pendingPayoutCount: 2,
+            snowballCarryAmount: '20.00',
           },
           activeGame: null,
         },
@@ -1131,16 +1318,16 @@ describeIntegrationSuite('backend blackjack integration', () => {
   );
 
   it(
-    'POST /blackjack/start carries deferred_double state across hands without changing blackjack engine rules',
+    'POST /blackjack/start defers blackjack profit until the next hand without changing blackjack engine rules',
     async () => {
       const user = await seedBlackjackScenario({
         email: 'blackjack-deferred-double@example.com',
       });
       await verifyUserContacts(user.id, { email: true });
 
-      const losingNonce = await findBlackjackClientNonce({
+      const winningNonce = await findBlackjackClientNonce({
         userId: user.id,
-        prefix: 'integration-blackjack-deferred-double-loss',
+        prefix: 'integration-blackjack-deferred-double-win',
         predicate: (preview, { scoreBlackjackCards }) => {
           const playerScore = scoreBlackjackCards([preview.deck[0], preview.deck[2]]);
           const dealerScore = scoreBlackjackCards([preview.deck[1], preview.deck[3]]);
@@ -1149,7 +1336,7 @@ describeIntegrationSuite('backend blackjack integration', () => {
               !dealerScore.blackjack &&
               !playerScore.bust &&
               dealerScore.total >= 17 &&
-              dealerScore.total > playerScore.total
+              playerScore.total > dealerScore.total
           );
         },
       });
@@ -1179,7 +1366,7 @@ describeIntegrationSuite('backend blackjack integration', () => {
         },
         payload: {
           stakeAmount: '10.00',
-          clientNonce: losingNonce,
+          clientNonce: winningNonce,
           playMode: {
             type: 'deferred_double',
           },
@@ -1222,21 +1409,23 @@ describeIntegrationSuite('backend blackjack integration', () => {
       const settlePayload = settleResponse.json();
       expect(settlePayload.ok).toBe(true);
       expect(settlePayload.data).toMatchObject({
-        balance: '90.00',
+        balance: '100.00',
         playMode: {
           type: 'deferred_double',
           appliedMultiplier: 1,
-          nextMultiplier: 2,
-          lastOutcome: 'lose',
+          nextMultiplier: 1,
+          lastOutcome: 'win',
           carryActive: true,
+          pendingPayoutAmount: '10.00',
+          pendingPayoutCount: 1,
         },
         game: {
           id: gameId,
-          status: 'dealer_win',
+          status: 'player_win',
           playMode: {
             type: 'deferred_double',
             appliedMultiplier: 1,
-            nextMultiplier: 2,
+            nextMultiplier: 1,
           },
         },
       });
@@ -1253,8 +1442,9 @@ describeIntegrationSuite('backend blackjack integration', () => {
         mode: 'deferred_double',
         state: expect.objectContaining({
           type: 'deferred_double',
-          nextMultiplier: 2,
-          lastOutcome: 'lose',
+          pendingPayoutAmount: '10.00',
+          pendingPayoutCount: 1,
+          lastOutcome: 'win',
         }),
       });
 
@@ -1278,21 +1468,21 @@ describeIntegrationSuite('backend blackjack integration', () => {
       const secondStartPayload = secondStartResponse.json();
       expect(secondStartPayload.ok).toBe(true);
       expect(secondStartPayload.data).toMatchObject({
-        balance: '70.00',
+        balance: '100.00',
         playMode: {
           type: 'deferred_double',
-          appliedMultiplier: 2,
-          nextMultiplier: 2,
-          carryActive: true,
+          appliedMultiplier: 1,
+          nextMultiplier: 1,
+          carryActive: false,
         },
         game: {
           status: 'active',
-          stakeAmount: '20.00',
-          totalStake: '20.00',
+          stakeAmount: '10.00',
+          totalStake: '10.00',
           playMode: {
             type: 'deferred_double',
-            appliedMultiplier: 2,
-            nextMultiplier: 2,
+            appliedMultiplier: 1,
+            nextMultiplier: 1,
           },
         },
       });

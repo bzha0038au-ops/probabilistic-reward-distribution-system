@@ -141,10 +141,12 @@ export function useBlackjack(options: UseBlackjackOptions) {
           ? {
               ...current,
               balance: response.data.balance,
+              activeGames: response.data.games.filter(
+                (game) => game.status === "active",
+              ),
               activeGame:
-                response.data.game.status === "active"
-                  ? response.data.game
-                  : null,
+                response.data.games.find((game) => game.status === "active") ??
+                null,
             }
           : current,
       );
@@ -171,16 +173,16 @@ export function useBlackjack(options: UseBlackjackOptions) {
   ]);
 
   const actOnBlackjack = useCallback(
-    async (action: BlackjackAction) => {
-      const activeGame = blackjackOverview?.activeGame;
-      if (!activeGame) {
+    async (gameId: number, action: BlackjackAction) => {
+      const activeGames = blackjackOverview?.activeGames ?? [];
+      if (!activeGames.some((game) => game.id === gameId)) {
         return;
       }
 
       resetFeedback();
       setActingBlackjack(action);
 
-      const response = await api.actOnBlackjack(activeGame.id, { action });
+      const response = await api.actOnBlackjack(gameId, { action });
 
       if (!response.ok) {
         setActingBlackjack(null);

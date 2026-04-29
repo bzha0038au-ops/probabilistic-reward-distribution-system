@@ -1,11 +1,14 @@
+import Decimal from "decimal.js";
 import { API_ERROR_CODES } from "@reward/shared-types/api";
 import type { DealerEvent } from "@reward/shared-types/dealer";
-import { blackjackGames } from "@reward/database";
+import { blackjackGames, userWallets } from "@reward/database";
 import { and, asc, eq, isNotNull, lte } from "@reward/database/orm";
 import type {
   BlackjackAction,
   BlackjackFairness,
+  BlackjackGame,
   BlackjackGameStatus,
+  BlackjackLinkedGroup,
   BlackjackMutationResponse,
   BlackjackOverviewResponse,
 } from "@reward/shared-types/blackjack";
@@ -13,6 +16,7 @@ import type {
   PlayModeOutcome,
   PlayModeSnapshot,
 } from "@reward/shared-types/play-mode";
+import { PlayModeSnapshotSchema } from "@reward/shared-types/play-mode";
 import { BLACKJACK_TURN_TIMEOUT_ACTION } from "@reward/shared-types/blackjack";
 
 import { db, type DbTransaction } from "../../db";
@@ -34,6 +38,8 @@ import { ensureFairnessSeed, getFairnessCommit } from "../fairness/service";
 import { assertKycStakeAllowed } from "../kyc/service";
 import {
   loadActivePlayModeSession,
+  loadPlayModeSessionById,
+  loadPlayModeSessionsByParent,
   loadUserPlayModeSnapshot,
   lockUserPlayModeState,
   resolveSettledPlayMode,
@@ -41,6 +47,7 @@ import {
   settlePlayModeSession,
   updatePlayModeSessionReference,
 } from "../play-mode/service";
+import { applySettledPlayModePayoutPolicy } from "../play-mode/deferred-payouts";
 import { getBlackjackConfig, getPoolSystemConfig } from "../system/service";
 import { assertWalletLedgerInvariant } from "../wallet/invariant-service";
 import {
@@ -80,6 +87,8 @@ import { BLACKJACK_ROUND_TYPE } from "../hand-history/round-id";
 
 export { drawBlackjackDeck, scoreBlackjackCards } from "./game";
 
+const DUAL_BET_EXECUTION_COUNT = 2;
+
 const resolveBlackjackPlayModeOutcome = (
   status: BlackjackGameStatus,
 ): PlayModeOutcome => {
@@ -98,43 +107,287 @@ const resolveBlackjackPlayModeOutcome = (
   return "lose";
 };
 
+const resolveBlackjackStakeMultiplier = (snapshot: PlayModeSnapshot) =>
+  snapshot.type === "dual_bet" ? 1 : snapshot.appliedMultiplier;
+
+const sortBlackjackGames = <T extends { id: number }>(
+  games: T[],
+  readLinkedGroup: (game: T) => BlackjackLinkedGroup | null | undefined,
+) =>
+  [...games].sort((left, right) => {
+    const leftLinkedGroup = readLinkedGroup(left);
+    const rightLinkedGroup = readLinkedGroup(right);
+    const leftPrimaryGameId = leftLinkedGroup?.primaryGameId ?? left.id;
+    const rightPrimaryGameId = rightLinkedGroup?.primaryGameId ?? right.id;
+    if (leftPrimaryGameId !== rightPrimaryGameId) {
+      return leftPrimaryGameId - rightPrimaryGameId;
+    }
+
+    const leftExecutionIndex = leftLinkedGroup?.executionIndex ?? 1;
+    const rightExecutionIndex = rightLinkedGroup?.executionIndex ?? 1;
+    if (leftExecutionIndex !== rightExecutionIndex) {
+      return leftExecutionIndex - rightExecutionIndex;
+    }
+
+    return left.id - right.id;
+  });
+
+const buildBlackjackMutationResponse = (params: {
+  balance: string;
+  playMode: PlayModeSnapshot;
+  games: BlackjackGame[];
+}): BlackjackMutationResponse => {
+  const orderedGames = sortBlackjackGames(
+    params.games,
+    (game) => game.linkedGroup,
+  );
+  const primaryGame = orderedGames[0];
+  if (!primaryGame) {
+    throw internalInvariantError("Blackjack mutation is missing a game.");
+  }
+
+  return {
+    balance: params.balance,
+    playMode: params.playMode,
+    games: orderedGames,
+    game: primaryGame,
+  };
+};
+
+const saveBlackjackUserPlayModeSnapshot = async (params: {
+  tx: DbTransaction;
+  userId: number;
+  snapshot: PlayModeSnapshot;
+}) => {
+  const storedPlayMode = await lockUserPlayModeState(
+    params.tx,
+    params.userId,
+    "blackjack",
+  );
+  if (!storedPlayMode) {
+    return;
+  }
+
+  await saveUserPlayModeState({
+    tx: params.tx,
+    rowId: storedPlayMode.id,
+    snapshot: params.snapshot,
+  });
+};
+
+const loadBlackjackWalletBalance = async (
+  tx: DbTransaction,
+  userId: number,
+) => {
+  const [wallet] = await tx
+    .select({ balance: userWallets.withdrawableBalance })
+    .from(userWallets)
+    .where(eq(userWallets.userId, userId))
+    .limit(1);
+
+  return wallet?.balance ?? "0.00";
+};
+
+const resolveBlackjackSessionSnapshot = (
+  value: unknown,
+  fallback: PlayModeSnapshot,
+) => {
+  const parsed = PlayModeSnapshotSchema.safeParse(value);
+  return parsed.success ? parsed.data : fallback;
+};
+
+const resolveBlackjackGroupedOutcome = (params: {
+  totalStakeAmount: ReturnType<typeof toDecimal>;
+  totalPayoutAmount: ReturnType<typeof toDecimal>;
+}): PlayModeOutcome => {
+  const comparison = params.totalPayoutAmount.cmp(params.totalStakeAmount);
+  if (comparison > 0) {
+    return "win";
+  }
+  if (comparison < 0) {
+    return "lose";
+  }
+  return "push";
+};
+
+const resolveBlackjackSettlementTotalsFromMetadata = (value: unknown) => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const totalStakeAmount = record.totalStakeAmount;
+  const payoutAmount = record.payoutAmount;
+  const status = record.status;
+  if (
+    typeof totalStakeAmount !== "string" ||
+    typeof payoutAmount !== "string" ||
+    typeof status !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    totalStakeAmount,
+    payoutAmount,
+    status,
+  };
+};
+
+const maybeFinalizeGroupedBlackjackPlayMode = async (params: {
+  tx: DbTransaction;
+  userId: number;
+  parentSessionId: number;
+  fallbackSnapshot: PlayModeSnapshot;
+}) => {
+  const parentSession = await loadPlayModeSessionById(params.tx, {
+    sessionId: params.parentSessionId,
+  });
+  if (!parentSession) {
+    return null;
+  }
+
+  const childSessions = await loadPlayModeSessionsByParent(params.tx, {
+    parentSessionId: params.parentSessionId,
+  });
+  if (
+    childSessions.length === 0 ||
+    childSessions.some((session) => session.status === "active")
+  ) {
+    return null;
+  }
+
+  let totalStakeAmount = toDecimal(0);
+  let totalPayoutAmount = toDecimal(0);
+  for (const session of childSessions) {
+    const totals = resolveBlackjackSettlementTotalsFromMetadata(session.metadata);
+    if (!totals) {
+      return null;
+    }
+
+    totalStakeAmount = totalStakeAmount.plus(totals.totalStakeAmount);
+    totalPayoutAmount = totalPayoutAmount.plus(totals.payoutAmount);
+  }
+
+  const parentSnapshot = resolveBlackjackSessionSnapshot(
+    parentSession.snapshot,
+    params.fallbackSnapshot,
+  );
+  const outcome = resolveBlackjackGroupedOutcome({
+    totalStakeAmount,
+    totalPayoutAmount,
+  });
+  const settledSnapshot = resolveSettledPlayMode({
+    snapshot: parentSnapshot,
+    outcome,
+  });
+
+  await settlePlayModeSession({
+    tx: params.tx,
+    sessionId: parentSession.id,
+    snapshot: settledSnapshot,
+    outcome,
+    metadata: {
+      totalStakeAmount: toMoneyString(totalStakeAmount),
+      totalPayoutAmount: toMoneyString(totalPayoutAmount),
+      childSessionCount: childSessions.length,
+    },
+  });
+  await saveBlackjackUserPlayModeSnapshot({
+    tx: params.tx,
+    userId: params.userId,
+    snapshot: settledSnapshot,
+  });
+
+  return settledSnapshot;
+};
+
 const persistSettledBlackjackPlayMode = async (params: {
   tx: DbTransaction;
   userId: number;
   game: BlackjackGameState;
   snapshot: PlayModeSnapshot;
+  sessionId?: number | null;
 }) => {
   const { tx, userId, game, snapshot } = params;
+  const outcome = resolveBlackjackPlayModeOutcome(game.status);
   const settledPlayMode = resolveSettledPlayMode({
     snapshot,
-    outcome: resolveBlackjackPlayModeOutcome(game.status),
+    outcome,
   });
-  game.metadata.playMode = settledPlayMode;
-  await persistGameState(tx, game);
-  const activeSession = await loadActivePlayModeSession(tx, {
+  const activeSession =
+    params.sessionId
+      ? await loadPlayModeSessionById(tx, {
+          sessionId: params.sessionId,
+        })
+      : await loadActivePlayModeSession(tx, {
+          userId,
+          gameKey: "blackjack",
+          referenceType: BLACKJACK_REFERENCE_TYPE,
+          referenceId: game.id,
+          includeChildSessions: true,
+        });
+  const adjustedPlayMode = await applySettledPlayModePayoutPolicy({
+    tx,
     userId,
     gameKey: "blackjack",
+    outcome,
+    settledSnapshot: settledPlayMode,
+    netPayoutAmount: toMoneyString(
+      Decimal.max(
+        toDecimal(game.payoutAmount).minus(toDecimal(game.totalStake)),
+        0,
+      ),
+    ),
+    balanceType: "withdrawable",
+    sessionId: activeSession?.id ?? params.sessionId ?? null,
+    sourceReferenceType: BLACKJACK_REFERENCE_TYPE,
+    sourceReferenceId: game.id,
   });
-  if (activeSession) {
-    await settlePlayModeSession({
+  game.metadata.playMode = adjustedPlayMode;
+  await persistGameState(tx, game);
+  if (!activeSession) {
+    await saveBlackjackUserPlayModeSnapshot({
       tx,
-      sessionId: activeSession.id,
-      snapshot: settledPlayMode,
-      outcome: resolveBlackjackPlayModeOutcome(game.status),
-      referenceType: BLACKJACK_REFERENCE_TYPE,
-      referenceId: game.id,
+      userId,
+      snapshot: adjustedPlayMode,
     });
+    return adjustedPlayMode;
   }
 
-  const storedPlayMode = await lockUserPlayModeState(tx, userId, "blackjack");
-  if (storedPlayMode) {
-    await saveUserPlayModeState({
+  await settlePlayModeSession({
+    tx,
+    sessionId: activeSession.id,
+    snapshot: adjustedPlayMode,
+    outcome,
+    referenceType: BLACKJACK_REFERENCE_TYPE,
+    referenceId: game.id,
+    metadata: {
+      totalStakeAmount: toMoneyString(game.totalStake),
+      payoutAmount: toMoneyString(game.payoutAmount),
+      status: game.status,
+      executionIndex: game.metadata.linkedGroup?.executionIndex ?? 1,
+      executionCount: game.metadata.linkedGroup?.executionCount ?? 1,
+      groupId: game.metadata.linkedGroup?.groupId ?? null,
+    },
+  });
+
+  if (!activeSession.parentSessionId) {
+    await saveBlackjackUserPlayModeSnapshot({
       tx,
-      rowId: storedPlayMode.id,
-      snapshot: settledPlayMode,
+      userId,
+      snapshot: adjustedPlayMode,
     });
+    return adjustedPlayMode;
   }
-  return settledPlayMode;
+
+  const groupedSnapshot = await maybeFinalizeGroupedBlackjackPlayMode({
+    tx,
+    userId,
+    parentSessionId: activeSession.parentSessionId,
+    fallbackSnapshot: snapshot,
+  });
+  return groupedSnapshot ?? snapshot;
 };
 
 type BlackjackTurnConfig = AppConfig & {
@@ -147,24 +400,106 @@ const BLACKJACK_PLAYER_SEAT_INDEX = 1;
 
 const buildBlackjackDealerEvent = (params: {
   game: BlackjackGameState;
-  actionCode: string;
-  text: string;
+  kind?: DealerEvent["kind"];
+  actionCode?: string | null;
+  pace?: DealerEvent["pace"];
+  seatIndex?: number | null;
+  phase?: string | null;
+  text?: string | null;
   metadata?: Record<string, unknown> | null;
   source?: DealerEvent["source"];
 }) =>
   buildDealerEvent({
-    kind: "action",
+    kind: params.kind ?? "action",
     source: params.source ?? "rule",
     gameType: "blackjack",
     tableId: null,
     tableRef: params.game.metadata.table.tableId,
     roundId: `${BLACKJACK_ROUND_TYPE}:${params.game.id}`,
     referenceId: params.game.id,
-    phase: params.game.status === "active" ? "active" : "settlement",
-    actionCode: params.actionCode,
-    text: params.text,
+    phase:
+      params.phase ?? (params.game.status === "active" ? "active" : "settlement"),
+    seatIndex: params.seatIndex ?? null,
+    actionCode: params.actionCode ?? null,
+    pace: params.pace ?? null,
+    text: params.text ?? null,
     metadata: params.metadata ?? null,
   });
+
+type BlackjackDealerLanguageTask =
+  | {
+      scenario: string;
+      summary: Record<string, unknown>;
+    }
+  | null;
+
+type BlackjackMutationExecutionResult =
+  | {
+      response: BlackjackMutationResponse;
+      dealerEvents: DealerEvent[];
+      dealerLanguageTask: BlackjackDealerLanguageTask;
+    }
+  | {
+      expiredTurnWasProcessed: true;
+    };
+
+const publishBlackjackDealerEvents = (userId: number, events: DealerEvent[]) => {
+  for (const event of events) {
+    publishDealerRealtimeToUser(userId, event);
+  }
+};
+
+const buildBlackjackPromptLanguageTask = (params: {
+  game: BlackjackGameState;
+  walletBalance: ReturnType<typeof toDecimal>;
+  scenario: string;
+}) => ({
+  scenario: params.scenario,
+  summary: {
+    activeHandIndex: params.game.metadata.activeHandIndex,
+    availableActions: getAvailableActions(params.game, params.walletBalance),
+    dealerVisibleTotal: scoreBlackjackCards(
+      params.game.dealerCards.filter((_, index) => index !== 1),
+    ).total,
+    playerTotals: params.game.metadata.playerHands.map(
+      (hand) => scoreBlackjackCards(hand.cards).total,
+    ),
+  },
+}) satisfies Exclude<BlackjackDealerLanguageTask, null>;
+
+const buildBlackjackPromptDealerEvents = (params: {
+  game: BlackjackGameState;
+  walletBalance: ReturnType<typeof toDecimal>;
+  actionCode?: string;
+  text?: string;
+  pace?: DealerEvent["pace"];
+}) => {
+  const availableActions = getAvailableActions(params.game, params.walletBalance);
+  if (params.game.status !== "active" || availableActions.length === 0) {
+    return [] satisfies DealerEvent[];
+  }
+
+  const activeHandIndex = params.game.metadata.activeHandIndex;
+  return [
+    buildBlackjackDealerEvent({
+      game: params.game,
+      kind: "pace_hint",
+      actionCode: params.actionCode ?? "prompt_player",
+      pace: params.pace ?? "normal",
+      seatIndex: BLACKJACK_PLAYER_SEAT_INDEX,
+      text:
+        params.text ??
+        (params.game.metadata.playerHands.length > 1 && activeHandIndex !== null
+          ? `Hand ${activeHandIndex + 1} is live. Your move.`
+          : "Your move."),
+      metadata: {
+        activeHandIndex,
+        availableActions,
+        turnDeadlineAt: params.game.turnDeadlineAt,
+      },
+    }),
+  ] satisfies DealerEvent[];
+};
 
 const appendDealerEventsToBlackjackGame = (
   game: BlackjackGameState,
@@ -215,6 +550,7 @@ const emitAsyncBlackjackDealerLanguageEvent = (params: {
   scenario: string;
   summary: Record<string, unknown>;
   tableRef: string;
+  phase: string;
 }) => {
   void (async () => {
     const event = await maybeGenerateDealerLanguageEvent({
@@ -225,7 +561,7 @@ const emitAsyncBlackjackDealerLanguageEvent = (params: {
       tableRef: params.tableRef,
       roundId: `${BLACKJACK_ROUND_TYPE}:${params.gameId}`,
       referenceId: params.gameId,
-      phase: "active",
+      phase: params.phase,
       seatIndex: null,
       summary: params.summary,
     });
@@ -234,15 +570,26 @@ const emitAsyncBlackjackDealerLanguageEvent = (params: {
     }
 
     const persisted = await db.transaction(async (tx) => {
-      const [activeRow] = await loadBlackjackGameRows(tx, {
+      const activeRows = await loadBlackjackGameRows(tx, {
         userId: params.userId,
         lock: true,
+        limit: null,
       });
-      if (!activeRow || activeRow.id !== params.gameId) {
+      const settledRows =
+        !activeRows.some((row) => row.id === params.gameId)
+          ? await loadBlackjackGameRows(tx, {
+              userId: params.userId,
+              settledOnly: true,
+            })
+          : [];
+      const activeTargetRow = activeRows.find((row) => row.id === params.gameId);
+      const targetRow =
+        activeTargetRow ?? settledRows.find((row) => row.id === params.gameId) ?? null;
+      if (!targetRow) {
         return null;
       }
 
-      const game = toGameState(activeRow);
+      const game = toGameState(targetRow);
       await persistBlackjackDealerEvents({
         tx,
         userId: params.userId,
@@ -262,6 +609,27 @@ const emitAsyncBlackjackDealerLanguageEvent = (params: {
       gameId: params.gameId,
       scenario: params.scenario,
     });
+  });
+};
+
+export const runBlackjackDealerSideEffects = (params: {
+  userId: number;
+  response: BlackjackMutationResponse;
+  dealerEvents: DealerEvent[];
+  dealerLanguageTask: BlackjackDealerLanguageTask;
+}) => {
+  publishBlackjackDealerEvents(params.userId, params.dealerEvents);
+  if (!params.dealerLanguageTask) {
+    return;
+  }
+
+  emitAsyncBlackjackDealerLanguageEvent({
+    userId: params.userId,
+    gameId: params.response.game.id,
+    scenario: params.dealerLanguageTask.scenario,
+    summary: params.dealerLanguageTask.summary,
+    tableRef: params.response.game.table.tableId,
+    phase: params.response.game.status === "active" ? "active" : "settlement",
   });
 };
 
@@ -324,7 +692,7 @@ const finalizeBlackjackProgress = async (params: {
   game: BlackjackGameState;
   walletBalance: ReturnType<typeof toDecimal>;
   now?: Date;
-}) => {
+}): Promise<Exclude<BlackjackMutationExecutionResult, { expiredTurnWasProcessed: true }>> => {
   const { tx, userId, game, walletBalance, now = new Date() } = params;
   const { allHandsComplete, events } = advanceResolvableHands(game, walletBalance);
   if (events.length > 0) {
@@ -349,20 +717,58 @@ const finalizeBlackjackProgress = async (params: {
       game: settled.game,
       snapshot: game.metadata.playMode,
     });
+    const responseBalance = toDecimal(await loadBlackjackWalletBalance(tx, userId));
     return {
-      balance: toMoneyString(settled.balance),
-      playMode,
-      game: serializeBlackjackGame(settled.game, settled.balance),
-    } satisfies BlackjackMutationResponse;
+      response: buildBlackjackMutationResponse({
+        balance: toMoneyString(responseBalance),
+        playMode,
+        games: [serializeBlackjackGame(settled.game, responseBalance)],
+      }),
+      dealerEvents: settled.dealerEvents,
+      dealerLanguageTask: {
+        scenario: "blackjack_round_settled",
+        summary: {
+          status: settled.game.status,
+          payoutAmount: settled.game.payoutAmount,
+          dealerCards: settled.game.dealerCards,
+        },
+      },
+    };
   }
 
   syncBlackjackTurnDeadline(game, now);
-  await persistGameState(tx, game);
+  const dealerEvents = buildBlackjackPromptDealerEvents({
+    game,
+    walletBalance,
+    actionCode:
+      game.metadata.playerHands.length > 1 ? "prompt_next_hand" : "prompt_player",
+  });
+  if (dealerEvents.length > 0) {
+    await persistBlackjackDealerEvents({
+      tx,
+      userId,
+      game,
+      events: dealerEvents,
+    });
+  } else {
+    await persistGameState(tx, game);
+  }
   return {
-    balance: toMoneyString(walletBalance),
-    playMode: game.metadata.playMode,
-    game: serializeBlackjackGame(game, walletBalance),
-  } satisfies BlackjackMutationResponse;
+    response: buildBlackjackMutationResponse({
+      balance: toMoneyString(walletBalance),
+      playMode: game.metadata.playMode,
+      games: [serializeBlackjackGame(game, walletBalance)],
+    }),
+    dealerEvents,
+    dealerLanguageTask:
+      dealerEvents.length > 0
+        ? buildBlackjackPromptLanguageTask({
+            game,
+            walletBalance,
+            scenario: "blackjack_player_turn",
+          })
+        : null,
+  };
 };
 
 const applyBlackjackStandAction = async (params: {
@@ -373,7 +779,7 @@ const applyBlackjackStandAction = async (params: {
   actor: "player" | "system";
   now?: Date;
   dueToTimeout?: boolean;
-}) => {
+}): Promise<Exclude<BlackjackMutationExecutionResult, { expiredTurnWasProcessed: true }>> => {
   const {
     tx,
     userId,
@@ -390,6 +796,21 @@ const applyBlackjackStandAction = async (params: {
   }
 
   const events = [];
+  const dealerEvents = dueToTimeout
+    ? [
+        buildBlackjackDealerEvent({
+          game,
+          kind: "action",
+          actionCode: "timeout_forced_stand",
+          seatIndex: BLACKJACK_PLAYER_SEAT_INDEX,
+          text: "Turn timer expired. Dealer stands the hand.",
+          metadata: {
+            handIndex: activeHandIndex,
+            total: scoreBlackjackCards(activeHand.cards).total,
+          },
+        }),
+      ]
+    : [];
   if (dueToTimeout) {
     events.push({
       type: "turn_timeout",
@@ -404,6 +825,14 @@ const applyBlackjackStandAction = async (params: {
             ? game.turnDeadlineAt.toISOString()
             : game.turnDeadlineAt,
       },
+    });
+  }
+  if (dealerEvents.length > 0) {
+    await persistBlackjackDealerEvents({
+      tx,
+      userId,
+      game,
+      events: dealerEvents,
     });
   }
   events.push({
@@ -436,20 +865,53 @@ const applyBlackjackStandAction = async (params: {
       game: settled.game,
       snapshot: game.metadata.playMode,
     });
+    const responseBalance = toDecimal(await loadBlackjackWalletBalance(tx, userId));
     return {
-      balance: toMoneyString(settled.balance),
-      playMode,
-      game: serializeBlackjackGame(settled.game, settled.balance),
-    } satisfies BlackjackMutationResponse;
+      response: buildBlackjackMutationResponse({
+        balance: toMoneyString(responseBalance),
+        playMode,
+        games: [serializeBlackjackGame(settled.game, responseBalance)],
+      }),
+      dealerEvents: [...dealerEvents, ...settled.dealerEvents],
+      dealerLanguageTask: dueToTimeout
+        ? {
+            scenario: "blackjack_timeout_forced_stand",
+            summary: {
+              handIndex: activeHandIndex,
+              total: scoreBlackjackCards(activeHand.cards).total,
+            },
+          }
+        : {
+            scenario: "blackjack_round_settled",
+            summary: {
+              status: settled.game.status,
+              payoutAmount: settled.game.payoutAmount,
+              dealerCards: settled.game.dealerCards,
+            },
+          },
+    };
   }
 
-  return finalizeBlackjackProgress({
+  const continued = await finalizeBlackjackProgress({
     tx,
     userId,
     game,
     walletBalance,
     now,
   });
+  return {
+    ...continued,
+    dealerEvents: [...dealerEvents, ...continued.dealerEvents],
+    dealerLanguageTask: dueToTimeout
+      ? {
+          scenario: "blackjack_timeout_forced_stand",
+          summary: {
+            handIndex: activeHandIndex,
+            total: scoreBlackjackCards(activeHand.cards).total,
+          },
+        }
+      : continued.dealerLanguageTask,
+  };
 };
 
 const processExpiredBlackjackTurnInTransaction = async (params: {
@@ -461,10 +923,10 @@ const processExpiredBlackjackTurnInTransaction = async (params: {
 }) => {
   const { tx, userId, game, walletBalance, now = new Date() } = params;
   if (!isBlackjackTurnExpired(game, now)) {
-    return false;
+    return null;
   }
 
-  await applyBlackjackStandAction({
+  return applyBlackjackStandAction({
     tx,
     userId,
     game,
@@ -473,31 +935,47 @@ const processExpiredBlackjackTurnInTransaction = async (params: {
     now,
     dueToTimeout: true,
   });
-  return true;
 };
 
 export async function processExpiredBlackjackTurnForUser(userId: number) {
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const user = await loadLockedBlackjackUser(tx, userId);
     if (!user) {
-      return false;
+      return null;
     }
 
-    const [activeRow] = await loadBlackjackGameRows(tx, {
-      userId,
-      lock: true,
-    });
-    if (!activeRow) {
-      return false;
+    const activeGames = sortBlackjackGames(
+      (await loadBlackjackGameRows(tx, {
+        userId,
+        lock: true,
+        limit: null,
+      })).map((row) => toGameState(row)),
+      (game) => game.metadata.linkedGroup,
+    );
+    const targetGame = activeGames.find((game) => isBlackjackTurnExpired(game));
+    if (!targetGame) {
+      return null;
     }
 
     return processExpiredBlackjackTurnInTransaction({
       tx,
       userId,
-      game: toGameState(activeRow),
+      game: targetGame,
       walletBalance: toDecimal(user.withdrawable_balance ?? 0),
     });
   });
+
+  if (!result) {
+    return false;
+  }
+
+  runBlackjackDealerSideEffects({
+    userId,
+    response: result.response,
+    dealerEvents: result.dealerEvents,
+    dealerLanguageTask: result.dealerLanguageTask,
+  });
+  return true;
 }
 
 export async function runBlackjackTimeoutCycle() {
@@ -544,239 +1022,267 @@ export async function getBlackjackOverview(
   ]);
   const [fairness, activeRows, recentRows] = await Promise.all([
     getFairnessCommit(db, Number(poolSystem.epochSeconds ?? 0)),
-    loadBlackjackGameRows(db, { userId }),
+    loadBlackjackGameRows(db, { userId, limit: null }),
     loadBlackjackGameRows(db, { userId, settledOnly: true }),
   ]);
 
-  const activeGame = activeRows[0] ? toGameState(activeRows[0]) : null;
+  const activeGames = sortBlackjackGames(
+    activeRows.map((row) => toGameState(row)),
+    (game) => game.metadata.linkedGroup,
+  );
   const recentGames = recentRows.map((row) =>
     serializeBlackjackSummary(toGameState(row)),
   );
   const balance = toDecimal(walletBalance);
+  const serializedActiveGames = activeGames.map((game) =>
+    serializeBlackjackGame(game, balance),
+  );
+  const activeGame = serializedActiveGames[0] ?? null;
 
   return {
     balance: toMoneyString(balance),
-    config: activeGame?.metadata.config ?? blackjackConfig,
-    playMode: activeGame?.metadata.playMode ?? storedPlayMode,
+    config: activeGames[0]?.metadata.config ?? blackjackConfig,
+    playMode: activeGame?.playMode ?? storedPlayMode,
     fairness,
-    activeGame: activeGame ? serializeBlackjackGame(activeGame, balance) : null,
+    activeGames: serializedActiveGames,
+    activeGame,
     recentGames,
   };
 }
 
-export async function startResolvedBlackjack(
+export const startResolvedBlackjackInTransaction = async (
+  tx: DbTransaction,
   userId: number,
   options: {
     stakeAmount: string;
     clientNonce?: string | null;
     playMode: import("@reward/shared-types/play-mode").PlayModeSnapshot;
+    playModeSessionId?: number | null;
+    linkedGroup?: Omit<BlackjackLinkedGroup, "primaryGameId" | "gameIds"> & {
+      primaryGameId?: number | null;
+      gameIds?: number[];
+    };
   },
-): Promise<BlackjackMutationResponse> {
-  const result = await db.transaction(async (tx) => {
-    const user = await loadLockedBlackjackUser(tx, userId);
-    if (!user) {
-      throw notFoundError("User not found.");
-    }
+) => {
+  const user = await loadLockedBlackjackUser(tx, userId);
+  if (!user) {
+    throw notFoundError("User not found.");
+  }
 
-    const [existingGame] = await loadBlackjackGameRows(tx, {
+  const existingActiveGames = sortBlackjackGames(
+    (await loadBlackjackGameRows(tx, {
       userId,
       lock: true,
-    });
-    if (existingGame) {
+      limit: null,
+    })).map((row) => toGameState(row)),
+    (game) => game.metadata.linkedGroup,
+  );
+  if (!options.linkedGroup && existingActiveGames.length > 0) {
+    throw conflictError(
+      "Finish the active blackjack game before starting a new one.",
+    );
+  }
+  if (options.linkedGroup) {
+    const unrelatedActiveGame = existingActiveGames.find(
+      (game) => game.metadata.linkedGroup?.groupId !== options.linkedGroup?.groupId,
+    );
+    if (unrelatedActiveGame) {
       throw conflictError(
         "Finish the active blackjack game before starting a new one.",
       );
     }
+  }
 
-    const activePlayMode = options.playMode;
-
-    const blackjackConfig = await getBlackjackConfig(tx);
-    const minStakeAmount = toDecimal(blackjackConfig.minStake);
-    const maxStakeAmount = toDecimal(blackjackConfig.maxStake);
-    const naturalPayoutMultiplier = toDecimal(
-      blackjackConfig.naturalPayoutMultiplier,
-    );
-    const baseStakeAmount = resolveStakeAmount(options.stakeAmount);
-    const stakeAmount = baseStakeAmount.mul(activePlayMode.appliedMultiplier);
-    if (stakeAmount.lt(minStakeAmount) || stakeAmount.gt(maxStakeAmount)) {
-      throw conflictError("Stake amount is outside the allowed range.", {
-        code: API_ERROR_CODES.STAKE_AMOUNT_OUT_OF_RANGE,
-      });
-    }
-    await assertKycStakeAllowed(userId, toMoneyString(stakeAmount), tx);
-
-    const walletBefore = toDecimal(user.withdrawable_balance ?? 0);
-    const wageredBefore = toDecimal(user.wagered_amount ?? 0);
-    if (walletBefore.lt(stakeAmount)) {
-      throw conflictError("Insufficient balance.", {
-        code: API_ERROR_CODES.INSUFFICIENT_BALANCE,
-      });
-    }
-
-    await ensurePoolCanCover(tx, {
-      additionalStake: stakeAmount,
-      maximumPayout: stakeAmount.mul(naturalPayoutMultiplier),
+  const activePlayMode = options.playMode;
+  const blackjackConfig = await getBlackjackConfig(tx);
+  const minStakeAmount = toDecimal(blackjackConfig.minStake);
+  const maxStakeAmount = toDecimal(blackjackConfig.maxStake);
+  const naturalPayoutMultiplier = toDecimal(
+    blackjackConfig.naturalPayoutMultiplier,
+  );
+  const baseStakeAmount = resolveStakeAmount(options.stakeAmount);
+  const stakeAmount = baseStakeAmount.mul(
+    resolveBlackjackStakeMultiplier(activePlayMode),
+  );
+  if (stakeAmount.lt(minStakeAmount) || stakeAmount.gt(maxStakeAmount)) {
+    throw conflictError("Stake amount is outside the allowed range.", {
+      code: API_ERROR_CODES.STAKE_AMOUNT_OUT_OF_RANGE,
     });
+  }
+  await assertKycStakeAllowed(userId, toMoneyString(stakeAmount), tx);
 
-    const poolSystem = await getPoolSystemConfig(tx);
-    const fairnessSeed = await ensureFairnessSeed(
+  const walletBefore = toDecimal(user.withdrawable_balance ?? 0);
+  const wageredBefore = toDecimal(user.wagered_amount ?? 0);
+  if (walletBefore.lt(stakeAmount)) {
+    throw conflictError("Insufficient balance.", {
+      code: API_ERROR_CODES.INSUFFICIENT_BALANCE,
+    });
+  }
+
+  await ensurePoolCanCover(tx, {
+    additionalStake: stakeAmount,
+    maximumPayout: stakeAmount.mul(naturalPayoutMultiplier),
+  });
+
+  const poolSystem = await getPoolSystemConfig(tx);
+  const fairnessSeed = await ensureFairnessSeed(
+    tx,
+    Number(poolSystem.epochSeconds ?? 0),
+  );
+  const { clientNonce, nonceSource } = resolveClientNonce(
+    options.clientNonce,
+  );
+  const { deck, rngDigest, deckDigest } = drawBlackjackDeck({
+    seed: fairnessSeed.seed,
+    userId,
+    clientNonce,
+  });
+  const fairness: BlackjackFairness = {
+    epoch: fairnessSeed.epoch,
+    epochSeconds: fairnessSeed.epochSeconds,
+    commitHash: fairnessSeed.commitHash,
+    clientNonce,
+    nonceSource,
+    rngDigest,
+    deckDigest,
+    algorithm: buildFairnessAlgorithmLabel(blackjackConfig),
+  };
+
+  const playerCards = [deck[0], deck[2]];
+  const dealerCards = [deck[1], deck[3]];
+  const linkedGroup = options.linkedGroup
+    ? {
+        groupId: options.linkedGroup.groupId,
+        primaryGameId: options.linkedGroup.primaryGameId ?? null,
+        gameIds: options.linkedGroup.gameIds ?? [],
+        executionIndex: options.linkedGroup.executionIndex,
+        executionCount: options.linkedGroup.executionCount,
+      }
+    : null;
+  const game = await insertInitialGame({
+    tx,
+    userId,
+    stakeAmount,
+    totalStake: stakeAmount,
+    playerCards,
+    dealerCards,
+    deck,
+    nextCardIndex: 4,
+    config: blackjackConfig,
+    fairness,
+    playMode: activePlayMode,
+    linkedGroup,
+  });
+  const activeSession =
+    options.playModeSessionId
+      ? await loadPlayModeSessionById(tx, {
+          sessionId: options.playModeSessionId,
+        })
+      : await loadActivePlayModeSession(tx, {
+          userId,
+          gameKey: "blackjack",
+        });
+  if (activeSession) {
+    await updatePlayModeSessionReference({
       tx,
-      Number(poolSystem.epochSeconds ?? 0),
-    );
-    const { clientNonce, nonceSource } = resolveClientNonce(
-      options.clientNonce,
-    );
-    const { deck, rngDigest, deckDigest } = drawBlackjackDeck({
-      seed: fairnessSeed.seed,
-      userId,
-      clientNonce,
-    });
-    const fairness: BlackjackFairness = {
-      epoch: fairnessSeed.epoch,
-      epochSeconds: fairnessSeed.epochSeconds,
-      commitHash: fairnessSeed.commitHash,
-      clientNonce,
-      nonceSource,
-      rngDigest,
-      deckDigest,
-      algorithm: buildFairnessAlgorithmLabel(blackjackConfig),
-    };
-
-    const playerCards = [deck[0], deck[2]];
-    const dealerCards = [deck[1], deck[3]];
-    const game = await insertInitialGame({
-      tx,
-      userId,
-      stakeAmount,
-      totalStake: stakeAmount,
-      playerCards,
-      dealerCards,
-      deck,
-      nextCardIndex: 4,
-      config: blackjackConfig,
-      fairness,
-      playMode: activePlayMode,
-    });
-    const activeSession = await loadActivePlayModeSession(tx, {
-      userId,
-      gameKey: "blackjack",
-    });
-    if (activeSession) {
-      await updatePlayModeSessionReference({
-        tx,
-        sessionId: activeSession.id,
-        referenceType: BLACKJACK_REFERENCE_TYPE,
-        referenceId: game.id,
-      });
-    }
-    syncBlackjackTurnDeadline(game);
-    await persistGameState(tx, game);
-
-    const { walletAfter } = await applyStakeDebit({
-      tx,
-      userId,
+      sessionId: activeSession.id,
+      referenceType: BLACKJACK_REFERENCE_TYPE,
       referenceId: game.id,
-      walletBefore,
-      wageredBefore,
-      stakeAmount,
-      entryType: "blackjack_stake",
     });
+  }
+  syncBlackjackTurnDeadline(game);
+  await persistGameState(tx, game);
 
-    await appendRoundEvents(tx, {
-      roundType: BLACKJACK_ROUND_TYPE,
-      roundEntityId: game.id,
-      userId,
-      events: [
-        {
-          type: "round_started",
-          actor: "system",
-          payload: {
-            stakeAmount: toMoneyString(stakeAmount),
-            totalStake: toMoneyString(stakeAmount),
-            playerCards,
-            dealerCards,
-            fairness,
-            config: blackjackConfig,
-            playMode: activePlayMode,
-            requestedStakeAmount: toMoneyString(baseStakeAmount),
-            table: game.metadata.table,
-            nextCardIndex: game.nextCardIndex,
-          },
+  const { walletAfter } = await applyStakeDebit({
+    tx,
+    userId,
+    referenceId: game.id,
+    walletBefore,
+    wageredBefore,
+    stakeAmount,
+    entryType: "blackjack_stake",
+  });
+
+  await appendRoundEvents(tx, {
+    roundType: BLACKJACK_ROUND_TYPE,
+    roundEntityId: game.id,
+    userId,
+    events: [
+      {
+        type: "round_started",
+        actor: "system",
+        payload: {
+          stakeAmount: toMoneyString(stakeAmount),
+          totalStake: toMoneyString(stakeAmount),
+          playerCards,
+          dealerCards,
+          fairness,
+          config: blackjackConfig,
+          playMode: activePlayMode,
+          requestedStakeAmount: toMoneyString(baseStakeAmount),
+          table: game.metadata.table,
+          nextCardIndex: game.nextCardIndex,
+          linkedGroup,
         },
-        {
-          type: "stake_debited",
-          actor: "system",
-          payload: {
-            amount: toMoneyString(stakeAmount),
-            balanceBefore: toMoneyString(walletBefore),
-            balanceAfter: toMoneyString(walletAfter),
-            totalStake: toMoneyString(stakeAmount),
-            entryType: "blackjack_stake",
-          },
+      },
+      {
+        type: "stake_debited",
+        actor: "system",
+        payload: {
+          amount: toMoneyString(stakeAmount),
+          balanceBefore: toMoneyString(walletBefore),
+          balanceAfter: toMoneyString(walletAfter),
+          totalStake: toMoneyString(stakeAmount),
+          entryType: "blackjack_stake",
         },
-      ],
+      },
+    ],
+  });
+  const initialDealerEvents = [
+    buildBlackjackDealerEvent({
+      game,
+      actionCode: "cards_dealt",
+      text: "Dealer completes the opening deal.",
+      metadata: {
+        playerCards,
+        dealerUpCard: dealerCards[0] ?? null,
+      },
+    }),
+    ...buildBlackjackPromptDealerEvents({
+      game,
+      walletBalance: walletAfter,
+      actionCode: "prompt_player",
+      text: "Opening deal is complete. Your move.",
+    }),
+  ];
+  await persistBlackjackDealerEvents({
+    tx,
+    userId,
+    game,
+    events: initialDealerEvents,
+  });
+
+  const initialStatus = resolveInitialOutcome(game);
+  if (initialStatus !== "active") {
+    const settled = await settleGameByStatus({
+      tx,
+      game,
+      status: initialStatus,
+      walletBalance: walletAfter,
     });
-    await persistBlackjackDealerEvents({
+    const settledPlayMode = await persistSettledBlackjackPlayMode({
       tx,
       userId,
-      game,
-      events: [
-        buildBlackjackDealerEvent({
-          game,
-          actionCode: "cards_dealt",
-          text: "Dealer completes the opening deal.",
-          metadata: {
-            playerCards,
-            dealerUpCard: dealerCards[0] ?? null,
-          },
-        }),
-        buildBlackjackDealerEvent({
-          game,
-          actionCode: "prompt_player",
-          text: "Your move.",
-          metadata: {
-            availableActions: getAvailableActions(game, walletAfter),
-          },
-        }),
-      ],
+      game: settled.game,
+      snapshot: activePlayMode,
+      sessionId: activeSession?.id ?? null,
     });
-
-    const initialStatus = resolveInitialOutcome(game);
-    if (initialStatus !== "active") {
-      const settled = await settleGameByStatus({
-        tx,
-        game,
-        status: initialStatus,
-        walletBalance: walletAfter,
-      });
-      const settledPlayMode = await persistSettledBlackjackPlayMode({
-        tx,
-        userId,
-        game: settled.game,
-        snapshot: activePlayMode,
-      });
-      const response = {
-        balance: toMoneyString(settled.balance),
-        playMode: settledPlayMode,
-        game: serializeBlackjackGame(settled.game, settled.balance),
-      };
-
-      await assertWalletLedgerInvariant(tx, userId, {
-        service: "blackjack",
-        operation: "startBlackjack",
-      });
-
-      return {
-        response,
-        dealerLanguageTask: null,
-      };
-    }
-
-    const response = {
-      balance: toMoneyString(walletAfter),
-      playMode: activePlayMode,
-      game: serializeBlackjackGame(game, walletAfter),
-    };
+    const responseBalance = toDecimal(await loadBlackjackWalletBalance(tx, userId));
+    const response = buildBlackjackMutationResponse({
+      balance: toMoneyString(responseBalance),
+      playMode: settledPlayMode,
+      games: [serializeBlackjackGame(settled.game, responseBalance)],
+    });
 
     await assertWalletLedgerInvariant(tx, userId, {
       service: "blackjack",
@@ -784,27 +1290,69 @@ export async function startResolvedBlackjack(
     });
 
     return {
+      game: settled.game,
       response,
+      dealerEvents: [...initialDealerEvents, ...settled.dealerEvents],
       dealerLanguageTask: {
-        scenario: "blackjack_initial_deal",
+        scenario: "blackjack_round_settled",
         summary: {
-          availableActions: response.game.availableActions,
-          dealerVisibleTotal: response.game.dealerHand.visibleTotal,
-          playerTotal: response.game.playerHand.total,
+          status: settled.game.status,
+          payoutAmount: settled.game.payoutAmount,
+          dealerCards: settled.game.dealerCards,
         },
       },
     };
+  }
+
+  const response = buildBlackjackMutationResponse({
+    balance: toMoneyString(walletAfter),
+    playMode: activePlayMode,
+    games: [serializeBlackjackGame(game, walletAfter)],
   });
 
-  if (result.dealerLanguageTask) {
-    emitAsyncBlackjackDealerLanguageEvent({
-      userId,
-      gameId: result.response.game.id,
-      scenario: result.dealerLanguageTask.scenario,
-      summary: result.dealerLanguageTask.summary,
-      tableRef: result.response.game.table.tableId,
-    });
-  }
+  await assertWalletLedgerInvariant(tx, userId, {
+    service: "blackjack",
+    operation: "startBlackjack",
+  });
+
+  return {
+    game,
+    response,
+    dealerEvents: initialDealerEvents,
+    dealerLanguageTask:
+      initialDealerEvents.length > 1
+        ? buildBlackjackPromptLanguageTask({
+            game,
+            walletBalance: walletAfter,
+            scenario: "blackjack_initial_deal",
+          })
+        : null,
+  };
+};
+
+export async function startResolvedBlackjack(
+  userId: number,
+  options: {
+    stakeAmount: string;
+    clientNonce?: string | null;
+    playMode: import("@reward/shared-types/play-mode").PlayModeSnapshot;
+    playModeSessionId?: number | null;
+    linkedGroup?: Omit<BlackjackLinkedGroup, "primaryGameId" | "gameIds"> & {
+      primaryGameId?: number | null;
+      gameIds?: number[];
+    };
+  },
+): Promise<BlackjackMutationResponse> {
+  const result = await db.transaction(async (tx) =>
+    startResolvedBlackjackInTransaction(tx, userId, options),
+  );
+
+  runBlackjackDealerSideEffects({
+    userId,
+    response: result.response,
+    dealerEvents: result.dealerEvents,
+    dealerLanguageTask: result.dealerLanguageTask,
+  });
 
   return result.response;
 }
@@ -822,14 +1370,16 @@ export async function actOnBlackjack(
       throw notFoundError("User not found.");
     }
 
-    const [activeRow] = await loadBlackjackGameRows(tx, {
+    const activeRows = await loadBlackjackGameRows(tx, {
       userId,
       lock: true,
+      limit: null,
     });
-    if (!activeRow) {
+    if (activeRows.length === 0) {
       throw notFoundError("No active blackjack game found.");
     }
-    if (activeRow.id !== gameId) {
+    const activeRow = activeRows.find((row) => row.id === gameId);
+    if (!activeRow) {
       throw conflictError("Blackjack game is no longer active.");
     }
 
@@ -851,17 +1401,18 @@ export async function actOnBlackjack(
     if (expiredTurnWasProcessed) {
       return {
         expiredTurnWasProcessed: true as const,
+        processedTurn: expiredTurnWasProcessed,
       } as const;
     }
 
     const finalizeMutation = async (
-      response: BlackjackMutationResponse,
-    ): Promise<BlackjackMutationResponse> => {
+      result: Exclude<BlackjackMutationExecutionResult, { expiredTurnWasProcessed: true }>,
+    ): Promise<Exclude<BlackjackMutationExecutionResult, { expiredTurnWasProcessed: true }>> => {
       await assertWalletLedgerInvariant(tx, userId, {
         service: "blackjack",
         operation: "actOnBlackjack",
       });
-      return response;
+      return result;
     };
 
     const availableActions = getAvailableActions(game, walletBalance);
@@ -870,14 +1421,14 @@ export async function actOnBlackjack(
     }
 
     const persistOrSettleAfterAutoAdvance = async () => {
-      const response = await finalizeBlackjackProgress({
+      const result = await finalizeBlackjackProgress({
         tx,
         userId,
         game,
         walletBalance,
         now,
       });
-      return finalizeMutation(response);
+      return finalizeMutation(result);
     };
 
     const activeHandIndex = game.metadata.activeHandIndex;
@@ -912,11 +1463,29 @@ export async function actOnBlackjack(
       }
 
       syncBlackjackTurnDeadline(game, now);
-      await persistGameState(tx, game);
+      const dealerEvents = buildBlackjackPromptDealerEvents({
+        game,
+        walletBalance,
+        text: "Card is live. Your move.",
+      });
+      if (dealerEvents.length > 0) {
+        await persistBlackjackDealerEvents({
+          tx,
+          userId,
+          game,
+          events: dealerEvents,
+        });
+      } else {
+        await persistGameState(tx, game);
+      }
       return finalizeMutation({
-        balance: toMoneyString(walletBalance),
-        playMode: game.metadata.playMode,
-        game: serializeBlackjackGame(game, walletBalance),
+        response: buildBlackjackMutationResponse({
+          balance: toMoneyString(walletBalance),
+          playMode: game.metadata.playMode,
+          games: [serializeBlackjackGame(game, walletBalance)],
+        }),
+        dealerEvents,
+        dealerLanguageTask: null,
       });
     }
 
@@ -1012,10 +1581,22 @@ export async function actOnBlackjack(
           game: settled.game,
           snapshot: game.metadata.playMode,
         });
+        const responseBalance = toDecimal(await loadBlackjackWalletBalance(tx, userId));
         return finalizeMutation({
-          balance: toMoneyString(settled.balance),
-          playMode,
-          game: serializeBlackjackGame(settled.game, settled.balance),
+          response: buildBlackjackMutationResponse({
+            balance: toMoneyString(responseBalance),
+            playMode,
+            games: [serializeBlackjackGame(settled.game, responseBalance)],
+          }),
+          dealerEvents: settled.dealerEvents,
+          dealerLanguageTask: {
+            scenario: "blackjack_round_settled",
+            summary: {
+              status: settled.game.status,
+              payoutAmount: settled.game.payoutAmount,
+              dealerCards: settled.game.dealerCards,
+            },
+          },
         });
       }
 
@@ -1130,6 +1711,14 @@ export async function actOnBlackjack(
   });
 
   if ("expiredTurnWasProcessed" in result) {
+    if (result.processedTurn) {
+      runBlackjackDealerSideEffects({
+        userId,
+        response: result.processedTurn.response,
+        dealerEvents: result.processedTurn.dealerEvents,
+        dealerLanguageTask: result.processedTurn.dealerLanguageTask,
+      });
+    }
     throw conflictError(
       "Blackjack turn timed out and the default action was applied.",
       {
@@ -1138,5 +1727,12 @@ export async function actOnBlackjack(
     );
   }
 
-  return result;
+  runBlackjackDealerSideEffects({
+    userId,
+    response: result.response,
+    dealerEvents: result.dealerEvents,
+    dealerLanguageTask: result.dealerLanguageTask,
+  });
+
+  return result.response;
 }

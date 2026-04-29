@@ -9,10 +9,12 @@ import {
   BlackjackConfigSchema,
   BlackjackFairnessSchema,
   BlackjackGameStatusSchema,
+  BlackjackLinkedGroupSchema,
   BlackjackTableSchema,
   type BlackjackCard,
   type BlackjackConfig,
   type BlackjackFairness,
+  type BlackjackLinkedGroup,
   type BlackjackTable,
 } from "@reward/shared-types/blackjack";
 import { DealerFeedSchema } from "@reward/shared-types/dealer";
@@ -38,6 +40,10 @@ const DEFAULT_PLAY_MODE_SNAPSHOT: PlayModeSnapshot = {
   streak: 0,
   lastOutcome: null,
   carryActive: false,
+  pendingPayoutAmount: "0.00",
+  pendingPayoutCount: 0,
+  snowballCarryAmount: "0.00",
+  snowballEnvelopeAmount: "0.00",
 };
 
 export type DbExecutor = DbClient | DbTransaction;
@@ -84,6 +90,7 @@ export const BlackjackMetadataSchema = z.object({
   table: BlackjackTableSchema.optional(),
   actionHistory: z.array(BlackjackActionHistoryEntrySchema).default([]),
   playMode: PlayModeSnapshotSchema.default(DEFAULT_PLAY_MODE_SNAPSHOT),
+  linkedGroup: BlackjackLinkedGroupSchema.nullable().default(null),
   playerHands: z.array(BlackjackStoredPlayerHandSchema).default([]),
   activeHandIndex: z.number().int().nonnegative().nullable().default(0),
   dealerEvents: DealerFeedSchema.default([]),
@@ -137,6 +144,7 @@ export type BlackjackGameState = Omit<BlackjackGameRow, "metadata"> & {
 export type BlackjackActionHistoryEntry = z.infer<
   typeof BlackjackActionHistoryEntrySchema
 >;
+export type ResolvedBlackjackLinkedGroup = BlackjackLinkedGroup;
 
 const buildBlackjackTableId = (params: {
   userId: number;
