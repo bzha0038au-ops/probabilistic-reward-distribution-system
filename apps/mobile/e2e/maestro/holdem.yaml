@@ -1,78 +1,48 @@
 appId: ${REWARD_MOBILE_APP_ID}
-env:
-  REWARD_E2E_EMAIL: mobile.e2e.alice@example.com
-  REWARD_E2E_PASSWORD: User123!
 ---
 - launchApp:
     clearState: true
-- tapOn:
-    id: auth-show-login-button
-    waitUntilVisible: true
-- tapOn:
-    id: auth-login-email-input
-    waitUntilVisible: true
-- eraseText
-- inputText: ${REWARD_E2E_EMAIL}
-- hideKeyboard
 - scrollUntilVisible:
     element:
-      id: auth-login-password-input
+      id: auth-login-seeded-button
     direction: DOWN
 - tapOn:
-    id: auth-login-password-input
-    waitUntilVisible: true
-- eraseText
-- inputText: ${REWARD_E2E_PASSWORD}
-- hideKeyboard
-- scrollUntilVisible:
-    element:
-      id: auth-login-submit-button
-    direction: DOWN
-- tapOn:
-    id: auth-login-submit-button
+    id: auth-login-seeded-button
     waitUntilVisible: true
 - tapOn:
     text: "Allow"
     optional: true
-- scrollUntilVisible:
-    element:
-      text: "Open Hold'em"
-    direction: DOWN
-- tapOn: "Open Hold'em"
-- scrollUntilVisible:
-    element:
-      text: "Mobile Maestro E2E Holdem"
-    direction: DOWN
-- tapOn: "Mobile Maestro E2E Holdem"
-- scrollUntilVisible:
-    element:
-      id: holdem-join-table-button
-    direction: DOWN
-- tapOn:
-    id: holdem-join-table-button
-- scrollUntilVisible:
-    element:
-      id: holdem-start-hand-button
-    direction: DOWN
-- tapOn:
-    id: holdem-start-hand-button
-- scrollUntilVisible:
-    element:
-      id: holdem-action-button-call
-    direction: DOWN
 - assertVisible:
-    id: holdem-action-button-call
+    id: home-open-route-button-account
 - scrollUntilVisible:
     element:
-      id: holdem-action-button-fold
+      id: home-open-route-button-holdem
     direction: DOWN
 - tapOn:
-    id: holdem-action-button-fold
+    id: home-open-route-button-holdem
+    waitUntilVisible: true
 - scrollUntilVisible:
     element:
-      id: holdem-leave-table-button
-    direction: UP
+      id: holdem-lobby-card-mobile-maestro-e2e-holdem
+    direction: DOWN
 - tapOn:
-    id: holdem-leave-table-button
+    id: holdem-lobby-card-mobile-maestro-e2e-holdem
+    waitUntilVisible: true
+- scrollUntilVisible:
+    element:
+      id: holdem-action-amount-input
+    direction: DOWN
+    timeout: 60000
+    speed: 80
+    visibilityPercentage: 20
 - assertVisible:
-    id: holdem-join-table-button
+    id: holdem-action-amount-input
+- swipe:
+    start: 50%, 85%
+    end: 50%, 60%
+    duration: 500
+    waitToSettleTimeoutMs: 500
+- assertVisible:
+    text: "Call"
+- assertVisible:
+    text: "Fold"

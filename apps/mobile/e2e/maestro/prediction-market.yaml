@@ -1,44 +1,27 @@
 appId: ${REWARD_MOBILE_APP_ID}
-env:
-  REWARD_E2E_EMAIL: mobile.e2e.alice@example.com
-  REWARD_E2E_PASSWORD: User123!
 ---
 - launchApp:
     clearState: true
-- tapOn:
-    id: auth-show-login-button
-    waitUntilVisible: true
-- tapOn:
-    id: auth-login-email-input
-    waitUntilVisible: true
-- eraseText
-- inputText: ${REWARD_E2E_EMAIL}
-- hideKeyboard
 - scrollUntilVisible:
     element:
-      id: auth-login-password-input
+      id: auth-login-seeded-button
     direction: DOWN
 - tapOn:
-    id: auth-login-password-input
-    waitUntilVisible: true
-- eraseText
-- inputText: ${REWARD_E2E_PASSWORD}
-- hideKeyboard
-- scrollUntilVisible:
-    element:
-      id: auth-login-submit-button
-    direction: DOWN
-- tapOn:
-    id: auth-login-submit-button
+    id: auth-login-seeded-button
     waitUntilVisible: true
 - tapOn:
     text: "Allow"
     optional: true
+- assertVisible:
+    id: home-open-route-button-account
 - scrollUntilVisible:
     element:
-      text: "Open markets"
+      id: home-open-route-button-predictionmarket
     direction: DOWN
-- tapOn: "Open markets"
+- tapOn:
+    id: home-open-route-button-predictionmarket
+    waitUntilVisible: true
+    retryTapIfNoChange: true
 - scrollUntilVisible:
     element:
       id: prediction-market-card-mobile-maestro-e2e-market
@@ -63,13 +46,3 @@ env:
     direction: DOWN
 - assertVisible:
     id: prediction-market-position-card-up
-- scrollUntilVisible:
-    element:
-      id: route-switcher-button-home
-    direction: UP
-- tapOn:
-    id: route-switcher-button-home
-- scrollUntilVisible:
-    element:
-      text: "Open markets"
-    direction: DOWN

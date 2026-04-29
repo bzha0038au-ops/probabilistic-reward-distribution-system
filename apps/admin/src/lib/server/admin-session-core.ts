@@ -3,6 +3,7 @@ import { jwtVerify } from 'jose';
 const encoder = new TextEncoder();
 
 type AdminSessionEnv = {
+  readonly [key: string]: string | undefined;
   ADMIN_JWT_SECRET?: string;
   ADMIN_JWT_SECRET_PREVIOUS?: string;
 };

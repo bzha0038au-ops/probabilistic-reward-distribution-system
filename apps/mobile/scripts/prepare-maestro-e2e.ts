@@ -20,7 +20,11 @@ import {
 import { and, eq, inArray } from "../../database/src/orm";
 
 import { db, resetDb } from "../../backend/src/db";
-import { createHoldemTable, joinHoldemTable } from "../../backend/src/modules/holdem/service";
+import {
+  createHoldemTable,
+  joinHoldemTable,
+  startHoldemTableHand,
+} from "../../backend/src/modules/holdem/service";
 import {
   getCurrentEffectiveLegalDocuments,
   recordLegalAcceptancesInTransaction,
@@ -222,8 +226,8 @@ async function prepareHoldem(params: { aliceId: number; bobId: number }) {
   const disconnectGraceExpiresAt = new Date(now.getTime() + 60 * 60 * 1_000);
   const seatLeaseExpiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1_000);
 
-  // Leave seat 0 open so Alice joins from mobile into the dealer/small-blind seat
-  // and can take the first preflop action in the Maestro flow.
+  // Move Bob to seat 1, then seat Alice directly into seat 0 so the Maestro
+  // flow starts from a deterministic waiting table with Alice on the button.
   await db
     .update(holdemTableSeats)
     .set({
@@ -237,6 +241,34 @@ async function prepareHoldem(params: { aliceId: number; bobId: number }) {
       ),
     );
 
+  await joinHoldemTable(params.aliceId, created.table.id, {
+    buyInAmount: HOLD_EM_BUY_IN,
+  });
+
+  const preparedSeats = await db
+    .select({ id: holdemTableSeats.id, metadata: holdemTableSeats.metadata })
+    .from(holdemTableSeats)
+    .where(eq(holdemTableSeats.tableId, created.table.id));
+
+  for (const seat of preparedSeats) {
+    const metadata =
+      typeof seat.metadata === "object" && seat.metadata
+        ? (seat.metadata as Record<string, unknown>)
+        : {};
+
+    await db
+      .update(holdemTableSeats)
+      .set({
+        metadata: {
+          ...metadata,
+          sittingOut: false,
+          sitOutSource: null,
+        },
+        updatedAt: now,
+      })
+      .where(eq(holdemTableSeats.id, seat.id));
+  }
+
   await db
     .update(holdemTableSeats)
     .set({
@@ -247,6 +279,41 @@ async function prepareHoldem(params: { aliceId: number; bobId: number }) {
       updatedAt: now,
     })
     .where(eq(holdemTableSeats.tableId, created.table.id));
+
+  await startHoldemTableHand(params.aliceId, created.table.id);
+
+  const extendedDeadlineAt = new Date(now.getTime() + 24 * 60 * 60 * 1_000);
+  const activeSeats = await db
+    .select({
+      id: holdemTableSeats.id,
+      turnDeadlineAt: holdemTableSeats.turnDeadlineAt,
+      metadata: holdemTableSeats.metadata,
+    })
+    .from(holdemTableSeats)
+    .where(eq(holdemTableSeats.tableId, created.table.id));
+
+  for (const seat of activeSeats) {
+    if (!seat.turnDeadlineAt) {
+      continue;
+    }
+
+    const metadata =
+      typeof seat.metadata === "object" && seat.metadata
+        ? (seat.metadata as Record<string, unknown>)
+        : {};
+
+    await db
+      .update(holdemTableSeats)
+      .set({
+        turnDeadlineAt: extendedDeadlineAt,
+        metadata: {
+          ...metadata,
+          timeBankRemainingMs: 24 * 60 * 60 * 1_000,
+        },
+        updatedAt: now,
+      })
+      .where(eq(holdemTableSeats.id, seat.id));
+  }
 
   return created.table.id;
 }

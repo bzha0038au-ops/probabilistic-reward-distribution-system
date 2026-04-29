@@ -3,6 +3,8 @@ env:
   REWARD_E2E_EMAIL: mobile.e2e.alice@example.com
   REWARD_E2E_PASSWORD: User123!
 ---
+- launchApp:
+    clearState: true
 - scrollUntilVisible:
     element:
       id: auth-login-seeded-button
