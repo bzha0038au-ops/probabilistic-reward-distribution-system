@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
 
 import {
   fatal,
@@ -251,13 +252,13 @@ async function finalizeRotation(args: ReturnType<typeof parseArgs>) {
   console.log(`Removed ${state.previous.filePath}. Deploy once more to drop the fallback verifier.`);
 }
 
-async function main() {
+export async function runRotateJwtCli(argv: string[]) {
   await primeOpsEnvironment();
 
-  const args = parseArgs(process.argv.slice(2));
+  const args = parseArgs(argv);
   if (getFlagBoolean(args, 'help')) {
     printUsage();
-    process.exit(0);
+    return;
   }
 
   const command = (args.positionals[0] || 'status').trim();
@@ -265,23 +266,28 @@ async function main() {
   if (command === 'status') {
     const targetFlag = getFlagString(args, 'target');
     await printStatus(targetFlag ? [resolveTarget(targetFlag)] : ['admin', 'user']);
-    process.exit(0);
+    return;
   }
 
   if (command === 'stage') {
     await stageRotation(args);
-    process.exit(0);
+    return;
   }
 
   if (command === 'finalize') {
     await finalizeRotation(args);
-    process.exit(0);
+    return;
   }
 
   fatal(`Unknown command: ${command}`);
 }
 
-void main().catch((error) => {
-  console.error(error instanceof Error ? error.stack || error.message : String(error));
-  process.exit(1);
-});
+const invokedAsScript =
+  process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (invokedAsScript) {
+  void runRotateJwtCli(process.argv.slice(2)).catch((error) => {
+    console.error(error instanceof Error ? error.stack || error.message : String(error));
+    process.exit(1);
+  });
+}

@@ -4,6 +4,7 @@ import {
   saasApiKeys,
   saasAgents,
   saasBillingAccounts,
+  saasBillingDisputes,
   saasBillingRuns,
   saasBillingTopUps,
   saasLedgerEntries,
@@ -11,6 +12,8 @@ import {
   saasOutboundWebhooks,
   saasProjectPrizes,
   saasProjects,
+  saasRewardEnvelopes,
+  saasReportExports,
   saasStripeWebhookEvents,
   saasTenants,
   saasTenantInvites,
@@ -27,6 +30,7 @@ import type {
   SaasApiKeyIssue,
   SaasAgent,
   SaasBillingAccount,
+  SaasBillingDispute,
   SaasBillingRun,
   SaasBillingTopUp,
   SaasAgentControl,
@@ -35,6 +39,8 @@ import type {
   SaasOutboundWebhookEvent,
   SaasProject,
   SaasProjectPrize,
+  SaasRewardEnvelope,
+  SaasReportExportJob,
   SaasStripeWebhookEvent,
   SaasTenant,
   SaasTenantInvite,
@@ -53,6 +59,10 @@ import {
   readBillingRunDecisionBreakdown,
   resolveBillingDecisionPricing,
 } from "./billing";
+import {
+  readSaasBillingBudgetPolicy,
+  redactBillingMetadata,
+} from "./billing-budget";
 import {
   DEFAULT_FAIRNESS_EPOCH_SECONDS,
   DEFAULT_PROJECT_API_RATE_LIMIT_BURST,
@@ -104,6 +114,18 @@ export const normalizeMetadata = (
   return null;
 };
 
+const redactBillingRunMetadata = (value: unknown) => {
+  const metadata = normalizeMetadata(value);
+  if (!metadata || !Reflect.has(metadata, "externalSync")) {
+    return metadata;
+  }
+
+  const rest = Object.fromEntries(
+    Object.entries(metadata).filter(([key]) => key !== "externalSync"),
+  );
+  return Object.keys(rest).length > 0 ? rest : null;
+};
+
 export const normalizeOutboundWebhookEvents = (
   value: unknown,
 ): SaasOutboundWebhookEvent[] => {
@@ -149,6 +171,7 @@ export const toSaasTenant = (
     emergencyStop: Boolean(row.riskEnvelopeEmergencyStop),
   },
   metadata: normalizeMetadata(row.metadata),
+  onboardedAt: row.onboardedAt,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });
@@ -206,6 +229,24 @@ export const toSaasPrize = (
   updatedAt: row.updatedAt,
 });
 
+export const toSaasRewardEnvelope = (
+  row: typeof saasRewardEnvelopes.$inferSelect,
+): SaasRewardEnvelope => ({
+  id: row.id,
+  tenantId: row.tenantId,
+  projectId: row.projectId,
+  window: row.window,
+  onCapHitStrategy: row.onCapHitStrategy,
+  budgetCap: new Decimal(row.budgetCap).toFixed(4),
+  expectedPayoutPerCall: new Decimal(row.expectedPayoutPerCall).toFixed(4),
+  varianceCap: new Decimal(row.varianceCap).toFixed(4),
+  currentConsumed: new Decimal(row.currentConsumed).toFixed(4),
+  currentCallCount: Number(row.currentCallCount ?? 0),
+  currentWindowStartedAt: row.currentWindowStartedAt,
+  createdAt: row.createdAt,
+  updatedAt: row.updatedAt,
+});
+
 export const toSaasAgent = (
   row: typeof saasAgents.$inferSelect,
 ): SaasAgent => ({
@@ -232,9 +273,10 @@ export const toSaasBilling = (
   baseMonthlyFee: toMoneyString(row.baseMonthlyFee),
   drawFee: new Decimal(row.drawFee).toFixed(4),
   decisionPricing: resolveBillingDecisionPricing(row.metadata, row.drawFee),
+  budgetPolicy: readSaasBillingBudgetPolicy(row.metadata),
   currency: row.currency,
   isBillable: Boolean(row.isBillable),
-  metadata: normalizeMetadata(row.metadata),
+  metadata: redactBillingMetadata(row.metadata),
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });
@@ -282,7 +324,18 @@ export const toSaasBillingRun = (
   finalizedAt: row.finalizedAt,
   sentAt: row.sentAt,
   paidAt: row.paidAt,
-  metadata: normalizeMetadata(row.metadata),
+  externalSync: {
+    status: row.externalSyncStatus,
+    action: row.externalSyncAction,
+    stage: row.externalSyncStage,
+    error: row.externalSyncError,
+    recoveryPath: row.externalSyncRecoveryPath,
+    observedInvoiceStatus: row.externalSyncObservedInvoiceStatus,
+    eventType: row.externalSyncEventType,
+    attemptedAt: row.externalSyncAttemptedAt,
+    completedAt: row.externalSyncCompletedAt,
+  },
+  metadata: redactBillingRunMetadata(row.metadata),
   createdByAdminId: row.createdByAdminId,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
@@ -303,6 +356,36 @@ export const toSaasBillingTopUp = (
   syncedAt: row.syncedAt,
   metadata: normalizeMetadata(row.metadata),
   createdByAdminId: row.createdByAdminId,
+  createdAt: row.createdAt,
+  updatedAt: row.updatedAt,
+});
+
+export const toSaasBillingDispute = (
+  row: typeof saasBillingDisputes.$inferSelect,
+): SaasBillingDispute => ({
+  id: row.id,
+  tenantId: row.tenantId,
+  billingRunId: row.billingRunId,
+  billingAccountId: row.billingAccountId,
+  status: row.status,
+  reason: row.reason,
+  summary: row.summary,
+  description: row.description,
+  requestedRefundAmount: toMoneyString(row.requestedRefundAmount),
+  approvedRefundAmount:
+    row.approvedRefundAmount !== null
+      ? toMoneyString(row.approvedRefundAmount)
+      : null,
+  currency: row.currency,
+  resolutionType: row.resolutionType,
+  resolutionNotes: row.resolutionNotes,
+  stripeCreditNoteId: row.stripeCreditNoteId,
+  stripeCreditNoteStatus: row.stripeCreditNoteStatus,
+  stripeCreditNotePdf: row.stripeCreditNotePdf,
+  metadata: normalizeMetadata(row.metadata),
+  createdByAdminId: row.createdByAdminId,
+  resolvedByAdminId: row.resolvedByAdminId,
+  resolvedAt: row.resolvedAt,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });
@@ -478,6 +561,34 @@ export const toSaasUsageEvent = (
   currency: row.currency,
   metadata: normalizeMetadata(row.metadata),
   createdAt: row.createdAt,
+});
+
+export const toSaasReportExportJob = (
+  row: typeof saasReportExports.$inferSelect,
+  download?: {
+    url: string;
+    expiresAt: Date;
+  } | null,
+): SaasReportExportJob => ({
+  id: row.id,
+  tenantId: row.tenantId,
+  projectId: row.projectId,
+  createdByAdminId: row.createdByAdminId,
+  resource: row.resource,
+  format: row.format,
+  status: row.status,
+  rowCount: row.rowCount,
+  contentType: row.contentType,
+  fileName: row.fileName,
+  fromAt: row.fromAt,
+  toAt: row.toAt,
+  lastError: row.lastError,
+  completedAt: row.completedAt,
+  expiresAt: row.expiresAt,
+  downloadUrl: download?.url ?? null,
+  downloadUrlExpiresAt: download?.expiresAt ?? null,
+  createdAt: row.createdAt,
+  updatedAt: row.updatedAt,
 });
 
 export const toSaasAdminActor = (

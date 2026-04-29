@@ -12,7 +12,6 @@ import {
 import {
   amlCheckResultValues,
   amlCheckpointValues,
-  amlProviderKeyValues,
   amlReviewStatusValues,
   amlRiskLevelValues,
 } from '@reward/shared-types/aml';
@@ -35,10 +34,7 @@ export const amlChecks = pgTable(
       length: 32,
       enum: amlCheckpointValues,
     }).notNull(),
-    providerKey: varchar('provider_key', {
-      length: 32,
-      enum: amlProviderKeyValues,
-    })
+    providerKey: varchar('provider_key', { length: 32 })
       .notNull()
       .default('mock'),
     result: varchar('result', {

@@ -14,6 +14,7 @@ import {
   sql,
   type SQL,
 } from '@reward/database/orm';
+import { emitAdminActionSecurityEvent } from '../security-events/service';
 
 export type AdminActionPayload = {
   adminId?: number | null;
@@ -158,16 +159,35 @@ const buildWhereClause = (
 };
 
 export async function recordAdminAction(payload: AdminActionPayload) {
-  await db.insert(adminActions).values({
-    adminId: payload.adminId ?? null,
-    action: payload.action,
-    targetType: payload.targetType ?? null,
-    targetId: payload.targetId ?? null,
-    ip: payload.ip ?? null,
-    sessionId: payload.sessionId ?? null,
-    userAgent: payload.userAgent ?? null,
-    metadata: payload.metadata ?? null,
-  });
+  const [created] = await db
+    .insert(adminActions)
+    .values({
+      adminId: payload.adminId ?? null,
+      action: payload.action,
+      targetType: payload.targetType ?? null,
+      targetId: payload.targetId ?? null,
+      ip: payload.ip ?? null,
+      sessionId: payload.sessionId ?? null,
+      userAgent: payload.userAgent ?? null,
+      metadata: payload.metadata ?? null,
+    })
+    .returning({
+      id: adminActions.id,
+      createdAt: adminActions.createdAt,
+    });
+
+  if (created) {
+    await emitAdminActionSecurityEvent({
+      sourceRecordId: created.id,
+      action: payload.action,
+      adminId: payload.adminId ?? null,
+      ip: payload.ip ?? null,
+      sessionId: payload.sessionId ?? null,
+      userAgent: payload.userAgent ?? null,
+      metadata: payload.metadata ?? null,
+      occurredAt: created.createdAt,
+    });
+  }
 }
 
 export async function listAdminActions(

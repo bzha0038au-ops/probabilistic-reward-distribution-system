@@ -21,7 +21,8 @@ const SESSION_SECRET_ENV_NAMES: Record<
 };
 
 const readSecret = (name: string) => (process.env[name] ?? "").trim();
-const getSessionSecretEnvNames = (kind: SessionKind) => SESSION_SECRET_ENV_NAMES[kind];
+const getSessionSecretEnvNames = (kind: SessionKind) =>
+  SESSION_SECRET_ENV_NAMES[kind];
 const getRequiredSessionSecret = (kind: SessionKind) => {
   const { current } = getSessionSecretEnvNames(kind);
   const secret = readSecret(current);
@@ -79,7 +80,9 @@ export async function verifySessionJwt(token: string, kind: SessionKind) {
     }
   }
 
-  throw lastError ?? internalInvariantError(`Unable to verify ${kind} session JWT.`);
+  throw (
+    lastError ?? internalInvariantError(`Unable to verify ${kind} session JWT.`)
+  );
 }
 
 export function validateSessionSecrets() {
@@ -93,6 +96,9 @@ export function validateSessionSecrets() {
   const adminMfaBreakGlassSecret = readSecret("ADMIN_MFA_BREAK_GLASS_SECRET");
   const handHistoryEvidenceSecret = readSecret(
     "HAND_HISTORY_EVIDENCE_SIGNING_SECRET",
+  );
+  const saasReportExportSecret = readSecret(
+    "SAAS_REPORT_EXPORT_SIGNING_SECRET",
   );
   const activeSessionSecrets = [
     { name: "ADMIN_JWT_SECRET", value: adminSecret },
@@ -108,7 +114,9 @@ export function validateSessionSecrets() {
   ].filter((secret) => secret.value);
 
   if (!adminSecret || !userSecret) {
-    throw internalInvariantError("ADMIN_JWT_SECRET and USER_JWT_SECRET must be set.");
+    throw internalInvariantError(
+      "ADMIN_JWT_SECRET and USER_JWT_SECRET must be set.",
+    );
   }
 
   for (let index = 0; index < activeSessionSecrets.length; index += 1) {
@@ -157,6 +165,12 @@ export function validateSessionSecrets() {
       compareTo: candidate.value,
       compareName: candidate.name,
     });
+    assertDistinct({
+      candidate: saasReportExportSecret,
+      candidateName: "SAAS_REPORT_EXPORT_SIGNING_SECRET",
+      compareTo: candidate.value,
+      compareName: candidate.name,
+    });
   }
   assertDistinct({
     candidate: adminMfaBreakGlassSecret,
@@ -197,6 +211,30 @@ export function validateSessionSecrets() {
   assertDistinct({
     candidate: handHistoryEvidenceSecret,
     candidateName: "HAND_HISTORY_EVIDENCE_SIGNING_SECRET",
+    compareTo: adminMfaBreakGlassSecret,
+    compareName: "ADMIN_MFA_BREAK_GLASS_SECRET",
+  });
+  assertDistinct({
+    candidate: saasReportExportSecret,
+    candidateName: "SAAS_REPORT_EXPORT_SIGNING_SECRET",
+    compareTo: webSecret,
+    compareName: "AUTH_SECRET",
+  });
+  assertDistinct({
+    candidate: saasReportExportSecret,
+    candidateName: "SAAS_REPORT_EXPORT_SIGNING_SECRET",
+    compareTo: adminMfaSecret,
+    compareName: "ADMIN_MFA_ENCRYPTION_SECRET",
+  });
+  assertDistinct({
+    candidate: saasReportExportSecret,
+    candidateName: "SAAS_REPORT_EXPORT_SIGNING_SECRET",
+    compareTo: userMfaSecret,
+    compareName: "USER_MFA_ENCRYPTION_SECRET",
+  });
+  assertDistinct({
+    candidate: saasReportExportSecret,
+    candidateName: "SAAS_REPORT_EXPORT_SIGNING_SECRET",
     compareTo: adminMfaBreakGlassSecret,
     compareName: "ADMIN_MFA_BREAK_GLASS_SECRET",
   });
@@ -245,6 +283,16 @@ export function validateSessionSecrets() {
     if (handHistoryEvidenceSecret.length < 32) {
       throw internalInvariantError(
         "HAND_HISTORY_EVIDENCE_SIGNING_SECRET must be at least 32 characters in production.",
+      );
+    }
+    if (!saasReportExportSecret) {
+      throw internalInvariantError(
+        "SAAS_REPORT_EXPORT_SIGNING_SECRET must be set in production and must not reuse session or MFA secrets.",
+      );
+    }
+    if (saasReportExportSecret.length < 32) {
+      throw internalInvariantError(
+        "SAAS_REPORT_EXPORT_SIGNING_SECRET must be at least 32 characters in production.",
       );
     }
   }

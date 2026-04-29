@@ -1,6 +1,7 @@
 import { View } from 'react-native';
 
 import type { MobileRouteLabels } from '../route-copy';
+import { buildTestId } from '../testing';
 import { ActionButton } from '../ui';
 import type { MobileAppRoute, MobileStyles } from './types';
 
@@ -33,6 +34,7 @@ export function RouteSwitcher(props: RouteSwitcherProps) {
           disabled={props.navigationLocked}
           variant={props.currentRoute === route ? 'primary' : 'secondary'}
           compact
+          testID={buildTestId('route-switcher-button', route)}
         />
       ))}
     </View>

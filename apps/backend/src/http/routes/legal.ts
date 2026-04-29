@@ -5,6 +5,7 @@ import {
   LegalCurrentDocumentsQuerySchema,
 } from "@reward/shared-types/legal";
 import { API_ERROR_CODES } from "@reward/shared-types/api";
+import { CreateDataDeletionRequestSchema } from "@reward/shared-types/data-rights";
 
 import {
   acceptCurrentLegalDocuments,
@@ -12,6 +13,7 @@ import {
   getCurrentLegalDocumentsResponse,
   listCurrentLegalDocuments,
 } from "../../modules/legal/service";
+import { createDataDeletionRequest } from "../../modules/data-rights/service";
 import { requireUserGuard } from "../guards";
 import { sendError, sendErrorForException, sendSuccess } from "../respond";
 import { parseSchema } from "../../shared/validation";
@@ -117,6 +119,38 @@ export async function registerLegalRoutes(app: AppInstance) {
           reply,
           error,
           "Failed to accept legal document.",
+        );
+      }
+    });
+
+    protectedRoutes.post("/legal/data-deletion-requests", async (request, reply) => {
+      const parsed = parseSchema(
+        CreateDataDeletionRequestSchema,
+        toObject(request.body),
+      );
+      if (!parsed.isValid) {
+        return sendError(
+          reply,
+          400,
+          "Invalid request.",
+          parsed.errors,
+          API_ERROR_CODES.INVALID_REQUEST,
+        );
+      }
+
+      try {
+        const created = await createDataDeletionRequest({
+          userId: request.user!.userId,
+          requestedByUserId: request.user!.userId,
+          reason: parsed.data.reason ?? null,
+          source: "user_self_service",
+        });
+        return sendSuccess(reply, created, 201);
+      } catch (error) {
+        return sendErrorForException(
+          reply,
+          error,
+          "Failed to create data deletion request.",
         );
       }
     });

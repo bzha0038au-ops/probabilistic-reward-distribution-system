@@ -13,6 +13,7 @@ const integrationSpecFiles = [
   'src/integration/backend.finance.integration.test.ts',
   'src/integration/backend.admin.integration.test.ts',
   'src/integration/backend.auth.integration.test.ts',
+  'src/integration/backend.security-events.integration.test.ts',
   'src/integration/backend.prize-engine.integration.test.ts',
   'src/integration/backend.aml.integration.test.ts',
   'src/integration/backend.legal.integration.test.ts',
@@ -26,7 +27,7 @@ async function main() {
 
   for (let index = 0; index < cliArgs.length; index += 1) {
     const arg = cliArgs[index];
-    if (!arg || arg === '--critical') {
+    if (!arg || arg === '--' || arg === '--critical') {
       continue;
     }
 

@@ -5,6 +5,7 @@ import {
   type HomeMenuRouteKey,
   type MobileRouteCards,
 } from '../route-copy';
+import { buildTestId } from '../testing';
 import { mobilePalette as palette } from '../theme';
 import { ActionButton, SectionCard } from '../ui';
 import type { MobileStyles } from './types';
@@ -33,6 +34,7 @@ export function HomeRouteScreen(props: HomeRouteScreenProps) {
                 disabled={props.navigationLocked}
                 variant={isPrimaryRoute(route) ? 'primary' : 'secondary'}
                 compact
+                testID={buildTestId('home-open-route-button', route)}
               />
             </View>
           ))}

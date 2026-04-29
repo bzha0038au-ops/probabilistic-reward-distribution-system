@@ -1,6 +1,7 @@
 import { sql } from "@reward/database/orm";
 import type {
   RewardCenterResponse,
+  RewardMission,
   RewardMissionId,
 } from "@reward/shared-types/gamification";
 
@@ -8,6 +9,7 @@ import {
   deposits,
   drawRecords,
   ledgerEntries,
+  referrals,
   userWallets,
   users,
 } from "@reward/database";
@@ -22,7 +24,7 @@ import {
 } from "../../shared/errors";
 import { readSqlRows } from "../../shared/sql-result";
 import { jsonbTextPathSql } from "../../shared/jsonb";
-import { listMissionDefinitions } from "./catalog";
+import { listMissionDefinitions, resolveMissionDefinitionsForUser } from "./catalog";
 import { evaluateRewardCenter } from "./evaluation";
 
 type DbExecutor = DbClient | DbTransaction;
@@ -41,6 +43,7 @@ type RewardCenterCountsRow = {
   drawCountAll: string | number | null;
   drawCountToday: string | number | null;
   depositCount: string | number | null;
+  depositCreditedCount: string | number | null;
 };
 
 type RewardCenterLedgerRow = {
@@ -50,6 +53,11 @@ type RewardCenterLedgerRow = {
 type RewardCenterMissionClaimRow = {
   createdAt: Date | string | null;
   missionId: string | null;
+};
+
+type RewardCenterReferralRow = {
+  rewardId: string | null;
+  qualifiedAt: Date | string | null;
 };
 
 const startOfDay = (value = new Date()) => {
@@ -74,7 +82,15 @@ async function readRewardCenterSnapshot(executor: DbExecutor, userId: number) {
   const now = new Date();
   const dayStart = startOfDay(now);
   const dayStartIso = dayStart.toISOString();
-  const missionDefinitions = await listMissionDefinitions(executor);
+  const missionDefinitions = await resolveMissionDefinitionsForUser(
+    userId,
+    executor,
+  );
+  const hasReferralMission = missionDefinitions.some(
+    (mission) =>
+      mission.type === "metric_threshold" &&
+      mission.params.metric === "referral_success_count",
+  );
   const claimableMissionIds = missionDefinitions
     .filter((mission) => mission.type === "metric_threshold")
     .map((mission) => mission.id);
@@ -85,6 +101,7 @@ async function readRewardCenterSnapshot(executor: DbExecutor, userId: number) {
     countsResult,
     dailyLedgerResult,
     missionLedgerResult,
+    referralResult,
   ] = await Promise.all([
     executor.execute(sql`
       WITH ensured_wallet AS (
@@ -120,6 +137,13 @@ async function readRewardCenterSnapshot(executor: DbExecutor, userId: number) {
           FROM ${deposits}
           WHERE ${deposits.userId} = ${userId}
         ) AS "depositCount"
+        ,
+        (
+          SELECT count(*)
+          FROM ${deposits}
+          WHERE ${deposits.userId} = ${userId}
+            AND ${deposits.status} = 'credited'
+        ) AS "depositCreditedCount"
     `),
     executor.execute(sql`
       WITH ranked_entries AS (
@@ -157,6 +181,18 @@ async function readRewardCenterSnapshot(executor: DbExecutor, userId: number) {
             )
           ORDER BY ${ledgerEntries.createdAt} DESC
         `),
+    hasReferralMission
+      ? executor.execute(sql`
+          SELECT
+            ${referrals.rewardId} AS "rewardId",
+            ${referrals.qualifiedAt} AS "qualifiedAt"
+          FROM ${referrals}
+          WHERE ${referrals.referrerId} = ${userId}
+            AND ${referrals.status} = 'qualified'
+            AND ${referrals.qualifiedAt} IS NOT NULL
+          ORDER BY ${referrals.qualifiedAt} DESC
+        `)
+      : Promise.resolve(null),
   ]);
 
   const actor = readSqlRows<RewardCenterActorWalletRow>(actorWalletResult)[0];
@@ -169,6 +205,9 @@ async function readRewardCenterSnapshot(executor: DbExecutor, userId: number) {
   const missionClaimRows = missionLedgerResult
     ? readSqlRows<RewardCenterMissionClaimRow>(missionLedgerResult)
     : [];
+  const qualifiedReferralRows = referralResult
+    ? readSqlRows<RewardCenterReferralRow>(referralResult)
+    : [];
 
   return {
     bonusBalance: actor.bonusBalance ?? "0",
@@ -177,6 +216,7 @@ async function readRewardCenterSnapshot(executor: DbExecutor, userId: number) {
     drawCountAll: Number(counts?.drawCountAll ?? 0),
     drawCountToday: Number(counts?.drawCountToday ?? 0),
     depositCount: Number(counts?.depositCount ?? 0),
+    depositCreditedCount: Number(counts?.depositCreditedCount ?? 0),
     dailyClaims: dailyClaimRows
       .map((entry) => toValidDate(entry.createdAt))
       .filter(
@@ -202,6 +242,27 @@ async function readRewardCenterSnapshot(executor: DbExecutor, userId: number) {
           createdAt: Date;
         } => entry !== null,
       ),
+    qualifiedReferrals: qualifiedReferralRows
+      .map((entry) => {
+        const qualifiedAt = toValidDate(entry.qualifiedAt);
+        const rewardId = readMissionId(entry.rewardId);
+        if (!qualifiedAt || !rewardId) {
+          return null;
+        }
+
+        return {
+          rewardId,
+          qualifiedAt,
+        };
+      })
+      .filter(
+        (
+          entry,
+        ): entry is {
+          rewardId: RewardMissionId;
+          qualifiedAt: Date;
+        } => entry !== null,
+      ),
     missions: missionDefinitions,
   };
 }
@@ -212,6 +273,73 @@ export async function getRewardCenter(
 ): Promise<RewardCenterResponse> {
   const snapshot = await readRewardCenterSnapshot(executor, userId);
   return evaluateRewardCenter(snapshot);
+}
+
+const isReadyAutoRewardMission = (mission: RewardMission) =>
+  mission.autoAwarded && mission.status === "ready";
+
+export async function grantEligibleAutoRewardMissions(
+  userId: number,
+  executor: DbExecutor = db,
+  options: {
+    trigger: string;
+  },
+) {
+  const run = async (tx: DbExecutor) => {
+    const center = await getRewardCenter(userId, tx);
+    const eligibleMissions = center.missions.filter(isReadyAutoRewardMission);
+    const granted: Array<{
+      missionId: RewardMissionId;
+      grantedAmount: string;
+    }> = [];
+
+    for (const mission of eligibleMissions) {
+      const budget = await consumeMarketingBudget(tx, mission.rewardAmount);
+      if (!budget.allowed) {
+        continue;
+      }
+
+      await grantBonus(
+        {
+          userId,
+          amount: mission.rewardAmount,
+          entryType: GAMIFICATION_REWARD_ENTRY_TYPE,
+          referenceType: "reward_mission",
+          metadata: {
+            reason: "reward_mission_auto",
+            missionId: mission.id,
+            cadence: mission.cadence,
+            awardMode: "auto_grant",
+            bonusUnlockWagerRatio: mission.bonusUnlockWagerRatio,
+            trigger: options.trigger,
+          },
+        },
+        tx,
+      );
+
+      granted.push({
+        missionId: mission.id,
+        grantedAmount: mission.rewardAmount,
+      });
+    }
+
+    return granted;
+  };
+
+  if (executor === db) {
+    return db.transaction(async (tx) => {
+      const result = await run(tx);
+      if (result.length > 0) {
+        await assertWalletLedgerInvariant(tx, userId, {
+          service: "gamification",
+          operation: "grantEligibleAutoRewardMissions",
+        });
+      }
+      return result;
+    });
+  }
+
+  return run(executor);
 }
 
 export async function claimRewardMission(
@@ -269,6 +397,7 @@ export async function claimRewardMission(
           reason: "reward_mission",
           missionId: mission.id,
           cadence: mission.cadence,
+          bonusUnlockWagerRatio: mission.bonusUnlockWagerRatio,
         },
       },
       tx,

@@ -3,13 +3,13 @@
 import { startTransition, useEffect, useState } from "react";
 import type {
   DrawCatalogResponse,
-  DrawOverviewResponse,
   DrawPlayResponse,
   DrawPrizePresentation,
   DrawPrizeRarity,
-  DrawResult,
 } from "@reward/shared-types/draw";
+import type { PlayModeType } from "@reward/shared-types/play-mode";
 
+import { PlayModeSwitcher } from "@/components/play-mode-switcher";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -138,44 +138,6 @@ const getFeaturedPrizes = (catalog: DrawCatalogResponse | null) => {
   return catalog.prizes.slice(0, 4);
 };
 
-const calculateFallbackEndingBalance = (
-  currentBalance: string | undefined,
-  drawCost: string,
-  rewardAmount: string,
-) => {
-  const nextValue =
-    Number(currentBalance ?? "0") - Number(drawCost) + Number(rewardAmount);
-
-  if (!Number.isFinite(nextValue)) {
-    return currentBalance ?? "0.00";
-  }
-
-  return nextValue.toFixed(2);
-};
-
-const buildSingleDrawSummary = (
-  result: DrawResult,
-  overview: DrawOverviewResponse | null,
-  currentCatalog: DrawCatalogResponse,
-): DrawPlayResponse => ({
-  requestedCount: 1,
-  count: 1,
-  totalCost: result.drawCost,
-  totalReward: result.rewardAmount,
-  winCount: result.status === "won" ? 1 : 0,
-  endingBalance:
-    overview?.balance ??
-    calculateFallbackEndingBalance(
-      currentCatalog.balance,
-      result.drawCost,
-      result.rewardAmount,
-  ),
-  highestRarity: result.prize?.displayRarity ?? null,
-  pity: overview?.pity ?? currentCatalog.pity,
-  playMode: overview?.playMode ?? currentCatalog.playMode,
-  results: [result],
-});
-
 export function DrawPanel({
   disabled = false,
   disabledReason = null,
@@ -192,6 +154,7 @@ export function DrawPanel({
     null,
   );
   const [loadingDrawCatalog, setLoadingDrawCatalog] = useState(false);
+  const [updatingPlayMode, setUpdatingPlayMode] = useState(false);
   const [playingDrawCount, setPlayingDrawCount] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
@@ -243,6 +206,38 @@ export function DrawPanel({
     void refreshDrawCatalog();
   }, [locale]);
 
+  const handleChangePlayMode = async (type: PlayModeType) => {
+    if (!drawCatalog || updatingPlayMode) {
+      return;
+    }
+
+    setUpdatingPlayMode(true);
+    const response = await browserUserApiClient.setPlayMode("draw", { type });
+    setUpdatingPlayMode(false);
+
+    if (!response.ok) {
+      const message = response.error?.message ?? t("draw.errorFallback");
+      setError(message);
+      showToast({
+        tone: "error",
+        description: message,
+        durationMs: 5200,
+      });
+      return;
+    }
+
+    startTransition(() => {
+      setDrawCatalog((current) =>
+        current
+          ? {
+              ...current,
+              playMode: response.data.snapshot,
+            }
+          : current,
+      );
+    });
+  };
+
   const handlePlayDraw = async (count: number) => {
     if (!drawCatalog || drawDisabled) {
       return;
@@ -251,54 +246,6 @@ export function DrawPanel({
     setError(null);
     setCatalogError(null);
     setPlayingDrawCount(count);
-
-    if (count === 1) {
-      const response = await browserUserApiClient.runDraw();
-
-      if (!response.ok) {
-        setPlayingDrawCount(null);
-        const message = response.error?.message ?? t("draw.errorFallback");
-        setError(message);
-        showToast({
-          tone: "error",
-          description: message,
-          durationMs: 5200,
-        });
-        return;
-      }
-
-      const nextDrawPlay = buildSingleDrawSummary(
-        response.data,
-        await refreshDrawCatalog(),
-        drawCatalog,
-      );
-
-      startTransition(() => {
-        setLastDrawPlay(nextDrawPlay);
-        setDrawCatalog((current) =>
-          current
-            ? {
-                ...current,
-                balance: nextDrawPlay.endingBalance,
-                pity: nextDrawPlay.pity,
-              }
-            : current,
-        );
-      });
-
-      onBalanceChange?.(nextDrawPlay.endingBalance);
-      onDrawComplete?.();
-      setPlayingDrawCount(null);
-
-      showToast({
-        tone: "success",
-        title: t("draw.latestSingleResult"),
-        description: t("draw.summaryReward", {
-          amount: formatAmount(locale, nextDrawPlay.totalReward),
-        }),
-      });
-      return;
-    }
 
     const response = await browserUserApiClient.playDraw({ count });
 
@@ -397,6 +344,13 @@ export function DrawPanel({
 
       <CardContent className="relative z-10 grid gap-6 p-6 xl:grid-cols-[minmax(0,1.18fr)_minmax(320px,0.82fr)]">
         <div className="space-y-4">
+          <PlayModeSwitcher
+            snapshot={drawCatalog?.playMode ?? null}
+            disabled={drawDisabled || playingDrawCount !== null}
+            loading={updatingPlayMode}
+            onSelect={(type) => void handleChangePlayMode(type)}
+          />
+
           <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(17,24,39,0.9),rgba(2,6,23,0.98))] p-5 shadow-[0_30px_80px_rgba(2,6,23,0.7)]">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
               <div className="space-y-3">

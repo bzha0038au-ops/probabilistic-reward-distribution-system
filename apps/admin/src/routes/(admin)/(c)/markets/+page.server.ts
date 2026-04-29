@@ -3,6 +3,9 @@ import type { Actions, PageServerLoad } from "./$types"
 import {
   CancelPredictionMarketRequestSchema,
   CreatePredictionMarketRequestSchema,
+  PredictionMarketAppealAcknowledgeRequestSchema,
+  PredictionMarketAppealQueueItemSchema,
+  PredictionMarketOracleBindingRequestSchema,
   PredictionMarketSummarySchema,
   SettlePredictionMarketRequestSchema,
 } from "@reward/shared-types/prediction-market"
@@ -40,6 +43,28 @@ const parseTags = (value: FormDataEntryValue | null) =>
         .filter(Boolean),
     ),
   )
+
+const VIG_PERCENT_PATTERN = /^\d+(?:\.\d{1,2})?$/
+
+const parseVigBps = (
+  value: FormDataEntryValue | null,
+  t: ReturnType<typeof createTranslator>,
+) => {
+  const raw = parseRequiredText(value)
+  if (!raw || !VIG_PERCENT_PATTERN.test(raw)) {
+    return { value: null, error: t("markets.errors.invalidVigPercent") }
+  }
+
+  const percent = Number(raw)
+  if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
+    return { value: null, error: t("markets.errors.invalidVigPercent") }
+  }
+
+  return {
+    value: Math.round(percent * 100),
+    error: null,
+  }
+}
 
 const parseOptionalJsonRecord = (
   value: FormDataEntryValue | null,
@@ -139,35 +164,84 @@ const buildOraclePayload = (
   }
 }
 
+const buildOracleBindingPayload = (
+  formData: FormData,
+  t: ReturnType<typeof createTranslator>,
+) => {
+  const provider = parseRequiredText(formData.get("oracleProvider"))
+  if (!provider) {
+    return { oracleBinding: null, error: t("markets.errors.oracleProviderRequired") }
+  }
+
+  const parsedConfig = parseOptionalJsonRecord(
+    formData.get("oracleBindingConfig"),
+    t,
+  )
+  if (parsedConfig.error) {
+    return { oracleBinding: null, error: parsedConfig.error }
+  }
+
+  const payload = {
+    provider,
+    name: parseOptionalText(formData.get("oracleBindingName")) ?? undefined,
+    config: parsedConfig.value ?? undefined,
+  }
+  const parsed = PredictionMarketOracleBindingRequestSchema.safeParse(payload)
+  if (!parsed.success) {
+    return {
+      oracleBinding: null,
+      error:
+        parsed.error.issues[0]?.message ??
+        t("markets.errors.invalidOracleBinding"),
+    }
+  }
+
+  return {
+    oracleBinding: parsed.data,
+    error: null,
+  }
+}
+
 export const load: PageServerLoad = async ({ fetch, cookies, locals }) => {
   const t = createTranslator(getMessages(locals.locale))
 
   try {
-    const response = await apiRequest(fetch, cookies, "/admin/markets")
-    if (!response.ok) {
-      return {
-        markets: [],
-        error: response.error?.message ?? t("markets.errors.loadData"),
-      }
-    }
+    const [marketsResponse, appealsResponse] = await Promise.all([
+      apiRequest(fetch, cookies, "/admin/markets"),
+      apiRequest(fetch, cookies, "/admin/markets/appeals"),
+    ])
 
-    const parsed = PredictionMarketSummarySchema.array().safeParse(
-      response.data ?? [],
-    )
-    if (!parsed.success) {
-      return {
-        markets: [],
-        error: t("markets.errors.unexpectedResponse"),
-      }
+    let error: string | null = null
+    const markets = marketsResponse.ok
+      ? PredictionMarketSummarySchema.array().safeParse(marketsResponse.data ?? [])
+      : null
+    const appeals = appealsResponse.ok
+      ? PredictionMarketAppealQueueItemSchema.array().safeParse(
+          appealsResponse.data ?? [],
+        )
+      : null
+
+    if (!marketsResponse.ok) {
+      error = marketsResponse.error?.message ?? t("markets.errors.loadData")
+    } else if (!markets?.success) {
+      error = t("markets.errors.unexpectedResponse")
+    }
+    if (!appealsResponse.ok) {
+      error ??=
+        appealsResponse.error?.message ?? t("markets.errors.loadAppeals")
+    } else if (!appeals?.success) {
+      error ??= t("markets.errors.unexpectedAppealsResponse")
     }
 
     return {
-      markets: parsed.data,
-      error: null,
+      markets: markets?.success ? markets.data : [],
+      appeals: appeals?.success ? appeals.data : [],
+      error,
     }
   } catch (error) {
     return {
       markets: [],
+      appeals: [],
       error:
         error instanceof Error ? error.message : t("markets.errors.loadData"),
     }
@@ -199,6 +273,20 @@ export const actions: Actions = {
     if (tags.length === 0) {
       return fail(400, { error: t("markets.errors.invalidTags") })
     }
+    const parsedVigBps = parseVigBps(formData.get("vigPercent"), t)
+    if (parsedVigBps.error || parsedVigBps.value === null) {
+      return fail(400, {
+        error: parsedVigBps.error ?? t("markets.errors.invalidVigPercent"),
+      })
+    }
+    const parsedOracleBinding = buildOracleBindingPayload(formData, t)
+    if (parsedOracleBinding.error || !parsedOracleBinding.oracleBinding) {
+      return fail(400, {
+        error:
+          parsedOracleBinding.error ??
+          t("markets.errors.invalidOracleBinding"),
+      })
+    }
 
     const payload = {
       slug: parseRequiredText(formData.get("slug")),
@@ -210,6 +298,8 @@ export const actions: Actions = {
       category: parseRequiredText(formData.get("category")),
       tags,
       invalidPolicy: parseRequiredText(formData.get("invalidPolicy")),
+      vigBps: parsedVigBps.value,
+      oracleBinding: parsedOracleBinding.oracleBinding,
       outcomes: parsedOutcomes.value,
       opensAt: parseOptionalText(formData.get("opensAt")) ?? undefined,
       locksAt: parseRequiredText(formData.get("locksAt")),
@@ -394,6 +484,53 @@ export const actions: Actions = {
       success: true,
       actionType: "cancel",
       marketId,
+    }
+  },
+  acknowledgeAppeal: async ({ request, fetch, cookies, locals }) => {
+    const t = getActionT(locals?.locale)
+    const formData = await request.formData()
+    const appealId = parseRequiredText(formData.get("appealId"))
+
+    if (!appealId) {
+      return fail(400, { error: t("markets.errors.missingAppealId") })
+    }
+
+    const payload = {
+      note: parseOptionalText(formData.get("acknowledgeNote")) ?? undefined,
+    }
+    const parsed = PredictionMarketAppealAcknowledgeRequestSchema.safeParse(
+      payload,
+    )
+    if (!parsed.success) {
+      return fail(400, {
+        error:
+          parsed.error.issues[0]?.message ??
+          t("markets.errors.acknowledgeAppealFailed"),
+      })
+    }
+
+    const response = await apiRequest(
+      fetch,
+      cookies,
+      `/admin/markets/appeals/${appealId}/acknowledge`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(parsed.data),
+      },
+    )
+
+    if (!response.ok) {
+      return fail(response.status, {
+        error:
+          response.error?.message ?? t("markets.errors.acknowledgeAppealFailed"),
+      })
+    }
+
+    return {
+      success: true,
+      actionType: "acknowledgeAppeal",
+      appealId,
     }
   },
 }

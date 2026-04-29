@@ -1,7 +1,18 @@
 import { createHash } from 'node:crypto';
 
-import { and, asc, desc, eq, gte, inArray, sql } from '@reward/database/orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  inArray,
+  ne,
+  or,
+  sql,
+} from '@reward/database/orm';
 import type {
+  DeviceFingerprintEntrypoint,
   UserFreezeCategory,
   UserFreezeReason,
   UserFreezeScope,
@@ -10,14 +21,19 @@ import type {
 import type { DbClient, DbTransaction } from '../../db';
 import { db } from '../../db';
 import {
+  authEvents,
   authSessions,
+  cryptoWithdrawAddresses,
+  deviceFingerprints,
+  fiatPayoutMethods,
   freezeRecords,
+  payoutMethods,
   riskTableInteractionEvents,
   riskTableInteractionPairs,
   suspiciousAccounts,
   users,
 } from '@reward/database';
-import { getAntiAbuseConfig } from '../system/service';
+import { getAntiAbuseConfig, getWithdrawalRiskConfig } from '../system/service';
 import { revokeAuthSessions } from '../session/service';
 import { logger } from '../../shared/logger';
 
@@ -46,6 +62,8 @@ const inferFreezeCategory = (reason: UserFreezeReason): UserFreezeCategory => {
   switch (reason) {
     case 'pending_kyc':
     case 'aml_review':
+    case 'jurisdiction_restriction':
+    case 'underage_restriction':
       return 'compliance';
     case 'account_lock':
     case 'auth_failure':
@@ -207,6 +225,72 @@ type RiskUserStatus = {
   riskScore: number;
 };
 
+type DeviceFingerprintActivity = {
+  fingerprint: string;
+  source: 'client_header' | 'server_derived';
+  sharedDeviceUserCount: number;
+  sharedIpUserCount: number;
+};
+
+type UserAssociationSignalKind = 'device' | 'ip' | 'payout';
+
+type UserAssociationSummary = {
+  deviceCount: number;
+  ipCount: number;
+  payoutCount: number;
+  relatedUserCount: number;
+  flaggedRelatedUserCount: number;
+};
+
+type UserAssociationSignal = {
+  id: string;
+  kind: UserAssociationSignalKind;
+  label: string;
+  fingerprint: string | null;
+  value: string;
+  eventCount: number;
+  userCount: number;
+  lastSeenAt: Date | null;
+  activityTypes: string[];
+  relatedUsers: RiskUserStatus[];
+};
+
+type UserAssociationRelatedUser = RiskUserStatus & {
+  relationTypes: UserAssociationSignalKind[];
+  sharedDevices: string[];
+  sharedIps: string[];
+  sharedPayouts: string[];
+};
+
+type UserAssociationGraphNode = {
+  id: string;
+  type: 'focus_user' | 'user' | 'device' | 'ip' | 'payout';
+  label: string;
+  subtitle: string | null;
+};
+
+type UserAssociationGraphEdge = {
+  source: string;
+  target: string;
+  type:
+    | 'focus_device'
+    | 'focus_ip'
+    | 'focus_payout'
+    | 'shared_device'
+    | 'shared_ip'
+    | 'shared_payout';
+  label: string;
+};
+
+type SuspiciousAssociationSnapshot = {
+  updatedAt: string;
+  summary: UserAssociationSummary;
+  relatedUserIds: number[];
+  deviceSignals: Array<{ fingerprint: string; userCount: number }>;
+  ipSignals: Array<{ value: string; userCount: number }>;
+  payoutSignals: Array<{ value: string; userCount: number }>;
+};
+
 type CollusionTimelineBucket = {
   deltaScore: number;
   eventCount: number;
@@ -253,6 +337,17 @@ const buildDeviceFingerprint = (
   userAgent: string | null
 ) => (ip && userAgent ? buildFingerprint(`${ip}::${userAgent}`) : null);
 
+const buildClientDeviceFingerprint = (value: string) =>
+  createHash('sha256').update(`client::${value}`).digest('hex');
+
+const buildServerDerivedDeviceFingerprint = (
+  ip: string | null,
+  userAgent: string | null
+) =>
+  ip && userAgent
+    ? createHash('sha256').update(`derived::${ip}::${userAgent}`).digest('hex')
+    : null;
+
 const normalizeTableUserIds = (userIds: number[]) =>
   [...new Set(userIds.filter((userId) => Number.isInteger(userId) && userId > 0))].sort(
     (left, right) => left - right
@@ -279,8 +374,23 @@ const readNumberValue = (value: unknown) =>
 
 const readBooleanValue = (value: unknown) => value === true;
 
+const normalizeLookup = (value: string | null | undefined) =>
+  value?.trim().toLowerCase() ?? '';
+
 const formatFingerprintLabel = (kind: 'ip' | 'device', fingerprint: string) =>
   `${kind === 'ip' ? 'IP' : 'Device'} ${fingerprint.slice(0, 12)}`;
+
+const formatPayoutLabel = (kind: 'bank_account' | 'crypto_address', value: string) =>
+  kind === 'bank_account' ? `Card ${value}` : `Wallet ${value}`;
+
+const normalizeDeviceFingerprintHeader = (value: string | null | undefined) => {
+  const normalized = value?.trim() ?? '';
+  if (normalized === '') {
+    return null;
+  }
+
+  return normalized.slice(0, 512);
+};
 
 const buildFallbackRiskUserStatus = (userId: number): RiskUserStatus => ({
   userId,
@@ -607,6 +717,919 @@ const buildClusterList = (
         .map((userId) => getRiskUserStatus(userStateMap, userId)),
     }));
 
+const getFreezeScopeForEntrypoint = (
+  entrypoint: DeviceFingerprintEntrypoint
+): UserFreezeScope =>
+  entrypoint === 'withdrawal'
+    ? 'withdrawal_lock'
+    : entrypoint === 'bet'
+      ? 'gameplay_lock'
+      : 'account_lock';
+
+const resolveDeviceFingerprintActivity = (payload: {
+  deviceFingerprint?: string | null;
+  ip?: string | null;
+  userAgent?: string | null;
+}) => {
+  const providedFingerprint = normalizeDeviceFingerprintHeader(
+    payload.deviceFingerprint
+  )?.toLowerCase();
+  if (providedFingerprint) {
+    return {
+      fingerprint: buildClientDeviceFingerprint(providedFingerprint),
+      source: 'client_header' as const,
+    };
+  }
+
+  const derivedFingerprint = buildServerDerivedDeviceFingerprint(
+    normalizeSignalValue(payload.ip),
+    payload.userAgent?.trim() ? payload.userAgent.trim() : null
+  );
+  if (!derivedFingerprint) {
+    return null;
+  }
+
+  return {
+    fingerprint: derivedFingerprint,
+    source: 'server_derived' as const,
+  };
+};
+
+export async function recordDeviceFingerprintActivity(
+  payload: {
+    userId: number;
+    deviceFingerprint?: string | null;
+    entrypoint: DeviceFingerprintEntrypoint;
+    activityType: string;
+    ip?: string | null;
+    userAgent?: string | null;
+    sessionId?: string | null;
+    metadata?: Record<string, unknown> | null;
+  },
+  executor: DbExecutor = db
+): Promise<DeviceFingerprintActivity | null> {
+  const resolved = resolveDeviceFingerprintActivity(payload);
+  if (!resolved) {
+    return null;
+  }
+
+  const now = new Date();
+  const normalizedIp = normalizeSignalValue(payload.ip);
+  const userAgent = payload.userAgent?.trim() ? payload.userAgent.trim() : null;
+  const sessionId = payload.sessionId?.trim() ? payload.sessionId.trim() : null;
+  const activityType = payload.activityType.trim().slice(0, 64);
+  if (activityType === '') {
+    return null;
+  }
+
+  const [existing] = await executor
+    .select({
+      id: deviceFingerprints.id,
+      eventCount: deviceFingerprints.eventCount,
+      metadata: deviceFingerprints.metadata,
+    })
+    .from(deviceFingerprints)
+    .where(
+      and(
+        eq(deviceFingerprints.userId, payload.userId),
+        eq(deviceFingerprints.fingerprint, resolved.fingerprint),
+        eq(deviceFingerprints.activityType, activityType)
+      )
+    )
+    .limit(1);
+
+  const nextMetadata = {
+    ...toMetadataRecord(existing?.metadata),
+    source: resolved.source,
+    ...(payload.metadata ?? {}),
+  };
+
+  if (existing) {
+    await executor
+      .update(deviceFingerprints)
+      .set({
+        entrypoint: payload.entrypoint,
+        sessionId,
+        ip: normalizedIp,
+        userAgent,
+        eventCount: existing.eventCount + 1,
+        metadata: nextMetadata,
+        lastSeenAt: now,
+        updatedAt: now,
+      })
+      .where(eq(deviceFingerprints.id, existing.id));
+  } else {
+    await executor.insert(deviceFingerprints).values({
+      userId: payload.userId,
+      fingerprint: resolved.fingerprint,
+      entrypoint: payload.entrypoint,
+      activityType,
+      sessionId,
+      ip: normalizedIp,
+      userAgent,
+      eventCount: 1,
+      metadata: nextMetadata,
+      firstSeenAt: now,
+      lastSeenAt: now,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  const [sharedDeviceRow] = await executor
+    .select({
+      total: sql<number>`count(distinct ${deviceFingerprints.userId})`,
+    })
+    .from(deviceFingerprints)
+    .where(eq(deviceFingerprints.fingerprint, resolved.fingerprint));
+
+  const sharedIpUserCount = normalizedIp
+    ? await executor
+        .select({
+          total: sql<number>`count(distinct ${deviceFingerprints.userId})`,
+        })
+        .from(deviceFingerprints)
+        .where(eq(deviceFingerprints.ip, normalizedIp))
+        .then((rows) => Number(rows[0]?.total ?? 0))
+    : 0;
+
+  return {
+    fingerprint: resolved.fingerprint,
+    source: resolved.source,
+    sharedDeviceUserCount: Number(sharedDeviceRow?.total ?? 0),
+    sharedIpUserCount,
+  };
+}
+
+export async function trackUserDeviceFingerprint(
+  payload: {
+    userId: number;
+    deviceFingerprint?: string | null;
+    entrypoint: DeviceFingerprintEntrypoint;
+    activityType: string;
+    ip?: string | null;
+    userAgent?: string | null;
+    sessionId?: string | null;
+    metadata?: Record<string, unknown> | null;
+  },
+  executor: DbExecutor = db
+) {
+  try {
+    const activity = await recordDeviceFingerprintActivity(payload, executor);
+    if (!activity) {
+      return null;
+    }
+
+    const riskConfig = await getWithdrawalRiskConfig(executor);
+    const sharedDeviceThreshold = Math.max(
+      2,
+      Number(riskConfig.sharedDeviceUserThreshold)
+    );
+    const sharedIpThreshold = Math.max(
+      2,
+      Number(riskConfig.sharedIpUserThreshold)
+    );
+    const freezeScope = getFreezeScopeForEntrypoint(payload.entrypoint);
+
+    if (activity.sharedDeviceUserCount >= sharedDeviceThreshold) {
+      await recordSuspiciousActivity(
+        {
+          userId: payload.userId,
+          reason: `shared_device_fingerprint_${payload.entrypoint}_cluster`,
+          score: 2,
+          freezeScope,
+          metadata: {
+            deviceFingerprint: activity.fingerprint,
+            fingerprintSource: activity.source,
+            sharedDeviceUserCount: activity.sharedDeviceUserCount,
+            activityType: payload.activityType,
+            entrypoint: payload.entrypoint,
+          },
+        },
+        executor
+      );
+    }
+
+    if (activity.sharedIpUserCount >= sharedIpThreshold) {
+      await recordSuspiciousActivity(
+        {
+          userId: payload.userId,
+          reason: `shared_ip_${payload.entrypoint}_cluster`,
+          score: 1,
+          freezeScope,
+          metadata: {
+            ip: normalizeSignalValue(payload.ip),
+            sharedIpUserCount: activity.sharedIpUserCount,
+            activityType: payload.activityType,
+            entrypoint: payload.entrypoint,
+          },
+        },
+        executor
+      );
+    }
+
+    return activity;
+  } catch (error) {
+    logger.warning('failed to track device fingerprint activity', {
+      err: error,
+      userId: payload.userId,
+      entrypoint: payload.entrypoint,
+      activityType: payload.activityType,
+    });
+    return null;
+  }
+}
+
+const LOGIN_EVENT_TYPES = [
+  'user_login_success',
+  'user_login_anomaly',
+  'user_login_blocked',
+] as const;
+
+const buildPayoutIdentity = (row: {
+  methodType: string | null;
+  accountName: string | null;
+  bankName: string | null;
+  brand: string | null;
+  accountLast4: string | null;
+  address: string | null;
+  network: string | null;
+  token: string | null;
+}) => {
+  if (row.methodType === 'bank_account' && row.accountLast4) {
+    const accountName = normalizeLookup(row.accountName);
+    const bankName = normalizeLookup(row.bankName);
+    const brand = normalizeLookup(row.brand);
+    const last4 = row.accountLast4.trim();
+    const fingerprint = buildFingerprint(
+      `bank:${accountName}:${bankName}:${brand}:${last4}`
+    );
+
+    return fingerprint
+      ? {
+          kind: 'bank_account' as const,
+          fingerprint,
+          value: last4,
+          label: formatPayoutLabel('bank_account', `****${last4}`),
+        }
+      : null;
+  }
+
+  if (row.methodType === 'crypto_address' && row.address) {
+    const address = normalizeLookup(row.address);
+    const fingerprint = buildFingerprint(`crypto:${address}`);
+    const suffix = row.address.slice(-8);
+    const prefix = row.address.slice(0, 6);
+    return fingerprint
+      ? {
+          kind: 'crypto_address' as const,
+          fingerprint,
+          value: address,
+          label: formatPayoutLabel('crypto_address', `${prefix}...${suffix}`),
+        }
+      : null;
+  }
+
+  return null;
+};
+
+const createSignalAccumulator = (params: {
+  kind: UserAssociationSignalKind;
+  id: string;
+  label: string;
+  fingerprint?: string | null;
+  value: string;
+}) => ({
+  kind: params.kind,
+  id: params.id,
+  label: params.label,
+  fingerprint: params.fingerprint ?? null,
+  value: params.value,
+  eventCount: 0,
+  lastSeenAt: null as Date | null,
+  activityTypes: new Set<string>(),
+  relatedUserIds: new Set<number>(),
+});
+
+const toSortedAssociationSignals = (
+  map: Map<
+    string,
+    ReturnType<typeof createSignalAccumulator>
+  >,
+  userStateMap: Map<number, RiskUserStatus>
+): UserAssociationSignal[] =>
+  [...map.values()]
+    .sort(
+      (left, right) =>
+        right.relatedUserIds.size - left.relatedUserIds.size ||
+        right.eventCount - left.eventCount ||
+        (right.lastSeenAt?.getTime() ?? 0) - (left.lastSeenAt?.getTime() ?? 0)
+    )
+    .map((value) => ({
+      id: value.id,
+      kind: value.kind,
+      label: value.label,
+      fingerprint: value.fingerprint,
+      value: value.value,
+      eventCount: value.eventCount,
+      userCount: value.relatedUserIds.size + 1,
+      lastSeenAt: value.lastSeenAt,
+      activityTypes: [...value.activityTypes].sort((left, right) =>
+        left.localeCompare(right)
+      ),
+      relatedUsers: [...value.relatedUserIds]
+        .sort((left, right) => left - right)
+        .map((userId) => getRiskUserStatus(userStateMap, userId)),
+    }));
+
+export async function getUserAssociationGraph(
+  userId: number,
+  options: {
+    days?: number;
+    signalLimit?: number;
+  } = {},
+  executor: DbExecutor = db
+) {
+  const windowDays = clampPositiveInt(options.days, 90, 365);
+  const signalLimit = clampPositiveInt(options.signalLimit, 12, 24);
+  const cutoff = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
+
+  const [focusUser] = await executor
+    .select({
+      userId: users.id,
+      email: users.email,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  if (!focusUser) {
+    return null;
+  }
+
+  const [deviceRows, authIpRows, payoutRows] = await Promise.all([
+    executor
+      .select({
+        fingerprint: deviceFingerprints.fingerprint,
+        ip: deviceFingerprints.ip,
+        eventCount: deviceFingerprints.eventCount,
+        lastSeenAt: deviceFingerprints.lastSeenAt,
+        activityType: deviceFingerprints.activityType,
+      })
+      .from(deviceFingerprints)
+      .where(
+        and(
+          eq(deviceFingerprints.userId, userId),
+          gte(deviceFingerprints.lastSeenAt, cutoff)
+        )
+      )
+      .orderBy(desc(deviceFingerprints.lastSeenAt), desc(deviceFingerprints.id))
+      .limit(128),
+    executor
+      .select({
+        ip: authEvents.ip,
+        createdAt: authEvents.createdAt,
+      })
+      .from(authEvents)
+      .where(
+        and(
+          eq(authEvents.userId, userId),
+          inArray(authEvents.eventType, [...LOGIN_EVENT_TYPES]),
+          gte(authEvents.createdAt, cutoff)
+        )
+      )
+      .orderBy(desc(authEvents.createdAt), desc(authEvents.id))
+      .limit(128),
+    executor
+      .select({
+        methodType: payoutMethods.methodType,
+        accountName: fiatPayoutMethods.accountName,
+        bankName: fiatPayoutMethods.bankName,
+        brand: fiatPayoutMethods.brand,
+        accountLast4: fiatPayoutMethods.accountLast4,
+        address: cryptoWithdrawAddresses.address,
+        network: cryptoWithdrawAddresses.network,
+        token: cryptoWithdrawAddresses.token,
+      })
+      .from(payoutMethods)
+      .leftJoin(
+        fiatPayoutMethods,
+        eq(fiatPayoutMethods.payoutMethodId, payoutMethods.id)
+      )
+      .leftJoin(
+        cryptoWithdrawAddresses,
+        eq(cryptoWithdrawAddresses.payoutMethodId, payoutMethods.id)
+      )
+      .where(eq(payoutMethods.userId, userId)),
+  ]);
+
+  const deviceSignalMap = new Map<
+    string,
+    ReturnType<typeof createSignalAccumulator>
+  >();
+  for (const row of deviceRows) {
+    const accumulator =
+      deviceSignalMap.get(row.fingerprint) ??
+      createSignalAccumulator({
+        kind: 'device',
+        id: `device:${row.fingerprint}`,
+        label: formatFingerprintLabel('device', row.fingerprint),
+        fingerprint: row.fingerprint,
+        value: row.fingerprint,
+      });
+
+    accumulator.eventCount += row.eventCount;
+    accumulator.lastSeenAt =
+      accumulator.lastSeenAt && accumulator.lastSeenAt > row.lastSeenAt
+        ? accumulator.lastSeenAt
+        : row.lastSeenAt;
+    accumulator.activityTypes.add(row.activityType);
+    deviceSignalMap.set(row.fingerprint, accumulator);
+  }
+
+  const ipSignalMap = new Map<
+    string,
+    ReturnType<typeof createSignalAccumulator>
+  >();
+  for (const row of deviceRows) {
+    const ip = normalizeSignalValue(row.ip);
+    if (!ip) {
+      continue;
+    }
+
+    const accumulator =
+      ipSignalMap.get(ip) ??
+      createSignalAccumulator({
+        kind: 'ip',
+        id: `ip:${ip}`,
+        label: ip,
+        value: ip,
+      });
+    accumulator.eventCount += row.eventCount;
+    accumulator.lastSeenAt =
+      accumulator.lastSeenAt && accumulator.lastSeenAt > row.lastSeenAt
+        ? accumulator.lastSeenAt
+        : row.lastSeenAt;
+    accumulator.activityTypes.add(row.activityType);
+    ipSignalMap.set(ip, accumulator);
+  }
+
+  for (const row of authIpRows) {
+    const ip = normalizeSignalValue(row.ip);
+    if (!ip) {
+      continue;
+    }
+
+    const accumulator =
+      ipSignalMap.get(ip) ??
+      createSignalAccumulator({
+        kind: 'ip',
+        id: `ip:${ip}`,
+        label: ip,
+        value: ip,
+      });
+    accumulator.eventCount += 1;
+    accumulator.lastSeenAt =
+      accumulator.lastSeenAt && accumulator.lastSeenAt > row.createdAt
+        ? accumulator.lastSeenAt
+        : row.createdAt;
+    accumulator.activityTypes.add('login_event');
+    ipSignalMap.set(ip, accumulator);
+  }
+
+  const payoutSignalMap = new Map<
+    string,
+    ReturnType<typeof createSignalAccumulator>
+  >();
+  for (const row of payoutRows) {
+    const payoutIdentity = buildPayoutIdentity(row);
+    if (!payoutIdentity) {
+      continue;
+    }
+
+    const accumulator =
+      payoutSignalMap.get(payoutIdentity.fingerprint) ??
+      createSignalAccumulator({
+        kind: 'payout',
+        id: `payout:${payoutIdentity.fingerprint}`,
+        label: payoutIdentity.label,
+        fingerprint: payoutIdentity.fingerprint,
+        value: payoutIdentity.value,
+      });
+    accumulator.eventCount += 1;
+    accumulator.activityTypes.add(payoutIdentity.kind);
+    payoutSignalMap.set(payoutIdentity.fingerprint, accumulator);
+  }
+
+  const focusDeviceFingerprints = [...deviceSignalMap.keys()].slice(0, signalLimit);
+  const focusIps = [...ipSignalMap.keys()].slice(0, signalLimit);
+  const focusPayoutFingerprints = [...payoutSignalMap.keys()].slice(0, signalLimit);
+
+  const deviceRelatedRows =
+    focusDeviceFingerprints.length > 0
+      ? await executor
+          .select({
+            userId: deviceFingerprints.userId,
+            fingerprint: deviceFingerprints.fingerprint,
+            eventCount: deviceFingerprints.eventCount,
+            lastSeenAt: deviceFingerprints.lastSeenAt,
+            activityType: deviceFingerprints.activityType,
+          })
+          .from(deviceFingerprints)
+          .where(
+            and(
+              ne(deviceFingerprints.userId, userId),
+              inArray(deviceFingerprints.fingerprint, focusDeviceFingerprints),
+              gte(deviceFingerprints.lastSeenAt, cutoff)
+            )
+          )
+      : [];
+
+  const deviceIpRelatedRows =
+    focusIps.length > 0
+      ? await executor
+          .select({
+            userId: deviceFingerprints.userId,
+            ip: deviceFingerprints.ip,
+            eventCount: deviceFingerprints.eventCount,
+            lastSeenAt: deviceFingerprints.lastSeenAt,
+            activityType: deviceFingerprints.activityType,
+          })
+          .from(deviceFingerprints)
+          .where(
+            and(
+              ne(deviceFingerprints.userId, userId),
+              inArray(deviceFingerprints.ip, focusIps),
+              gte(deviceFingerprints.lastSeenAt, cutoff)
+            )
+          )
+      : [];
+
+  const authIpRelatedRows =
+    focusIps.length > 0
+      ? await executor
+          .select({
+            userId: authEvents.userId,
+            ip: authEvents.ip,
+            createdAt: authEvents.createdAt,
+          })
+          .from(authEvents)
+          .where(
+            and(
+              ne(authEvents.userId, userId),
+              inArray(authEvents.ip, focusIps),
+              inArray(authEvents.eventType, [...LOGIN_EVENT_TYPES]),
+              gte(authEvents.createdAt, cutoff)
+            )
+          )
+      : [];
+
+  const payoutConditions = [];
+  if (focusPayoutFingerprints.length > 0) {
+    const bankLast4Values = [...new Set(
+      payoutRows
+        .filter((row) => row.methodType === 'bank_account' && row.accountLast4)
+        .map((row) => row.accountLast4!)
+    )];
+    const cryptoAddressValues = [...new Set(
+      payoutRows
+        .filter((row) => row.methodType === 'crypto_address' && row.address)
+        .map((row) => row.address!)
+    )];
+
+    if (bankLast4Values.length > 0) {
+      payoutConditions.push(inArray(fiatPayoutMethods.accountLast4, bankLast4Values));
+    }
+    if (cryptoAddressValues.length > 0) {
+      payoutConditions.push(inArray(cryptoWithdrawAddresses.address, cryptoAddressValues));
+    }
+  }
+
+  const payoutRelatedRows =
+    payoutConditions.length > 0
+      ? await executor
+          .select({
+            userId: payoutMethods.userId,
+            methodType: payoutMethods.methodType,
+            accountName: fiatPayoutMethods.accountName,
+            bankName: fiatPayoutMethods.bankName,
+            brand: fiatPayoutMethods.brand,
+            accountLast4: fiatPayoutMethods.accountLast4,
+            address: cryptoWithdrawAddresses.address,
+            network: cryptoWithdrawAddresses.network,
+            token: cryptoWithdrawAddresses.token,
+          })
+          .from(payoutMethods)
+          .leftJoin(
+            fiatPayoutMethods,
+            eq(fiatPayoutMethods.payoutMethodId, payoutMethods.id)
+          )
+          .leftJoin(
+            cryptoWithdrawAddresses,
+            eq(cryptoWithdrawAddresses.payoutMethodId, payoutMethods.id)
+          )
+          .where(and(ne(payoutMethods.userId, userId), or(...payoutConditions)))
+      : [];
+
+  const relatedUserIds = new Set<number>();
+  const relatedUserAccumulator = new Map<
+    number,
+    {
+      relationTypes: Set<UserAssociationSignalKind>;
+      sharedDevices: Set<string>;
+      sharedIps: Set<string>;
+      sharedPayouts: Set<string>;
+    }
+  >();
+
+  const getRelatedAccumulator = (relatedUserId: number) => {
+    const existing = relatedUserAccumulator.get(relatedUserId);
+    if (existing) {
+      return existing;
+    }
+
+    const created = {
+      relationTypes: new Set<UserAssociationSignalKind>(),
+      sharedDevices: new Set<string>(),
+      sharedIps: new Set<string>(),
+      sharedPayouts: new Set<string>(),
+    };
+    relatedUserAccumulator.set(relatedUserId, created);
+    relatedUserIds.add(relatedUserId);
+    return created;
+  };
+
+  for (const row of deviceRelatedRows) {
+    const signal = deviceSignalMap.get(row.fingerprint);
+    if (!signal) {
+      continue;
+    }
+
+    signal.relatedUserIds.add(row.userId);
+    signal.eventCount += row.eventCount;
+    signal.activityTypes.add(row.activityType);
+    signal.lastSeenAt =
+      signal.lastSeenAt && signal.lastSeenAt > row.lastSeenAt
+        ? signal.lastSeenAt
+        : row.lastSeenAt;
+
+    const related = getRelatedAccumulator(row.userId);
+    related.relationTypes.add('device');
+    related.sharedDevices.add(signal.label);
+  }
+
+  for (const row of deviceIpRelatedRows) {
+    const ip = normalizeSignalValue(row.ip);
+    if (!ip) {
+      continue;
+    }
+
+    const signal = ipSignalMap.get(ip);
+    if (!signal) {
+      continue;
+    }
+
+    signal.relatedUserIds.add(row.userId);
+    signal.eventCount += row.eventCount;
+    signal.activityTypes.add(row.activityType);
+    signal.lastSeenAt =
+      signal.lastSeenAt && signal.lastSeenAt > row.lastSeenAt
+        ? signal.lastSeenAt
+        : row.lastSeenAt;
+
+    const related = getRelatedAccumulator(row.userId);
+    related.relationTypes.add('ip');
+    related.sharedIps.add(signal.label);
+  }
+
+  for (const row of authIpRelatedRows) {
+    const ip = normalizeSignalValue(row.ip);
+    const relatedUserId = Number(row.userId ?? 0);
+    if (!ip || !Number.isInteger(relatedUserId) || relatedUserId <= 0) {
+      continue;
+    }
+
+    const signal = ipSignalMap.get(ip);
+    if (!signal) {
+      continue;
+    }
+
+    signal.relatedUserIds.add(relatedUserId);
+    signal.eventCount += 1;
+    signal.activityTypes.add('login_event');
+    signal.lastSeenAt =
+      signal.lastSeenAt && signal.lastSeenAt > row.createdAt
+        ? signal.lastSeenAt
+        : row.createdAt;
+
+    const related = getRelatedAccumulator(relatedUserId);
+    related.relationTypes.add('ip');
+    related.sharedIps.add(signal.label);
+  }
+
+  for (const row of payoutRelatedRows) {
+    const payoutIdentity = buildPayoutIdentity(row);
+    if (!payoutIdentity) {
+      continue;
+    }
+
+    const signal = payoutSignalMap.get(payoutIdentity.fingerprint);
+    if (!signal) {
+      continue;
+    }
+
+    signal.relatedUserIds.add(row.userId);
+    signal.eventCount += 1;
+    signal.activityTypes.add(payoutIdentity.kind);
+
+    const related = getRelatedAccumulator(row.userId);
+    related.relationTypes.add('payout');
+    related.sharedPayouts.add(signal.label);
+  }
+
+  const userStateMap = await buildRiskUserStateMap([userId, ...relatedUserIds]);
+  const focusRiskUser = getRiskUserStatus(userStateMap, userId);
+
+  const deviceSignals = toSortedAssociationSignals(deviceSignalMap, userStateMap);
+  const ipSignals = toSortedAssociationSignals(ipSignalMap, userStateMap);
+  const payoutSignals = toSortedAssociationSignals(payoutSignalMap, userStateMap);
+
+  const relatedUsers: UserAssociationRelatedUser[] = [...relatedUserAccumulator.entries()]
+    .map(([relatedUserId, relation]) => {
+      const base = getRiskUserStatus(userStateMap, relatedUserId);
+      return {
+        ...base,
+        relationTypes: [...relation.relationTypes].sort((left, right) =>
+          left.localeCompare(right)
+        ),
+        sharedDevices: [...relation.sharedDevices].sort((left, right) =>
+          left.localeCompare(right)
+        ),
+        sharedIps: [...relation.sharedIps].sort((left, right) =>
+          left.localeCompare(right)
+        ),
+        sharedPayouts: [...relation.sharedPayouts].sort((left, right) =>
+          left.localeCompare(right)
+        ),
+      };
+    })
+    .sort(
+      (left, right) =>
+        right.riskScore - left.riskScore ||
+        Number(right.hasOpenRiskFlag) - Number(left.hasOpenRiskFlag) ||
+        left.userId - right.userId
+    );
+
+  const graphNodes: UserAssociationGraphNode[] = [
+    {
+      id: `user:${userId}`,
+      type: 'focus_user',
+      label:
+        focusRiskUser.email ? `${focusRiskUser.email} (#${userId})` : `User #${userId}`,
+      subtitle: focusRiskUser.isFrozen
+        ? `Frozen: ${focusRiskUser.freezeReason ?? 'active'}`
+        : focusRiskUser.hasOpenRiskFlag
+          ? `Risk: ${focusRiskUser.riskReason ?? 'open'}`
+          : null,
+    },
+  ];
+  const graphEdges: UserAssociationGraphEdge[] = [];
+
+  for (const signal of [...deviceSignals, ...ipSignals, ...payoutSignals]) {
+    graphNodes.push({
+      id: signal.id,
+      type: signal.kind === 'device' ? 'device' : signal.kind === 'ip' ? 'ip' : 'payout',
+      label: signal.label,
+      subtitle:
+        signal.lastSeenAt instanceof Date
+          ? signal.lastSeenAt.toISOString()
+          : null,
+    });
+    graphEdges.push({
+      source: `user:${userId}`,
+      target: signal.id,
+      type:
+        signal.kind === 'device'
+          ? 'focus_device'
+          : signal.kind === 'ip'
+            ? 'focus_ip'
+            : 'focus_payout',
+      label: `${signal.userCount} users`,
+    });
+  }
+
+  for (const user of relatedUsers) {
+    const nodeId = `user:${user.userId}`;
+    graphNodes.push({
+      id: nodeId,
+      type: 'user',
+      label: user.email ? `${user.email} (#${user.userId})` : `User #${user.userId}`,
+      subtitle: user.hasOpenRiskFlag ? user.riskReason ?? 'risk flag' : null,
+    });
+
+    for (const label of user.sharedDevices) {
+      const signal = deviceSignals.find((item) => item.label === label);
+      if (!signal) {
+        continue;
+      }
+
+      graphEdges.push({
+        source: signal.id,
+        target: nodeId,
+        type: 'shared_device',
+        label: 'shared device',
+      });
+    }
+
+    for (const label of user.sharedIps) {
+      const signal = ipSignals.find((item) => item.label === label);
+      if (!signal) {
+        continue;
+      }
+
+      graphEdges.push({
+        source: signal.id,
+        target: nodeId,
+        type: 'shared_ip',
+        label: 'shared ip',
+      });
+    }
+
+    for (const label of user.sharedPayouts) {
+      const signal = payoutSignals.find((item) => item.label === label);
+      if (!signal) {
+        continue;
+      }
+
+      graphEdges.push({
+        source: signal.id,
+        target: nodeId,
+        type: 'shared_payout',
+        label: 'shared payout',
+      });
+    }
+  }
+
+  const summary: UserAssociationSummary = {
+    deviceCount: deviceSignals.length,
+    ipCount: ipSignals.length,
+    payoutCount: payoutSignals.length,
+    relatedUserCount: relatedUsers.length,
+    flaggedRelatedUserCount: relatedUsers.filter((user) => user.hasOpenRiskFlag).length,
+  };
+
+  return {
+    user: focusRiskUser,
+    windowDays,
+    signalLimit,
+    generatedAt: new Date(),
+    summary,
+    deviceSignals,
+    ipSignals,
+    payoutSignals,
+    relatedUsers,
+    graph: {
+      nodes: graphNodes,
+      edges: graphEdges,
+    },
+  };
+}
+
+const buildSuspiciousAssociationSnapshot = async (
+  userId: number,
+  executor: DbExecutor = db
+): Promise<SuspiciousAssociationSnapshot | null> => {
+  const graph = await getUserAssociationGraph(
+    userId,
+    {
+      days: 120,
+      signalLimit: 8,
+    },
+    executor
+  );
+  if (!graph) {
+    return null;
+  }
+
+  return {
+    updatedAt: new Date().toISOString(),
+    summary: graph.summary,
+    relatedUserIds: graph.relatedUsers.map((user) => user.userId),
+    deviceSignals: graph.deviceSignals.map((signal) => ({
+      fingerprint: signal.fingerprint ?? signal.value,
+      userCount: signal.userCount,
+    })),
+    ipSignals: graph.ipSignals.map((signal) => ({
+      value: signal.value,
+      userCount: signal.userCount,
+    })),
+    payoutSignals: graph.payoutSignals.map((signal) => ({
+      value: signal.label,
+      userCount: signal.userCount,
+    })),
+  };
+};
+
 export async function recordSuspiciousActivity(
   payload: {
     userId: number;
@@ -621,6 +1644,10 @@ export async function recordSuspiciousActivity(
 ) {
   const score = Number(payload.score ?? 1);
   const run = async (tx: DbExecutor) => {
+    const associationSnapshot = await buildSuspiciousAssociationSnapshot(
+      payload.userId,
+      tx
+    );
     const [existing] = await tx
       .select()
       .from(suspiciousAccounts)
@@ -645,6 +1672,8 @@ export async function recordSuspiciousActivity(
           reason: payload.reason,
           metadata: {
             ...metadata,
+            ...(payload.metadata ?? {}),
+            associations: associationSnapshot ?? Reflect.get(metadata, 'associations') ?? null,
             score: nextScore,
             lastReason: payload.reason,
             lastSeenAt: new Date().toISOString(),
@@ -657,10 +1686,11 @@ export async function recordSuspiciousActivity(
         reason: payload.reason,
         status: 'open',
         metadata: {
+          ...(payload.metadata ?? {}),
+          associations: associationSnapshot,
           score: nextScore,
           lastReason: payload.reason,
           lastSeenAt: new Date().toISOString(),
-          ...(payload.metadata ?? {}),
         },
       });
     }
@@ -721,23 +1751,35 @@ export async function recordTableInteraction(
       return null;
     }
 
-    const sessionRows = await tx
-      .select({
-        userId: authSessions.userId,
-        ip: authSessions.ip,
-        userAgent: authSessions.userAgent,
-        lastSeenAt: authSessions.lastSeenAt,
-        createdAt: authSessions.createdAt,
-      })
-      .from(authSessions)
-      .where(
-        and(
-          inArray(authSessions.userId, validUserIds),
-          eq(authSessions.subjectRole, 'user'),
-          eq(authSessions.status, 'active')
+    const [sessionRows, deviceFingerprintRows] = await Promise.all([
+      tx
+        .select({
+          userId: authSessions.userId,
+          ip: authSessions.ip,
+          userAgent: authSessions.userAgent,
+          lastSeenAt: authSessions.lastSeenAt,
+          createdAt: authSessions.createdAt,
+        })
+        .from(authSessions)
+        .where(
+          and(
+            inArray(authSessions.userId, validUserIds),
+            eq(authSessions.subjectRole, 'user'),
+            eq(authSessions.status, 'active')
+          )
         )
-      )
-      .orderBy(desc(authSessions.lastSeenAt), desc(authSessions.createdAt));
+        .orderBy(desc(authSessions.lastSeenAt), desc(authSessions.createdAt)),
+      tx
+        .select({
+          userId: deviceFingerprints.userId,
+          fingerprint: deviceFingerprints.fingerprint,
+          lastSeenAt: deviceFingerprints.lastSeenAt,
+          createdAt: deviceFingerprints.createdAt,
+        })
+        .from(deviceFingerprints)
+        .where(inArray(deviceFingerprints.userId, validUserIds))
+        .orderBy(desc(deviceFingerprints.lastSeenAt), desc(deviceFingerprints.createdAt)),
+    ]);
 
     const latestSessions = new Map<
       number,
@@ -746,6 +1788,7 @@ export async function recordTableInteraction(
         userAgent: string | null;
       }
     >();
+    const latestDeviceFingerprints = new Map<number, string>();
 
     for (const row of sessionRows) {
       if (!latestSessions.has(row.userId)) {
@@ -756,15 +1799,22 @@ export async function recordTableInteraction(
       }
     }
 
+    for (const row of deviceFingerprintRows) {
+      if (!latestDeviceFingerprints.has(row.userId)) {
+        latestDeviceFingerprints.set(row.userId, row.fingerprint);
+      }
+    }
+
     const participantSnapshots: TableInteractionSessionSnapshot[] = validUserIds.map((userId) => {
       const session = latestSessions.get(userId);
       const ip = session?.ip ?? null;
       const userAgent = session?.userAgent ?? null;
+      const trackedFingerprint = latestDeviceFingerprints.get(userId) ?? null;
 
       return {
         userId,
         ipFingerprint: buildFingerprint(ip),
-        deviceFingerprint: buildDeviceFingerprint(ip, userAgent),
+        deviceFingerprint: trackedFingerprint ?? buildDeviceFingerprint(ip, userAgent),
       };
     });
 

@@ -3,6 +3,12 @@ import Decimal from 'decimal.js';
 
 import { systemConfig } from '@reward/database';
 import type { DbClient, DbTransaction } from '../../db';
+import {
+  deleteCacheKeys,
+  readJsonCache,
+  readJsonCacheMany,
+  writeJsonCacheMany,
+} from '../../shared/cache';
 import { getConfig } from '../../shared/config';
 import { internalInvariantError } from '../../shared/errors';
 import { toDecimal, toMoneyString } from '../../shared/money';
@@ -18,6 +24,8 @@ export type ConfigRow = {
 };
 
 export type ConfigRowMap = Map<string, ConfigRow>;
+
+const SYSTEM_CONFIG_CACHE_TTL_SECONDS = 300;
 
 const isStrictSystemConfigMode = () => getConfig().nodeEnv === 'production';
 
@@ -50,7 +58,44 @@ const autoCreateOrThrow = async (
   await createEntry();
 };
 
-const readConfigRow = async (
+const buildSystemConfigCacheKey = (key: string) => `system-config:${key}`;
+
+const parseCachedConfigRow = (value: unknown): ConfigRow | null => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return null;
+  }
+
+  const configNumber = Reflect.get(value, 'config_number');
+  const configValue = Reflect.get(value, 'config_value');
+
+  if (
+    configNumber !== null &&
+    configNumber !== undefined &&
+    typeof configNumber !== 'string' &&
+    typeof configNumber !== 'number'
+  ) {
+    return null;
+  }
+
+  if (
+    configValue !== null &&
+    configValue !== undefined &&
+    (typeof configValue !== 'object' || Array.isArray(configValue))
+  ) {
+    return null;
+  }
+
+  return {
+    config_number: configNumber ?? null,
+    config_value: (configValue as Record<string, unknown> | null | undefined) ?? null,
+  };
+};
+
+const invalidateSystemConfigCacheKeys = async (keys: string[]) => {
+  await deleteCacheKeys(keys.map(buildSystemConfigCacheKey));
+};
+
+const readConfigRowFromDb = async (
   db: DbExecutor,
   key: string,
   lock: boolean
@@ -66,6 +111,35 @@ const readConfigRow = async (
   return readSqlRows<ConfigRow>(result)[0] ?? null;
 };
 
+const readConfigRow = async (
+  db: DbExecutor,
+  key: string,
+  lock: boolean
+): Promise<ConfigRow | null> => {
+  if (lock) {
+    return readConfigRowFromDb(db, key, true);
+  }
+
+  const cacheKey = buildSystemConfigCacheKey(key);
+  const cachedRow = await readJsonCache(cacheKey, parseCachedConfigRow);
+  if (cachedRow) {
+    return cachedRow;
+  }
+
+  const row = await readConfigRowFromDb(db, key, false);
+  if (row) {
+    await writeJsonCacheMany([
+      {
+        key: cacheKey,
+        value: row,
+        ttlSeconds: SYSTEM_CONFIG_CACHE_TTL_SECONDS,
+      },
+    ]);
+  }
+
+  return row;
+};
+
 export const getConfigRowsByKeys = async (
   db: DbExecutor,
   keys: string[]
@@ -75,6 +149,25 @@ export const getConfigRowsByKeys = async (
     return new Map();
   }
 
+  const cacheKeys = uniqueKeys.map((key) => buildSystemConfigCacheKey(key));
+  const cachedRows = await readJsonCacheMany(cacheKeys, parseCachedConfigRow);
+  const output = new Map<string, ConfigRow>();
+  const missingKeys: string[] = [];
+
+  uniqueKeys.forEach((key) => {
+    const cached = cachedRows.get(buildSystemConfigCacheKey(key));
+    if (cached) {
+      output.set(key, cached);
+      return;
+    }
+
+    missingKeys.push(key);
+  });
+
+  if (missingKeys.length === 0) {
+    return output;
+  }
+
   const rows = await db
     .select({
       configKey: systemConfig.configKey,
@@ -82,17 +175,29 @@ export const getConfigRowsByKeys = async (
       configValue: systemConfig.configValue,
     })
     .from(systemConfig)
-    .where(inArray(systemConfig.configKey, uniqueKeys));
+    .where(inArray(systemConfig.configKey, missingKeys));
 
-  return new Map(
-    rows.map((row) => [
-      row.configKey,
-      {
-        config_number: row.configNumber,
-        config_value: row.configValue as Record<string, unknown> | null,
-      },
-    ])
-  );
+  const cacheWrites: Array<{
+    key: string;
+    value: ConfigRow;
+    ttlSeconds: number;
+  }> = [];
+
+  rows.forEach((row) => {
+    const configRow = {
+      config_number: row.configNumber,
+      config_value: row.configValue as Record<string, unknown> | null,
+    };
+    output.set(row.configKey, configRow);
+    cacheWrites.push({
+      key: buildSystemConfigCacheKey(row.configKey),
+      value: configRow,
+      ttlSeconds: SYSTEM_CONFIG_CACHE_TTL_SECONDS,
+    });
+  });
+
+  await writeJsonCacheMany(cacheWrites);
+  return output;
 };
 
 const parseConfigNumber = (
@@ -207,6 +312,7 @@ export async function getConfigString(
         })
         .onConflictDoNothing()
     );
+    await invalidateSystemConfigCacheKeys([key]);
     return fallback;
   }
   return parseConfigString(key, row, fallback);
@@ -231,6 +337,7 @@ export async function getConfigStringFromRows(
         })
         .onConflictDoNothing()
     );
+    await invalidateSystemConfigCacheKeys([key]);
     rows.set(key, {
       config_number: null,
       config_value: { value: fallback },
@@ -260,6 +367,7 @@ export async function getConfigJson<T>(
         })
         .onConflictDoNothing()
     );
+    await invalidateSystemConfigCacheKeys([key]);
     return fallback;
   }
   return parseConfigJson(key, row, fallback);
@@ -284,6 +392,7 @@ export async function getConfigJsonFromRows<T>(
         })
         .onConflictDoNothing()
     );
+    await invalidateSystemConfigCacheKeys([key]);
     rows.set(key, {
       config_number: null,
       config_value: fallback as Record<string, unknown>,
@@ -320,6 +429,8 @@ export async function setConfigDecimal(
       target: systemConfig.configKey,
       set: updateValues,
     });
+
+  await invalidateSystemConfigCacheKeys([key]);
 }
 
 export async function getConfigDecimal(

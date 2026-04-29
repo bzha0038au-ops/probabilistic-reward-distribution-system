@@ -47,10 +47,16 @@ import type {
   DrawOverviewResponse,
   DrawResult,
 } from "@reward/shared-types/draw";
+import type { ExperimentVariantResponse } from "@reward/shared-types/experiments";
 import type {
   FairnessCommit,
   FairnessReveal,
 } from "@reward/shared-types/fairness";
+import type {
+  PlayModeGameKey,
+  PlayModeRequest,
+  PlayModeStateResponse,
+} from "@reward/shared-types/play-mode";
 import type {
   HandHistory,
   HoldemSignedEvidenceBundle,
@@ -58,6 +64,8 @@ import type {
 import type {
   HoldemCreateTableRequest,
   HoldemJoinTableRequest,
+  HoldemRealtimeObservationsRequest,
+  HoldemRealtimeObservationsResponse,
   HoldemPresenceResponse,
   HoldemSeatModeRequest,
   HoldemTableMessage,
@@ -90,6 +98,16 @@ import type {
   PredictionMarketSummary,
 } from "@reward/shared-types/prediction-market";
 import type {
+  NotificationListResponse,
+  NotificationPushDeviceDeleteRequest,
+  NotificationPushDeviceRecord,
+  NotificationPushDeviceRegisterRequest,
+  NotificationPreferencesResponse,
+  NotificationPreferencesUpdateRequest,
+  NotificationRecord,
+  NotificationSummary,
+} from "@reward/shared-types/notification";
+import type {
   BankCardRecord,
   CryptoDepositChannelRecord,
   CryptoWithdrawAddressViewRecord,
@@ -106,7 +124,7 @@ import type { WalletBalanceResponse } from "@reward/shared-types/user";
 
 export type ApiResult<T> = ApiResponse<T>;
 
-export const USER_REALTIME_ROUTE = '/realtime';
+export const USER_REALTIME_ROUTE = "/realtime";
 
 export const USER_API_ROUTES = {
   auth: {
@@ -133,6 +151,11 @@ export const USER_API_ROUTES = {
   communityThreads: "/community/threads",
   wallet: "/wallet",
   transactions: "/transactions",
+  notifications: "/notifications",
+  notificationSummary: "/notifications/summary",
+  notificationPreferences: "/notification-preferences",
+  notificationPushDevices: "/notification-push-devices",
+  experiments: "/experiments",
   kycProfile: "/kyc/profile",
   rewardCenter: "/rewards/center",
   rewardClaim: "/rewards/claim",
@@ -141,8 +164,10 @@ export const USER_API_ROUTES = {
   marketHistory: "/markets/history",
   fairnessCommit: "/fairness/commit",
   fairnessReveal: "/fairness/reveal",
+  playModes: "/play-modes",
   handHistory: "/hand-history",
   holdemTables: "/holdem/tables",
+  holdemRealtimeObservations: "/holdem/realtime-observations",
   blackjack: "/blackjack",
   blackjackStart: "/blackjack/start",
   draw: "/draw",
@@ -169,12 +194,52 @@ export const LOCAL_API_BASE_URLS: Record<SupportedUserPlatform, string> = {
 };
 
 const fallbackError: ApiError = { message: "Request failed." };
+const networkFailureCode = "NETWORK_REQUEST_FAILED";
+const genericNetworkFailureMessage =
+  "Network request failed. Check that the API server is reachable and try again.";
+
+const normalizeRequestFailure = (error: unknown): ApiError => {
+  if (error instanceof Error) {
+    const message = error.message.trim();
+    if (!message) {
+      return {
+        message: genericNetworkFailureMessage,
+        code: networkFailureCode,
+      };
+    }
+
+    if (message.toLowerCase() === "network request failed") {
+      return {
+        message: genericNetworkFailureMessage,
+        code: networkFailureCode,
+      };
+    }
+
+    return {
+      message: `Request failed: ${message}`,
+      code: networkFailureCode,
+    };
+  }
+
+  return {
+    message: genericNetworkFailureMessage,
+    code: networkFailureCode,
+  };
+};
+
+const toRequestFailureResult = <T>(error: unknown): ApiResult<T> => ({
+  ok: false,
+  error: normalizeRequestFailure(error),
+  status: 0,
+});
 
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
 const resolveRealtimeProtocol = (protocol: string) =>
-  protocol === 'https:' ? 'wss:' : 'ws:';
+  protocol === "https:" ? "wss:" : "ws:";
 
-const toSearch = (params: Record<string, string | number | undefined>) => {
+const toSearch = (
+  params: Record<string, string | number | boolean | undefined>,
+) => {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined || value === null || value === "") continue;
@@ -192,15 +257,18 @@ export const resolveUserRealtimeUrl = (payload: {
   authToken?: string | null;
   query?: Record<string, string | number | boolean | undefined>;
 }) => {
-  const url = new URL(USER_REALTIME_ROUTE, `${trimTrailingSlash(payload.baseUrl)}/`);
+  const url = new URL(
+    USER_REALTIME_ROUTE,
+    `${trimTrailingSlash(payload.baseUrl)}/`,
+  );
   url.protocol = resolveRealtimeProtocol(url.protocol);
 
   if (payload.authToken) {
-    url.searchParams.set('token', payload.authToken);
+    url.searchParams.set("token", payload.authToken);
   }
 
   for (const [key, value] of Object.entries(payload.query ?? {})) {
-    if (value === undefined || value === null || value === '') {
+    if (value === undefined || value === null || value === "") {
       continue;
     }
 
@@ -259,12 +327,16 @@ export async function requestUserApi<T>({
     headers.set("Authorization", `Bearer ${authToken}`);
   }
 
-  const response = await fetchImpl(`${trimTrailingSlash(baseUrl)}${path}`, {
-    ...init,
-    headers,
-  });
+  try {
+    const response = await fetchImpl(`${trimTrailingSlash(baseUrl)}${path}`, {
+      ...init,
+      headers,
+    });
 
-  return parseApiResponse<T>(response);
+    return parseApiResponse<T>(response);
+  } catch (error) {
+    return toRequestFailureResult<T>(error);
+  }
 }
 
 type AsyncValue<T> = T | Promise<T>;
@@ -274,6 +346,7 @@ export type UserApiRuntime = {
   fetchImpl?: typeof fetch;
   getLocale?: () => AsyncValue<string | null | undefined>;
   getAuthToken?: () => AsyncValue<string | null | undefined>;
+  getExtraHeaders?: () => AsyncValue<Record<string, string> | undefined>;
 };
 
 export type UserApiOverrides = {
@@ -347,15 +420,34 @@ export function createUserApiClient(runtime: UserApiRuntime) {
     path: string,
     init: RequestInit = {},
     overrides: UserApiOverrides = {},
-  ) =>
-    requestUserApi<T>({
-      path,
-      init,
-      baseUrl: overrides.baseUrl ?? runtime.baseUrl,
-      locale: await resolveLocale(overrides),
-      authToken: await resolveAuthToken(overrides),
-      fetchImpl: overrides.fetchImpl ?? runtime.fetchImpl,
-    });
+  ) => {
+    try {
+      const extraHeaders = runtime.getExtraHeaders
+        ? await runtime.getExtraHeaders()
+        : undefined;
+      const headers = new Headers(init.headers ?? {});
+
+      for (const [key, value] of Object.entries(extraHeaders ?? {})) {
+        if (value.trim() !== "") {
+          headers.set(key, value);
+        }
+      }
+
+      return requestUserApi<T>({
+        path,
+        init: {
+          ...init,
+          headers,
+        },
+        baseUrl: overrides.baseUrl ?? runtime.baseUrl,
+        locale: await resolveLocale(overrides),
+        authToken: await resolveAuthToken(overrides),
+        fetchImpl: overrides.fetchImpl ?? runtime.fetchImpl,
+      });
+    } catch (error) {
+      return toRequestFailureResult<T>(error);
+    }
+  };
 
   return {
     request,
@@ -675,6 +767,104 @@ export function createUserApiClient(runtime: UserApiRuntime) {
         overrides,
       );
     },
+    listNotifications(
+      params: {
+        limit?: number;
+        unreadOnly?: boolean;
+      } = {},
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<NotificationListResponse>(
+        `${USER_API_ROUTES.notifications}${toSearch({
+          limit: params.limit,
+          unreadOnly: params.unreadOnly,
+        })}`,
+        { cache: "no-store" },
+        overrides,
+      );
+    },
+    getNotificationSummary(overrides: UserApiOverrides = {}) {
+      return request<NotificationSummary>(
+        USER_API_ROUTES.notificationSummary,
+        { cache: "no-store" },
+        overrides,
+      );
+    },
+    markNotificationRead(
+      notificationId: number,
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<NotificationRecord>(
+        `${USER_API_ROUTES.notifications}/${notificationId}/read`,
+        {
+          method: "POST",
+          cache: "no-store",
+        },
+        overrides,
+      );
+    },
+    markAllNotificationsRead(overrides: UserApiOverrides = {}) {
+      return request<{ updatedCount: number }>(
+        `${USER_API_ROUTES.notifications}/read-all`,
+        {
+          method: "POST",
+          cache: "no-store",
+        },
+        overrides,
+      );
+    },
+    listNotificationPreferences(overrides: UserApiOverrides = {}) {
+      return request<NotificationPreferencesResponse>(
+        USER_API_ROUTES.notificationPreferences,
+        { cache: "no-store" },
+        overrides,
+      );
+    },
+    updateNotificationPreferences(
+      payload: NotificationPreferencesUpdateRequest,
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<NotificationPreferencesResponse>(
+        USER_API_ROUTES.notificationPreferences,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          cache: "no-store",
+        },
+        overrides,
+      );
+    },
+    registerNotificationPushDevice(
+      payload: NotificationPushDeviceRegisterRequest,
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<NotificationPushDeviceRecord>(
+        USER_API_ROUTES.notificationPushDevices,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          cache: "no-store",
+        },
+        overrides,
+      );
+    },
+    unregisterNotificationPushDevice(
+      payload: NotificationPushDeviceDeleteRequest,
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<NotificationPushDeviceRecord>(
+        USER_API_ROUTES.notificationPushDevices,
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          cache: "no-store",
+        },
+        overrides,
+      );
+    },
     getKycProfile(overrides: UserApiOverrides = {}) {
       return request<KycUserProfile>(
         USER_API_ROUTES.kycProfile,
@@ -719,10 +909,7 @@ export function createUserApiClient(runtime: UserApiRuntime) {
         overrides,
       );
     },
-    setDefaultBankCard(
-      bankCardId: number,
-      overrides: UserApiOverrides = {},
-    ) {
+    setDefaultBankCard(bankCardId: number, overrides: UserApiOverrides = {}) {
       return request<BankCardRecord>(
         `${USER_API_ROUTES.bankCards}/${bankCardId}/default`,
         {
@@ -796,10 +983,7 @@ export function createUserApiClient(runtime: UserApiRuntime) {
         overrides,
       );
     },
-    createTopUp(
-      payload: TopUpCreateRequest,
-      overrides: UserApiOverrides = {},
-    ) {
+    createTopUp(payload: TopUpCreateRequest, overrides: UserApiOverrides = {}) {
       return request<DepositRecord>(
         USER_API_ROUTES.topUps,
         {
@@ -869,13 +1053,26 @@ export function createUserApiClient(runtime: UserApiRuntime) {
         overrides,
       );
     },
-    getHoldemTableMessages(
-      tableId: number,
-      overrides: UserApiOverrides = {},
-    ) {
+    getHoldemTableMessages(tableId: number, overrides: UserApiOverrides = {}) {
       return request<HoldemTableMessagesResponse>(
         `${USER_API_ROUTES.holdemTables}/${tableId}/messages`,
         { cache: "no-store" },
+        overrides,
+      );
+    },
+    reportHoldemRealtimeObservations(
+      payload: HoldemRealtimeObservationsRequest,
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<HoldemRealtimeObservationsResponse>(
+        USER_API_ROUTES.holdemRealtimeObservations,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          cache: "no-store",
+          keepalive: true,
+        },
         overrides,
       );
     },
@@ -1046,6 +1243,13 @@ export function createUserApiClient(runtime: UserApiRuntime) {
         overrides,
       );
     },
+    getExperimentVariant(expKey: string, overrides: UserApiOverrides = {}) {
+      return request<ExperimentVariantResponse>(
+        `${USER_API_ROUTES.experiments}/${encodeURIComponent(expKey)}/variant`,
+        { cache: "no-store" },
+        overrides,
+      );
+    },
     getFairnessCommit(overrides: UserApiOverrides = {}) {
       return request<FairnessCommit>(
         USER_API_ROUTES.fairnessCommit,
@@ -1064,6 +1268,29 @@ export function createUserApiClient(runtime: UserApiRuntime) {
           ...overrides,
           auth: false,
         },
+      );
+    },
+    getPlayMode(gameKey: PlayModeGameKey, overrides: UserApiOverrides = {}) {
+      return request<PlayModeStateResponse>(
+        `${USER_API_ROUTES.playModes}/${gameKey}`,
+        { cache: "no-store" },
+        overrides,
+      );
+    },
+    setPlayMode(
+      gameKey: PlayModeGameKey,
+      payload: PlayModeRequest,
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<PlayModeStateResponse>(
+        `${USER_API_ROUTES.playModes}/${gameKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          cache: "no-store",
+        },
+        overrides,
       );
     },
     claimRewardMission(
@@ -1116,10 +1343,7 @@ export function createUserApiClient(runtime: UserApiRuntime) {
         overrides,
       );
     },
-    getPredictionMarket(
-      marketId: number,
-      overrides: UserApiOverrides = {},
-    ) {
+    getPredictionMarket(marketId: number, overrides: UserApiOverrides = {}) {
       return request<PredictionMarketDetail>(
         `${USER_API_ROUTES.markets}/${marketId}`,
         { cache: "no-store" },
@@ -1137,6 +1361,20 @@ export function createUserApiClient(runtime: UserApiRuntime) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
+          cache: "no-store",
+        },
+        overrides,
+      );
+    },
+    sellPredictionPosition(
+      marketId: number,
+      positionId: number,
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<PredictionMarketPositionMutationResponse>(
+        `${USER_API_ROUTES.markets}/${marketId}/positions/${positionId}/sell`,
+        {
+          method: "POST",
           cache: "no-store",
         },
         overrides,

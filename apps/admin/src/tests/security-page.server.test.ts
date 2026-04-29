@@ -50,6 +50,10 @@ describe('security admin page server', () => {
           limit: 10,
           hasNext: true,
         },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: [],
       });
 
     const result = await load({
@@ -72,6 +76,12 @@ describe('security admin page server', () => {
       expect.any(Function),
       {},
       '/admin/freeze-records?limit=10&page=2'
+    );
+    expect(apiRequest).toHaveBeenNthCalledWith(
+      3,
+      expect.any(Function),
+      {},
+      '/admin/jurisdiction-rules'
     );
     expect(result).toMatchObject({
       error: null,

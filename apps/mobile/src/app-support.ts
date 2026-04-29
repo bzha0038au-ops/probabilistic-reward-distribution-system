@@ -37,7 +37,9 @@ export type AppStackParamList = {
   account: undefined;
   wallet: undefined;
   rewards: undefined;
+  community: undefined;
   security: undefined;
+  notifications: undefined;
   gacha: undefined;
   quickEight: undefined;
   predictionMarket: undefined;
@@ -51,6 +53,7 @@ export type WebRoute =
   | "/login"
   | "/register"
   | "/app"
+  | "/app/community"
   | "/app/verification"
   | "/app/slot"
   | "/app/gacha"
@@ -103,7 +106,7 @@ const defaultWebBaseUrl =
 
 export const seededEmail =
   process.env.EXPO_PUBLIC_WEBVIEW_SEED_EMAIL?.trim() ||
-  "alice.manual@example.com";
+  "mobile.e2e.alice@example.com";
 
 export const seededPassword =
   process.env.EXPO_PUBLIC_WEBVIEW_SEED_PASSWORD?.trim() || "User123!";

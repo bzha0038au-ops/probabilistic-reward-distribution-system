@@ -3,7 +3,8 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { API_ERROR_CODES } from '@reward/shared-types/api';
 
 import { db } from '../db';
-import { sendError } from '../http/respond';
+import { sendError, sendErrorForException } from '../http/respond';
+import { assertCurrentLegalAcceptanceForUser } from '../modules/legal/service';
 import { isUserFrozen } from '../modules/risk/service';
 import { getSystemFlags } from '../modules/system/service';
 import { bindActorObservability } from '../shared/telemetry';
@@ -64,6 +65,16 @@ export const requireRealtimeUserGuard = async (
       'Account locked.',
       undefined,
       API_ERROR_CODES.ACCOUNT_LOCKED
+    );
+  }
+
+  try {
+    await assertCurrentLegalAcceptanceForUser(user.userId);
+  } catch (error) {
+    return sendErrorForException(
+      reply,
+      error,
+      'Accept the current legal documents to continue.'
     );
   }
 

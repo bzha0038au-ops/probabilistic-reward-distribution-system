@@ -755,6 +755,7 @@ export async function createCryptoWithdrawal(payload: {
     ip?: string | null;
     userAgent?: string | null;
     sessionId?: string | null;
+    deviceFingerprint?: string | null;
   };
 }) {
   return createWithdrawal({

@@ -178,7 +178,7 @@ jobs:
     if: ${{ needs.backup.outputs.run_restore_drill == 'true' }}
     needs: backup
     runs-on: ubuntu-latest
-    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }}
+    environment: ${{ github.event_name == 'schedule' && github.event.schedule == '45 16 1 * *' && 'staging' || github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }}
     permissions:
       contents: write
       pull-requests: write
@@ -252,9 +252,14 @@ jobs:
           bundle_path="$(find ops-backup-artifacts -maxdepth 1 -type f -name '*.enc' | head -n 1)"
           test -n "$bundle_path"
           drill_approver="${RESTORE_APPROVER:-production-environment-reviewer}"
+          drill_environment="${{ github.event_name == 'schedule' && github.event.schedule == '45 16 1 * *' && 'staging' || github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }}"
+          drill_restore_target="github-actions-postgres-${drill_environment}"
 
           DRILL_ID="gha-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
           DRILL_OUTPUT_DIR="${GITHUB_WORKSPACE}/ops-restore-drills" \
+          DRILL_ENVIRONMENT="${drill_environment}" \
+          DRILL_RESTORE_SCOPE="full-database" \
+          DRILL_RESTORE_TARGET="${drill_restore_target}" \
           DRILL_OPERATOR="github-actions" \
           DRILL_APPROVER="${drill_approver}" \
           DRILL_TICKET="gha-run-${GITHUB_RUN_ID}" \
@@ -281,9 +286,11 @@ jobs:
 
           cp "$report_path" "$report_target"
           cp "$summary_path" "$summary_target"
+          node scripts/ops/build-restore-drill-ledger.mjs
 
           echo "report_path=${report_target}" >> "$GITHUB_OUTPUT"
           echo "summary_path=${summary_target}" >> "$GITHUB_OUTPUT"
+          echo "ledger_path=docs/operations/dr-drills.md" >> "$GITHUB_OUTPUT"
           echo "evidence_month=${evidence_month}" >> "$GITHUB_OUTPUT"
 
       - name: Upload Restore Drill Evidence
@@ -300,6 +307,7 @@ jobs:
           add-paths: |
             ${{ steps.evidence.outputs.report_path }}
             ${{ steps.evidence.outputs.summary_path }}
+            ${{ steps.evidence.outputs.ledger_path }}
           base: ${{ github.event.repository.default_branch }}
           branch: codex/ops-restore-drill-${{ steps.evidence.outputs.evidence_month }}
           commit-message: 'docs: add restore drill evidence for ${{ steps.evidence.outputs.evidence_month }}'
@@ -310,7 +318,8 @@ jobs:
 
             - Run: `${{ github.run_id }}`
             - Attempt: `${{ github.run_attempt }}`
-            - Environment: `${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }}`
+            - Backup source environment: `${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }}`
+            - Drill environment: `${{ github.event_name == 'schedule' && github.event.schedule == '45 16 1 * *' && 'staging' || github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }}`
             - Evidence month: `${{ steps.evidence.outputs.evidence_month }}`
 
       - name: Page Restore Drill Failure
@@ -319,7 +328,7 @@ jobs:
           if [ -n "${DEPLOY_TG_BOT_TOKEN:-}" ] && [ -n "${DEPLOY_TG_PAGE_CHAT_ID:-}" ]; then
             ./deploy/scripts/telegram-notify.sh \
               "${DEPLOY_TG_PAGE_CHAT_ID}" \
-              "restore-drill=failed run=${GITHUB_RUN_ID} workflow=${GITHUB_WORKFLOW} env=${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }} approver=${RESTORE_APPROVER:-unassigned}"
+              "restore-drill=failed run=${GITHUB_RUN_ID} workflow=${GITHUB_WORKFLOW} env=${{ github.event_name == 'schedule' && github.event.schedule == '45 16 1 * *' && 'staging' || github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }} approver=${RESTORE_APPROVER:-unassigned}"
           fi
 
       - name: Notify Restore Drill Failure
@@ -351,7 +360,7 @@ jobs:
       - name: Check Restore Drill Freshness
         id: freshness
         continue-on-error: true
-        run: ./deploy/scripts/check-restore-drill-freshness.sh docs/operations/evidence 90
+        run: ./deploy/scripts/check-restore-drill-freshness.sh docs/operations/evidence 45
 
       - name: Page Stale Restore Drill Evidence
         if: ${{ steps.freshness.outcome == 'failure' }}
@@ -362,7 +371,7 @@ jobs:
           if [ -n "${DEPLOY_TG_BOT_TOKEN:-}" ] && [ -n "${DEPLOY_TG_PAGE_CHAT_ID:-}" ]; then
             ./deploy/scripts/telegram-notify.sh \
               "${DEPLOY_TG_PAGE_CHAT_ID}" \
-              "restore-drill=stale latest=${LATEST_FILE} age_days=${LATEST_AGE_DAYS} max_days=90 primary=${PRIMARY_ONCALL} secondary=${SECONDARY_ONCALL}"
+              "restore-drill=stale latest=${LATEST_FILE} age_days=${LATEST_AGE_DAYS} max_days=45 primary=${PRIMARY_ONCALL} secondary=${SECONDARY_ONCALL}"
           fi
 
       - name: Fail On Stale Restore Drill Evidence

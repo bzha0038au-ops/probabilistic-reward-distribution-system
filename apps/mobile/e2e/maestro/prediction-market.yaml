@@ -1,0 +1,75 @@
+appId: ${REWARD_MOBILE_APP_ID}
+env:
+  REWARD_E2E_EMAIL: mobile.e2e.alice@example.com
+  REWARD_E2E_PASSWORD: User123!
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: auth-show-login-button
+    waitUntilVisible: true
+- tapOn:
+    id: auth-login-email-input
+    waitUntilVisible: true
+- eraseText
+- inputText: ${REWARD_E2E_EMAIL}
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: auth-login-password-input
+    direction: DOWN
+- tapOn:
+    id: auth-login-password-input
+    waitUntilVisible: true
+- eraseText
+- inputText: ${REWARD_E2E_PASSWORD}
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: auth-login-submit-button
+    direction: DOWN
+- tapOn:
+    id: auth-login-submit-button
+    waitUntilVisible: true
+- tapOn:
+    text: "Allow"
+    optional: true
+- scrollUntilVisible:
+    element:
+      text: "Open markets"
+    direction: DOWN
+- tapOn: "Open markets"
+- scrollUntilVisible:
+    element:
+      id: prediction-market-card-mobile-maestro-e2e-market
+    direction: DOWN
+- tapOn:
+    id: prediction-market-card-mobile-maestro-e2e-market
+- scrollUntilVisible:
+    element:
+      id: prediction-market-outcome-card-up
+    direction: DOWN
+- tapOn:
+    id: prediction-market-outcome-card-up
+- scrollUntilVisible:
+    element:
+      id: prediction-market-place-position-button
+    direction: DOWN
+- tapOn:
+    id: prediction-market-place-position-button
+- scrollUntilVisible:
+    element:
+      id: prediction-market-position-card-up
+    direction: DOWN
+- assertVisible:
+    id: prediction-market-position-card-up
+- scrollUntilVisible:
+    element:
+      id: route-switcher-button-home
+    direction: UP
+- tapOn:
+    id: route-switcher-button-home
+- scrollUntilVisible:
+    element:
+      text: "Open markets"
+    direction: DOWN

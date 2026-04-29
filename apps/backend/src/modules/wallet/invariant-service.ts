@@ -1,21 +1,21 @@
-import { ledgerEntries, userWallets } from '@reward/database';
-import { sql } from '@reward/database/orm';
+import { ledgerEntries, userWallets } from "@reward/database";
+import { sql } from "@reward/database/orm";
 
-import type { DbClient, DbTransaction } from '../../db';
-import { getConfig } from '../../shared/config';
-import { internalInvariantError } from '../../shared/errors';
-import { logger } from '../../shared/logger';
-import { toDecimal, toMoneyString } from '../../shared/money';
-import { readSqlRows } from '../../shared/sql-result';
+import type { DbClient, DbTransaction } from "../../db";
+import { getConfig } from "../../shared/config";
+import { internalInvariantError } from "../../shared/errors";
+import { logger } from "../../shared/logger";
+import { toDecimal, toMoneyString } from "../../shared/money";
+import { readSqlRows } from "../../shared/sql-result";
 
 type DbExecutor = DbClient | DbTransaction;
 
 type WalletLedgerBalanceKind =
-  | 'withdrawable'
-  | 'bonus'
-  | 'locked'
-  | 'wagered'
-  | 'total';
+  | "withdrawable"
+  | "bonus"
+  | "locked"
+  | "wagered"
+  | "total";
 
 type WalletLedgerEntrySnapshot = {
   entryType: string;
@@ -54,80 +54,117 @@ export type WalletInvariantMismatch = {
 };
 
 const readDecimalLike = (value: unknown) =>
-  typeof value === 'string' || typeof value === 'number' ? value : 0;
+  typeof value === "string" || typeof value === "number" ? value : 0;
 
 export const KNOWN_USER_LEDGER_ENTRY_TYPES = [
-  'deposit_credit',
-  'deposit_reversed',
-  'draw_cost',
-  'draw_reward',
-  'bonus_release_auto',
-  'bonus_release_manual',
-  'gamification_reward',
-  'withdraw_request',
-  'withdraw_rejected_refund',
-  'withdraw_reversed_refund',
-  'withdraw_paid',
-  'quick_eight_stake',
-  'quick_eight_payout',
-  'blackjack_stake',
-  'blackjack_double_down',
-  'blackjack_split',
-  'blackjack_payout',
-  'holdem_buy_in',
-  'holdem_cash_out',
-  'holdem_hand_result',
-  'holdem_rake',
+  "deposit_credit",
+  "deposit_reversed",
+  "draw_cost",
+  "draw_reward",
+  "bonus_release_auto",
+  "bonus_release_manual",
+  "gamification_reward",
+  "withdraw_request",
+  "withdraw_rejected_refund",
+  "withdraw_reversed_refund",
+  "withdraw_paid",
+  "quick_eight_stake",
+  "quick_eight_payout",
+  "blackjack_stake",
+  "blackjack_double_down",
+  "blackjack_split",
+  "blackjack_payout",
+  "holdem_buy_in",
+  "holdem_cash_out",
+  "holdem_hand_result",
+  "holdem_rake",
+  "holdem_tournament_buy_in",
+  "holdem_tournament_refund",
+  "holdem_tournament_payout",
+  "prediction_market_stake",
+  "prediction_market_sell",
+  "prediction_market_payout",
+  "prediction_market_refund",
 ] as const;
 
 const KNOWN_USER_LEDGER_ENTRY_TYPE_SET = new Set<string>(
-  KNOWN_USER_LEDGER_ENTRY_TYPES
+  KNOWN_USER_LEDGER_ENTRY_TYPES,
 );
 
 const WITHDRAWABLE_DIRECT_ENTRY_TYPES = [
-  'deposit_credit',
-  'deposit_reversed',
-  'draw_cost',
-  'withdraw_request',
-  'withdraw_rejected_refund',
-  'withdraw_reversed_refund',
-  'quick_eight_stake',
-  'quick_eight_payout',
-  'blackjack_stake',
-  'blackjack_double_down',
-  'blackjack_split',
-  'blackjack_payout',
-  'holdem_buy_in',
-  'holdem_cash_out',
+  "deposit_credit",
+  "deposit_reversed",
+  "draw_cost",
+  "withdraw_request",
+  "withdraw_rejected_refund",
+  "withdraw_reversed_refund",
+  "quick_eight_stake",
+  "quick_eight_payout",
+  "blackjack_stake",
+  "blackjack_double_down",
+  "blackjack_split",
+  "blackjack_payout",
+  "holdem_buy_in",
+  "holdem_cash_out",
+  "holdem_tournament_buy_in",
+  "holdem_tournament_refund",
+  "holdem_tournament_payout",
+  "prediction_market_stake",
+  "prediction_market_sell",
+  "prediction_market_payout",
+  "prediction_market_refund",
 ] as const;
 
-const BONUS_CREDIT_ENTRY_TYPES = ['draw_reward', 'gamification_reward'] as const;
+const BONUS_CREDIT_ENTRY_TYPES = [
+  "draw_reward",
+  "gamification_reward",
+] as const;
 
 const STAKE_ENTRY_TYPES = [
-  'draw_cost',
-  'quick_eight_stake',
-  'blackjack_stake',
-  'blackjack_double_down',
-  'blackjack_split',
+  "draw_cost",
+  "quick_eight_stake",
+  "blackjack_stake",
+  "blackjack_double_down",
+  "blackjack_split",
+  "prediction_market_stake",
 ] as const;
 
-const RELEASE_ENTRY_TYPES = ['bonus_release_auto', 'bonus_release_manual'] as const;
+const RELEASE_ENTRY_TYPES = [
+  "bonus_release_auto",
+  "bonus_release_manual",
+] as const;
 
 const REFUND_ENTRY_TYPES = [
-  'withdraw_rejected_refund',
-  'withdraw_reversed_refund',
+  "withdraw_rejected_refund",
+  "withdraw_reversed_refund",
 ] as const;
 
 const toNumericLiteral = (entryTypes: readonly string[]) =>
   entryTypes.map((entryType) => sql`${entryType}`);
 
 const normalizeUnknownEntryTypes = (value: string[] | null | undefined) =>
-  (value ?? []).filter((entryType) => !KNOWN_USER_LEDGER_ENTRY_TYPE_SET.has(entryType));
+  (value ?? []).filter(
+    (entryType) => !KNOWN_USER_LEDGER_ENTRY_TYPE_SET.has(entryType),
+  );
 
-const normalizeInvariantRow = (row: WalletInvariantRow): WalletInvariantMismatch => ({
+const readPredictionMarketLockedDeltaSql = sql`
+  ROUND(
+    COALESCE(NULLIF(le.metadata->>'lockedBalanceAfter', '')::numeric, 0)
+    - COALESCE(NULLIF(le.metadata->>'lockedBalanceBefore', '')::numeric, 0),
+    2
+  )
+`;
+
+const normalizeInvariantRow = (
+  row: WalletInvariantRow,
+): WalletInvariantMismatch => ({
   userId: row.user_id,
-  actualWithdrawableBalance: toMoneyString(row.actual_withdrawable_balance ?? 0),
-  expectedWithdrawableBalance: toMoneyString(row.expected_withdrawable_balance ?? 0),
+  actualWithdrawableBalance: toMoneyString(
+    row.actual_withdrawable_balance ?? 0,
+  ),
+  expectedWithdrawableBalance: toMoneyString(
+    row.expected_withdrawable_balance ?? 0,
+  ),
   actualBonusBalance: toMoneyString(row.actual_bonus_balance ?? 0),
   expectedBonusBalance: toMoneyString(row.expected_bonus_balance ?? 0),
   actualLockedBalance: toMoneyString(row.actual_locked_balance ?? 0),
@@ -142,21 +179,30 @@ const normalizeInvariantRow = (row: WalletInvariantRow): WalletInvariantMismatch
 const buildWalletInvariantMismatchDetail = (
   label: WalletLedgerBalanceKind,
   actual: string,
-  expected: string
+  expected: string,
 ) => `${label}:${actual}->${expected}`;
+
+const readBalanceDeltaFromMetadata = (
+  metadata: Record<string, unknown>,
+  beforeKey: string,
+  afterKey: string,
+) =>
+  toDecimal(readDecimalLike(Reflect.get(metadata, afterKey))).minus(
+    toDecimal(readDecimalLike(Reflect.get(metadata, beforeKey))),
+  );
 
 const isStrictWalletInvariantMode = () => {
   const config = getConfig();
-  if (config.nodeEnv !== 'production') {
+  if (config.nodeEnv !== "production") {
     return true;
   }
 
-  return config.observabilityEnvironment.toLowerCase().includes('staging');
+  return config.observabilityEnvironment.toLowerCase().includes("staging");
 };
 
 const loadWalletInvariantRows = async (
   executor: DbExecutor,
-  params: { userId?: number } = {}
+  params: { userId?: number } = {},
 ) => {
   const { userId } = params;
   const candidateUsersCte =
@@ -215,6 +261,13 @@ const loadWalletInvariantRows = async (
                 THEN -le.amount
               WHEN le.type IN ('holdem_cash_out', 'holdem_hand_result', 'holdem_rake')
                 THEN le.amount
+              WHEN le.type IN (
+                'prediction_market_stake',
+                'prediction_market_sell',
+                'prediction_market_payout',
+                'prediction_market_refund'
+              )
+                THEN ${readPredictionMarketLockedDeltaSql}
               ELSE 0
             END
           ),
@@ -312,71 +365,90 @@ export const countWalletInvariantSubjects = async (executor: DbExecutor) => {
 export const deriveWalletLedgerEffects = (entry: WalletLedgerEntrySnapshot) => {
   const amount = toDecimal(entry.amount ?? 0);
   const metadata =
-    typeof entry.metadata === 'object' && entry.metadata !== null
+    typeof entry.metadata === "object" && entry.metadata !== null
       ? (entry.metadata as Record<string, unknown>)
       : {};
-  const unlockRatio = toDecimal(readDecimalLike(Reflect.get(metadata, 'unlockRatio')));
+  const unlockRatio = toDecimal(
+    readDecimalLike(Reflect.get(metadata, "unlockRatio")),
+  );
 
   switch (entry.entryType) {
-    case 'deposit_credit':
-    case 'deposit_reversed':
-    case 'quick_eight_payout':
-    case 'blackjack_payout':
+    case "deposit_credit":
+    case "deposit_reversed":
+    case "quick_eight_payout":
+    case "blackjack_payout":
+    case "prediction_market_sell":
+    case "prediction_market_payout":
+    case "prediction_market_refund":
       return {
         withdrawable: amount,
         bonus: toDecimal(0),
-        locked: toDecimal(0),
+        locked: entry.entryType.startsWith("prediction_market_")
+          ? readBalanceDeltaFromMetadata(
+              metadata,
+              "lockedBalanceBefore",
+              "lockedBalanceAfter",
+            )
+          : toDecimal(0),
         wagered: toDecimal(0),
       };
-    case 'draw_cost':
-    case 'quick_eight_stake':
-    case 'blackjack_stake':
-    case 'blackjack_double_down':
-    case 'blackjack_split':
+    case "draw_cost":
+    case "quick_eight_stake":
+    case "blackjack_stake":
+    case "blackjack_double_down":
+    case "blackjack_split":
+    case "prediction_market_stake":
       return {
         withdrawable: amount,
         bonus: toDecimal(0),
-        locked: toDecimal(0),
+        locked:
+          entry.entryType === "prediction_market_stake"
+            ? readBalanceDeltaFromMetadata(
+                metadata,
+                "lockedBalanceBefore",
+                "lockedBalanceAfter",
+              )
+            : toDecimal(0),
         wagered: amount.negated(),
       };
-    case 'draw_reward':
-    case 'gamification_reward':
+    case "draw_reward":
+    case "gamification_reward":
       return {
         withdrawable: toDecimal(0),
         bonus: amount,
         locked: toDecimal(0),
         wagered: toDecimal(0),
       };
-    case 'bonus_release_manual':
+    case "bonus_release_manual":
       return {
         withdrawable: amount,
         bonus: amount.negated(),
         locked: toDecimal(0),
         wagered: toDecimal(0),
       };
-    case 'bonus_release_auto':
+    case "bonus_release_auto":
       return {
         withdrawable: amount,
         bonus: amount.negated(),
         locked: toDecimal(0),
         wagered: amount.mul(unlockRatio).negated().toDecimalPlaces(2),
       };
-    case 'withdraw_request':
+    case "withdraw_request":
       return {
         withdrawable: amount,
         bonus: toDecimal(0),
         locked: amount.negated(),
         wagered: toDecimal(0),
       };
-    case 'withdraw_rejected_refund':
-    case 'withdraw_reversed_refund':
+    case "withdraw_rejected_refund":
+    case "withdraw_reversed_refund":
       return {
         withdrawable: amount,
         bonus: toDecimal(0),
         locked: amount.negated(),
         wagered: toDecimal(0),
       };
-    case 'withdraw_paid':
+    case "withdraw_paid":
       return {
         withdrawable: toDecimal(0),
         bonus: toDecimal(0),
@@ -402,7 +474,7 @@ export async function assertWalletLedgerInvariant(
   context: {
     service: string;
     operation: string;
-  }
+  },
 ) {
   const [mismatch] = await loadWalletInvariantRows(executor, { userId });
   if (!mismatch) {
@@ -411,37 +483,37 @@ export async function assertWalletLedgerInvariant(
 
   const detailParts = [
     buildWalletInvariantMismatchDetail(
-      'withdrawable',
+      "withdrawable",
       mismatch.actualWithdrawableBalance,
-      mismatch.expectedWithdrawableBalance
+      mismatch.expectedWithdrawableBalance,
     ),
     buildWalletInvariantMismatchDetail(
-      'bonus',
+      "bonus",
       mismatch.actualBonusBalance,
-      mismatch.expectedBonusBalance
+      mismatch.expectedBonusBalance,
     ),
     buildWalletInvariantMismatchDetail(
-      'locked',
+      "locked",
       mismatch.actualLockedBalance,
-      mismatch.expectedLockedBalance
+      mismatch.expectedLockedBalance,
     ),
     buildWalletInvariantMismatchDetail(
-      'wagered',
+      "wagered",
       mismatch.actualWageredAmount,
-      mismatch.expectedWageredAmount
+      mismatch.expectedWageredAmount,
     ),
     buildWalletInvariantMismatchDetail(
-      'total',
+      "total",
       mismatch.actualTotal,
-      mismatch.expectedTotal
+      mismatch.expectedTotal,
     ),
   ];
 
   if (mismatch.unknownEntryTypes.length > 0) {
-    detailParts.push(`unknown:${mismatch.unknownEntryTypes.join(',')}`);
+    detailParts.push(`unknown:${mismatch.unknownEntryTypes.join(",")}`);
   }
 
-  logger.error('wallet ledger invariant drift detected', {
+  logger.error("wallet ledger invariant drift detected", {
     ...mismatch,
     service: context.service,
     operation: context.operation,
@@ -451,7 +523,7 @@ export async function assertWalletLedgerInvariant(
     return;
   }
 
-  throw internalInvariantError('Wallet ledger invariant failed.', {
+  throw internalInvariantError("Wallet ledger invariant failed.", {
     details: detailParts,
   });
 }

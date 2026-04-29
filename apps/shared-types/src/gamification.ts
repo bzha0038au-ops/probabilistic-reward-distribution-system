@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { MoneyLikeSchema } from './common';
+import { ExperimentBindingSchema } from "./experiments";
 
 export const RewardMissionIdSchema = z.string().trim().min(1).max(128);
 export type RewardMissionId = z.infer<typeof RewardMissionIdSchema>;
@@ -24,9 +25,22 @@ export const rewardMissionMetricValues = [
   'draw_count_all',
   'draw_count_today',
   'deposit_count',
+  'deposit_credited_count',
+  'referral_success_count',
 ] as const;
 export const RewardMissionMetricSchema = z.enum(rewardMissionMetricValues);
 export type RewardMissionMetric = z.infer<typeof RewardMissionMetricSchema>;
+
+export const rewardMissionAwardModeValues = [
+  'manual_claim',
+  'auto_grant',
+] as const;
+export const RewardMissionAwardModeSchema = z.enum(
+  rewardMissionAwardModeValues,
+);
+export type RewardMissionAwardMode = z.infer<
+  typeof RewardMissionAwardModeSchema
+>;
 
 const RewardMissionTitleSchema = z.string().trim().min(1).max(120);
 const RewardMissionDescriptionSchema = z.string().trim().min(1).max(400);
@@ -35,6 +49,7 @@ export const RewardMissionDailyCheckInParamsSchema = z.object({
   title: RewardMissionTitleSchema,
   description: RewardMissionDescriptionSchema,
   sortOrder: z.coerce.number().int().min(0).max(9999).optional(),
+  experiment: ExperimentBindingSchema.optional(),
 });
 export type RewardMissionDailyCheckInParams = z.infer<
   typeof RewardMissionDailyCheckInParamsSchema
@@ -46,7 +61,11 @@ export const RewardMissionMetricThresholdParamsSchema = z.object({
   metric: RewardMissionMetricSchema,
   target: z.coerce.number().int().positive().max(100000),
   cadence: RewardMissionCadenceSchema,
+  rewardId: RewardMissionIdSchema.optional(),
+  awardMode: RewardMissionAwardModeSchema.optional(),
+  bonusUnlockWagerRatio: MoneyLikeSchema.optional(),
   sortOrder: z.coerce.number().int().min(0).max(9999).optional(),
+  experiment: ExperimentBindingSchema.optional(),
 });
 export type RewardMissionMetricThresholdParams = z.infer<
   typeof RewardMissionMetricThresholdParamsSchema
@@ -70,6 +89,7 @@ export const RewardMissionSchema = z.object({
   cadence: RewardMissionCadenceSchema,
   status: RewardMissionStatusSchema,
   rewardAmount: z.string(),
+  bonusUnlockWagerRatio: z.string().nullable().optional(),
   progressCurrent: z.number().int().nonnegative(),
   progressTarget: z.number().int().positive(),
   claimable: z.boolean(),

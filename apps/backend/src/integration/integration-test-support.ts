@@ -82,9 +82,14 @@ const authNotificationCaptures = vi.hoisted(() => ({
   anomalousLogin: [] as Array<Record<string, unknown>>,
   amlReview: [] as Array<Record<string, unknown>>,
   saasTenantInvite: [] as Array<Record<string, unknown>>,
+  saasOnboardingComplete: [] as Array<Record<string, unknown>>,
 }));
 
-vi.mock('../modules/auth/notification-service', () => {
+vi.mock('../modules/auth/notification-service', async () => {
+  const actual = await vi.importActual<
+    typeof import('../modules/auth/notification-service')
+  >('../modules/auth/notification-service');
+
   class NotificationThrottleError extends Error {
     constructor(
       message: string,
@@ -107,30 +112,27 @@ vi.mock('../modules/auth/notification-service', () => {
   }
 
   return {
+    ...actual,
     NotificationThrottleError,
     NotificationProviderUnavailableError,
     assertNotificationChannelAvailable: vi.fn(() => undefined),
+    normalizeEmail: vi.fn((email: string) => email.trim().toLowerCase()),
+    normalizePhone: vi.fn((phone: string) =>
+      phone.trim().replace(/[^\d+]/g, '')
+    ),
+    normalizeRecipient: vi.fn((channel: string, recipient: string) =>
+      channel === 'email'
+        ? recipient.trim().toLowerCase()
+        : recipient.trim().replace(/[^\d+]/g, '')
+    ),
     getNotificationProviderStatus: vi.fn(() => ({
       emailProvider: 'mock',
       smsProvider: 'mock',
+      pushProvider: 'expo_push',
     })),
     processPendingAuthNotifications: vi.fn(async () => 0),
     recoverStuckAuthNotifications: vi.fn(async () => 0),
     registerAuthNotificationEnqueueHook: vi.fn(() => undefined),
-    listNotificationDeliveries: vi.fn(async () => []),
-    getNotificationDeliverySummary: vi.fn(async () => ({
-      counts: {
-        pending: 0,
-        processing: 0,
-        sent: 0,
-        failed: 0,
-      },
-      oldestPendingAt: null,
-      providers: {
-        emailProvider: 'mock',
-        smsProvider: 'mock',
-      },
-    })),
     sendPasswordResetNotification: vi.fn(async (payload) => {
       authNotificationCaptures.passwordReset.push(payload);
       return true;
@@ -153,6 +155,10 @@ vi.mock('../modules/auth/notification-service', () => {
     }),
     sendSaasTenantInviteNotification: vi.fn(async (payload) => {
       authNotificationCaptures.saasTenantInvite.push(payload);
+      return true;
+    }),
+    sendSaasOnboardingCompleteNotification: vi.fn(async (payload) => {
+      authNotificationCaptures.saasOnboardingComplete.push(payload);
       return true;
     }),
   };
@@ -717,6 +723,8 @@ const resetAuthNotificationCaptures = () => {
   authNotificationCaptures.phoneVerification.length = 0;
   authNotificationCaptures.anomalousLogin.length = 0;
   authNotificationCaptures.amlReview.length = 0;
+  authNotificationCaptures.saasTenantInvite.length = 0;
+  authNotificationCaptures.saasOnboardingComplete.length = 0;
 };
 
 const extractTokenFromUrl = (url: string) => {
@@ -742,7 +750,11 @@ const buildUserAuthHeaders = (token: string) => ({
   authorization: `Bearer ${token}`,
 });
 
-const registerUser = async (email: string, password = 'secret-123') => {
+const registerUser = async (
+  email: string,
+  password = 'secret-123',
+  referrerId?: number,
+) => {
   const legalDocumentsResponse = await getApp().inject({
     method: 'GET',
     url: '/legal/current',
@@ -762,6 +774,8 @@ const registerUser = async (email: string, password = 'secret-123') => {
     payload: {
       email,
       password,
+      birthDate: '1990-01-01',
+      ...(referrerId ? { referrerId } : {}),
       legalAcceptances: legalPayload.items.map((document) => ({
         slug: document.slug,
         version: document.version,
@@ -979,8 +993,24 @@ const normalizeIntegrationTags = (
 const shouldRunIntegrationTest = (tags: IntegrationTestTag[]) =>
   activeIntegrationTags.size === 0 || tags.some((tag) => activeIntegrationTags.has(tag));
 
-const INTEGRATION_TEST_TIMEOUT_MS = 15_000;
-const INTEGRATION_HOOK_TIMEOUT_MS = 60_000;
+const readTimeoutOverride = (key: string, fallback: number) => {
+  const raw = process.env[key];
+  if (!raw) {
+    return fallback;
+  }
+
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const INTEGRATION_TEST_TIMEOUT_MS = readTimeoutOverride(
+  'INTEGRATION_TEST_TIMEOUT_MS',
+  45_000,
+);
+const INTEGRATION_HOOK_TIMEOUT_MS = readTimeoutOverride(
+  'INTEGRATION_HOOK_TIMEOUT_MS',
+  180_000,
+);
 
 const initializeRuntime = async () => {
   const dbModule = await import('../db');

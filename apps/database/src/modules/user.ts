@@ -1,5 +1,6 @@
 import {
   boolean,
+  date,
   index,
   integer,
   jsonb,
@@ -11,6 +12,7 @@ import {
   uniqueIndex,
   varchar,
 } from "drizzle-orm/pg-core";
+import { countryTierValues } from "@reward/shared-types/risk";
 
 export const users = pgTable(
   "users",
@@ -20,6 +22,17 @@ export const users = pgTable(
     phone: varchar("phone", { length: 32 }),
     passwordHash: varchar("password_hash", { length: 255 }).notNull(),
     role: varchar("role", { length: 20 }).notNull().default("user"),
+    birthDate: date("birth_date", { mode: "string" }),
+    registrationCountryCode: varchar("registration_country_code", {
+      length: 2,
+    }),
+    countryTier: varchar("country_tier", {
+      length: 16,
+      enum: countryTierValues,
+    })
+      .notNull()
+      .default("unknown"),
+    countryResolvedAt: timestamp("country_resolved_at", { withTimezone: true }),
     emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
     phoneVerifiedAt: timestamp("phone_verified_at", { withTimezone: true }),
     userPoolBalance: numeric("user_pool_balance", { precision: 14, scale: 2 })
@@ -38,6 +51,9 @@ export const users = pgTable(
   (table) => ({
     emailUnique: uniqueIndex("users_email_unique").on(table.email),
     phoneUnique: uniqueIndex("users_phone_unique").on(table.phone),
+    registrationCountryIdx: index("users_registration_country_idx").on(
+      table.registrationCountryCode,
+    ),
     userPoolBalanceIdx: index("users_user_pool_balance_idx").on(
       table.userPoolBalance,
     ),

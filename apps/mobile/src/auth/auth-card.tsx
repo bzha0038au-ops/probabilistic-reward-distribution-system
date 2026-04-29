@@ -32,6 +32,7 @@ type MobileAuthCardProps = {
   selectedLegalDocumentKeys: string[];
   email: string;
   password: string;
+  birthDate: string;
   resetTokenInput: string;
   newPassword: string;
   verificationTokenInput: string;
@@ -42,6 +43,7 @@ type MobileAuthCardProps = {
   showSeededLogin: boolean;
   onChangeEmail: (value: string) => void;
   onChangePassword: (value: string) => void;
+  onChangeBirthDate: (value: string) => void;
   onChangeResetTokenInput: (value: string) => void;
   onChangeNewPassword: (value: string) => void;
   onChangeVerificationTokenInput: (value: string) => void;
@@ -186,11 +188,13 @@ function LoginCard(props: MobileAuthCardProps) {
           label={props.copy.tabs.login}
           onPress={props.onShowLogin}
           variant="primary"
+          testID="auth-show-login-button"
         />
         <ActionButton
           label={props.copy.tabs.register}
           onPress={props.onShowRegister}
           variant="secondary"
+          testID="auth-show-register-button"
         />
       </View>
 
@@ -200,18 +204,23 @@ function LoginCard(props: MobileAuthCardProps) {
         onChangeText={props.onChangeEmail}
         keyboardType="email-address"
         placeholder={props.copy.emailPlaceholder}
+        testID="auth-login-email-input"
       />
       <Field
         label={props.copy.password}
         value={props.password}
         onChangeText={props.onChangePassword}
         secureTextEntry
+        onSubmitEditing={props.onLogin}
+        returnKeyType="go"
+        testID="auth-login-password-input"
       />
 
       <ActionButton
         label={props.submitting ? props.copy.submit.busy : props.copy.submit.login}
         onPress={props.onLogin}
         disabled={props.submitting}
+        testID="auth-login-submit-button"
       />
       {props.showSeededLogin ? (
         <ActionButton
@@ -219,6 +228,7 @@ function LoginCard(props: MobileAuthCardProps) {
           onPress={props.onSeededLogin}
           disabled={props.submitting}
           variant="secondary"
+          testID="auth-login-seeded-button"
         />
       ) : null}
 
@@ -238,11 +248,13 @@ function RegisterCard(props: MobileAuthCardProps) {
           label={props.copy.tabs.login}
           onPress={props.onShowLogin}
           variant="secondary"
+          testID="auth-show-login-button"
         />
         <ActionButton
           label={props.copy.tabs.register}
           onPress={props.onShowRegister}
           variant="primary"
+          testID="auth-show-register-button"
         />
       </View>
 
@@ -258,6 +270,12 @@ function RegisterCard(props: MobileAuthCardProps) {
         value={props.password}
         onChangeText={props.onChangePassword}
         secureTextEntry
+      />
+      <Field
+        label={props.copy.birthDate}
+        value={props.birthDate}
+        onChangeText={props.onChangeBirthDate}
+        placeholder={props.copy.birthDatePlaceholder}
       />
 
       <View style={styles.legalSection}>

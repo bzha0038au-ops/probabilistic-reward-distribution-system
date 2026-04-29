@@ -10,6 +10,8 @@ import {
   waitForNotificationPayload,
 } from '../support/test-harness';
 
+const TEST_BIRTH_DATE = '1990-01-01';
+
 async function main() {
   const connections = Number(process.env.LOAD_CONNECTIONS ?? 20);
   const duration = Number(process.env.LOAD_DURATION ?? 10);
@@ -242,7 +244,11 @@ async function main() {
     const email = `load-${Date.now()}@example.com`;
     const password = 'Password123!';
 
-    await postJson('/auth/register', { email, password });
+    await postJson('/auth/register', {
+      email,
+      password,
+      birthDate: TEST_BIRTH_DATE,
+    });
 
     const notification = await waitForNotificationPayload(database.databaseUrl, {
       kind: 'email_verification',

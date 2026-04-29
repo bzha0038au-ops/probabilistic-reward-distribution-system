@@ -1,0 +1,5 @@
+export const SAAS_STATUS_REQUEST_REFERENCE_TYPE = 'status_api_request';
+export const SAAS_STATUS_REQUEST_TELEMETRY_KIND = 'request_status';
+export const SAAS_STATUS_RECENT_MINUTES = 180;
+export const SAAS_STATUS_CURRENT_WINDOW_MINUTES = 5;
+export const SAAS_STATUS_SUMMARY_WINDOW_MINUTES = 60;

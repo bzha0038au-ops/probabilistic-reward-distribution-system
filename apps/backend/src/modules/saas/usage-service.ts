@@ -16,6 +16,7 @@ import { readSqlRows } from "../../shared/sql-result";
 import { getSaasUsageAlertConfig } from "../system/service";
 import { type SaasAdminActor, assertTenantCapability } from "./access";
 import { toSaasTenant } from "./records";
+import { SAAS_STATUS_REQUEST_REFERENCE_TYPE } from "../saas-status/constants";
 
 const REALTIME_WINDOW_MINUTES = 60;
 const PAYOUT_HISTOGRAM_WINDOW_HOURS = 24;
@@ -121,6 +122,7 @@ export async function getSaasTenantUsageDashboard(
         .where(
           and(
             eq(saasUsageEvents.tenantId, tenant.id),
+            sql`${saasUsageEvents.referenceType} is distinct from ${SAAS_STATUS_REQUEST_REFERENCE_TYPE}`,
             gte(saasUsageEvents.createdAt, realtimeSince),
           ),
         ),
@@ -128,6 +130,7 @@ export async function getSaasTenantUsageDashboard(
         SELECT max(${saasUsageEvents.createdAt}) AS "lastRequestAt"
         FROM ${saasUsageEvents}
         WHERE ${saasUsageEvents.tenantId} = ${tenant.id}
+          AND ${saasUsageEvents.referenceType} IS DISTINCT FROM ${SAAS_STATUS_REQUEST_REFERENCE_TYPE}
       `),
     ]);
 

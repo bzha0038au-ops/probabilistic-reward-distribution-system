@@ -3,6 +3,7 @@ import type { DrawPrizePresentation } from "@reward/shared-types/draw";
 import {
   saasProjectStrategyValues,
   type PrizeEngineApiKeyScope,
+  type SaasBillingBudgetPolicy,
   type SaaSAgentControlMode,
   type SaasBillingDecisionPricing,
   type SaasProjectStrategy,
@@ -59,7 +60,9 @@ export type ProjectApiAuth = {
   apiKeyId: number;
   scopes: PrizeEngineApiKeyScope[];
   drawFee: string;
+  baseMonthlyFee: string;
   decisionPricing: SaasBillingDecisionPricing;
+  billingBudgetPolicy: SaasBillingBudgetPolicy;
   billingCurrency: string;
   apiRateLimitBurst: number;
   apiRateLimitHourly: number;

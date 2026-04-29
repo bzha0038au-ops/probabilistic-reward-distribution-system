@@ -42,6 +42,7 @@ export const kycProfiles = pgTable(
       .notNull()
       .default("not_started"),
     submissionVersion: integer("submission_version").notNull().default(0),
+    activeSubmissionVersion: integer("active_submission_version"),
     legalName: varchar("legal_name", { length: 160 }),
     documentType: varchar("document_type", { length: 32 }),
     documentNumberLast4: varchar("document_number_last4", { length: 8 }),
@@ -102,6 +103,7 @@ export const kycDocuments = pgTable(
     mimeType: varchar("mime_type", { length: 128 }).notNull(),
     sizeBytes: integer("size_bytes"),
     storagePath: text("storage_path").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
     metadata: jsonb("metadata"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -112,6 +114,7 @@ export const kycDocuments = pgTable(
       table.profileId,
       table.submissionVersion,
     ),
+    expiresAtIdx: index("kyc_documents_expires_at_idx").on(table.expiresAt),
     userIdx: index("kyc_documents_user_idx").on(table.userId),
   }),
 );

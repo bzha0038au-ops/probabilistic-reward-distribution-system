@@ -9,6 +9,7 @@ import {
   type BlackjackAction,
   type BlackjackOverviewResponse,
 } from "@reward/shared-types/blackjack";
+import type { PlayModeType } from "@reward/shared-types/play-mode";
 import { createUserApiClient, type UserApiOverrides } from "@reward/user-core";
 
 import { blackjackStatusLabels } from "../app-support";
@@ -17,7 +18,7 @@ type UnauthorizedHandler = (message: string) => Promise<boolean>;
 
 type BlackjackApi = Pick<
   ReturnType<typeof createUserApiClient>,
-  "actOnBlackjack" | "getBlackjackOverview" | "startBlackjack"
+  "actOnBlackjack" | "getBlackjackOverview" | "setPlayMode" | "startBlackjack"
 >;
 
 type UseBlackjackOptions = {
@@ -49,6 +50,8 @@ export function useBlackjack(options: UseBlackjackOptions) {
     BLACKJACK_CONFIG.minStake,
   );
   const [loadingBlackjack, setLoadingBlackjack] = useState(false);
+  const [updatingBlackjackPlayMode, setUpdatingBlackjackPlayMode] =
+    useState(false);
   const [actingBlackjack, setActingBlackjack] = useState<
     BlackjackAction | "start" | null
   >(null);
@@ -217,6 +220,42 @@ export function useBlackjack(options: UseBlackjackOptions) {
     ],
   );
 
+  const setBlackjackPlayMode = useCallback(
+    async (type: PlayModeType) => {
+      setUpdatingBlackjackPlayMode(true);
+      const response = await api.setPlayMode("blackjack", { type });
+      setUpdatingBlackjackPlayMode(false);
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          const onUnauthorized = handleUnauthorizedRef.current;
+          if (onUnauthorized) {
+            await onUnauthorized(
+              "Session expired or was revoked. Sign in again.",
+            );
+          }
+          return false;
+        }
+
+        setError(response.error?.message ?? "Failed to update blackjack play mode.");
+        return false;
+      }
+
+      startTransition(() => {
+        setBlackjackOverview((current) =>
+          current
+            ? {
+                ...current,
+                playMode: response.data.snapshot,
+              }
+            : current,
+        );
+      });
+      return true;
+    },
+    [api, handleUnauthorizedRef, setError],
+  );
+
   return {
     actingBlackjack,
     actOnBlackjack,
@@ -226,6 +265,8 @@ export function useBlackjack(options: UseBlackjackOptions) {
     refreshBlackjackOverview,
     resetBlackjack,
     setBlackjackStakeAmount,
+    setBlackjackPlayMode,
     startBlackjack,
+    updatingBlackjackPlayMode,
   };
 }

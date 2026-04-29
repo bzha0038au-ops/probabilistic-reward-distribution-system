@@ -78,6 +78,13 @@ import {
   SAAS_USAGE_ALERT_MAX_ANTI_EXPLOIT_RATE_PCT_KEY,
   SAAS_USAGE_ALERT_MAX_MINUTE_QPS_KEY,
   SAAS_USAGE_ALERT_MAX_SINGLE_PAYOUT_AMOUNT_KEY,
+  SAAS_STATUS_API_ERROR_RATE_OUTAGE_KEY,
+  SAAS_STATUS_API_ERROR_RATE_WARN_KEY,
+  SAAS_STATUS_API_P95_MS_OUTAGE_KEY,
+  SAAS_STATUS_API_P95_MS_WARN_KEY,
+  SAAS_STATUS_MONTHLY_SLA_TARGET_PCT_KEY,
+  SAAS_STATUS_WORKER_LAG_MS_OUTAGE_KEY,
+  SAAS_STATUS_WORKER_LAG_MS_WARN_KEY,
   SYSTEM_DEFAULT_LANGUAGE_KEY,
   SYSTEM_LOGIN_ENABLED_KEY,
   SYSTEM_MAINTENANCE_MODE_KEY,
@@ -987,5 +994,76 @@ export async function getSaasUsageAlertConfig(db: DbExecutor) {
     maxMinuteQps,
     maxSinglePayoutAmount,
     maxAntiExploitRatePct,
+  };
+}
+
+export async function getSaasStatusConfig(db: DbExecutor) {
+  const rows = await getConfigRowsByKeys(db, [
+    SAAS_STATUS_API_ERROR_RATE_WARN_KEY,
+    SAAS_STATUS_API_ERROR_RATE_OUTAGE_KEY,
+    SAAS_STATUS_API_P95_MS_WARN_KEY,
+    SAAS_STATUS_API_P95_MS_OUTAGE_KEY,
+    SAAS_STATUS_WORKER_LAG_MS_WARN_KEY,
+    SAAS_STATUS_WORKER_LAG_MS_OUTAGE_KEY,
+    SAAS_STATUS_MONTHLY_SLA_TARGET_PCT_KEY,
+  ]);
+
+  const apiErrorRateWarn = await getConfigDecimalFromRows(
+    db,
+    rows,
+    SAAS_STATUS_API_ERROR_RATE_WARN_KEY,
+    2,
+  );
+  const apiErrorRateOutage = await getConfigDecimalFromRows(
+    db,
+    rows,
+    SAAS_STATUS_API_ERROR_RATE_OUTAGE_KEY,
+    10,
+  );
+  const apiP95MsWarn = await getConfigDecimalFromRows(
+    db,
+    rows,
+    SAAS_STATUS_API_P95_MS_WARN_KEY,
+    1000,
+  );
+  const apiP95MsOutage = await getConfigDecimalFromRows(
+    db,
+    rows,
+    SAAS_STATUS_API_P95_MS_OUTAGE_KEY,
+    2500,
+  );
+  const workerLagMsWarn = await getConfigDecimalFromRows(
+    db,
+    rows,
+    SAAS_STATUS_WORKER_LAG_MS_WARN_KEY,
+    60000,
+  );
+  const workerLagMsOutage = await getConfigDecimalFromRows(
+    db,
+    rows,
+    SAAS_STATUS_WORKER_LAG_MS_OUTAGE_KEY,
+    300000,
+  );
+  const monthlySlaTargetPct = await getConfigDecimalFromRows(
+    db,
+    rows,
+    SAAS_STATUS_MONTHLY_SLA_TARGET_PCT_KEY,
+    99.9,
+  );
+
+  return {
+    apiErrorRatePct: {
+      degraded: apiErrorRateWarn,
+      outage: apiErrorRateOutage,
+    },
+    apiP95Ms: {
+      degraded: apiP95MsWarn,
+      outage: apiP95MsOutage,
+    },
+    workerLagMs: {
+      degraded: workerLagMsWarn,
+      outage: workerLagMsOutage,
+    },
+    monthlySlaTargetPct,
   };
 }

@@ -28,6 +28,7 @@ import type {
 import { db, type DbClient, type DbTransaction } from "../../db";
 import {
   conflictError,
+  forbiddenError,
   notFoundError,
   persistenceError,
   unprocessableEntityError,
@@ -966,10 +967,11 @@ export async function recordLegalAcceptancesInTransaction(
 
 export async function getCurrentLegalAcceptanceStateForUser(
   userId: number,
+  executor: DbExecutor = db,
 ): Promise<CurrentLegalAcceptanceState> {
-  const currentDocuments = (await listCurrentLegalDocuments({ userId })).filter(
-    (document) => document.isRequired,
-  );
+  const currentDocuments = (
+    await listCurrentLegalDocuments({ executor, userId })
+  ).filter((document) => document.isRequired);
   const items = currentDocuments.map((document) => ({
     id: document.id,
     slug: document.documentKey,
@@ -985,6 +987,20 @@ export async function getCurrentLegalAcceptanceStateForUser(
     requiresAcceptance: items.some((item) => !item.accepted),
     items,
   };
+}
+
+export async function assertCurrentLegalAcceptanceForUser(
+  userId: number,
+  executor: DbExecutor = db,
+) {
+  const legal = await getCurrentLegalAcceptanceStateForUser(userId, executor);
+  if (!legal.requiresAcceptance) {
+    return legal;
+  }
+
+  throw forbiddenError("Accept the current legal documents to continue.", {
+    code: API_ERROR_CODES.LEGAL_ACCEPTANCE_REQUIRED,
+  });
 }
 
 export async function acceptCurrentLegalDocuments(params: {

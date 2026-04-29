@@ -5,6 +5,8 @@ import {
   adminActions,
   auditEvents,
   authEvents,
+  experimentAssignments,
+  experiments,
   saasApiKeys,
   saasAgents,
   saasAgentGroupCorrelations,
@@ -693,6 +695,133 @@ describeIntegrationSuite("backend prize engine integration", () => {
 
     expect(response.statusCode).toBe(429);
     expect(response.json()).toMatchObject({
+      ok: false,
+      error: {
+        code: "REWARD_ENVELOPE_LIMIT_EXCEEDED",
+      },
+    });
+  });
+
+  it("updates project reward envelopes through the admin route and invalidates cached config", async () => {
+    const seededProject = await seedPrizeEngineProject("admin-envelope-cache", {
+      scopes: DEFAULT_SCOPES,
+    });
+    await seedProjectPrize({
+      projectId: seededProject.project.id,
+      name: "Cached Envelope Prize",
+      rewardAmount: "1.00",
+      stock: 10,
+      weight: 1,
+    });
+    await seedRewardEnvelope({
+      tenantId: seededProject.tenant.id,
+      projectId: seededProject.project.id,
+      window: "minute",
+      onCapHitStrategy: "mute",
+      budgetCap: "10.0000",
+      expectedPayoutPerCall: "1.0000",
+      varianceCap: "10.0000",
+    });
+
+    const primeResponse = await getApp().inject({
+      method: "POST",
+      url: prizeEngineUrl("/v1/engine/draws"),
+      headers: {
+        authorization: `Bearer ${seededProject.apiKey}`,
+      },
+      payload: prizeEnginePayload({
+        player: {
+          playerId: "admin-envelope-prime-player",
+        },
+      }),
+    });
+    expect(primeResponse.statusCode).toBe(200);
+    expect(primeResponse.json()).toMatchObject({
+      ok: true,
+      data: {
+        result: {
+          rewardAmount: "1.00",
+          status: "won",
+        },
+      },
+    });
+
+    const admin = await seedConfigAdminSession(
+      "saas-envelope-cache-admin@example.com",
+    );
+    await grantTenantOwnerMembership(seededProject.tenant.id, admin.admin.id);
+
+    const updateResponse = await getApp().inject({
+      method: "POST",
+      url: `/admin/saas/projects/${seededProject.project.id}/reward-envelopes/minute`,
+      headers: admin.headers,
+      payload: {
+        onCapHitStrategy: "reject",
+        budgetCap: "0.5000",
+        expectedPayoutPerCall: "1.0000",
+        varianceCap: "10.0000",
+      },
+    });
+
+    expect(updateResponse.statusCode).toBe(200);
+    expect(updateResponse.json()).toMatchObject({
+      ok: true,
+      data: {
+        tenantId: seededProject.tenant.id,
+        projectId: seededProject.project.id,
+        window: "minute",
+        onCapHitStrategy: "reject",
+        budgetCap: "0.5000",
+        expectedPayoutPerCall: "1.0000",
+        varianceCap: "10.0000",
+      },
+    });
+
+    const [updatedEnvelope] = await getDb()
+      .select()
+      .from(saasRewardEnvelopes)
+      .where(
+        and(
+          eq(saasRewardEnvelopes.tenantId, seededProject.tenant.id),
+          eq(saasRewardEnvelopes.projectId, seededProject.project.id),
+          eq(saasRewardEnvelopes.window, "minute"),
+        ),
+      )
+      .orderBy(desc(saasRewardEnvelopes.id))
+      .limit(1);
+    expect(updatedEnvelope).toMatchObject({
+      onCapHitStrategy: "reject",
+      budgetCap: "0.5000",
+    });
+
+    const [audit] = await getDb()
+      .select()
+      .from(adminActions)
+      .where(eq(adminActions.action, "saas_reward_envelope_upsert"))
+      .orderBy(desc(adminActions.id))
+      .limit(1);
+    expect(audit?.metadata).toMatchObject({
+      scope: "project",
+      projectId: seededProject.project.id,
+      window: "minute",
+      onCapHitStrategy: "reject",
+    });
+
+    const rejectResponse = await getApp().inject({
+      method: "POST",
+      url: prizeEngineUrl("/v1/engine/draws"),
+      headers: {
+        authorization: `Bearer ${seededProject.apiKey}`,
+      },
+      payload: prizeEnginePayload({
+        player: {
+          playerId: "admin-envelope-reject-player",
+        },
+      }),
+    });
+
+    expect(rejectResponse.statusCode).toBe(429);
+    expect(rejectResponse.json()).toMatchObject({
       ok: false,
       error: {
         code: "REWARD_ENVELOPE_LIMIT_EXCEEDED",
@@ -2426,6 +2555,122 @@ describeIntegrationSuite("backend prize engine integration", () => {
         },
       },
     });
+  });
+
+  it("resolves experiment-bound strategy params in reward-first flows", async () => {
+    const seededProject = await seedPrizeEngineDrawProject(
+      "reward-strategy-experiment",
+      {
+        agentId: "reward-experiment-agent",
+      },
+    );
+
+    await getDb().insert(experiments).values({
+      key: "reward-epsilon-rollout",
+      description: "Reward strategy params rollout",
+      status: "active",
+      defaultVariantKey: "treatment",
+      variants: [
+        {
+          key: "treatment",
+          weight: 1,
+          payload: {
+            epsilon: 1,
+          },
+        },
+      ],
+    });
+
+    await getDb()
+      .update(saasProjects)
+      .set({
+        strategy: "epsilon_greedy",
+        strategyParams: {
+          epsilon: 0,
+          experiment: {
+            expKey: "reward-epsilon-rollout",
+          },
+        },
+      })
+      .where(eq(saasProjects.id, seededProject.project.id));
+
+    const buildPayload = (idempotencyKey: string, clientNonce: string) => ({
+      agent: {
+        agentId: "reward-experiment-agent",
+        groupId: "reward-experiment-group",
+      },
+      behavior: {
+        actionType: "checkout.completed",
+        score: 0.91,
+        novelty: 0.11,
+      },
+      idempotencyKey,
+      clientNonce,
+    });
+
+    const firstResponse = await seededProject.callReward(
+      buildPayload("reward-exp-1", "reward-exp-nonce-1"),
+    );
+    expect(firstResponse.statusCode).toBe(201);
+    expect(firstResponse.json()).toMatchObject({
+      ok: true,
+      data: {
+        result: {
+          selectionStrategy: "epsilon_greedy",
+          fairness: {
+            strategy: "epsilon_greedy",
+            epsilon: 1,
+          },
+        },
+      },
+    });
+
+    const secondResponse = await seededProject.callReward(
+      buildPayload("reward-exp-2", "reward-exp-nonce-2"),
+    );
+    expect(secondResponse.statusCode).toBe(201);
+    expect(secondResponse.json()).toMatchObject({
+      ok: true,
+      data: {
+        result: {
+          selectionStrategy: "epsilon_greedy",
+          fairness: {
+            strategy: "epsilon_greedy",
+            epsilon: 1,
+          },
+        },
+      },
+    });
+
+    const storedAssignments = await getDb()
+      .select({
+        subjectType: experimentAssignments.subjectType,
+        subjectKey: experimentAssignments.subjectKey,
+        variantKey: experimentAssignments.variantKey,
+      })
+      .from(experimentAssignments)
+      .innerJoin(
+        experiments,
+        eq(experimentAssignments.experimentId, experiments.id),
+      )
+      .where(
+        and(
+          eq(experiments.key, "reward-epsilon-rollout"),
+          eq(experimentAssignments.subjectType, "saas_project_player"),
+          eq(
+            experimentAssignments.subjectKey,
+            `${seededProject.project.id}:reward-experiment-agent`,
+          ),
+        ),
+      );
+
+    expect(storedAssignments).toEqual([
+      {
+        subjectType: "saas_project_player",
+        subjectKey: `${seededProject.project.id}:reward-experiment-agent`,
+        variantKey: "treatment",
+      },
+    ]);
   });
 
   it("marks legacy draws as deprecated and points callers to rewards", async () => {

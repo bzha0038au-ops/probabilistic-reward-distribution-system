@@ -1,0 +1,78 @@
+appId: ${REWARD_MOBILE_APP_ID}
+env:
+  REWARD_E2E_EMAIL: mobile.e2e.alice@example.com
+  REWARD_E2E_PASSWORD: User123!
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: auth-show-login-button
+    waitUntilVisible: true
+- tapOn:
+    id: auth-login-email-input
+    waitUntilVisible: true
+- eraseText
+- inputText: ${REWARD_E2E_EMAIL}
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: auth-login-password-input
+    direction: DOWN
+- tapOn:
+    id: auth-login-password-input
+    waitUntilVisible: true
+- eraseText
+- inputText: ${REWARD_E2E_PASSWORD}
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: auth-login-submit-button
+    direction: DOWN
+- tapOn:
+    id: auth-login-submit-button
+    waitUntilVisible: true
+- tapOn:
+    text: "Allow"
+    optional: true
+- scrollUntilVisible:
+    element:
+      text: "Open Hold'em"
+    direction: DOWN
+- tapOn: "Open Hold'em"
+- scrollUntilVisible:
+    element:
+      text: "Mobile Maestro E2E Holdem"
+    direction: DOWN
+- tapOn: "Mobile Maestro E2E Holdem"
+- scrollUntilVisible:
+    element:
+      id: holdem-join-table-button
+    direction: DOWN
+- tapOn:
+    id: holdem-join-table-button
+- scrollUntilVisible:
+    element:
+      id: holdem-start-hand-button
+    direction: DOWN
+- tapOn:
+    id: holdem-start-hand-button
+- scrollUntilVisible:
+    element:
+      id: holdem-action-button-call
+    direction: DOWN
+- assertVisible:
+    id: holdem-action-button-call
+- scrollUntilVisible:
+    element:
+      id: holdem-action-button-fold
+    direction: DOWN
+- tapOn:
+    id: holdem-action-button-fold
+- scrollUntilVisible:
+    element:
+      id: holdem-leave-table-button
+    direction: UP
+- tapOn:
+    id: holdem-leave-table-button
+- assertVisible:
+    id: holdem-join-table-button

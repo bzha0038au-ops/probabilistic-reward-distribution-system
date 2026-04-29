@@ -33,6 +33,13 @@ export const saasActionPolicies = {
   syncBillingRun: { requireBreakGlass: false },
   refreshBillingRun: { requireBreakGlass: false },
   settleBillingRun: { requireBreakGlass: false },
+  reviewBillingDispute: {
+    requireBreakGlass: true,
+    title: "Resolve billing dispute",
+    description:
+      "This can issue a Stripe credit note and write a reversing billing ledger entry. Re-check the tenant, invoice run, and approved refund amount before confirming.",
+    confirmLabel: "Resolve dispute",
+  },
   createTopUp: {
     requireBreakGlass: true,
     title: "Create tenant top-up",

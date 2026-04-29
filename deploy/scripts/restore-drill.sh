@@ -19,6 +19,9 @@ Configuration:
   BACKUP_ENCRYPTION_PASSPHRASE    Required when the input bundle ends with .enc
   DRILL_OUTPUT_DIR                Default: ./var/ops/restore-drills
   DRILL_ID                        Default: current UTC timestamp
+  DRILL_ENVIRONMENT               Default: staging
+  DRILL_RESTORE_SCOPE             Default: full-database
+  DRILL_RESTORE_TARGET            Default: isolated-target
   DRILL_OPERATOR                  Default: unassigned
   DRILL_APPROVER                  Default: unassigned
   DRILL_TICKET                    Optional ticket / change id
@@ -55,6 +58,68 @@ bool_is_true() {
 
 seconds_now() {
   date -u +"%s"
+}
+
+compact_timestamp_to_iso() {
+  local timestamp="$1"
+
+  if [[ "${timestamp}" =~ ^[0-9]{8}T[0-9]{6}Z$ ]]; then
+    printf '%s-%s-%sT%s:%s:%sZ' \
+      "${timestamp:0:4}" \
+      "${timestamp:4:2}" \
+      "${timestamp:6:2}" \
+      "${timestamp:9:2}" \
+      "${timestamp:11:2}" \
+      "${timestamp:13:2}"
+    return 0
+  fi
+
+  printf '%s' "${timestamp}"
+}
+
+parse_utc_timestamp_epoch() {
+  local timestamp="$1"
+  local normalized_timestamp
+
+  normalized_timestamp="$(compact_timestamp_to_iso "${timestamp}")"
+
+  if date -j -u -f "%Y-%m-%dT%H:%M:%SZ" "${normalized_timestamp}" +"%s" >/dev/null 2>&1; then
+    date -j -u -f "%Y-%m-%dT%H:%M:%SZ" "${normalized_timestamp}" +"%s"
+    return 0
+  fi
+
+  date -u -d "${normalized_timestamp}" +"%s"
+}
+
+format_duration_human() {
+  local total_seconds="$1"
+  local hours minutes seconds
+  local parts=()
+
+  hours="$((total_seconds / 3600))"
+  minutes="$(((total_seconds % 3600) / 60))"
+  seconds="$((total_seconds % 60))"
+
+  if (( hours > 0 )); then
+    parts+=("${hours}h")
+  fi
+
+  if (( minutes > 0 )); then
+    parts+=("${minutes}m")
+  fi
+
+  if (( seconds > 0 || ${#parts[@]} == 0 )); then
+    parts+=("${seconds}s")
+  fi
+
+  printf '%s' "${parts[*]}"
+}
+
+extract_metadata_value() {
+  local metadata_file="$1"
+  local key="$2"
+
+  awk -F': ' -v key="${key}" '$1 == key { print substr($0, index($0, ": ") + 2) }' "${metadata_file}" | tail -n 1
 }
 
 cleanup() {
@@ -156,6 +221,9 @@ extract_dir="${work_dir}/bundle"
 report_file="${drill_dir}/restore-drill-report.md"
 summary_file="${drill_dir}/restore-drill-summary.json"
 backend_log_file="${drill_dir}/backend-smoke.log"
+drill_environment="${DRILL_ENVIRONMENT:-staging}"
+drill_restore_scope="${DRILL_RESTORE_SCOPE:-full-database}"
+drill_restore_target="${DRILL_RESTORE_TARGET:-isolated-target}"
 drill_operator="${DRILL_OPERATOR:-unassigned}"
 drill_approver="${DRILL_APPROVER:-unassigned}"
 drill_ticket="${DRILL_TICKET:-none}"
@@ -180,6 +248,26 @@ if [[ -z "${backup_dump_file}" ]]; then
   exit 1
 fi
 
+backup_metadata_file="$(find "${extract_dir}" -maxdepth 1 -type f -name '*.metadata.txt' | head -n 1)"
+backup_created_at_utc=""
+backup_created_at_epoch=""
+
+if [[ -n "${backup_metadata_file}" ]]; then
+  backup_created_at_raw="$(extract_metadata_value "${backup_metadata_file}" "backup_created_at_utc")"
+  if [[ -n "${backup_created_at_raw}" ]]; then
+    backup_created_at_utc="$(compact_timestamp_to_iso "${backup_created_at_raw}")"
+    backup_created_at_epoch="$(parse_utc_timestamp_epoch "${backup_created_at_utc}")"
+  fi
+fi
+
+if [[ -z "${backup_created_at_utc}" ]]; then
+  backup_dump_basename="$(basename "${backup_dump_file}")"
+  if [[ "${backup_dump_basename}" =~ ([0-9]{8}T[0-9]{6}Z) ]]; then
+    backup_created_at_utc="$(compact_timestamp_to_iso "${BASH_REMATCH[1]}")"
+    backup_created_at_epoch="$(parse_utc_timestamp_epoch "${backup_created_at_utc}")"
+  fi
+fi
+
 drill_started_at_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 restore_started_epoch="$(seconds_now)"
 
@@ -192,9 +280,14 @@ TARGET_DATABASE_URL="${target_database_url}" \
 restore_finished_epoch="$(seconds_now)"
 
 psql "${target_database_url}" -v ON_ERROR_STOP=1 -f "${finance_sql}" | tee "${drill_dir}/finance-sanity.log"
+restore_status="passed"
+post_restore_checks_status="passed"
+finance_sanity_status="passed"
+write_probe_status="skipped"
 
 if bool_is_true "${run_write_probe}"; then
   write_probe "${target_database_url}" | tee "${drill_dir}/write-probe.log"
+  write_probe_status="passed"
 fi
 
 if bool_is_true "${run_backend_smoke}"; then
@@ -212,21 +305,50 @@ drill_finished_epoch="$(seconds_now)"
 restore_duration_seconds="$((restore_finished_epoch - restore_started_epoch))"
 validation_duration_seconds="$((drill_finished_epoch - restore_finished_epoch))"
 total_duration_seconds="$((drill_finished_epoch - restore_started_epoch))"
+actual_rto_seconds="${total_duration_seconds}"
+actual_rto_human="$(format_duration_human "${actual_rto_seconds}")"
+estimated_rpo_seconds=""
+estimated_rpo_human="unknown"
+
+if [[ -n "${backup_created_at_epoch}" ]]; then
+  estimated_rpo_seconds="$((restore_started_epoch - backup_created_at_epoch))"
+  if (( estimated_rpo_seconds < 0 )); then
+    estimated_rpo_seconds=0
+  fi
+  estimated_rpo_human="$(format_duration_human "${estimated_rpo_seconds}")"
+fi
+
+estimated_rpo_json="null"
+if [[ -n "${estimated_rpo_seconds}" ]]; then
+  estimated_rpo_json="${estimated_rpo_seconds}"
+fi
 
 cat > "${summary_file}" <<EOF
 {
   "drill_id": "${drill_id}",
   "started_at_utc": "${drill_started_at_utc}",
   "finished_at_utc": "${drill_finished_at_utc}",
+  "drill_environment": "${drill_environment}",
+  "restore_scope": "${drill_restore_scope}",
+  "restore_target": "${drill_restore_target}",
   "operator": "${drill_operator}",
   "approver": "${drill_approver}",
   "ticket": "${drill_ticket}",
   "input_bundle": "${input_bundle}",
   "backup_dump_file": "${backup_dump_file}",
+  "backup_metadata_file": "${backup_metadata_file}",
+  "backup_created_at_utc": "${backup_created_at_utc}",
   "target_database_url": "$(printf '%s' "${target_database_url}" | sed -E 's#(postgres(ql)?://)[^@/]+@#\1***:***@#')",
+  "estimated_rpo_seconds": ${estimated_rpo_json},
+  "actual_rto_seconds": ${actual_rto_seconds},
   "restore_duration_seconds": ${restore_duration_seconds},
   "validation_duration_seconds": ${validation_duration_seconds},
   "total_duration_seconds": ${total_duration_seconds},
+  "restore_status": "${restore_status}",
+  "post_restore_checks": "${post_restore_checks_status}",
+  "finance_sanity": "${finance_sanity_status}",
+  "write_probe": "${write_probe_status}",
+  "overall_status": "passed",
   "backend_smoke_status": "${backend_smoke_status}"
 }
 EOF
@@ -236,22 +358,30 @@ cat > "${report_file}" <<EOF
 
 - Drill ID: \`${drill_id}\`
 - Drill date (UTC): ${drill_started_at_utc}
+- Drill environment: \`${drill_environment}\`
+- Restore scope: \`${drill_restore_scope}\`
+- Restore target: \`${drill_restore_target}\`
 - Operator: ${drill_operator}
 - Restore approver: ${drill_approver}
 - Change / ticket: ${drill_ticket}
 - Input backup bundle: \`${input_bundle}\`
 - Restored dump: \`${backup_dump_file}\`
+- Backup created (UTC): ${backup_created_at_utc:-unknown}
 - Target database: \`$(printf '%s' "${target_database_url}" | sed -E 's#(postgres(ql)?://)[^@/]+@#\1***:***@#')\`
 
 ## Result
 
-- Restore status: passed
-- Finance sanity SQL: passed
-- Write probe: $(if bool_is_true "${run_write_probe}"; then echo "passed"; else echo "skipped"; fi)
+- Overall status: passed
+- Restore status: ${restore_status}
+- \`deploy/sql/post-restore-checks.sql\`: ${post_restore_checks_status}
+- Finance sanity SQL: ${finance_sanity_status}
+- Write probe: ${write_probe_status}
 - Backend smoke: ${backend_smoke_status}
 
 ## Timings
 
+- Estimated RPO: $(if [[ -n "${estimated_rpo_seconds}" ]]; then printf '%ss (%s)' "${estimated_rpo_seconds}" "${estimated_rpo_human}"; else printf 'unknown'; fi)
+- Actual RTO: ${actual_rto_seconds}s (${actual_rto_human})
 - Restore duration: ${restore_duration_seconds}s
 - Validation duration: ${validation_duration_seconds}s
 - End-to-end duration: ${total_duration_seconds}s
@@ -268,6 +398,8 @@ cat > "${report_file}" <<EOF
 ## Notes
 
 - This drill restored into an isolated target.
+- Estimated RPO is measured as backup age at restore start.
+- Actual RTO is measured as restore plus validation wall-clock time.
 - \`deploy/sql/post-restore-checks.sql\` ran through \`postgres-restore.sh\`.
 - \`deploy/sql/finance-sanity.sql\` passed after restore.
 - The write probe used a temporary table and rolled back.

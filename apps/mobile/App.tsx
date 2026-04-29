@@ -5,9 +5,23 @@ import {
 } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Linking, ScrollView, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Linking,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import { API_ERROR_CODES } from "@reward/shared-types/api";
+import type {
+  CommunityThread,
+  CommunityThreadDetailResponse,
+  CommunityThreadMutationResponse,
+} from "@reward/shared-types/community";
 import type { CurrentLegalDocument } from "@reward/shared-types/legal";
+import type { NotificationRecord } from "@reward/shared-types/notification";
 import { QUICK_EIGHT_CONFIG } from "@reward/shared-types/quick-eight";
 import { createUserApiClient } from "@reward/user-core";
 import {
@@ -32,6 +46,10 @@ import {
   webviewQaEnabled,
 } from "./src/app-support";
 import {
+  getMobileCommunityCopy,
+  type MobileCommunityCopy,
+} from "./src/community-copy";
+import {
   getMobileFairnessCopy,
   resolveMobileFairnessLocale,
 } from "./src/fairness";
@@ -54,16 +72,21 @@ import {
   buildLegalDocumentKey,
   MobileLegalAcceptanceCard,
 } from "./src/legal/legal-acceptance-card";
+import { getMobileDeviceFingerprint } from "./src/device-fingerprint";
 import { getMobileAppCopy } from "./src/mobile-copy";
 import { mobileStyles as styles } from "./src/mobile-styles";
+import { getPlayModeCopy } from "./src/play-mode-copy";
+import { registerForPushNotifications } from "./src/push-notifications";
 import { getMobileRouteCopy } from "./src/route-copy";
 import {
   AccountRouteContainer,
   BlackjackRouteContainer,
+  CommunityRouteContainer,
   FairnessRouteContainer,
   GachaRouteContainer,
   HoldemRouteContainer,
   HomeRouteContainer,
+  NotificationsRouteContainer,
   PredictionMarketRouteContainer,
   QuickEightRouteContainer,
   RewardsRouteContainer,
@@ -74,6 +97,55 @@ import { VerificationCallout } from "./src/sections/verification-callout";
 import { ToastBanner, type ToastTone } from "./src/ui";
 import { WebviewQaHarness } from "./src/webview-qa-harness";
 import { mobileDrawRarityTones, mobilePalette as palette } from "./src/theme";
+
+function resolveCommunityErrorMessage(
+  copy: MobileCommunityCopy,
+  fallback?: string,
+  code?: string,
+  message?: string,
+) {
+  if (code === API_ERROR_CODES.COMMUNITY_CAPTCHA_REQUIRED) {
+    return copy.captchaRequired;
+  }
+
+  if (code === API_ERROR_CODES.COMMUNITY_CAPTCHA_INVALID) {
+    return copy.captchaInvalid;
+  }
+
+  if (code === API_ERROR_CODES.KYC_TIER_REQUIRED) {
+    return message ?? copy.kycRequired;
+  }
+
+  if (code === API_ERROR_CODES.COMMUNITY_THREAD_NOT_FOUND) {
+    return copy.threadMissing;
+  }
+
+  if (code === API_ERROR_CODES.COMMUNITY_THREAD_LOCKED) {
+    return message ?? copy.threadLocked;
+  }
+
+  if (code === API_ERROR_CODES.TOO_MANY_REQUESTS) {
+    return message ?? copy.rateLimited;
+  }
+
+  return message ?? fallback ?? copy.loadFailed;
+}
+
+function resolveCommunityMutationNotice(
+  copy: MobileCommunityCopy,
+  response: CommunityThreadMutationResponse,
+  kind: "thread" | "reply",
+) {
+  if (response.autoHidden) {
+    return kind === "thread" ? copy.createHidden : copy.replyHidden;
+  }
+
+  if (response.reviewRequired) {
+    return kind === "thread" ? copy.createQueued : copy.replyQueued;
+  }
+
+  return kind === "thread" ? copy.createSuccess : copy.replySuccess;
+}
 
 function NativeApp() {
   const [screen, setScreen] = useState<ScreenMode>("login");
@@ -90,6 +162,7 @@ function NativeApp() {
   const authTokenRef = useRef<string | null>(null);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastFeedbackKeyRef = useRef<string | null>(null);
+  const pushRegistrationTokenRef = useRef<string | null>(null);
   const handleUnauthorizedRef = useRef<
     ((message: string) => Promise<boolean>) | null
   >(null);
@@ -98,6 +171,18 @@ function NativeApp() {
     createUserApiClient({
       baseUrl: configuredApiBaseUrl,
       getAuthToken: () => authTokenRef.current,
+      getExtraHeaders: async () => {
+        // Risk enrichment should not block sign-in if secure storage is unavailable.
+        const deviceFingerprint = await getMobileDeviceFingerprint().catch(
+          () => null,
+        );
+
+        if (!deviceFingerprint) {
+          return undefined;
+        }
+
+        return { "x-device-fingerprint": deviceFingerprint };
+      },
     }),
   );
   const api = apiRef.current;
@@ -109,6 +194,39 @@ function NativeApp() {
     string[]
   >([]);
   const [acceptingLegal, setAcceptingLegal] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationRecord[] | null>(
+    null,
+  );
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
+  const [mutatingNotifications, setMutatingNotifications] = useState(false);
+  const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
+  const [communityThreads, setCommunityThreads] = useState<CommunityThread[] | null>(
+    null,
+  );
+  const [selectedCommunityThreadId, setSelectedCommunityThreadId] = useState<
+    number | null
+  >(null);
+  const [communityThreadDetail, setCommunityThreadDetail] =
+    useState<CommunityThreadDetailResponse | null>(null);
+  const [loadingCommunityThreads, setLoadingCommunityThreads] = useState(false);
+  const [loadingCommunityThread, setLoadingCommunityThread] = useState(false);
+  const [creatingCommunityThread, setCreatingCommunityThread] = useState(false);
+  const [creatingCommunityReply, setCreatingCommunityReply] = useState(false);
+  const [communityThreadTitle, setCommunityThreadTitle] = useState("");
+  const [communityThreadBody, setCommunityThreadBody] = useState("");
+  const [communityReplyBody, setCommunityReplyBody] = useState("");
+  const [communityListError, setCommunityListError] = useState<string | null>(
+    null,
+  );
+  const [communityDetailError, setCommunityDetailError] = useState<string | null>(
+    null,
+  );
+  const [communityCreateError, setCommunityCreateError] = useState<string | null>(
+    null,
+  );
+  const [communityReplyError, setCommunityReplyError] = useState<string | null>(
+    null,
+  );
 
   const resetFeedback = useCallback(() => {
     setError(null);
@@ -143,8 +261,30 @@ function NativeApp() {
   }, []);
   const fairnessLocale = resolveMobileFairnessLocale();
   const appContent = getMobileAppCopy(fairnessLocale);
+  const communityCopy = getMobileCommunityCopy(fairnessLocale);
   const fairnessContent = getMobileFairnessCopy(fairnessLocale);
+  const playModeCopy = getPlayModeCopy(fairnessLocale);
   const routeContent = getMobileRouteCopy(fairnessLocale);
+  const notificationRouteCopy =
+    fairnessLocale === "zh-CN"
+      ? {
+          unreadLabel: "未读",
+          refresh: "刷新",
+          refreshing: "刷新中...",
+          markAllRead: "全部已读",
+          markRead: "标记已读",
+          empty: "还没有通知。",
+          newBadge: "新",
+        }
+      : {
+          unreadLabel: "Unread",
+          refresh: "Refresh",
+          refreshing: "Refreshing...",
+          markAllRead: "Mark all read",
+          markRead: "Mark read",
+          empty: "No notifications yet.",
+          newBadge: "NEW",
+        };
   const refreshLegalDocuments = useCallback(async () => {
     setLoadingLegalDocuments(true);
     const response = await api.getCurrentLegalDocuments();
@@ -195,6 +335,199 @@ function NativeApp() {
     handleUnauthorizedRef,
     setError,
   });
+
+  const refreshNotificationSummary = useCallback(async () => {
+    const response = await api.getNotificationSummary();
+    if (!response.ok) {
+      setError(response.error?.message ?? "Failed to load notification summary.");
+      return false;
+    }
+
+    setNotificationUnreadCount(response.data.unreadCount);
+    return true;
+  }, [api, setError]);
+
+  const refreshNotifications = useCallback(async () => {
+    setLoadingNotifications(true);
+    const [listResponse, summaryResponse] = await Promise.all([
+      api.listNotifications({ limit: 50 }),
+      api.getNotificationSummary(),
+    ]);
+    setLoadingNotifications(false);
+
+    if (!listResponse.ok) {
+      setError(listResponse.error?.message ?? "Failed to load notifications.");
+      return false;
+    }
+    if (!summaryResponse.ok) {
+      setError(
+        summaryResponse.error?.message ?? "Failed to load notification summary.",
+      );
+      return false;
+    }
+
+    setNotifications(listResponse.data.items);
+    setNotificationUnreadCount(summaryResponse.data.unreadCount);
+    return true;
+  }, [api, setError]);
+
+  const resetCommunityState = useCallback(() => {
+    setCommunityThreads(null);
+    setSelectedCommunityThreadId(null);
+    setCommunityThreadDetail(null);
+    setLoadingCommunityThreads(false);
+    setLoadingCommunityThread(false);
+    setCreatingCommunityThread(false);
+    setCreatingCommunityReply(false);
+    setCommunityThreadTitle("");
+    setCommunityThreadBody("");
+    setCommunityReplyBody("");
+    setCommunityListError(null);
+    setCommunityDetailError(null);
+    setCommunityCreateError(null);
+    setCommunityReplyError(null);
+  }, []);
+
+  const refreshCommunityThreadDetail = useCallback(
+    async (threadId: number) => {
+      setSelectedCommunityThreadId(threadId);
+      setLoadingCommunityThread(true);
+      setCommunityDetailError(null);
+      const response = await api.getCommunityThread(threadId, 1, 50);
+      setLoadingCommunityThread(false);
+
+      if (!response.ok) {
+        setCommunityThreadDetail(null);
+        setCommunityDetailError(
+          resolveCommunityErrorMessage(
+            communityCopy,
+            communityCopy.loadThreadFailed,
+            response.error?.code,
+            response.error?.message,
+          ),
+        );
+        return false;
+      }
+
+      setCommunityThreadDetail(response.data);
+      setSelectedCommunityThreadId(threadId);
+      return true;
+    },
+    [api, communityCopy],
+  );
+
+  const refreshCommunityThreads = useCallback(
+    async (preferredThreadId: number | null = null) => {
+      setLoadingCommunityThreads(true);
+      setCommunityListError(null);
+      const response = await api.listCommunityThreads(1, 20);
+      setLoadingCommunityThreads(false);
+
+      if (!response.ok) {
+        setCommunityThreads([]);
+        setSelectedCommunityThreadId(null);
+        setCommunityThreadDetail(null);
+        setCommunityListError(
+          resolveCommunityErrorMessage(
+            communityCopy,
+            communityCopy.loadFailed,
+            response.error?.code,
+            response.error?.message,
+          ),
+        );
+        return false;
+      }
+
+      const items = response.data.items;
+      setCommunityThreads(items);
+
+      const nextThreadId =
+        preferredThreadId && items.some((thread) => thread.id === preferredThreadId)
+          ? preferredThreadId
+          : items[0]?.id ?? null;
+
+      if (!nextThreadId) {
+        setSelectedCommunityThreadId(null);
+        setCommunityThreadDetail(null);
+        setCommunityDetailError(null);
+        return true;
+      }
+
+      setSelectedCommunityThreadId(nextThreadId);
+      return refreshCommunityThreadDetail(nextThreadId);
+    },
+    [api, communityCopy, refreshCommunityThreadDetail],
+  );
+
+  const syncPushRegistration = useCallback(async () => {
+    const registration = await registerForPushNotifications();
+    if (!registration.token || !registration.platform) {
+      if (__DEV__) {
+        console.warn(
+          "[push] Skipping device registration:",
+          registration.reason ?? "push_registration_failed",
+        );
+      }
+      return false;
+    }
+    if (pushRegistrationTokenRef.current === registration.token) {
+      return true;
+    }
+
+    const response = await api.registerNotificationPushDevice({
+      token: registration.token,
+      platform: registration.platform,
+    });
+    if (!response.ok) {
+      if (__DEV__) {
+        console.warn(
+          "[push] Backend registration failed:",
+          response.error?.message ?? "push_registration_failed",
+        );
+      }
+      return false;
+    }
+
+    pushRegistrationTokenRef.current = registration.token;
+    return true;
+  }, [api]);
+
+  const markNotificationRead = useCallback(
+    async (notificationId: number) => {
+      setMutatingNotifications(true);
+      const response = await api.markNotificationRead(notificationId);
+      setMutatingNotifications(false);
+
+      if (!response.ok) {
+        setError(response.error?.message ?? "Failed to update notification.");
+        return false;
+      }
+
+      setNotifications((current) =>
+        current?.map((item) => (item.id === notificationId ? response.data : item)) ??
+        current,
+      );
+      setNotificationUnreadCount((current) => Math.max(current - 1, 0));
+      return true;
+    },
+    [api, setError],
+  );
+
+  const markAllNotificationsRead = useCallback(async () => {
+    setMutatingNotifications(true);
+    const response = await api.markAllNotificationsRead();
+    setMutatingNotifications(false);
+
+    if (!response.ok) {
+      setError(response.error?.message ?? "Failed to update notifications.");
+      return false;
+    }
+
+    if (response.data.updatedCount > 0) {
+      await refreshNotifications();
+    }
+    return true;
+  }, [api, refreshNotifications, setError]);
 
   const {
     claimingMissionId,
@@ -249,6 +582,8 @@ function NativeApp() {
     playingDrawCount,
     refreshDrawCatalog,
     resetDraw,
+    setDrawPlayMode,
+    updatingDrawPlayMode,
   } = useDraw({
     api,
     authTokenRef,
@@ -269,7 +604,9 @@ function NativeApp() {
     refreshBlackjackOverview,
     resetBlackjack,
     setBlackjackStakeAmount,
+    setBlackjackPlayMode,
     startBlackjack,
+    updatingBlackjackPlayMode,
   } = useBlackjack({
     api,
     authTokenRef,
@@ -289,6 +626,11 @@ function NativeApp() {
     getHoldemEvidenceBundle,
     holdemActionAmount,
     holdemBuyInAmount,
+    holdemCreateMaxSeats,
+    holdemCreateTableType,
+    holdemTournamentPayoutPlaces,
+    holdemTournamentStartingStackAmount,
+    holdemPlayMode,
     holdemReplayError,
     holdemRealtimeStatus,
     holdemTableName,
@@ -311,15 +653,22 @@ function NativeApp() {
     selectedHoldemTable,
     setHoldemActionAmount,
     setHoldemBuyInAmount,
+    setHoldemCreateMaxSeats,
+    setHoldemCreateTableType,
+    setHoldemTournamentPayoutPlaces,
+    setHoldemTournamentStartingStackAmount,
+    setHoldemPlayMode,
     setHoldemSeatMode,
     setHoldemTableName,
     setSelectedHoldemTableId,
     startHoldemTable,
+    updatingHoldemPlayMode,
   } = useHoldem({
     api,
     authTokenRef,
     handleUnauthorizedRef,
     enabled: screen === "app" && appRoute === "holdem",
+    observabilitySurface: platform,
     realtimeBaseUrl: configuredApiBaseUrl,
     refreshBalance,
     resetFeedback,
@@ -407,12 +756,14 @@ function NativeApp() {
     applyAuthLink,
     email,
     password,
+    birthDate,
     resetTokenInput,
     newPassword,
     verificationTokenInput,
     sendingVerification,
     setEmail,
     setPassword,
+    setBirthDate,
     setResetTokenInput,
     setNewPassword,
     setVerificationTokenInput,
@@ -524,15 +875,27 @@ function NativeApp() {
     await refreshKycProfile(overrides);
     await refreshSessions(overrides);
     await refreshRewardCenter(overrides);
+    await syncPushRegistration();
+    await refreshNotificationSummary();
   };
 
   useEffect(() => {
     if (!session?.token) {
+      setNotifications(null);
+      setNotificationUnreadCount(0);
+      resetCommunityState();
+      pushRegistrationTokenRef.current = null;
       return;
     }
 
     void hydrateAuthenticatedState(session);
-  }, [refreshKycProfile, session?.token]);
+  }, [
+    refreshKycProfile,
+    refreshNotificationSummary,
+    resetCommunityState,
+    session?.token,
+    syncPushRegistration,
+  ]);
 
   const legalAcceptanceRequired = Boolean(session?.legal?.requiresAcceptance);
   const pendingLegalDocumentKeys =
@@ -642,6 +1005,142 @@ function NativeApp() {
       setError("Unable to open the hosted verification page on this device.");
     }
   }, [resetFeedback, setError]);
+  const handleOpenCommunityWeb = useCallback(async () => {
+    const url = buildWebUrl("/app/community");
+
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) {
+        showToast("error", communityCopy.openWebFailed);
+        return;
+      }
+
+      await Linking.openURL(url);
+    } catch {
+      showToast("error", communityCopy.openWebFailed);
+    }
+  }, [communityCopy.openWebFailed, showToast]);
+  const selectCommunityThread = useCallback(
+    async (threadId: number) => {
+      setCommunityCreateError(null);
+      setCommunityReplyError(null);
+      await refreshCommunityThreadDetail(threadId);
+    },
+    [refreshCommunityThreadDetail],
+  );
+  const createCommunityThread = useCallback(async () => {
+    const title = communityThreadTitle.trim();
+    const body = communityThreadBody.trim();
+
+    setCommunityCreateError(null);
+
+    if (!title) {
+      setCommunityCreateError(communityCopy.titleRequired);
+      return;
+    }
+
+    if (!body) {
+      setCommunityCreateError(communityCopy.bodyRequired);
+      return;
+    }
+
+    setCreatingCommunityThread(true);
+    const response = await api.createCommunityThread({
+      title,
+      body,
+    });
+    setCreatingCommunityThread(false);
+
+    if (!response.ok) {
+      const message = resolveCommunityErrorMessage(
+        communityCopy,
+        communityCopy.createFailed,
+        response.error?.code,
+        response.error?.message,
+      );
+      setCommunityCreateError(message);
+      showToast("error", message);
+      return;
+    }
+
+    const notice = resolveCommunityMutationNotice(
+      communityCopy,
+      response.data,
+      "thread",
+    );
+    setCommunityThreadTitle("");
+    setCommunityThreadBody("");
+    showToast(
+      response.data.reviewRequired || response.data.autoHidden ? "info" : "success",
+      notice,
+    );
+    await refreshCommunityThreads(
+      response.data.autoHidden
+        ? selectedCommunityThreadId
+        : response.data.thread.id,
+    );
+  }, [
+    api,
+    communityCopy,
+    communityThreadBody,
+    communityThreadTitle,
+    refreshCommunityThreads,
+    selectedCommunityThreadId,
+    showToast,
+  ]);
+  const createCommunityReply = useCallback(async () => {
+    if (!selectedCommunityThreadId) {
+      return;
+    }
+
+    const body = communityReplyBody.trim();
+    setCommunityReplyError(null);
+
+    if (!body) {
+      setCommunityReplyError(communityCopy.replyRequired);
+      return;
+    }
+
+    setCreatingCommunityReply(true);
+    const response = await api.createCommunityPost(selectedCommunityThreadId, {
+      body,
+    });
+    setCreatingCommunityReply(false);
+
+    if (!response.ok) {
+      const message = resolveCommunityErrorMessage(
+        communityCopy,
+        communityCopy.replyFailed,
+        response.error?.code,
+        response.error?.message,
+      );
+      setCommunityReplyError(message);
+      showToast("error", message);
+      if (response.error?.code === API_ERROR_CODES.COMMUNITY_THREAD_NOT_FOUND) {
+        await refreshCommunityThreads();
+      }
+      return;
+    }
+
+    const notice = resolveCommunityMutationNotice(
+      communityCopy,
+      response.data,
+      "reply",
+    );
+    setCommunityReplyBody("");
+    showToast(
+      response.data.reviewRequired || response.data.autoHidden ? "info" : "success",
+      notice,
+    );
+    await refreshCommunityThreads(selectedCommunityThreadId);
+  }, [
+    api,
+    communityCopy,
+    communityReplyBody,
+    refreshCommunityThreads,
+    selectedCommunityThreadId,
+    showToast,
+  ]);
   const routeNavigationLocked =
     playingDrawCount !== null ||
     playingQuickEight ||
@@ -652,7 +1151,9 @@ function NativeApp() {
     loadingFairnessCommit ||
     revealingFairness ||
     gachaAnimating ||
-    claimingMissionId !== null;
+    claimingMissionId !== null ||
+    creatingCommunityThread ||
+    creatingCommunityReply;
 
   const syncAppRouteFromNavigation = () => {
     const currentRoute = navigationRef.getCurrentRoute()?.name;
@@ -708,6 +1209,10 @@ function NativeApp() {
       await refreshRewardCenter();
     }
 
+    if (nextRoute === "community" && session?.token && communityThreads === null) {
+      await refreshCommunityThreads();
+    }
+
     if (
       nextRoute === "security" &&
       session?.token &&
@@ -717,6 +1222,10 @@ function NativeApp() {
     }
     if (nextRoute === "security" && session?.token && !kycProfile) {
       await refreshKycProfile();
+    }
+
+    if (nextRoute === "notifications" && session?.token) {
+      await refreshNotifications();
     }
 
     if (nextRoute === "holdem" && session?.token) {
@@ -757,6 +1266,7 @@ function NativeApp() {
       selectedLegalDocumentKeys={selectedLegalDocumentKeys}
       email={email}
       password={password}
+      birthDate={birthDate}
       resetTokenInput={resetTokenInput}
       newPassword={newPassword}
       verificationTokenInput={verificationTokenInput}
@@ -767,6 +1277,7 @@ function NativeApp() {
       showSeededLogin={__DEV__ && screen === "login"}
       onChangeEmail={setEmail}
       onChangePassword={setPassword}
+      onChangeBirthDate={setBirthDate}
       onChangeResetTokenInput={setResetTokenInput}
       onChangeNewPassword={setNewPassword}
       onChangeVerificationTokenInput={setVerificationTokenInput}
@@ -793,6 +1304,46 @@ function NativeApp() {
     />
   );
 
+  const renderNotificationBell = () => (
+    <Pressable
+      onPress={() => void openAppRoute("notifications")}
+      disabled={routeNavigationLocked}
+      accessibilityRole="button"
+      accessibilityLabel={routeContent.labels.notifications}
+      testID="app-notifications-bell-button"
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        opacity: routeNavigationLocked ? 0.55 : 1,
+      }}
+    >
+      <Text style={{ color: palette.text, fontSize: 18 }}>🔔</Text>
+      {notificationUnreadCount > 0 ? (
+        <View
+          style={{
+            minWidth: 20,
+            borderRadius: 999,
+            backgroundColor: palette.accent,
+            paddingHorizontal: 6,
+            paddingVertical: 2,
+          }}
+        >
+          <Text
+            style={{
+              color: palette.background,
+              fontSize: 11,
+              fontWeight: "800",
+              textAlign: "center",
+            }}
+          >
+            {notificationUnreadCount}
+          </Text>
+        </View>
+      ) : null}
+    </Pressable>
+  );
+
   const renderAppNavigator = () => (
     <NavigationContainer
       key={session?.sessionId ?? session?.user.id ?? "mobile-app"}
@@ -810,6 +1361,7 @@ function NativeApp() {
           headerStyle: { backgroundColor: palette.panel },
           headerTintColor: palette.text,
           headerTitleStyle: { fontWeight: "700" },
+          headerRight: renderNotificationBell,
         }}
       >
         <AppStack.Screen
@@ -904,6 +1456,46 @@ function NativeApp() {
           )}
         </AppStack.Screen>
         <AppStack.Screen
+          name="community"
+          options={{ title: routeContent.labels.community }}
+        >
+          {() => (
+            <CommunityRouteContainer
+              styles={styles}
+              hero={routeContent.heroes.community}
+              apiBaseUrl={configuredApiBaseUrl}
+              message={message}
+              error={error}
+              title={routeContent.labels.community}
+              subtitle={routeContent.heroes.community.subtitle}
+              copy={communityCopy}
+              threads={communityThreads}
+              selectedThreadId={selectedCommunityThreadId}
+              threadDetail={communityThreadDetail}
+              loadingThreads={loadingCommunityThreads}
+              loadingThread={loadingCommunityThread}
+              creatingThread={creatingCommunityThread}
+              creatingReply={creatingCommunityReply}
+              createError={communityCreateError}
+              replyError={communityReplyError}
+              listError={communityListError}
+              detailError={communityDetailError}
+              threadTitleInput={communityThreadTitle}
+              threadBodyInput={communityThreadBody}
+              replyBodyInput={communityReplyBody}
+              formatTimestamp={(value) => formatOptionalTimestamp(value ?? null) ?? "—"}
+              onRefresh={() => void refreshCommunityThreads(selectedCommunityThreadId)}
+              onOpenWebCommunity={() => void handleOpenCommunityWeb()}
+              onSelectThread={(threadId) => void selectCommunityThread(threadId)}
+              onChangeThreadTitle={setCommunityThreadTitle}
+              onChangeThreadBody={setCommunityThreadBody}
+              onCreateThread={() => void createCommunityThread()}
+              onChangeReplyBody={setCommunityReplyBody}
+              onCreateReply={() => void createCommunityReply()}
+            />
+          )}
+        </AppStack.Screen>
+        <AppStack.Screen
           name="security"
           options={{ title: routeContent.labels.security }}
         >
@@ -934,6 +1526,33 @@ function NativeApp() {
           )}
         </AppStack.Screen>
         <AppStack.Screen
+          name="notifications"
+          options={{ title: routeContent.labels.notifications }}
+        >
+          {() => (
+            <NotificationsRouteContainer
+              styles={styles}
+              hero={routeContent.heroes.notifications}
+              apiBaseUrl={configuredApiBaseUrl}
+              message={message}
+              error={error}
+              title={routeContent.labels.notifications}
+              subtitle={routeContent.heroes.notifications.subtitle}
+              copy={notificationRouteCopy}
+              unreadCount={notificationUnreadCount}
+              notifications={notifications}
+              loading={loadingNotifications}
+              mutating={mutatingNotifications}
+              formatTimestamp={(value) =>
+                formatOptionalTimestamp(value ?? null) ?? "—"
+              }
+              onRefresh={() => void refreshNotifications()}
+              onMarkAllRead={() => void markAllNotificationsRead()}
+              onMarkRead={(notificationId) => void markNotificationRead(notificationId)}
+            />
+          )}
+        </AppStack.Screen>
+        <AppStack.Screen
           name="gacha"
           options={{ title: routeContent.labels.gacha }}
         >
@@ -952,6 +1571,7 @@ function NativeApp() {
               screenCopy={routeContent.screens.gacha}
               fairnessRefreshingLabel={fairnessContent.refreshing}
               balance={balance}
+              playModeCopy={playModeCopy}
               drawCatalog={drawCatalog}
               featuredPrizes={featuredPrizes}
               multiDrawCount={multiDrawCount}
@@ -960,6 +1580,7 @@ function NativeApp() {
               playingDrawCount={playingDrawCount}
               playingQuickEight={playingQuickEight}
               loadingDrawCatalog={loadingDrawCatalog}
+              updatingDrawPlayMode={updatingDrawPlayMode}
               submitting={submitting}
               emailVerified={emailVerified}
               gachaReels={gachaReels}
@@ -968,6 +1589,7 @@ function NativeApp() {
               gachaTone={gachaTone}
               formatAmount={formatAmount}
               shortenCommitHash={shortenCommitHash}
+              onChangeDrawPlayMode={(type) => void setDrawPlayMode(type)}
               onPlayDraw={(count) => void playDraw(count)}
               onRefreshDrawCatalog={() => void refreshDrawCatalog()}
               drawRarityLabels={drawRarityLabels}
@@ -1084,8 +1706,11 @@ function NativeApp() {
               verificationCallout={verificationCallout}
               screenCopy={routeContent.screens.holdem}
               balance={balance}
+              playModeCopy={playModeCopy}
               formatAmount={formatAmount}
               emailVerified={emailVerified}
+              holdemPlayMode={holdemPlayMode}
+              updatingHoldemPlayMode={updatingHoldemPlayMode}
               holdemTables={holdemTables}
               selectedHoldemTable={selectedHoldemTable}
               selectedHoldemReplayRoundId={selectedHoldemReplayRoundId}
@@ -1097,6 +1722,12 @@ function NativeApp() {
               actingHoldem={actingHoldem}
               holdemTableName={holdemTableName}
               holdemBuyInAmount={holdemBuyInAmount}
+              holdemCreateTableType={holdemCreateTableType}
+              holdemCreateMaxSeats={holdemCreateMaxSeats}
+              holdemTournamentStartingStackAmount={
+                holdemTournamentStartingStackAmount
+              }
+              holdemTournamentPayoutPlaces={holdemTournamentPayoutPlaces}
               holdemRealtimeStatus={holdemRealtimeStatus}
               holdemActionAmount={holdemActionAmount}
               holdemTableMessages={holdemTableMessages}
@@ -1104,12 +1735,21 @@ function NativeApp() {
               sendingHoldemMessage={sendingHoldemMessage}
               onChangeHoldemTableName={setHoldemTableName}
               onChangeHoldemBuyInAmount={setHoldemBuyInAmount}
+              onChangeHoldemCreateTableType={setHoldemCreateTableType}
+              onChangeHoldemCreateMaxSeats={setHoldemCreateMaxSeats}
+              onChangeHoldemTournamentStartingStackAmount={
+                setHoldemTournamentStartingStackAmount
+              }
+              onChangeHoldemTournamentPayoutPlaces={
+                setHoldemTournamentPayoutPlaces
+              }
               onChangeHoldemActionAmount={setHoldemActionAmount}
+              onChangeHoldemPlayMode={(type) => void setHoldemPlayMode(type)}
               onSelectHoldemTable={setSelectedHoldemTableId}
               onCreateHoldemTable={() => void createHoldemTable()}
               onJoinHoldemTable={(tableId) => void joinHoldemTable(tableId)}
               onLeaveHoldemTable={(tableId) => void leaveHoldemTable(tableId)}
-              onSetHoldemSeatMode={(tableId, sittingOut) =>
+    onSetHoldemSeatMode={(tableId, sittingOut) =>
                 void setHoldemSeatMode(tableId, sittingOut)
               }
               onStartHoldemTable={(tableId) => void startHoldemTable(tableId)}
@@ -1154,14 +1794,17 @@ function NativeApp() {
               verificationCallout={verificationCallout}
               screenCopy={routeContent.screens.blackjack}
               balance={balance}
+              playModeCopy={playModeCopy}
               formatAmount={formatAmount}
               loadingBlackjack={loadingBlackjack}
+              updatingBlackjackPlayMode={updatingBlackjackPlayMode}
               actingBlackjack={actingBlackjack}
               emailVerified={emailVerified}
               fairnessLocale={fairnessLocale}
               fairnessEyebrow={fairnessContent.commitLive}
               blackjackOverview={blackjackOverview}
               blackjackStakeAmount={blackjackStakeAmount}
+              onChangeBlackjackPlayMode={(type) => void setBlackjackPlayMode(type)}
               onChangeStakeAmount={setBlackjackStakeAmount}
               onStartBlackjack={() => void startBlackjack()}
               onRefreshBlackjackOverview={() => void refreshBlackjackOverview()}
@@ -1205,6 +1848,7 @@ function NativeApp() {
       message={toast.message}
       tone={toast.tone}
       onDismiss={dismissToast}
+      testID="app-toast-banner"
     />
   ) : null;
 
@@ -1231,7 +1875,10 @@ function NativeApp() {
       return (
         <SafeAreaView style={styles.safeArea}>
           <StatusBar style="light" />
-          <ScrollView contentContainerStyle={styles.container}>
+          <ScrollView
+            contentContainerStyle={styles.container}
+            keyboardShouldPersistTaps="handled"
+          >
             <View style={styles.hero}>
               <Text style={styles.kicker}>{appContent.appHero.kicker}</Text>
               <Text style={styles.title}>{appContent.legalGate.title}</Text>
@@ -1271,7 +1918,10 @@ function NativeApp() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="light" />
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.hero}>
           <Text style={styles.kicker}>{appContent.appHero.kicker}</Text>
           <Text style={styles.title}>{appContent.appHero.title}</Text>

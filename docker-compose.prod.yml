@@ -148,6 +148,38 @@ services:
     networks:
       - data
 
+  prediction-market-oracle-worker:
+    <<: *app-defaults
+    image: ${BACKEND_IMAGE:-reward-system/backend}:${IMAGE_TAG:-latest}
+    command: ["pnpm", "--dir", "apps/backend", "start:worker:prediction-market-oracles"]
+    env_file:
+      - ./.env.d/backend.env
+    volumes:
+      - ./.secrets:/run/secrets:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - data
+
+  kyc-reverification-worker:
+    <<: *app-defaults
+    image: ${BACKEND_IMAGE:-reward-system/backend}:${IMAGE_TAG:-latest}
+    command: ["pnpm", "--dir", "apps/backend", "start:worker:kyc-reverification"]
+    env_file:
+      - ./.env.d/backend.env
+    volumes:
+      - ./.secrets:/run/secrets:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - data
+
   blackjack-timeout-worker:
     <<: *app-defaults
     image: ${BACKEND_IMAGE:-reward-system/backend}:${IMAGE_TAG:-latest}

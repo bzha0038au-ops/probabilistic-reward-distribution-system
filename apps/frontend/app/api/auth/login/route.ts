@@ -107,6 +107,7 @@ export async function POST(request: Request) {
   const password = String(formData.get("password") ?? "");
   const redirectTo = sanitizeRedirectPath(formData.get("redirectTo"), request.url);
   const isDocumentSubmit = isDocumentFormSubmission(request);
+  const deviceFingerprint = request.headers.get("x-device-fingerprint");
 
   if (!email || !password) {
     if (isDocumentSubmit) {
@@ -132,6 +133,9 @@ export async function POST(request: Request) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...(deviceFingerprint
+            ? { "x-device-fingerprint": deviceFingerprint }
+            : {}),
         },
         body: JSON.stringify({ email, password }),
         cache: "no-store",

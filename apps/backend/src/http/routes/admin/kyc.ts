@@ -5,6 +5,7 @@ import {
   KycApproveRequestSchema,
   KycRejectRequestSchema,
   KycRequestMoreInfoRequestSchema,
+  KycRequestReverificationRequestSchema,
 } from "@reward/shared-types/kyc";
 import { API_ERROR_CODES } from "@reward/shared-types/api";
 
@@ -16,6 +17,7 @@ import {
   listAdminKycQueue,
   loadKycDocumentPreview,
   reviewKycProfile,
+  triggerKycReverification,
 } from "../../../modules/kyc/service";
 import { withAdminAuditContext } from "../../admin-audit";
 import { requireAdminPermission } from "../../guards";
@@ -273,6 +275,62 @@ export async function registerAdminKycRoutes(protectedRoutes: AppInstance) {
           targetId: profileId,
           metadata: {
             status: result.status,
+            freezeRecordId: result.freezeRecordId ?? null,
+            reason: parsed.data.reason ?? null,
+          },
+        }),
+      );
+
+      return sendSuccess(reply, result);
+    },
+  );
+
+  protectedRoutes.post(
+    "/admin/kyc-profiles/:profileId/request-reverification",
+    {
+      config: { rateLimit: adminRateLimit },
+      preHandler: [
+        requireAdminPermission(ADMIN_PERMISSION_KEYS.KYC_REVIEW),
+        enforceAdminLimit,
+      ],
+    },
+    async (request, reply) => {
+      const profileId = parseReviewTargetId(request, reply);
+      if (!profileId) {
+        return;
+      }
+
+      const parsed = parseSchema(
+        KycRequestReverificationRequestSchema,
+        toObject(request.body),
+      );
+      if (!parsed.isValid) {
+        return sendError(
+          reply,
+          400,
+          "Invalid request.",
+          parsed.errors,
+          API_ERROR_CODES.INVALID_REQUEST,
+        );
+      }
+
+      const result = await triggerKycReverification({
+        profileId,
+        adminId: request.admin?.adminId ?? 0,
+        trigger: "policy_update",
+        reason: parsed.data.reason ?? null,
+      });
+
+      await recordAdminAction(
+        withAdminAuditContext(request, {
+          adminId: request.admin?.adminId ?? null,
+          action: "kyc_profile_request_reverification",
+          targetType: "kyc_profile",
+          targetId: profileId,
+          metadata: {
+            status: result.status,
+            currentTier: result.currentTier,
+            requestedTier: result.requestedTier,
             freezeRecordId: result.freezeRecordId ?? null,
             reason: parsed.data.reason ?? null,
           },

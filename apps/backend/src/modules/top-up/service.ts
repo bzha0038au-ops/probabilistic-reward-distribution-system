@@ -32,6 +32,7 @@ import {
   parseDepositStatus,
   type DepositStatus,
 } from '../payment/state-machine';
+import { grantEligibleAutoRewardMissions } from '../gamification/service';
 import {
   getPaymentCapabilitySummary,
   resolvePaymentProcessingContext,
@@ -458,6 +459,10 @@ const creditDepositRecord = async (
         reviewState.effectiveReview.settlementReference,
       processingChannel: reviewState.effectiveReview.processingChannel,
     },
+  });
+
+  await grantEligibleAutoRewardMissions(deposit.userId, tx, {
+    trigger: 'deposit_credited',
   });
 
   return updated;

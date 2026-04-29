@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DealerFeedSchema } from "./dealer";
 import { HandHistoryRoundIdSchema } from './hand-history';
 import {
   PlayModeRequestSchema,
@@ -237,6 +238,7 @@ export const BlackjackGameSchema = z.object({
   availableActions: z.array(BlackjackActionSchema),
   fairness: BlackjackFairnessSchema,
   playMode: PlayModeSnapshotSchema,
+  dealerEvents: DealerFeedSchema.default([]),
   createdAt: DateLikeSchema,
   settledAt: DateLikeSchema.nullable(),
 });

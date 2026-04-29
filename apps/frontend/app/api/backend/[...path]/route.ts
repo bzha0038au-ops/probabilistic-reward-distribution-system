@@ -48,10 +48,12 @@ const buildForwardHeaders = async (
   const contentType = request.headers.get("content-type");
   const locale = request.headers.get("x-locale");
   const traceId = request.headers.get("x-trace-id");
+  const deviceFingerprint = request.headers.get("x-device-fingerprint");
 
   if (contentType) headers.set("content-type", contentType);
   if (locale) headers.set("x-locale", locale);
   if (traceId) headers.set("x-trace-id", traceId);
+  if (deviceFingerprint) headers.set("x-device-fingerprint", deviceFingerprint);
 
   if (requiresAuth) {
     const backendToken = await getBackendAccessToken(request);

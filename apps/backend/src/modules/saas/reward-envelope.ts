@@ -11,9 +11,12 @@ import type {
 } from "@reward/shared-types/saas";
 
 import type { DbTransaction } from "../../db";
+import {
+  deleteCacheKeys,
+  readJsonCacheMany,
+  writeJsonCacheMany,
+} from "../../shared/cache";
 import { domainError } from "../../shared/errors";
-import { logger } from "../../shared/logger";
-import { getRedis } from "../../shared/redis";
 import { readSqlRows } from "../../shared/sql-result";
 
 const REWARD_ENVELOPE_WINDOWS: SaasRewardEnvelopeWindow[] = [
@@ -25,6 +28,7 @@ const REWARD_ENVELOPE_CAP_HIT_STRATEGIES: SaasRewardEnvelopeCapHitStrategy[] = [
   "reject",
   "mute",
 ];
+const REWARD_ENVELOPE_CONFIG_CACHE_TTL_SECONDS = 300;
 
 export type RewardEnvelopeScope = Extract<
   SaasRewardEnvelopeScope,
@@ -47,13 +51,29 @@ export type RewardEnvelopeRow = {
   updatedAt: Date | string;
 };
 
-type CachedRewardEnvelopeRow = Omit<
+type RewardEnvelopeConfigRow = Pick<
   RewardEnvelopeRow,
-  "currentWindowStartedAt" | "updatedAt"
-> & {
-  currentWindowStartedAt: string;
-  updatedAt: string;
-};
+  | "id"
+  | "tenantId"
+  | "projectId"
+  | "window"
+  | "onCapHitStrategy"
+  | "budgetCap"
+  | "expectedPayoutPerCall"
+  | "varianceCap"
+>;
+
+type RewardEnvelopeStateRow = Pick<
+  RewardEnvelopeRow,
+  | "id"
+  | "tenantId"
+  | "projectId"
+  | "window"
+  | "currentConsumed"
+  | "currentCallCount"
+  | "currentWindowStartedAt"
+  | "updatedAt"
+>;
 
 export type RewardEnvelopeState = Omit<
   RewardEnvelopeRow,
@@ -73,17 +93,6 @@ export type RewardEnvelopePayout =
   | { kind: "expected" }
   | { kind: "actual"; rewardAmount: Decimal.Value };
 
-const resolveRewardEnvelopeWindowMs = (window: SaasRewardEnvelopeWindow) => {
-  switch (window) {
-    case "minute":
-      return 60 * 1000;
-    case "hour":
-      return 60 * 60 * 1000;
-    case "day":
-      return 24 * 60 * 60 * 1000;
-  }
-};
-
 const resolveRewardEnvelopeWindowStart = (
   window: SaasRewardEnvelopeWindow,
   now: Date,
@@ -101,11 +110,6 @@ const resolveRewardEnvelopeWindowStart = (
   return start;
 };
 
-const resolveRewardEnvelopeWindowResetAt = (
-  window: SaasRewardEnvelopeWindow,
-  windowStart: Date,
-) => new Date(windowStart.getTime() + resolveRewardEnvelopeWindowMs(window));
-
 const resolveRewardEnvelopeScope = (
   projectId: number | null,
 ): RewardEnvelopeScope => (projectId === null ? "tenant" : "project");
@@ -122,7 +126,7 @@ const toRewardEnvelopeDate = (
   return parsed;
 };
 
-const buildRewardEnvelopeCacheKey = (payload: {
+const buildRewardEnvelopeConfigCacheKey = (payload: {
   scope: RewardEnvelopeScope;
   tenantId: number;
   projectId: number | null;
@@ -132,103 +136,120 @@ const buildRewardEnvelopeCacheKey = (payload: {
     ? `saas:reward-envelope:tenant:${payload.tenantId}:window:${payload.window}`
     : `saas:reward-envelope:project:${payload.projectId}:window:${payload.window}`;
 
-const buildRewardEnvelopeCacheKeys = (params: {
+const buildRewardEnvelopeConfigCacheKeys = (params: {
   tenantId: number;
-  projectId: number;
-}) => [
-  ...REWARD_ENVELOPE_WINDOWS.map((window) =>
-    buildRewardEnvelopeCacheKey({
-      scope: "tenant",
-      tenantId: params.tenantId,
-      projectId: null,
-      window,
-    }),
-  ),
-  ...REWARD_ENVELOPE_WINDOWS.map((window) =>
-    buildRewardEnvelopeCacheKey({
-      scope: "project",
-      tenantId: params.tenantId,
-      projectId: params.projectId,
-      window,
-    }),
-  ),
-];
+  projectId?: number | null;
+}) => {
+  const projectId =
+    typeof params.projectId === "number" ? params.projectId : null;
 
-const parseCachedRewardEnvelopeRow = (value: string) => {
-  const parsed = JSON.parse(value) as Partial<CachedRewardEnvelopeRow>;
+  return [
+    ...REWARD_ENVELOPE_WINDOWS.map((window) =>
+      buildRewardEnvelopeConfigCacheKey({
+        scope: "tenant",
+        tenantId: params.tenantId,
+        projectId: null,
+        window,
+      }),
+    ),
+    ...(projectId === null
+      ? []
+      : REWARD_ENVELOPE_WINDOWS.map((window) =>
+          buildRewardEnvelopeConfigCacheKey({
+            scope: "project",
+            tenantId: params.tenantId,
+            projectId,
+            window,
+          }),
+        )),
+  ];
+};
+
+const isObjectRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const parseCachedRewardEnvelopeConfigRow = (
+  value: unknown,
+): RewardEnvelopeConfigRow | null => {
+  if (!isObjectRecord(value)) {
+    return null;
+  }
+
+  const id = Reflect.get(value, "id");
+  const tenantId = Reflect.get(value, "tenantId");
+  const projectId = Reflect.get(value, "projectId");
+  const window = Reflect.get(value, "window");
+  const onCapHitStrategy = Reflect.get(value, "onCapHitStrategy");
+  const budgetCap = Reflect.get(value, "budgetCap");
+  const expectedPayoutPerCall = Reflect.get(value, "expectedPayoutPerCall");
+  const varianceCap = Reflect.get(value, "varianceCap");
+
   if (
-    typeof parsed.id !== "number" ||
-    typeof parsed.tenantId !== "number" ||
-    typeof parsed.window !== "string" ||
-    !REWARD_ENVELOPE_WINDOWS.includes(
-      parsed.window as SaasRewardEnvelopeWindow,
-    ) ||
-    typeof parsed.onCapHitStrategy !== "string" ||
+    typeof id !== "number" ||
+    typeof tenantId !== "number" ||
+    typeof window !== "string" ||
+    !REWARD_ENVELOPE_WINDOWS.includes(window as SaasRewardEnvelopeWindow) ||
+    typeof onCapHitStrategy !== "string" ||
     !REWARD_ENVELOPE_CAP_HIT_STRATEGIES.includes(
-      parsed.onCapHitStrategy as SaasRewardEnvelopeCapHitStrategy,
+      onCapHitStrategy as SaasRewardEnvelopeCapHitStrategy,
     ) ||
-    typeof parsed.budgetCap !== "string" ||
-    typeof parsed.expectedPayoutPerCall !== "string" ||
-    typeof parsed.varianceCap !== "string" ||
-    typeof parsed.currentConsumed !== "string" ||
-    typeof parsed.currentCallCount !== "number" ||
-    typeof parsed.currentWindowStartedAt !== "string" ||
-    typeof parsed.updatedAt !== "string"
+    typeof budgetCap !== "string" ||
+    typeof expectedPayoutPerCall !== "string" ||
+    typeof varianceCap !== "string" ||
+    (projectId !== null && projectId !== undefined && typeof projectId !== "number")
   ) {
     return null;
   }
 
   return {
-    id: parsed.id,
-    tenantId: parsed.tenantId,
-    projectId: typeof parsed.projectId === "number" ? parsed.projectId : null,
-    window: parsed.window as SaasRewardEnvelopeWindow,
+    id,
+    tenantId,
+    projectId: typeof projectId === "number" ? projectId : null,
+    window: window as SaasRewardEnvelopeWindow,
     onCapHitStrategy:
-      parsed.onCapHitStrategy as SaasRewardEnvelopeCapHitStrategy,
-    budgetCap: parsed.budgetCap,
-    expectedPayoutPerCall: parsed.expectedPayoutPerCall,
-    varianceCap: parsed.varianceCap,
-    currentConsumed: parsed.currentConsumed,
-    currentCallCount: parsed.currentCallCount,
-    currentWindowStartedAt: toRewardEnvelopeDate(
-      parsed.currentWindowStartedAt,
-      "currentWindowStartedAt",
-    ),
-    updatedAt: toRewardEnvelopeDate(parsed.updatedAt, "updatedAt"),
-  } satisfies RewardEnvelopeRow;
+      onCapHitStrategy as SaasRewardEnvelopeCapHitStrategy,
+    budgetCap,
+    expectedPayoutPerCall,
+    varianceCap,
+  };
 };
 
-const readRewardEnvelopeCache = async (params: {
+const readRewardEnvelopeConfigCache = async (params: {
   tenantId: number;
   projectId: number;
 }) => {
-  const redis = getRedis();
-  if (!redis) {
-    return new Map<string, RewardEnvelopeRow>();
-  }
+  return readJsonCacheMany(
+    buildRewardEnvelopeConfigCacheKeys(params),
+    parseCachedRewardEnvelopeConfigRow,
+  );
+};
 
-  const keys = buildRewardEnvelopeCacheKeys(params);
+const loadRewardEnvelopeConfigRows = async (
+  tx: DbTransaction,
+  params: {
+    tenantId: number;
+    projectId: number;
+  },
+) => {
+  const result = await tx.execute(sql`
+    SELECT
+      id,
+      tenant_id AS "tenantId",
+      project_id AS "projectId",
+      ${saasRewardEnvelopes.window} AS "window",
+      on_cap_hit_strategy AS "onCapHitStrategy",
+      budget_cap AS "budgetCap",
+      expected_payout_per_call AS "expectedPayoutPerCall",
+      variance_cap AS "varianceCap"
+    FROM ${saasRewardEnvelopes}
+    WHERE ${saasRewardEnvelopes.tenantId} = ${params.tenantId}
+      AND (
+        ${saasRewardEnvelopes.projectId} IS NULL
+        OR ${saasRewardEnvelopes.projectId} = ${params.projectId}
+      )
+  `);
 
-  try {
-    const values = await redis.mget(keys);
-    const output = new Map<string, RewardEnvelopeRow>();
-
-    values.forEach((value, index) => {
-      if (!value) {
-        return;
-      }
-
-      const parsed = parseCachedRewardEnvelopeRow(value);
-      if (parsed) {
-        output.set(keys[index]!, parsed);
-      }
-    });
-
-    return output;
-  } catch (error) {
-    logger.warning("saas reward envelope cache read failed", { err: error });
-    return new Map<string, RewardEnvelopeRow>();
-  }
+  return readSqlRows<RewardEnvelopeConfigRow>(result);
 };
 
 const normalizeRewardEnvelopeState = (
@@ -327,62 +348,30 @@ const buildRewardEnvelopeRejectionDetails = (
       `${trigger.scope}:${trigger.window} ${trigger.reason} triggered (${trigger.strategy})`,
   );
 
-const toCachedRewardEnvelopeRow = (
-  state: RewardEnvelopeState,
-): CachedRewardEnvelopeRow => ({
-  id: state.id,
-  tenantId: state.tenantId,
-  projectId: state.projectId,
-  window: state.window,
-  onCapHitStrategy: state.onCapHitStrategy,
-  budgetCap: state.budgetCap,
-  expectedPayoutPerCall: state.expectedPayoutPerCall,
-  varianceCap: state.varianceCap,
-  currentConsumed: state.currentConsumed,
-  currentCallCount: state.currentCallCount,
-  currentWindowStartedAt: state.currentWindowStartedAt.toISOString(),
-  updatedAt: state.updatedAt.toISOString(),
-});
-
-export const syncRewardEnvelopeCache = async (states: RewardEnvelopeState[]) => {
-  if (states.length === 0) {
+const syncRewardEnvelopeConfigCache = async (rows: RewardEnvelopeConfigRow[]) => {
+  if (rows.length === 0) {
     return;
   }
 
-  const redis = getRedis();
-  if (!redis) {
-    return;
-  }
+  await writeJsonCacheMany(
+    rows.map((row) => ({
+      key: buildRewardEnvelopeConfigCacheKey({
+        scope: resolveRewardEnvelopeScope(row.projectId),
+        tenantId: row.tenantId,
+        projectId: row.projectId,
+        window: row.window,
+      }),
+      value: row,
+      ttlSeconds: REWARD_ENVELOPE_CONFIG_CACHE_TTL_SECONDS,
+    })),
+  );
+};
 
-  const now = Date.now();
-  const pipeline = redis.pipeline();
-
-  for (const state of states) {
-    const key = buildRewardEnvelopeCacheKey({
-      scope: state.scope,
-      tenantId: state.tenantId,
-      projectId: state.projectId,
-      window: state.window,
-    });
-    const ttlMs =
-      resolveRewardEnvelopeWindowResetAt(
-        state.window,
-        state.currentWindowStartedAt,
-      ).getTime() - now;
-
-    if (ttlMs <= 0) {
-      pipeline.del(key);
-      continue;
-    }
-
-    pipeline.set(key, JSON.stringify(toCachedRewardEnvelopeRow(state)), "PX", ttlMs);
-  }
-
-  try {
-    await pipeline.exec();
-  } catch (error) {
-    logger.warning("saas reward envelope cache write failed", { err: error });
-  }
+export const invalidateRewardEnvelopeConfigCache = async (params: {
+  tenantId: number;
+  projectId?: number | null;
+}) => {
+  await deleteCacheKeys(buildRewardEnvelopeConfigCacheKeys(params));
 };
 
 export const loadLockedRewardEnvelopeStates = async (
@@ -394,17 +383,13 @@ export const loadLockedRewardEnvelopeStates = async (
   },
 ) => {
   const now = params.now ?? new Date();
-  const cachedRows = await readRewardEnvelopeCache(params);
+  const cachedRows = await readRewardEnvelopeConfigCache(params);
   const result = await tx.execute(sql`
     SELECT
       id,
       tenant_id AS "tenantId",
       project_id AS "projectId",
       ${saasRewardEnvelopes.window} AS "window",
-      on_cap_hit_strategy AS "onCapHitStrategy",
-      budget_cap AS "budgetCap",
-      expected_payout_per_call AS "expectedPayoutPerCall",
-      variance_cap AS "varianceCap",
       current_consumed AS "currentConsumed",
       current_call_count AS "currentCallCount",
       current_window_started_at AS "currentWindowStartedAt",
@@ -419,24 +404,64 @@ export const loadLockedRewardEnvelopeStates = async (
     FOR UPDATE
   `);
 
-  return readSqlRows<RewardEnvelopeRow>(result).map((row) => {
+  const stateRows = readSqlRows<RewardEnvelopeStateRow>(result);
+  const needsRefresh = stateRows.some((row) => {
     const scope = resolveRewardEnvelopeScope(row.projectId);
-    const cacheKey = buildRewardEnvelopeCacheKey({
+    const cacheKey = buildRewardEnvelopeConfigCacheKey({
       scope,
       tenantId: row.tenantId,
       projectId: row.projectId,
       window: row.window,
     });
     const cachedRow = cachedRows.get(cacheKey);
-    const sourceRow =
-      cachedRow &&
-      cachedRow.id === row.id &&
-      toRewardEnvelopeDate(cachedRow.updatedAt, "updatedAt").getTime() >=
-        toRewardEnvelopeDate(row.updatedAt, "updatedAt").getTime()
-        ? cachedRow
-        : row;
+    return !cachedRow || cachedRow.id !== row.id;
+  });
 
-    return normalizeRewardEnvelopeState(sourceRow, now);
+  const freshConfigRows = needsRefresh
+    ? await loadRewardEnvelopeConfigRows(tx, params)
+    : [];
+
+  if (freshConfigRows.length > 0) {
+    await syncRewardEnvelopeConfigCache(freshConfigRows);
+  }
+
+  const freshConfigRowsByKey = new Map<string, RewardEnvelopeConfigRow>();
+  freshConfigRows.forEach((row) => {
+    freshConfigRowsByKey.set(
+      buildRewardEnvelopeConfigCacheKey({
+        scope: resolveRewardEnvelopeScope(row.projectId),
+        tenantId: row.tenantId,
+        projectId: row.projectId,
+        window: row.window,
+      }),
+      row,
+    );
+  });
+
+  return stateRows.map((row) => {
+    const scope = resolveRewardEnvelopeScope(row.projectId);
+    const cacheKey = buildRewardEnvelopeConfigCacheKey({
+      scope,
+      tenantId: row.tenantId,
+      projectId: row.projectId,
+      window: row.window,
+    });
+    const cachedRow = cachedRows.get(cacheKey);
+    const configRow =
+      freshConfigRowsByKey.get(cacheKey) ??
+      (cachedRow && cachedRow.id === row.id ? cachedRow : null);
+
+    if (!configRow) {
+      throw new Error("Missing reward envelope config row.");
+    }
+
+    return normalizeRewardEnvelopeState(
+      {
+        ...row,
+        ...configRow,
+      },
+      now,
+    );
   });
 };
 

@@ -11,6 +11,7 @@ import type {
   HoldemRecentHand,
   HoldemRealtimePublicSeat,
   HoldemRealtimePublicTable,
+  HoldemTableRakePolicy,
   HoldemTable,
   HoldemTableSummary,
   HoldemStreet,
@@ -58,11 +59,7 @@ const HOLDEM_DECK_TEMPLATE: HoldemCard[] = (
 const hashSha256Hex = (value: string) =>
   createHash("sha256").update(value, "utf8").digest("hex");
 
-export type HoldemRakePolicy = {
-  rakeBps: number;
-  capAmount: string;
-  noFlopNoDrop: boolean;
-};
+export type HoldemRakePolicy = HoldemTableRakePolicy;
 
 export type HoldemAppliedRake = {
   totalRakeAmount: string;
@@ -97,6 +94,30 @@ const sortSeatsByIndex = (seats: HoldemSeatState[]) =>
 
 const toIsoStringOrNull = (value: string | Date | null | undefined) =>
   value ? new Date(value).toISOString() : null;
+
+type SerializedHoldemTournamentState = NonNullable<HoldemTable["tournament"]>;
+
+const serializeHoldemTournamentState = (
+  tournament: HoldemTableState["metadata"]["tournament"],
+): SerializedHoldemTournamentState | null => {
+  if (!tournament) {
+    return null;
+  }
+
+  return {
+    ...tournament,
+    payoutPlaces: Math.max(tournament.payoutPlaces ?? 1, 1),
+    completedAt: toIsoStringOrNull(tournament.completedAt),
+    standings: tournament.standings.map((standing) => ({
+      ...standing,
+      eliminatedAt: toIsoStringOrNull(standing.eliminatedAt),
+    })),
+    payouts: tournament.payouts.map((payout) => ({
+      ...payout,
+      awardedAt: toIsoStringOrNull(payout.awardedAt),
+    })),
+  };
+};
 
 const findSeatByIndex = (state: HoldemTableState, seatIndex: number | null) =>
   seatIndex === null
@@ -1301,6 +1322,17 @@ const buildRealtimeSeatSnapshot = (
   };
 };
 
+const canStartHoldemTable = (state: HoldemTableState) => {
+  if (
+    state.metadata.tableType === "tournament" &&
+    state.metadata.tournament?.status === "completed"
+  ) {
+    return false;
+  }
+
+  return state.status === "waiting" && listEligibleSeats(state).length >= HOLDEM_MIN_PLAYERS;
+};
+
 export const serializeHoldemRealtimeTable = (
   state: HoldemTableState,
 ): HoldemRealtimePublicTable => {
@@ -1312,7 +1344,10 @@ export const serializeHoldemRealtimeTable = (
   return {
     id: state.id,
     name: state.name,
+    tableType: state.metadata.tableType,
     status: state.status,
+    rakePolicy: state.metadata.rakePolicy,
+    tournament: serializeHoldemTournamentState(state.metadata.tournament),
     handNumber: state.metadata.handNumber,
     stage: state.metadata.stage,
     smallBlind: toMoneyString(state.smallBlind),
@@ -1321,8 +1356,7 @@ export const serializeHoldemRealtimeTable = (
     maximumBuyIn: toMoneyString(state.maximumBuyIn),
     maxSeats: state.maxSeats,
     occupiedSeats: state.seats.length,
-    canStart:
-      state.status === "waiting" && listEligibleSeats(state).length >= HOLDEM_MIN_PLAYERS,
+    canStart: canStartHoldemTable(state),
     communityCards: state.metadata.communityCards,
     pots:
       state.status === "active"
@@ -1426,7 +1460,10 @@ export const serializeHoldemTable = (
   return {
     id: state.id,
     name: state.name,
+    tableType: state.metadata.tableType,
     status: state.status,
+    rakePolicy: state.metadata.rakePolicy,
+    tournament: serializeHoldemTournamentState(state.metadata.tournament),
     handNumber: state.metadata.handNumber,
     stage: state.metadata.stage,
     smallBlind: toMoneyString(state.smallBlind),
@@ -1462,6 +1499,7 @@ export const serializeHoldemTable = (
       ...hand,
       settledAt: toIsoStringOrNull(hand.settledAt) ?? hand.settledAt,
     })),
+    dealerEvents: state.metadata.dealerEvents,
     createdAt: new Date(state.createdAt).toISOString(),
     updatedAt: new Date(state.updatedAt).toISOString(),
   };
@@ -1473,7 +1511,10 @@ export const serializeHoldemTableSummary = (
 ): HoldemTableSummary => ({
   id: state.id,
   name: state.name,
+  tableType: state.metadata.tableType,
   status: state.status,
+  rakePolicy: state.metadata.rakePolicy,
+  tournament: serializeHoldemTournamentState(state.metadata.tournament),
   smallBlind: toMoneyString(state.smallBlind),
   bigBlind: toMoneyString(state.bigBlind),
   minimumBuyIn: toMoneyString(state.minimumBuyIn),
@@ -1482,7 +1523,7 @@ export const serializeHoldemTableSummary = (
   occupiedSeats: state.seats.length,
   heroSeatIndex:
     state.seats.find((seat) => seat.userId === viewerUserId)?.seatIndex ?? null,
-  canStart: state.status === "waiting" && listEligibleSeats(state).length >= HOLDEM_MIN_PLAYERS,
+  canStart: canStartHoldemTable(state),
   updatedAt: new Date(state.updatedAt).toISOString(),
 });
 

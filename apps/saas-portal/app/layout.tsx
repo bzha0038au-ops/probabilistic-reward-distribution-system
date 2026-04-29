@@ -1,7 +1,6 @@
 import "./globals.css";
 
 import type { Metadata, Viewport } from "next";
-import type { ReactNode } from "react";
 import { GeistSans } from "geist/font/sans";
 
 const title = "Reward SaaS Portal";
@@ -27,11 +26,7 @@ export const viewport: Viewport = {
   colorScheme: "light",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: ReactNode;
-}) {
+export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en">
       <body className={`${GeistSans.variable} app-root`}>{children}</body>

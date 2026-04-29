@@ -13,6 +13,7 @@ import {
   sql,
   type SQL,
 } from '@reward/database/orm';
+import { emitAuthSecurityEvent } from '../security-events/service';
 
 export async function recordAuthEvent(payload: {
   eventType: string;
@@ -22,14 +23,33 @@ export async function recordAuthEvent(payload: {
   userAgent?: string | null;
   metadata?: Record<string, unknown> | null;
 }) {
-  await db.insert(authEvents).values({
-    eventType: payload.eventType,
-    email: payload.email ?? null,
-    userId: payload.userId ?? null,
-    ip: payload.ip ?? null,
-    userAgent: payload.userAgent ?? null,
-    metadata: payload.metadata ?? null,
-  });
+  const [created] = await db
+    .insert(authEvents)
+    .values({
+      eventType: payload.eventType,
+      email: payload.email ?? null,
+      userId: payload.userId ?? null,
+      ip: payload.ip ?? null,
+      userAgent: payload.userAgent ?? null,
+      metadata: payload.metadata ?? null,
+    })
+    .returning({
+      id: authEvents.id,
+      createdAt: authEvents.createdAt,
+    });
+
+  if (created) {
+    await emitAuthSecurityEvent({
+      sourceRecordId: created.id,
+      eventType: payload.eventType,
+      email: payload.email ?? null,
+      userId: payload.userId ?? null,
+      ip: payload.ip ?? null,
+      userAgent: payload.userAgent ?? null,
+      metadata: payload.metadata ?? null,
+      occurredAt: created.createdAt,
+    });
+  }
 }
 
 export async function listAuthEvents(options: {

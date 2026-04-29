@@ -7,8 +7,6 @@ import {
   VerificationTokenConfirmSchema,
 } from "@reward/shared-types/auth";
 import { type UserFreezeScope } from "@reward/shared-types/risk";
-import { eq } from "@reward/database/orm";
-import { users } from "@reward/database";
 
 import { db } from "../../../db";
 import {
@@ -40,7 +38,15 @@ import {
   getCurrentLegalAcceptanceStateForUser,
   recordLegalAcceptancesInTransaction,
 } from "../../../modules/legal/service";
-import { ensureUserFreeze, isUserFrozen } from "../../../modules/risk/service";
+import {
+  ensureUserFreeze,
+  isUserFrozen,
+  trackUserDeviceFingerprint,
+} from "../../../modules/risk/service";
+import {
+  resolveRequestCountryCode,
+  syncUserJurisdictionState,
+} from "../../../modules/risk/jurisdiction-service";
 import {
   consumeMarketingBudget,
   getAntiAbuseConfig,
@@ -48,6 +54,7 @@ import {
   getSystemFlags,
 } from "../../../modules/system/service";
 import { grantDailyCheckInRewardOnLogin } from "../../../modules/gamification/service";
+import { createReferralForRegistration } from "../../../modules/referral/service";
 import { revokeAuthSessions } from "../../../modules/session/service";
 import { withAdminAuditContext } from "../../admin-audit";
 import { createAdminSessionToken } from "../../../shared/admin-session";
@@ -55,7 +62,7 @@ import { applyAuthFailureDelay } from "../../../shared/auth-delay";
 import { createUserSessionToken } from "../../../shared/user-session";
 import { parseSchema } from "../../../shared/validation";
 import { sendError, sendErrorForException, sendSuccess } from "../../respond";
-import { readStringValue, toObject } from "../../utils";
+import { readHeaderValue, readStringValue, toObject } from "../../utils";
 import { validateAuth } from "../../validators";
 import {
   adminAuthRateLimit,
@@ -89,6 +96,14 @@ export async function registerAuthPublicRoutes(app: AppInstance) {
       const password = parsed.data.password;
       const referrerId = Number(parsed.data.referrerId ?? 0);
       const userAgent = resolveUserAgent(request);
+      const requestDeviceFingerprint = readHeaderValue(
+        request.headers as Record<string, unknown>,
+        "x-device-fingerprint",
+      ) ?? parsed.data.deviceFingerprint?.trim() ?? null;
+      const requestCountryCode = await resolveRequestCountryCode({
+        headers: request.headers as Record<string, unknown>,
+        ip: request.ip,
+      });
       const currentLegalDocuments = await getCurrentEffectiveLegalDocuments(db);
 
       const systemFlags = await getSystemFlags(db);
@@ -216,6 +231,12 @@ export async function registerAuthPublicRoutes(app: AppInstance) {
       }
 
       const user = await createUserWithWallet(email, password, {
+        profile: {
+          birthDate: parsed.data.birthDate,
+          registrationCountryCode: requestCountryCode,
+          countryTier: "unknown",
+          countryResolvedAt: requestCountryCode ? new Date() : null,
+        },
         afterCreate: async (transaction, createdUser) => {
           await recordLegalAcceptancesInTransaction(transaction, {
             userId: createdUser.id,
@@ -224,6 +245,29 @@ export async function registerAuthPublicRoutes(app: AppInstance) {
             ip: request.ip,
             userAgent,
           });
+
+          await createReferralForRegistration(
+            {
+              referrerId,
+              referredId: createdUser.id,
+            },
+            transaction,
+          );
+        },
+      });
+      await syncUserJurisdictionState({
+        userId: user.id,
+        countryCodeOverride: requestCountryCode,
+      });
+      await trackUserDeviceFingerprint({
+        userId: user.id,
+        deviceFingerprint: requestDeviceFingerprint,
+        entrypoint: "login",
+        activityType: "user_register_success",
+        ip: request.ip,
+        userAgent,
+        metadata: {
+          source: "register",
         },
       });
       try {
@@ -280,34 +324,6 @@ export async function registerAuthPublicRoutes(app: AppInstance) {
           });
         }
       }
-      if (
-        rewardConfig.referralEnabled &&
-        rewardConfig.referralAmount.gt(0) &&
-        Number.isFinite(referrerId) &&
-        referrerId > 0
-      ) {
-        const referrer = await db
-          .select({ id: users.id })
-          .from(users)
-          .where(eq(users.id, referrerId))
-          .limit(1);
-        if (referrer.length > 0) {
-          const budget = await consumeMarketingBudget(
-            db,
-            rewardConfig.referralAmount,
-          );
-          if (budget.allowed) {
-            await grantBonus({
-              userId: referrerId,
-              amount: rewardConfig.referralAmount.toString(),
-              entryType: "referral_bonus",
-              referenceType: "reward_event",
-              metadata: { reason: "referral_bonus", referredUserId: user.id },
-            });
-          }
-        }
-      }
-
       await applyAuthFailureDelay();
       return sendSuccess(reply, { id: user.id, email: user.email }, 201);
     },
@@ -454,6 +470,11 @@ export async function registerAuthPublicRoutes(app: AppInstance) {
 
       const email = (readStringValue(payload, "email") ?? "").toLowerCase();
       const password = readStringValue(payload, "password") ?? "";
+      const userAgent = resolveUserAgent(request);
+      const requestDeviceFingerprint = readHeaderValue(
+        request.headers as Record<string, unknown>,
+        "x-device-fingerprint",
+      );
 
       const systemFlags = await getSystemFlags(db);
       if (systemFlags.maintenanceMode) {
@@ -461,7 +482,7 @@ export async function registerAuthPublicRoutes(app: AppInstance) {
           eventType: "user_login_blocked",
           email,
           ip: request.ip,
-          userAgent: resolveUserAgent(request),
+          userAgent,
           metadata: { reason: "maintenance_mode" },
         });
         await applyAuthFailureDelay();
@@ -472,7 +493,7 @@ export async function registerAuthPublicRoutes(app: AppInstance) {
           eventType: "user_login_blocked",
           email,
           ip: request.ip,
-          userAgent: resolveUserAgent(request),
+          userAgent,
           metadata: { reason: "login_disabled" },
         });
         await applyAuthFailureDelay();
@@ -496,7 +517,7 @@ export async function registerAuthPublicRoutes(app: AppInstance) {
           email,
           userId: existingUser.id,
           ip: request.ip,
-          userAgent: resolveUserAgent(request),
+          userAgent,
           metadata: { reason: "account_lock" },
         });
         await applyAuthFailureDelay();
@@ -515,7 +536,7 @@ export async function registerAuthPublicRoutes(app: AppInstance) {
           eventType: "user_login_failed",
           email,
           ip: request.ip,
-          userAgent: resolveUserAgent(request),
+          userAgent,
           metadata: { reason: "invalid_credentials" },
         });
         if (existingUser) {
@@ -543,12 +564,13 @@ export async function registerAuthPublicRoutes(app: AppInstance) {
         );
       }
 
-      const anomaly = await detectLoginAnomaly({
+      const requestCountryCode = await resolveRequestCountryCode({
+        headers: request.headers as Record<string, unknown>,
+        ip: request.ip,
+      });
+      await syncUserJurisdictionState({
         userId: user.id,
-        email: user.email,
-        successEventType: "user_login_success",
-        currentIp: request.ip,
-        currentUserAgent: resolveUserAgent(request),
+        countryCodeOverride: requestCountryCode,
       });
 
       const { token, expiresAt, sessionId } = await createUserSessionToken(
@@ -559,19 +581,41 @@ export async function registerAuthPublicRoutes(app: AppInstance) {
         },
         {
           ip: request.ip,
-          userAgent: resolveUserAgent(request),
+          userAgent,
         },
       );
+
+      const trackedDevice = await trackUserDeviceFingerprint({
+        userId: user.id,
+        deviceFingerprint: requestDeviceFingerprint,
+        entrypoint: "login",
+        activityType: "user_login_success",
+        ip: request.ip,
+        userAgent,
+        sessionId,
+      });
+      const currentDeviceFingerprint = trackedDevice?.fingerprint ?? null;
+
+      const anomaly = await detectLoginAnomaly({
+        userId: user.id,
+        email: user.email,
+        successEventType: "user_login_success",
+        currentIp: request.ip,
+        currentUserAgent: userAgent,
+        currentDeviceFingerprint,
+      });
 
       await safeRecordAuthEvent({
         eventType: "user_login_success",
         email,
         userId: user.id,
         ip: request.ip,
-        userAgent: resolveUserAgent(request),
+        userAgent,
         metadata: {
           sessionId,
           sessionKind: "user",
+          deviceFingerprint: currentDeviceFingerprint,
+          deviceFingerprintSource: trackedDevice?.source ?? null,
         },
       });
       if (anomaly) {
@@ -580,7 +624,8 @@ export async function registerAuthPublicRoutes(app: AppInstance) {
           email: user.email,
           anomalyEventType: "user_login_anomaly",
           currentIp: request.ip,
-          currentUserAgent: resolveUserAgent(request),
+          currentUserAgent: userAgent,
+          currentDeviceFingerprint,
           anomaly,
         });
       }
@@ -613,6 +658,11 @@ export async function registerAuthPublicRoutes(app: AppInstance) {
       const password = readStringValue(payload, "password") ?? "";
       const totpCode = readStringValue(payload, "totpCode") ?? "";
       const breakGlassCode = readStringValue(payload, "breakGlassCode") ?? "";
+      const userAgent = resolveUserAgent(request);
+      const requestDeviceFingerprint = readHeaderValue(
+        request.headers as Record<string, unknown>,
+        "x-device-fingerprint",
+      );
 
       const failureConfig = await resolveAuthFailureConfig();
       const existingUser = await getUserByEmail(email);
@@ -625,7 +675,7 @@ export async function registerAuthPublicRoutes(app: AppInstance) {
           email,
           userId: existingUser.id,
           ip: request.ip,
-          userAgent: resolveUserAgent(request),
+          userAgent,
           metadata: { reason: "account_lock" },
         });
         await applyAuthFailureDelay();
@@ -644,7 +694,7 @@ export async function registerAuthPublicRoutes(app: AppInstance) {
           eventType: "admin_login_failed",
           email,
           ip: request.ip,
-          userAgent: resolveUserAgent(request),
+          userAgent,
           metadata: { reason: "invalid_credentials" },
         });
         if (existingUser) {
@@ -697,7 +747,7 @@ export async function registerAuthPublicRoutes(app: AppInstance) {
             email,
             userId: user.id,
             ip: request.ip,
-            userAgent: resolveUserAgent(request),
+            userAgent,
             metadata: {
               reason: failureReason,
             },
@@ -742,14 +792,6 @@ export async function registerAuthPublicRoutes(app: AppInstance) {
         }
       }
 
-      const anomaly = await detectLoginAnomaly({
-        userId: user.id,
-        email: user.email,
-        successEventType: "admin_login_success",
-        currentIp: request.ip,
-        currentUserAgent: resolveUserAgent(request),
-      });
-
       const { token, expiresAt, sessionId } = await createAdminSessionToken(
         {
           adminId: admin.id,
@@ -764,16 +806,39 @@ export async function registerAuthPublicRoutes(app: AppInstance) {
         },
         {
           ip: request.ip,
-          userAgent: resolveUserAgent(request),
+          userAgent,
         },
       );
+
+      const trackedDevice = await trackUserDeviceFingerprint({
+        userId: user.id,
+        deviceFingerprint: requestDeviceFingerprint,
+        entrypoint: "login",
+        activityType: "admin_login_success",
+        ip: request.ip,
+        userAgent,
+        sessionId,
+        metadata: {
+          adminId: admin.id,
+        },
+      });
+      const currentDeviceFingerprint = trackedDevice?.fingerprint ?? null;
+
+      const anomaly = await detectLoginAnomaly({
+        userId: user.id,
+        email: user.email,
+        successEventType: "admin_login_success",
+        currentIp: request.ip,
+        currentUserAgent: userAgent,
+        currentDeviceFingerprint,
+      });
 
       await safeRecordAuthEvent({
         eventType: "admin_login_success",
         email,
         userId: user.id,
         ip: request.ip,
-        userAgent: resolveUserAgent(request),
+        userAgent,
         metadata: {
           adminId: admin.id,
           mfaEnabled: Boolean(admin.mfaEnabled),
@@ -781,6 +846,8 @@ export async function registerAuthPublicRoutes(app: AppInstance) {
           recoveryCodesRemaining,
           sessionId,
           sessionKind: "admin",
+          deviceFingerprint: currentDeviceFingerprint,
+          deviceFingerprintSource: trackedDevice?.source ?? null,
         },
       });
       await recordAdminAction(withAdminAuditContext(request, {
@@ -812,7 +879,8 @@ export async function registerAuthPublicRoutes(app: AppInstance) {
           email: user.email,
           anomalyEventType: "admin_login_anomaly",
           currentIp: request.ip,
-          currentUserAgent: resolveUserAgent(request),
+          currentUserAgent: userAgent,
+          currentDeviceFingerprint,
           anomaly,
         });
       }

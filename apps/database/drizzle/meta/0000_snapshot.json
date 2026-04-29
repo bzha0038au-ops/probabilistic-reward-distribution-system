@@ -1,7 +1,5 @@
 {
-  "id": "41bd9b3f-a479-4e39-a542-34eecb74e057",
-  "prevId": "00000000-0000-0000-0000-000000000000",
-  "version": "6",
+  "version": "7",
   "dialect": "postgresql",
   "tables": {
     "public.draw_records": {
@@ -61,59 +59,96 @@
       },
       "indexes": {
         "draw_records_user_created_idx": {
-          "name": "draw_records_user_created_idx",
           "columns": [
-            "user_id",
-            "created_at"
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "draw_records_user_created_idx",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         },
         "draw_records_prize_status_idx": {
-          "name": "draw_records_prize_status_idx",
           "columns": [
-            "prize_id",
-            "status"
+            {
+              "expression": "prize_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "draw_records_prize_status_idx",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         },
         "draw_records_status_idx": {
-          "name": "draw_records_status_idx",
           "columns": [
-            "status"
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "draw_records_status_idx",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "draw_records_user_id_users_id_fk": {
           "name": "draw_records_user_id_users_id_fk",
           "tableFrom": "draw_records",
-          "tableTo": "users",
           "columnsFrom": [
             "user_id"
           ],
+          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "draw_records_prize_id_prizes_id_fk": {
           "name": "draw_records_prize_id_prizes_id_fk",
           "tableFrom": "draw_records",
-          "tableTo": "prizes",
           "columnsFrom": [
             "prize_id"
           ],
+          "tableTo": "prizes",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "set null"
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false,
+      "checkConstraints": {}
     },
     "public.prizes": {
       "name": "prizes",
@@ -183,24 +218,48 @@
       },
       "indexes": {
         "prizes_active_stock_idx": {
-          "name": "prizes_active_stock_idx",
           "columns": [
-            "is_active",
-            "stock"
+            {
+              "expression": "is_active",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "stock",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "prizes_active_stock_idx",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         },
         "prizes_pool_threshold_idx": {
-          "name": "prizes_pool_threshold_idx",
           "columns": [
-            "pool_threshold"
+            {
+              "expression": "pool_threshold",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "prizes_pool_threshold_idx",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         }
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false,
+      "checkConstraints": {}
     },
     "public.system_config": {
       "name": "system_config",
@@ -247,16 +306,27 @@
       },
       "indexes": {
         "system_config_key_unique": {
-          "name": "system_config_key_unique",
           "columns": [
-            "config_key"
+            {
+              "expression": "config_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": true
+          "with": {},
+          "name": "system_config_key_unique",
+          "isUnique": true,
+          "method": "btree",
+          "concurrently": false
         }
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false,
+      "checkConstraints": {}
     },
     "public.transactions": {
       "name": "transactions",
@@ -332,60 +402,102 @@
       },
       "indexes": {
         "transactions_user_created_idx": {
-          "name": "transactions_user_created_idx",
           "columns": [
-            "user_id",
-            "created_at"
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "transactions_user_created_idx",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         },
         "transactions_type_created_idx": {
-          "name": "transactions_type_created_idx",
           "columns": [
-            "type",
-            "created_at"
+            {
+              "expression": "type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "transactions_type_created_idx",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         },
         "transactions_reference_idx": {
-          "name": "transactions_reference_idx",
           "columns": [
-            "reference_type",
-            "reference_id"
+            {
+              "expression": "reference_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "reference_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "transactions_reference_idx",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "transactions_user_id_users_id_fk": {
           "name": "transactions_user_id_users_id_fk",
           "tableFrom": "transactions",
-          "tableTo": "users",
           "columnsFrom": [
             "user_id"
           ],
+          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "transactions_wallet_id_wallets_id_fk": {
           "name": "transactions_wallet_id_wallets_id_fk",
           "tableFrom": "transactions",
-          "tableTo": "wallets",
           "columnsFrom": [
             "wallet_id"
           ],
+          "tableTo": "wallets",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false,
+      "checkConstraints": {}
     },
     "public.users": {
       "name": "users",
@@ -433,16 +545,27 @@
       },
       "indexes": {
         "users_email_unique": {
-          "name": "users_email_unique",
           "columns": [
-            "email"
+            {
+              "expression": "email",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": true
+          "with": {},
+          "name": "users_email_unique",
+          "isUnique": true,
+          "method": "btree",
+          "concurrently": false
         }
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false,
+      "checkConstraints": {}
     },
     "public.wallets": {
       "name": "wallets",
@@ -484,44 +607,69 @@
       },
       "indexes": {
         "wallets_user_id_unique": {
-          "name": "wallets_user_id_unique",
           "columns": [
-            "user_id"
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": true
+          "with": {},
+          "name": "wallets_user_id_unique",
+          "isUnique": true,
+          "method": "btree",
+          "concurrently": false
         },
         "wallets_balance_idx": {
-          "name": "wallets_balance_idx",
           "columns": [
-            "balance"
+            {
+              "expression": "balance",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "wallets_balance_idx",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "wallets_user_id_users_id_fk": {
           "name": "wallets_user_id_users_id_fk",
           "tableFrom": "wallets",
-          "tableTo": "users",
           "columnsFrom": [
             "user_id"
           ],
+          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false,
+      "checkConstraints": {}
     }
   },
   "enums": {},
   "schemas": {},
   "_meta": {
-    "columns": {},
     "schemas": {},
-    "tables": {}
-  }
+    "tables": {},
+    "columns": {}
+  },
+  "id": "41bd9b3f-a479-4e39-a542-34eecb74e057",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "sequences": {},
+  "policies": {},
+  "views": {},
+  "roles": {}
 }

@@ -6,19 +6,31 @@ import {
   saasBillingRuns,
   saasBillingTopUps,
 } from "@reward/database";
-import { saasDecisionTypeValues } from "@reward/shared-types/saas";
+import {
+  saasBillingRunExternalSyncActionValues,
+  saasBillingRunExternalSyncStageValues,
+  saasBillingRunExternalSyncStatusValues,
+  saasDecisionTypeValues,
+} from "@reward/shared-types/saas";
 import type {
   PrizeEngineApiKeyScope,
+  SaasBillingRunExternalSyncAction,
   SaasBillingDecisionBreakdown,
   SaasBillingDecisionPricing,
   SaasBillingDecisionPricingInput,
+  SaasBillingRunExternalSyncStage,
+  SaasBillingRunExternalSyncStatus,
   SaasBillingRun,
   SaasBillingRunCreate,
   SaaSEnvironment,
   SaasDecisionType,
 } from "@reward/shared-types/saas";
 
-import { badRequestError } from "../../shared/errors";
+import {
+  badRequestError,
+  conflictError,
+  internalInvariantError,
+} from "../../shared/errors";
 import { toMoneyString } from "../../shared/money";
 import type { StripeEvent, StripeInvoice } from "./stripe";
 
@@ -45,6 +57,54 @@ export const BILLING_RUN_TERMINAL_STATUSES = new Set<SaasBillingRun["status"]>([
 export const BILLING_RUN_DISPATCHED_STATUSES = new Set<
   SaasBillingRun["status"]
 >(["sent", "paid", "void", "uncollectible"]);
+
+export const BILLING_RUN_SYNC_CONFLICT_MESSAGE =
+  "Billing run sync state changed concurrently. Retry the request.";
+
+const billingRunExternalSyncTransitionMap = new Map<
+  SaasBillingRunExternalSyncStatus,
+  Set<SaasBillingRunExternalSyncStatus>
+>([
+  ["idle", new Set(["processing"])],
+  ["processing", new Set(["processing", "succeeded", "failed"])],
+  ["succeeded", new Set(["processing"])],
+  ["failed", new Set(["processing"])],
+]);
+
+export const saasBillingRunExternalSyncActionSet = new Set<
+  SaasBillingRunExternalSyncAction
+>(saasBillingRunExternalSyncActionValues);
+
+export const saasBillingRunExternalSyncStageSet = new Set<
+  SaasBillingRunExternalSyncStage
+>(saasBillingRunExternalSyncStageValues);
+
+export const resolveBillingRunExternalSyncTransition = (
+  currentStatus: SaasBillingRunExternalSyncStatus,
+  nextStatus: SaasBillingRunExternalSyncStatus,
+) => {
+  if (!saasBillingRunExternalSyncStatusValues.includes(currentStatus)) {
+    throw internalInvariantError("Billing run external sync status is invalid.");
+  }
+
+  const allowedStatuses = billingRunExternalSyncTransitionMap.get(currentStatus);
+  if (!allowedStatuses?.has(nextStatus)) {
+    throw internalInvariantError("Billing run external sync transition is invalid.");
+  }
+
+  return nextStatus;
+};
+
+export const billingRunSyncConflictError = () =>
+  conflictError(BILLING_RUN_SYNC_CONFLICT_MESSAGE, {
+    code: API_ERROR_CODES.BILLING_RUN_SYNC_CONFLICT,
+  });
+
+export const isBillingRunSyncConflictError = (error: unknown) =>
+  (typeof error === "object" || typeof error === "function") &&
+  error !== null &&
+  Reflect.get(error, "code") ===
+  API_ERROR_CODES.BILLING_RUN_SYNC_CONFLICT;
 
 export const getDefaultBillingPeriod = (now = new Date()) => {
   const currentMonthStart = new Date(
@@ -518,6 +578,21 @@ export const buildBillingTopUpIdempotencyKey = (
     topUp.stripeCustomerId ?? null,
   ]);
 
+export const buildBillingDisputeCreditNoteIdempotencyKey = (payload: {
+  disputeId: number;
+  billingRunId: number;
+  tenantId: number;
+  approvedRefundAmount: string;
+  resolutionType: string;
+}) =>
+  buildSaasStripeIdempotencyKey("saas-billing-dispute-credit-note", [
+    payload.disputeId,
+    payload.billingRunId,
+    payload.tenantId,
+    payload.approvedRefundAmount,
+    payload.resolutionType,
+  ]);
+
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -580,6 +655,8 @@ export const parseStripeInvoiceObject = (
     status: readStringField(value, "status"),
     hosted_invoice_url: readStringField(value, "hosted_invoice_url"),
     invoice_pdf: readStringField(value, "invoice_pdf"),
+    amount_paid: readNumberField(value, "amount_paid"),
+    amount_remaining: readNumberField(value, "amount_remaining"),
     starting_balance: readNumberField(value, "starting_balance"),
     amount_due: readNumberField(value, "amount_due"),
     total: readNumberField(value, "total"),

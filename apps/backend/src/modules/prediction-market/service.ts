@@ -1,22 +1,33 @@
 import type Decimal from "decimal.js";
 import {
   ledgerEntries,
+  predictionMarketAppeals,
+  predictionMarketOracles,
   predictionMarkets,
   predictionPositions,
   userWallets,
 } from "@reward/database";
-import { desc, eq, inArray, sql } from "@reward/database/orm";
+import { and, desc, eq, inArray, sql } from "@reward/database/orm";
 import { API_ERROR_CODES } from "@reward/shared-types/api";
 import {
   type CancelPredictionMarketRequest,
+  type PredictionMarketAppealAcknowledgeRequest,
+  type PredictionMarketAppealQueueItem,
+  PredictionMarketAppealQueueItemSchema,
+  type PredictionMarketAppealReason,
+  type PredictionMarketAppealStatus,
+  PredictionMarketAppealRecordSchema,
   PredictionMarketDetailSchema,
   PredictionMarketOutcomeSchema,
+  type PredictionMarketOracleBinding,
+  PredictionMarketOracleBindingRequestSchema,
   PredictionMarketOracleSchema,
   PredictionMarketPortfolioItemSchema,
   PredictionMarketPortfolioStatusSchema,
   PredictionMarketTagsSchema,
   PredictionPositionStatusSchema,
   PredictionMarketStatusSchema,
+  type PredictionMarketOracleBindingRequest,
   type CreatePredictionMarketRequest,
   type PredictionMarketDetail,
   type PredictionMarketHistoryResponse,
@@ -41,15 +52,25 @@ import {
   notFoundError,
   persistenceError,
 } from "../../shared/errors";
+import { getConfigView } from "../../shared/config";
+import { logger } from "../../shared/logger";
 import { toDecimal, toMoneyString } from "../../shared/money";
 import { readSqlRows } from "../../shared/sql-result";
 import { parseSchema } from "../../shared/validation";
+import { applyHouseBankrollDelta } from "../house/service";
 import { assertKycStakeAllowed } from "../kyc/service";
+import { sendPredictionMarketSettledNotification } from "../notification/service";
+import {
+  evaluatePredictionMarketOracle,
+  type PredictionMarketOracleEvaluationResult,
+} from "./oracle-providers";
 import { resolvePariMutuelSettlement } from "./settlement";
 
 type DbExecutor = DbClient | DbTransaction;
 
+type StoredAppeal = typeof predictionMarketAppeals.$inferSelect;
 type StoredMarket = typeof predictionMarkets.$inferSelect;
+type StoredOracle = typeof predictionMarketOracles.$inferSelect;
 type StoredPosition = typeof predictionPositions.$inferSelect;
 
 type LockedWalletRow = {
@@ -71,6 +92,7 @@ type LockedMarketRow = {
   tags: StoredMarket["tags"];
   invalidPolicy: StoredMarket["invalidPolicy"];
   mechanism: StoredMarket["mechanism"];
+  vigBps: StoredMarket["vigBps"];
   status: StoredMarket["status"];
   outcomes: StoredMarket["outcomes"];
   totalPoolAmount: StoredMarket["totalPoolAmount"];
@@ -90,14 +112,19 @@ type LockedMarketRow = {
 
 const MARKET_REFERENCE_TYPE = "prediction_market";
 const STAKE_ENTRY_TYPE = "prediction_market_stake";
+const SELL_ENTRY_TYPE = "prediction_market_sell";
 const PAYOUT_ENTRY_TYPE = "prediction_market_payout";
 const REFUND_ENTRY_TYPE = "prediction_market_refund";
+const VIG_ENTRY_TYPE = "prediction_market_vig";
 
 const OutcomeArraySchema = PredictionMarketOutcomeSchema.array().min(2);
 const TagsArraySchema = PredictionMarketTagsSchema;
 const MarketDetailListSchema = PredictionMarketDetailSchema.array();
+const MarketAppealQueueItemListSchema =
+  PredictionMarketAppealQueueItemSchema.array();
 const MarketPortfolioItemListSchema =
   PredictionMarketPortfolioItemSchema.array();
+const config = getConfigView();
 
 const normalizeJsonValue = (value: unknown) => {
   if (typeof value !== "string") {
@@ -198,6 +225,164 @@ const parseMarketOracle = (market: {
   return parsed.success ? parsed.data : null;
 };
 
+const buildDefaultOracleBinding = (): PredictionMarketOracleBindingRequest => ({
+  provider: "manual_admin",
+  name: "Manual Admin",
+  config: {},
+});
+
+const resolveCreateOracleBinding = (
+  value: CreatePredictionMarketRequest["oracleBinding"],
+) => {
+  const candidate = value ?? buildDefaultOracleBinding();
+  const parsed =
+    PredictionMarketOracleBindingRequestSchema.safeParse(candidate);
+  if (!parsed.success) {
+    throw badRequestError("Prediction market oracle binding is invalid.", {
+      details: parsed.error.issues.map((issue) => issue.message),
+    });
+  }
+
+  return parsed.data;
+};
+
+const collectOracleOutcomeKeys = (
+  binding: PredictionMarketOracleBindingRequest,
+): string[] => {
+  switch (binding.provider) {
+    case "manual_admin":
+      return [];
+    case "api_pull":
+      if (binding.config.outcomeValueMap) {
+        return Object.values(binding.config.outcomeValueMap);
+      }
+      return binding.config.comparison
+        ? [
+            binding.config.comparison.outcomeKeyIfTrue,
+            binding.config.comparison.outcomeKeyIfFalse,
+          ]
+        : [];
+    case "chainlink":
+      return [
+        binding.config.comparison.outcomeKeyIfTrue,
+        binding.config.comparison.outcomeKeyIfFalse,
+      ];
+    case "uma_oracle":
+      return [
+        binding.config.outcomeKeyIfTrue,
+        binding.config.outcomeKeyIfFalse ?? "",
+      ].filter(Boolean);
+  }
+};
+
+const assertOracleBindingMatchesOutcomes = (
+  binding: PredictionMarketOracleBindingRequest,
+  outcomes: readonly PredictionMarketOutcome[],
+) => {
+  const outcomeKeySet = new Set(outcomes.map((outcome) => outcome.key));
+  const missingKeys = collectOracleOutcomeKeys(binding).filter(
+    (key) => !outcomeKeySet.has(key),
+  );
+
+  if (missingKeys.length > 0) {
+    throw badRequestError(
+      "Prediction market oracle binding references invalid outcomes.",
+      {
+        details: missingKeys.map((key) => `Unknown oracle outcome key: ${key}`),
+      },
+    );
+  }
+};
+
+const serializeOracleBinding = (
+  oracle: StoredOracle | null | undefined,
+): PredictionMarketOracleBinding | null => {
+  if (!oracle) {
+    return null;
+  }
+
+  return {
+    id: oracle.id,
+    provider: oracle.provider,
+    name: oracle.name ?? null,
+    status: oracle.status,
+    lastCheckedAt: oracle.lastCheckedAt ?? null,
+    lastReportedAt: oracle.lastReportedAt ?? null,
+    lastResolvedOutcomeKey: oracle.lastResolvedOutcomeKey ?? null,
+    createdAt: oracle.createdAt,
+    updatedAt: oracle.updatedAt,
+  };
+};
+
+const serializePredictionMarketAppealRecord = (appeal: StoredAppeal) => {
+  const parsed = PredictionMarketAppealRecordSchema.safeParse({
+    id: appeal.id,
+    marketId: appeal.marketId,
+    oracleBindingId: appeal.oracleBindingId ?? null,
+    appealKey: appeal.appealKey,
+    reason: appeal.reason,
+    status: appeal.status,
+    provider: appeal.provider ?? null,
+    title: appeal.title,
+    description: appeal.description,
+    metadata: toRecord(appeal.metadata),
+    firstDetectedAt: appeal.firstDetectedAt,
+    lastDetectedAt: appeal.lastDetectedAt,
+    resolvedByAdminId: appeal.resolvedByAdminId ?? null,
+    resolvedAt: appeal.resolvedAt ?? null,
+    createdAt: appeal.createdAt,
+    updatedAt: appeal.updatedAt,
+  });
+  if (!parsed.success) {
+    throw internalInvariantError(
+      "Prediction market appeal serialization is invalid.",
+    );
+  }
+
+  return parsed.data;
+};
+
+const serializePredictionMarketAppealQueueItem = (params: {
+  appeal: StoredAppeal;
+  market: StoredMarket;
+  oracleBinding: StoredOracle | null;
+}): PredictionMarketAppealQueueItem => {
+  const parsed = PredictionMarketAppealQueueItemSchema.safeParse({
+    ...serializePredictionMarketAppealRecord(params.appeal),
+    market: {
+      id: params.market.id,
+      slug: params.market.slug,
+      roundKey: params.market.roundKey,
+      title: params.market.title,
+      status: params.market.status,
+      oracleBinding: serializeOracleBinding(params.oracleBinding),
+    },
+  });
+  if (!parsed.success) {
+    throw internalInvariantError(
+      "Prediction market appeal queue serialization is invalid.",
+    );
+  }
+
+  return parsed.data;
+};
+
+const loadOracleBindingsByMarketId = async (
+  executor: DbExecutor,
+  marketIds: number[],
+) => {
+  if (marketIds.length === 0) {
+    return new Map<number, StoredOracle>();
+  }
+
+  const rows = await executor
+    .select()
+    .from(predictionMarketOracles)
+    .where(inArray(predictionMarketOracles.marketId, marketIds));
+
+  return new Map(rows.map((row) => [row.marketId, row] as const));
+};
+
 const parseMarketDetailList = (value: unknown) => {
   const parsed = parseSchema(MarketDetailListSchema, value);
   if (!parsed.isValid) {
@@ -212,6 +397,17 @@ const parseMarketPortfolioItemList = (value: unknown) => {
   if (!parsed.isValid) {
     throw internalInvariantError(
       "Prediction market portfolio serialization is invalid.",
+    );
+  }
+
+  return parsed.data;
+};
+
+const parseMarketAppealQueueItemList = (value: unknown) => {
+  const parsed = parseSchema(MarketAppealQueueItemListSchema, value);
+  if (!parsed.isValid) {
+    throw internalInvariantError(
+      "Prediction market appeal queue serialization is invalid.",
     );
   }
 
@@ -295,6 +491,7 @@ const serializeStoredPosition = (
 
 const serializePortfolioMarket = (
   market: StoredMarket,
+  oracleBinding?: StoredOracle | null,
 ): PredictionMarketPortfolioMarket => ({
   id: market.id,
   slug: market.slug,
@@ -307,6 +504,7 @@ const serializePortfolioMarket = (
   tags: parseMarketTags(market.tags),
   invalidPolicy: market.invalidPolicy,
   mechanism: market.mechanism,
+  vigBps: market.vigBps,
   status: getEffectivePredictionMarketStatus(market),
   outcomes: parseMarketOutcomes(market.outcomes),
   totalPoolAmount: toMoneyString(market.totalPoolAmount ?? 0),
@@ -315,6 +513,7 @@ const serializePortfolioMarket = (
     market.winningPoolAmount === null || market.winningPoolAmount === undefined
       ? null
       : toMoneyString(market.winningPoolAmount),
+  oracleBinding: serializeOracleBinding(oracleBinding),
   opensAt: market.opensAt,
   locksAt: market.locksAt,
   resolvesAt: market.resolvesAt ?? null,
@@ -330,7 +529,12 @@ const getPortfolioStatusForPositions = (
     return PredictionMarketPortfolioStatusSchema.parse("open");
   }
 
-  if (positions.every((position) => position.status === "refunded")) {
+  if (
+    positions.every(
+      (position) =>
+        position.status === "refunded" || position.status === "sold",
+    )
+  ) {
     return PredictionMarketPortfolioStatusSchema.parse("refunded");
   }
 
@@ -340,8 +544,9 @@ const getPortfolioStatusForPositions = (
 const buildPortfolioItem = (params: {
   market: StoredMarket;
   positions: StoredPosition[];
+  oracleBinding?: StoredOracle | null;
 }): PredictionMarketPortfolioItem => {
-  const { market, positions } = params;
+  const { market, positions, oracleBinding } = params;
   const serializedPositions = positions.map(serializeStoredPosition);
   const portfolioStatus = getPortfolioStatusForPositions(positions);
   let totalStakeAmount = toDecimal(0);
@@ -362,7 +567,7 @@ const buildPortfolioItem = (params: {
       continue;
     }
 
-    if (position.status === "refunded") {
+    if (position.status === "refunded" || position.status === "sold") {
       refundedAmount = refundedAmount.plus(position.payoutAmount ?? 0);
       continue;
     }
@@ -372,7 +577,7 @@ const buildPortfolioItem = (params: {
 
   return {
     portfolioStatus,
-    market: serializePortfolioMarket(market),
+    market: serializePortfolioMarket(market, oracleBinding),
     positions: serializedPositions,
     positionCount: serializedPositions.length,
     totalStakeAmount: toMoneyString(totalStakeAmount),
@@ -470,6 +675,10 @@ const listUserPredictionMarketPortfolioItems = async (
   const marketById = new Map(
     markets.map((market) => [market.id, market] as const),
   );
+  const oracleBindingsByMarketId = await loadOracleBindingsByMarketId(
+    db,
+    marketIds,
+  );
   const positionsByMarketId = new Map<number, StoredPosition[]>();
   for (const position of userPositions) {
     const list = positionsByMarketId.get(position.marketId) ?? [];
@@ -484,7 +693,13 @@ const listUserPredictionMarketPortfolioItems = async (
       return [];
     }
 
-    return [buildPortfolioItem({ market, positions })];
+    return [
+      buildPortfolioItem({
+        market,
+        positions,
+        oracleBinding: oracleBindingsByMarketId.get(market.id) ?? null,
+      }),
+    ];
   });
 
   return parseMarketPortfolioItemList(sortPortfolioItems(items));
@@ -500,6 +715,10 @@ const serializeMarketDetails = async (
   }
 
   const marketIds = storedMarkets.map((market) => market.id);
+  const oracleBindingsByMarketId = await loadOracleBindingsByMarketId(
+    executor,
+    marketIds,
+  );
   const positions = await executor
     .select()
     .from(predictionPositions)
@@ -522,6 +741,10 @@ const serializeMarketDetails = async (
     const marketPositions = positionsByMarketId.get(market.id) ?? [];
 
     for (const position of marketPositions) {
+      if (position.status === "sold") {
+        continue;
+      }
+
       const current = pools.get(position.outcomeKey) ?? {
         totalStakeAmount: toDecimal(0),
         positionCount: 0,
@@ -545,6 +768,7 @@ const serializeMarketDetails = async (
       tags: parseMarketTags(market.tags),
       invalidPolicy: market.invalidPolicy,
       mechanism: market.mechanism,
+      vigBps: market.vigBps,
       status: getEffectivePredictionMarketStatus(market),
       outcomes,
       outcomePools: outcomes.map((outcome) => {
@@ -564,6 +788,8 @@ const serializeMarketDetails = async (
           ? null
           : toMoneyString(market.winningPoolAmount),
       oracle: parseMarketOracle(market),
+      oracleBinding:
+        serializeOracleBinding(oracleBindingsByMarketId.get(market.id)) ?? null,
       opensAt: market.opensAt,
       locksAt: market.locksAt,
       resolvesAt: market.resolvesAt ?? null,
@@ -617,6 +843,7 @@ const lockPredictionMarket = async (
            tags,
            invalid_policy AS "invalidPolicy",
            mechanism,
+           vig_bps AS "vigBps",
            status,
            outcomes,
            total_pool_amount AS "totalPoolAmount",
@@ -638,6 +865,264 @@ const lockPredictionMarket = async (
   `);
 
   return readSqlRows<LockedMarketRow>(result)[0] ?? null;
+};
+
+const lockPredictionPosition = async (
+  tx: DbTransaction,
+  params: {
+    marketId: number;
+    positionId: number;
+    userId: number;
+  },
+): Promise<StoredPosition | null> => {
+  const result = await tx.execute(sql`
+    SELECT id,
+           market_id AS "marketId",
+           user_id AS "userId",
+           outcome_key AS "outcomeKey",
+           stake_amount AS "stakeAmount",
+           payout_amount AS "payoutAmount",
+           status,
+           metadata,
+           created_at AS "createdAt",
+           settled_at AS "settledAt"
+    FROM ${predictionPositions}
+    WHERE ${predictionPositions.id} = ${params.positionId}
+      AND ${predictionPositions.marketId} = ${params.marketId}
+      AND ${predictionPositions.userId} = ${params.userId}
+    FOR UPDATE
+  `);
+
+  return readSqlRows<StoredPosition>(result)[0] ?? null;
+};
+
+const getPredictionMarketOracleBinding = async (
+  executor: DbExecutor,
+  marketId: number,
+) => {
+  const [oracle] = await executor
+    .select()
+    .from(predictionMarketOracles)
+    .where(eq(predictionMarketOracles.marketId, marketId))
+    .limit(1);
+
+  return oracle ?? null;
+};
+
+const hasOpenPredictionMarketAppeal = async (
+  executor: DbExecutor,
+  marketId: number,
+) => {
+  const [appeal] = await executor
+    .select({ id: predictionMarketAppeals.id })
+    .from(predictionMarketAppeals)
+    .where(
+      and(
+        eq(predictionMarketAppeals.marketId, marketId),
+        inArray(predictionMarketAppeals.status, ["open", "acknowledged"]),
+      ),
+    )
+    .limit(1);
+
+  return Boolean(appeal);
+};
+
+const listPredictionMarketAppealQueueRows = async (
+  executor: DbExecutor,
+  statuses: PredictionMarketAppealStatus[],
+) => {
+  if (statuses.length === 0) {
+    return [];
+  }
+
+  return executor
+    .select({
+      appeal: predictionMarketAppeals,
+      market: predictionMarkets,
+      oracleBinding: predictionMarketOracles,
+    })
+    .from(predictionMarketAppeals)
+    .innerJoin(
+      predictionMarkets,
+      eq(predictionMarkets.id, predictionMarketAppeals.marketId),
+    )
+    .leftJoin(
+      predictionMarketOracles,
+      eq(predictionMarketOracles.id, predictionMarketAppeals.oracleBindingId),
+    )
+    .where(inArray(predictionMarketAppeals.status, statuses))
+    .orderBy(
+      sql`case
+        when ${predictionMarketAppeals.status} = 'open' then 0
+        when ${predictionMarketAppeals.status} = 'acknowledged' then 1
+        else 2
+      end`,
+      desc(predictionMarketAppeals.lastDetectedAt),
+      desc(predictionMarketAppeals.id),
+    );
+};
+
+const getPredictionMarketAppealQueueItemById = async (
+  executor: DbExecutor,
+  appealId: number,
+) => {
+  const [row] = await executor
+    .select({
+      appeal: predictionMarketAppeals,
+      market: predictionMarkets,
+      oracleBinding: predictionMarketOracles,
+    })
+    .from(predictionMarketAppeals)
+    .innerJoin(
+      predictionMarkets,
+      eq(predictionMarkets.id, predictionMarketAppeals.marketId),
+    )
+    .leftJoin(
+      predictionMarketOracles,
+      eq(predictionMarketOracles.id, predictionMarketAppeals.oracleBindingId),
+    )
+    .where(eq(predictionMarketAppeals.id, appealId))
+    .limit(1);
+
+  return row
+    ? serializePredictionMarketAppealQueueItem({
+        appeal: row.appeal,
+        market: row.market,
+        oracleBinding: row.oracleBinding ?? null,
+      })
+    : null;
+};
+
+const queuePredictionMarketAppeal = async (
+  executor: DbExecutor,
+  params: {
+    marketId: number;
+    oracleBindingId: number | null;
+    provider: StoredOracle["provider"] | null;
+    reason: PredictionMarketAppealReason;
+    title: string;
+    description: string;
+    metadata: Record<string, unknown>;
+  },
+) => {
+  const now = new Date();
+  const appealKey = [
+    params.marketId,
+    params.oracleBindingId ?? "none",
+    params.reason,
+  ].join(":");
+
+  await executor
+    .insert(predictionMarketAppeals)
+    .values({
+      marketId: params.marketId,
+      oracleBindingId: params.oracleBindingId,
+      appealKey,
+      provider: params.provider,
+      reason: params.reason,
+      status: "open",
+      title: params.title,
+      description: params.description,
+      metadata: params.metadata,
+      firstDetectedAt: now,
+      lastDetectedAt: now,
+      resolvedAt: null,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: predictionMarketAppeals.appealKey,
+      set: {
+        provider: params.provider,
+        status: "open",
+        title: params.title,
+        description: params.description,
+        metadata: params.metadata,
+        lastDetectedAt: now,
+        resolvedAt: null,
+        resolvedByAdminId: null,
+        updatedAt: now,
+      },
+    });
+};
+
+export async function listPredictionMarketAppealQueue(
+  statuses: PredictionMarketAppealStatus[] = ["open", "acknowledged"],
+): Promise<PredictionMarketAppealQueueItem[]> {
+  const rows = await listPredictionMarketAppealQueueRows(db, statuses);
+  return parseMarketAppealQueueItemList(
+    rows.map((row) =>
+      serializePredictionMarketAppealQueueItem({
+        appeal: row.appeal,
+        market: row.market,
+        oracleBinding: row.oracleBinding ?? null,
+      }),
+    ),
+  );
+}
+
+export async function acknowledgePredictionMarketAppeal(
+  appealId: number,
+  input: PredictionMarketAppealAcknowledgeRequest,
+  adminId: number | null = null,
+): Promise<PredictionMarketAppealQueueItem> {
+  return db.transaction(async (tx) => {
+    const [appeal] = await tx
+      .select()
+      .from(predictionMarketAppeals)
+      .where(eq(predictionMarketAppeals.id, appealId))
+      .limit(1);
+
+    if (!appeal) {
+      throw notFoundError("Prediction market appeal not found.");
+    }
+    if (appeal.status === "resolved") {
+      throw conflictError("Prediction market appeal is already resolved.");
+    }
+
+    const now = new Date();
+    const nextMetadata = {
+      ...(toRecord(appeal.metadata) ?? {}),
+      acknowledgedAt: now.toISOString(),
+      acknowledgedByAdminId: adminId,
+      ...(input.note ? { acknowledgeNote: input.note } : {}),
+    };
+
+    await tx
+      .update(predictionMarketAppeals)
+      .set({
+        status: "acknowledged",
+        metadata: nextMetadata,
+        updatedAt: now,
+      })
+      .where(eq(predictionMarketAppeals.id, appealId));
+
+    const updated = await getPredictionMarketAppealQueueItemById(tx, appealId);
+    if (!updated) {
+      throw persistenceError("Failed to reload prediction market appeal.");
+    }
+
+    return updated;
+  });
+}
+
+const resolvePredictionMarketAppealsForMarket = async (
+  executor: DbExecutor,
+  marketId: number,
+) => {
+  const now = new Date();
+  await executor
+    .update(predictionMarketAppeals)
+    .set({
+      status: "resolved",
+      resolvedAt: now,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(predictionMarketAppeals.marketId, marketId),
+        inArray(predictionMarketAppeals.status, ["open", "acknowledged"]),
+      ),
+    );
 };
 
 const ensureWalletRow = async (tx: DbTransaction, userId: number) => {
@@ -737,42 +1222,57 @@ export async function createPredictionMarket(
   const locksAt = new Date(input.locksAt);
   const resolvesAt = input.resolvesAt ? new Date(input.resolvesAt) : null;
   const initialStatus = opensAt.getTime() > now.getTime() ? "draft" : "open";
+  const oracleBinding = resolveCreateOracleBinding(input.oracleBinding);
+  assertOracleBindingMatchesOutcomes(oracleBinding, input.outcomes);
 
-  const [market] = await db
-    .insert(predictionMarkets)
-    .values({
-      slug: input.slug,
-      roundKey: input.roundKey,
-      title: input.title,
-      description: input.description ?? null,
-      resolutionRules: input.resolutionRules,
-      sourceOfTruth: input.sourceOfTruth,
-      category: input.category,
-      tags: input.tags,
-      invalidPolicy: input.invalidPolicy,
-      mechanism: "pari_mutuel",
-      status: initialStatus,
-      outcomes: input.outcomes,
-      totalPoolAmount: "0.00",
-      winningOutcomeKey: null,
-      winningPoolAmount: null,
-      metadata: null,
-      opensAt,
-      locksAt,
-      resolvesAt,
-    })
-    .returning();
+  return db.transaction(async (tx) => {
+    const [market] = await tx
+      .insert(predictionMarkets)
+      .values({
+        slug: input.slug,
+        roundKey: input.roundKey,
+        title: input.title,
+        description: input.description ?? null,
+        resolutionRules: input.resolutionRules,
+        sourceOfTruth: input.sourceOfTruth,
+        category: input.category,
+        tags: input.tags,
+        invalidPolicy: input.invalidPolicy,
+        mechanism: "pari_mutuel",
+        vigBps: input.vigBps,
+        status: initialStatus,
+        outcomes: input.outcomes,
+        totalPoolAmount: "0.00",
+        winningOutcomeKey: null,
+        winningPoolAmount: null,
+        metadata: null,
+        opensAt,
+        locksAt,
+        resolvesAt,
+      })
+      .returning();
 
-  if (!market) {
-    throw persistenceError("Failed to create prediction market.");
-  }
+    if (!market) {
+      throw persistenceError("Failed to create prediction market.");
+    }
 
-  const detail = await getSerializedMarketById(db, market.id, null);
-  if (!detail) {
-    throw persistenceError("Failed to load prediction market.");
-  }
+    await tx.insert(predictionMarketOracles).values({
+      marketId: market.id,
+      provider: oracleBinding.provider,
+      name: oracleBinding.name ?? null,
+      status:
+        oracleBinding.provider === "manual_admin" ? "manual_only" : "active",
+      config: oracleBinding.config ?? {},
+      metadata: oracleBinding.metadata ?? null,
+    });
 
-  return detail;
+    const detail = await getSerializedMarketById(tx, market.id, null);
+    if (!detail) {
+      throw persistenceError("Failed to load prediction market.");
+    }
+
+    return detail;
+  });
 }
 
 export async function placePredictionPosition(
@@ -898,15 +1398,145 @@ export async function placePredictionPosition(
   });
 }
 
-export async function settlePredictionMarket(
+export async function sellPredictionPosition(
+  userId: number,
   marketId: number,
-  input: SettlePredictionMarketRequest,
-): Promise<PredictionMarketDetail> {
+  positionId: number,
+): Promise<PredictionMarketPositionMutationResponse> {
   return db.transaction(async (tx) => {
     const market = await lockPredictionMarket(tx, marketId);
     if (!market) {
       throw notFoundError("Prediction market not found.");
     }
+
+    const effectiveStatus = getEffectivePredictionMarketStatus(market);
+    if (effectiveStatus !== "open") {
+      throw conflictError("Prediction market is not allowing exits.");
+    }
+
+    const position = await lockPredictionPosition(tx, {
+      marketId,
+      positionId,
+      userId,
+    });
+    if (!position) {
+      throw notFoundError("Prediction market position not found.");
+    }
+
+    if (position.status !== "open") {
+      throw conflictError("Prediction market position is not open.");
+    }
+
+    const wallet = await lockWallet(tx, userId);
+    if (!wallet) {
+      throw notFoundError("User wallet not found.");
+    }
+
+    const stakeAmount = toDecimal(position.stakeAmount ?? 0);
+    const withdrawableBefore = toDecimal(wallet.withdrawableBalance ?? 0);
+    const lockedBefore = toDecimal(wallet.lockedBalance ?? 0);
+    if (lockedBefore.lt(stakeAmount)) {
+      throw conflictError("Locked balance is insufficient.");
+    }
+
+    const withdrawableAfter = withdrawableBefore.plus(stakeAmount);
+    const lockedAfter = lockedBefore.minus(stakeAmount);
+    const totalPoolAfter = toDecimal(market.totalPoolAmount ?? 0).minus(
+      stakeAmount,
+    );
+    if (totalPoolAfter.lt(0)) {
+      throw internalInvariantError(
+        "Prediction market pool cannot become negative.",
+      );
+    }
+
+    await tx
+      .update(userWallets)
+      .set({
+        withdrawableBalance: toMoneyString(withdrawableAfter),
+        lockedBalance: toMoneyString(lockedAfter),
+        updatedAt: new Date(),
+      })
+      .where(eq(userWallets.userId, userId));
+
+    const settledAt = new Date();
+    await tx
+      .update(predictionPositions)
+      .set({
+        payoutAmount: toMoneyString(stakeAmount),
+        status: "sold",
+        settledAt,
+        metadata: {
+          ...toRecord(position.metadata),
+          settlementMode: "user_sell",
+          soldAt: settledAt.toISOString(),
+        },
+      })
+      .where(eq(predictionPositions.id, positionId));
+
+    await tx
+      .update(predictionMarkets)
+      .set({
+        totalPoolAmount: toMoneyString(totalPoolAfter),
+        updatedAt: settledAt,
+      })
+      .where(eq(predictionMarkets.id, marketId));
+
+    await tx.insert(ledgerEntries).values({
+      userId,
+      entryType: SELL_ENTRY_TYPE,
+      amount: toMoneyString(stakeAmount),
+      balanceBefore: toMoneyString(withdrawableBefore),
+      balanceAfter: toMoneyString(withdrawableAfter),
+      referenceType: MARKET_REFERENCE_TYPE,
+      referenceId: marketId,
+      metadata: {
+        positionId,
+        roundKey: market.roundKey,
+        outcomeKey: position.outcomeKey,
+        lockedBalanceBefore: toMoneyString(lockedBefore),
+        lockedBalanceAfter: toMoneyString(lockedAfter),
+      },
+    });
+
+    const serializedMarket = await getSerializedMarketById(
+      tx,
+      marketId,
+      userId,
+    );
+    if (!serializedMarket) {
+      throw persistenceError("Failed to reload prediction market.");
+    }
+
+    const serializedPosition = serializedMarket.userPositions.find(
+      (candidate) => candidate.id === positionId,
+    );
+    if (!serializedPosition) {
+      throw persistenceError("Failed to reload prediction market position.");
+    }
+
+    return {
+      market: serializedMarket,
+      position: serializedPosition,
+    };
+  });
+}
+
+type SettlePredictionMarketOptions = {
+  source?: "admin" | "oracle_worker";
+};
+
+export async function settlePredictionMarket(
+  marketId: number,
+  input: SettlePredictionMarketRequest,
+  options: SettlePredictionMarketOptions = {},
+): Promise<PredictionMarketDetail> {
+  const outcome = await db.transaction(async (tx) => {
+    const market = await lockPredictionMarket(tx, marketId);
+    if (!market) {
+      throw notFoundError("Prediction market not found.");
+    }
+    const oracleBinding = await getPredictionMarketOracleBinding(tx, marketId);
 
     const effectiveStatus = getEffectivePredictionMarketStatus(market);
     if (effectiveStatus === "resolved" || effectiveStatus === "cancelled") {
@@ -922,6 +1552,18 @@ export async function settlePredictionMarket(
     );
     if (!matchingOutcome) {
       throw badRequestError("Prediction market outcome is invalid.");
+    }
+
+    const settlementSource = options.source ?? "admin";
+    if (
+      settlementSource === "admin" &&
+      oracleBinding &&
+      oracleBinding.provider !== "manual_admin" &&
+      !(await hasOpenPredictionMarketAppeal(tx, marketId))
+    ) {
+      throw conflictError(
+        "This market must settle from its configured oracle unless an appeal is open.",
+      );
     }
 
     const positions = await tx
@@ -941,6 +1583,7 @@ export async function settlePredictionMarket(
         stakeAmount: toMoneyString(position.stakeAmount ?? 0),
       })),
       winningOutcomeKey: input.winningOutcomeKey,
+      vigBps: market.vigBps,
     });
 
     const resultByPositionId = new Map(
@@ -1036,11 +1679,31 @@ export async function settlePredictionMarket(
             roundKey: market.roundKey,
             winningOutcomeKey: input.winningOutcomeKey,
             winningOutcomeLabel: matchingOutcome.label,
+            vigBps: market.vigBps,
+            feeAmount: settlement.feeAmount,
+            payoutPoolAmount: settlement.payoutPoolAmount,
             lockedBalanceBefore: toMoneyString(lockedBefore),
             lockedBalanceAfter: toMoneyString(lockedAfter),
           },
         });
       }
+    }
+
+    if (settlement.mode === "payout" && toDecimal(settlement.feeAmount).gt(0)) {
+      await applyHouseBankrollDelta(tx, settlement.feeAmount, {
+        entryType: VIG_ENTRY_TYPE,
+        referenceType: MARKET_REFERENCE_TYPE,
+        referenceId: marketId,
+        metadata: {
+          roundKey: market.roundKey,
+          winningOutcomeKey: input.winningOutcomeKey,
+          winningOutcomeLabel: matchingOutcome.label,
+          vigBps: market.vigBps,
+          totalPoolAmount: settlement.totalPoolAmount,
+          payoutPoolAmount: settlement.payoutPoolAmount,
+          winningPoolAmount: settlement.winningPoolAmount,
+        },
+      });
     }
 
     const settledAt = new Date();
@@ -1061,6 +1724,9 @@ export async function settlePredictionMarket(
           metadata: {
             ...toRecord(position.metadata),
             settlementMode: settlement.mode,
+            vigBps: market.vigBps,
+            feeAmount: settlement.feeAmount,
+            payoutPoolAmount: settlement.payoutPoolAmount,
           },
         })
         .where(eq(predictionPositions.id, position.id));
@@ -1083,18 +1749,73 @@ export async function settlePredictionMarket(
           ...toRecord(market.metadata),
           oracle: input.oracle,
           settlementMode: settlement.mode,
+          vigBps: market.vigBps,
+          feeAmount: settlement.feeAmount,
+          payoutPoolAmount: settlement.payoutPoolAmount,
           totalPoolAmount: settlement.totalPoolAmount,
         },
       })
       .where(eq(predictionMarkets.id, marketId));
+
+    if (oracleBinding) {
+      await tx
+        .update(predictionMarketOracles)
+        .set({
+          status: "resolved",
+          lastCheckedAt: settledAt,
+          lastReportedAt: input.oracle.reportedAt
+            ? new Date(input.oracle.reportedAt)
+            : settledAt,
+          lastResolvedOutcomeKey: input.winningOutcomeKey,
+          lastPayloadHash: input.oracle.payloadHash ?? null,
+          lastPayload: input.oracle.payload ?? null,
+          lastError: null,
+          updatedAt: settledAt,
+        })
+        .where(eq(predictionMarketOracles.id, oracleBinding.id));
+    }
+    await resolvePredictionMarketAppealsForMarket(tx, marketId);
 
     const detail = await getSerializedMarketById(tx, marketId, null);
     if (!detail) {
       throw persistenceError("Failed to reload settled prediction market.");
     }
 
-    return detail;
+    return {
+      detail,
+      notifications: orderedUserIds.map((userId) => {
+        const aggregate = userAggregates.get(userId);
+        if (!aggregate) {
+          throw internalInvariantError(
+            "Prediction market notification aggregate missing.",
+          );
+        }
+
+        return {
+          userId,
+          marketId,
+          marketTitle: market.title,
+          winningOutcomeLabel: matchingOutcome.label,
+          positionCount: aggregate.positionIds.length,
+          payoutAmount: toMoneyString(aggregate.credit),
+        };
+      }),
+    };
   });
+
+  for (const notification of outcome.notifications) {
+    try {
+      await sendPredictionMarketSettledNotification(notification);
+    } catch (error) {
+      logger.warning("failed to dispatch prediction market notification", {
+        err: error,
+        marketId,
+        userId: notification.userId,
+      });
+    }
+  }
+
+  return outcome.detail;
 }
 
 export async function cancelPredictionMarket(
@@ -1106,6 +1827,7 @@ export async function cancelPredictionMarket(
     if (!market) {
       throw notFoundError("Prediction market not found.");
     }
+    const oracleBinding = await getPredictionMarketOracleBinding(tx, marketId);
 
     const effectiveStatus = getEffectivePredictionMarketStatus(market);
     if (effectiveStatus === "resolved" || effectiveStatus === "cancelled") {
@@ -1258,6 +1980,26 @@ export async function cancelPredictionMarket(
       })
       .where(eq(predictionMarkets.id, marketId));
 
+    if (oracleBinding) {
+      await tx
+        .update(predictionMarketOracles)
+        .set({
+          status: "cancelled",
+          lastCheckedAt: settledAt,
+          lastReportedAt: input.oracle?.reportedAt
+            ? new Date(input.oracle.reportedAt)
+            : input.oracle
+              ? settledAt
+              : null,
+          lastPayloadHash: input.oracle?.payloadHash ?? null,
+          lastPayload: input.oracle?.payload ?? null,
+          lastError: null,
+          updatedAt: settledAt,
+        })
+        .where(eq(predictionMarketOracles.id, oracleBinding.id));
+    }
+    await resolvePredictionMarketAppealsForMarket(tx, marketId);
+
     const detail = await getSerializedMarketById(tx, marketId, null);
     if (!detail) {
       throw persistenceError("Failed to reload cancelled prediction market.");
@@ -1265,4 +2007,177 @@ export async function cancelPredictionMarket(
 
     return detail;
   });
+}
+
+export type PredictionMarketOracleSettlementCycleSummary = {
+  scanned: number;
+  pending: number;
+  resolved: number;
+  appealed: number;
+  failed: number;
+};
+
+const applyOracleEvaluationStatus = async (
+  oracleBindingId: number,
+  evaluation: PredictionMarketOracleEvaluationResult,
+) => {
+  await db
+    .update(predictionMarketOracles)
+    .set({
+      status: evaluation.bindingStatus,
+      lastCheckedAt: new Date(),
+      lastReportedAt: evaluation.reportedAt,
+      lastPayloadHash: evaluation.payloadHash,
+      lastPayload: evaluation.payload,
+      lastError: evaluation.status === "appeal" ? evaluation.description : null,
+      updatedAt: new Date(),
+    })
+    .where(eq(predictionMarketOracles.id, oracleBindingId));
+};
+
+export async function runPredictionMarketOracleSettlementCycle(
+  params: {
+    now?: Date;
+    limit?: number;
+  } = {},
+): Promise<PredictionMarketOracleSettlementCycleSummary> {
+  const now = params.now ?? new Date();
+  const nowIso = now.toISOString();
+  const limit = params.limit ?? config.predictionMarketOracleBatchSize;
+
+  const rows = await db
+    .select({
+      market: predictionMarkets,
+      oracle: predictionMarketOracles,
+    })
+    .from(predictionMarkets)
+    .innerJoin(
+      predictionMarketOracles,
+      eq(predictionMarketOracles.marketId, predictionMarkets.id),
+    )
+    .where(
+      and(
+        inArray(predictionMarkets.status, ["draft", "open", "locked"]),
+        inArray(predictionMarketOracles.status, [
+          "active",
+          "pending",
+          "appealed",
+        ]),
+        sql`coalesce(${predictionMarkets.resolvesAt}, ${predictionMarkets.locksAt}) <= ${nowIso}::timestamptz`,
+      ),
+    )
+    .orderBy(predictionMarkets.resolvesAt, predictionMarkets.id)
+    .limit(limit);
+
+  const summary: PredictionMarketOracleSettlementCycleSummary = {
+    scanned: rows.length,
+    pending: 0,
+    resolved: 0,
+    appealed: 0,
+    failed: 0,
+  };
+
+  for (const row of rows) {
+    const market = row.market;
+    const oracleBinding = row.oracle;
+
+    try {
+      const evaluation = await evaluatePredictionMarketOracle({
+        market: {
+          id: market.id,
+          slug: market.slug,
+          title: market.title,
+          locksAt: market.locksAt,
+          resolvesAt: market.resolvesAt,
+        },
+        binding: {
+          id: oracleBinding.id,
+          provider: oracleBinding.provider,
+          name: oracleBinding.name ?? null,
+          config: oracleBinding.config,
+          metadata: oracleBinding.metadata,
+        },
+        timeoutMs: config.predictionMarketOracleRequestTimeoutMs,
+      });
+
+      if (evaluation.status === "resolved") {
+        await settlePredictionMarket(
+          market.id,
+          {
+            winningOutcomeKey: evaluation.winningOutcomeKey,
+            oracle: evaluation.oracle,
+          },
+          { source: "oracle_worker" },
+        );
+        summary.resolved += 1;
+        continue;
+      }
+
+      if (evaluation.status === "pending") {
+        await applyOracleEvaluationStatus(oracleBinding.id, evaluation);
+        summary.pending += 1;
+        continue;
+      }
+
+      await db.transaction(async (tx) => {
+        await tx
+          .update(predictionMarketOracles)
+          .set({
+            status: evaluation.bindingStatus,
+            lastCheckedAt: now,
+            lastReportedAt: evaluation.reportedAt,
+            lastPayloadHash: evaluation.payloadHash,
+            lastPayload: evaluation.payload,
+            lastError: evaluation.description,
+            updatedAt: now,
+          })
+          .where(eq(predictionMarketOracles.id, oracleBinding.id));
+
+        await queuePredictionMarketAppeal(tx, {
+          marketId: market.id,
+          oracleBindingId: oracleBinding.id,
+          provider: oracleBinding.provider,
+          reason: evaluation.reason,
+          title: evaluation.title,
+          description: evaluation.description,
+          metadata: evaluation.metadata,
+        });
+      });
+      summary.appealed += 1;
+    } catch (error) {
+      const description =
+        error instanceof Error
+          ? error.message
+          : "Unknown prediction market oracle failure.";
+
+      await db.transaction(async (tx) => {
+        await tx
+          .update(predictionMarketOracles)
+          .set({
+            status: "appealed",
+            lastCheckedAt: now,
+            lastError: description,
+            updatedAt: now,
+          })
+          .where(eq(predictionMarketOracles.id, oracleBinding.id));
+
+        await queuePredictionMarketAppeal(tx, {
+          marketId: market.id,
+          oracleBindingId: oracleBinding.id,
+          provider: oracleBinding.provider,
+          reason: "oracle_fetch_failed",
+          title: "Oracle polling failed.",
+          description,
+          metadata: {
+            marketId: market.id,
+            marketSlug: market.slug,
+            oracleBindingId: oracleBinding.id,
+          },
+        });
+      });
+      summary.failed += 1;
+    }
+  }
+
+  return summary;
 }

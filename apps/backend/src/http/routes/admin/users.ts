@@ -1,5 +1,6 @@
 import type { AppInstance } from '../types';
 import {
+  AdminUserAssociationQuerySchema,
   AdminUserSearchQuerySchema,
   FreezeCreateSchema,
   FreezeReleaseBodySchema,
@@ -12,6 +13,7 @@ import { ADMIN_PERMISSION_KEYS } from '../../../modules/admin-permission/definit
 import { recordAdminAction } from '../../../modules/admin/audit';
 import {
   forceLogoutUserByAdmin,
+  getAdminUserAssociations,
   getAdminUserDetail,
   searchUsersForAdmin,
   triggerUserPasswordResetByAdmin,
@@ -91,6 +93,50 @@ export async function registerAdminUserRoutes(protectedRoutes: AppInstance) {
       }
 
       return sendSuccess(reply, detail);
+    }
+  );
+
+  protectedRoutes.get(
+    '/admin/users/:userId/associations',
+    { preHandler: [requireAdminPermission(ADMIN_PERMISSION_KEYS.RISK_READ)] },
+    async (request, reply) => {
+      const userId = parseIdParam(request.params, 'userId');
+      if (!userId) {
+        return sendError(
+          reply,
+          400,
+          'Invalid user id.',
+          undefined,
+          API_ERROR_CODES.INVALID_USER_ID
+        );
+      }
+
+      const parsed = parseSchema(
+        AdminUserAssociationQuerySchema,
+        toObject(request.query)
+      );
+      if (!parsed.isValid) {
+        return sendError(
+          reply,
+          400,
+          'Invalid request.',
+          parsed.errors,
+          API_ERROR_CODES.INVALID_REQUEST
+        );
+      }
+
+      const graph = await getAdminUserAssociations(userId, parsed.data);
+      if (!graph) {
+        return sendError(
+          reply,
+          404,
+          'User not found.',
+          undefined,
+          API_ERROR_CODES.USER_NOT_FOUND
+        );
+      }
+
+      return sendSuccess(reply, graph);
     }
   );
 

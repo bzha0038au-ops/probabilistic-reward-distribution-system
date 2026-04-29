@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from "$app/stores"
+  import type { AdminDataDeletionQueueItem } from "@reward/shared-types/data-rights"
   import type { LegalDocumentAdminRecord } from "@reward/shared-types/legal"
 
   import AdminChangeRequestsSection from "../(shared)/control-center/admin-change-requests-section.svelte"
@@ -8,6 +9,12 @@
   type PageData = {
     admin?: { mfaEnabled?: boolean } | null
     documents: LegalDocumentAdminRecord[]
+    dataDeletionQueue: {
+      pendingCount: number
+      overdueCount: number
+      completedCount: number
+      items: AdminDataDeletionQueueItem[]
+    }
     changeRequests: ChangeRequestRecord[]
     mfaStatus: { mfaEnabled?: boolean } | null
     error: string | null
@@ -53,6 +60,14 @@
   const actionError = $derived($page.form?.error as string | undefined)
   const mfaEnabled = $derived(
     Boolean(data.admin?.mfaEnabled ?? data.mfaStatus?.mfaEnabled),
+  )
+  const dataDeletionQueue = $derived(
+    data.dataDeletionQueue ?? {
+      pendingCount: 0,
+      overdueCount: 0,
+      completedCount: 0,
+      items: [],
+    },
   )
   const changeRequests = $derived((data.changeRequests ?? []).filter(
     (request) => request.changeType === "legal_document_publish",
@@ -173,6 +188,30 @@
     return Number.isNaN(parsed.valueOf()) ? "—" : parsed.toLocaleString()
   }
 
+  const deletionStatusLabel = (item: AdminDataDeletionQueueItem) => {
+    if (item.status === "pending_review") return "Pending Review"
+    if (item.status === "processing") return "Processing"
+    if (item.status === "completed") return "Completed"
+    if (item.status === "rejected") return "Rejected"
+    if (item.status === "failed") return "Failed"
+    return item.status
+  }
+
+  const deletionStatusClass = (item: AdminDataDeletionQueueItem) => {
+    if (item.status === "pending_review" && item.isOverdue) return "badge-error"
+    if (item.status === "pending_review") return "badge-warning"
+    if (item.status === "processing") return "badge-info"
+    if (item.status === "completed") return "badge-success"
+    if (item.status === "rejected") return "badge-ghost"
+    if (item.status === "failed") return "badge-error"
+    return "badge-outline"
+  }
+
+  const displayDeletionSubject = (item: AdminDataDeletionQueueItem) =>
+    item.currentUserEmail?.endsWith("@privacy.invalid")
+      ? item.subjectEmailHint ?? `User #${item.userId}`
+      : item.currentUserEmail ?? item.subjectEmailHint ?? `User #${item.userId}`
+
   const startNewVersionFromSelected = () => {
     if (!selectedDocument) return
     selectedDocumentId = null
@@ -268,6 +307,156 @@
       {documents.reduce((total, document) => total + document.acceptanceCount, 0)}
     </p>
   </article>
+</section>
+
+<section class="mt-6 card bg-base-100 shadow">
+  <div class="card-body space-y-5">
+    <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+      <div>
+        <h2 class="card-title">Data Deletion Queue</h2>
+        <p class="text-sm text-slate-500">
+          处理用户“删我数据”请求。审批通过后会执行 pseudo-anonymize，并追加法律审计记录。
+        </p>
+      </div>
+      <div class="grid gap-3 sm:grid-cols-3">
+        <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Pending</p>
+          <p class="mt-2 text-2xl font-semibold">{dataDeletionQueue.pendingCount}</p>
+        </div>
+        <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Overdue</p>
+          <p class="mt-2 text-2xl font-semibold text-error">{dataDeletionQueue.overdueCount}</p>
+        </div>
+        <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Completed</p>
+          <p class="mt-2 text-2xl font-semibold">{dataDeletionQueue.completedCount}</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+      {#if mfaEnabled}
+        审批动作要求当前管理员输入 MFA code。
+      {:else}
+        当前管理员未启用 MFA，后端会拒绝审批动作。
+      {/if}
+    </div>
+
+    {#if dataDeletionQueue.items.length === 0}
+      <div class="rounded-2xl border border-dashed border-slate-300 p-6 text-sm text-slate-500">
+        还没有数据删除请求。
+      </div>
+    {:else}
+      <div class="space-y-4">
+        {#each dataDeletionQueue.items as item}
+          <article class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+              <div class="space-y-3">
+                <div class="flex flex-wrap items-center gap-3">
+                  <h3 class="text-lg font-semibold text-slate-900">
+                    Request #{item.id}
+                  </h3>
+                  <span class={`badge ${deletionStatusClass(item)}`}>
+                    {deletionStatusLabel(item)}
+                  </span>
+                  {#if item.isOverdue}
+                    <span class="badge badge-error badge-outline">Overdue</span>
+                  {/if}
+                </div>
+                <div class="grid gap-3 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-3">
+                  <div>
+                    <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Subject</p>
+                    <p class="mt-1 font-medium text-slate-900">
+                      {displayDeletionSubject(item)}
+                    </p>
+                    <p class="text-xs text-slate-500">
+                      User #{item.userId}{item.currentUserPhone ? ` · ${item.currentUserPhone}` : ""}
+                    </p>
+                  </div>
+                  <div>
+                    <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Requested</p>
+                    <p class="mt-1">{formatDateTime(item.createdAt)}</p>
+                    <p class="text-xs text-slate-500">Due {formatDateTime(item.dueAt)}</p>
+                  </div>
+                  <div>
+                    <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Review</p>
+                    <p class="mt-1">
+                      {item.reviewedAt ? formatDateTime(item.reviewedAt) : "Not reviewed"}
+                    </p>
+                    <p class="text-xs text-slate-500">
+                      {item.completedAt
+                        ? `Completed ${formatDateTime(item.completedAt)}`
+                        : item.failureReason ?? "Awaiting action"}
+                    </p>
+                  </div>
+                </div>
+                {#if item.requestReason}
+                  <div class="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                    <span class="font-medium text-slate-900">Request reason:</span>
+                    {" "}{item.requestReason}
+                  </div>
+                {/if}
+                {#if item.reviewNotes}
+                  <div class="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                    <span class="font-medium text-slate-900">Review notes:</span>
+                    {" "}{item.reviewNotes}
+                  </div>
+                {/if}
+                {#if item.resultSummary}
+                  <div class="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                    Redacted:
+                    {item.resultSummary.authSessionsRevoked} sessions,
+                    {item.resultSummary.authTokensRedacted} tokens,
+                    {item.resultSummary.kycProfilesRedacted} KYC profiles,
+                    {item.resultSummary.notificationsRedacted} notifications.
+                  </div>
+                {/if}
+              </div>
+
+              {#if item.status === "pending_review"}
+                <form method="post" class="w-full max-w-md space-y-3 xl:shrink-0">
+                  <input type="hidden" name="requestId" value={item.id} />
+                  <label class="form-control">
+                    <span class="label-text mb-2">Review Notes</span>
+                    <textarea
+                      name="reviewNotes"
+                      class="textarea textarea-bordered min-h-24"
+                      placeholder="Retention exception, scope note, or rejection reason"
+                    ></textarea>
+                  </label>
+                  <label class="form-control">
+                    <span class="label-text mb-2">Admin MFA Code</span>
+                    <input
+                      name="totpCode"
+                      class="input input-bordered"
+                      inputmode="numeric"
+                      placeholder="123456"
+                    />
+                  </label>
+                  <div class="flex flex-wrap gap-3">
+                    <button
+                      class="btn btn-primary"
+                      type="submit"
+                      formaction="?/approveDataDeletionRequest"
+                    >
+                      Approve & Erase
+                    </button>
+                    <button
+                      class="btn btn-outline"
+                      type="submit"
+                      formaction="?/rejectDataDeletionRequest"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </form>
+              {/if}
+            </div>
+          </article>
+        {/each}
+      </div>
+    {/if}
+  </div>
 </section>
 
 <section class="mt-6 grid gap-6 xl:grid-cols-[1.2fr_1.8fr]">

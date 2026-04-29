@@ -40,9 +40,7 @@ export const viewport: Viewport = {
 
 export default async function RootLayout({
   children,
-}: {
-  children: ReactNode;
-}) {
+}: LayoutProps<'/'>) {
   const locale = await getServerLocale();
   const messages = await getServerMessages(locale);
 
@@ -52,7 +50,7 @@ export default async function RootLayout({
         <ObservabilityBootstrap />
         <WebviewBridge />
         <I18nProvider locale={locale} messages={messages}>
-          <ToastProvider>{children}</ToastProvider>
+          <ToastProvider>{children as ReactNode}</ToastProvider>
         </I18nProvider>
       </body>
     </html>

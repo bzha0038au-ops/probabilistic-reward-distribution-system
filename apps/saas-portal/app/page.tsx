@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
-import { auth } from "@/lib/auth";
+import { getCurrentUserSession } from "@/lib/current-user-session";
+import { buildLegalPath, buildLoginPath } from "@/lib/navigation";
 
 export default async function Home({
   searchParams,
@@ -8,15 +9,18 @@ export default async function Home({
   searchParams?: Promise<{ invite?: string }>;
 }) {
   const resolvedSearchParams = await searchParams;
-  const session = await auth();
   const invite = resolvedSearchParams?.invite?.trim();
   const portalPath = invite
     ? `/portal?invite=${encodeURIComponent(invite)}`
     : "/portal";
+  const currentSession = await getCurrentUserSession();
 
-  if (session?.user) {
+  if (currentSession.ok) {
+    if (currentSession.data.legal.requiresAcceptance) {
+      redirect(buildLegalPath(portalPath));
+    }
     redirect(portalPath);
   }
 
-  redirect(`/login?callbackUrl=${encodeURIComponent(portalPath)}`);
+  redirect(buildLoginPath(portalPath));
 }

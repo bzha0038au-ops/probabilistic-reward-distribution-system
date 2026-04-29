@@ -1,0 +1,136 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+  padding: 1.5rem 0 5rem;
+}
+
+.hero {
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  align-items: stretch;
+}
+
+.heroCopy {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 2rem 0;
+}
+
+.kicker {
+  margin: 0 0 1rem;
+  color: var(--ifm-color-primary);
+  font-family: var(--reward-heading-font);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.heroCopy h1 {
+  margin: 0;
+  color: var(--reward-ink-strong);
+  font-family: var(--reward-heading-font);
+  font-size: clamp(2.8rem, 5vw, 4.8rem);
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+}
+
+.subtitle {
+  max-width: 42rem;
+  margin: 1.5rem 0 0;
+  color: var(--reward-ink-muted);
+  font-size: 1.1rem;
+  line-height: 1.7;
+}
+
+.actions {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 2rem;
+}
+
+.heroPanel {
+  overflow: hidden;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at top right, rgba(28, 201, 255, 0.18), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(245, 249, 255, 0.98));
+  box-shadow: 0 30px 90px rgba(16, 30, 54, 0.12);
+}
+
+.metrics {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.metrics div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1.25rem 1.35rem;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.metrics strong {
+  color: var(--reward-ink-strong);
+  font-family: var(--reward-heading-font);
+  font-size: 2.4rem;
+  line-height: 1;
+}
+
+.metrics span {
+  color: var(--reward-ink-muted);
+  font-size: 0.98rem;
+}
+
+.pillars {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.pillarCard {
+  padding: 1.5rem;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(244, 248, 255, 0.88));
+  box-shadow: 0 18px 40px rgba(12, 24, 46, 0.08);
+}
+
+.pillarCard h2 {
+  margin: 0 0 0.8rem;
+  color: var(--reward-ink-strong);
+  font-family: var(--reward-heading-font);
+  font-size: 1.2rem;
+}
+
+.pillarCard p {
+  margin: 0;
+  color: var(--reward-ink-muted);
+  line-height: 1.7;
+}
+
+@media (max-width: 996px) {
+  .hero,
+  .metrics,
+  .pillars {
+    grid-template-columns: 1fr;
+  }
+
+  .heroCopy {
+    padding-top: 0.5rem;
+  }
+
+  .heroCopy h1 {
+    font-size: clamp(2.5rem, 11vw, 4rem);
+  }
+}

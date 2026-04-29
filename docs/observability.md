@@ -50,6 +50,36 @@ errors.
 Never log secrets, passwords, tokens, full card numbers, or raw notification
 recipients.
 
+## Security Event Stream
+
+The backend now normalizes security-sensitive activity into a single
+`security_events` stream in Postgres and mirrors it to configurable sinks.
+
+Current upstream sources include:
+
+- admin actions
+- auth successes / failures / anomalies
+- AML hits and AML review decisions
+- wallet reconciliation alerts and status changes
+
+Sink configuration:
+
+- `SECURITY_EVENT_SINKS=log` writes structured `securityEvent` JSON to stdout.
+  This is the preferred path when Datadog Logs, Vector, Fluent Bit, or another
+  collector already tails container logs.
+- `SECURITY_EVENT_SINKS=log,webhook` also POSTs normalized events to
+  `SECURITY_EVENT_WEBHOOK_URL` for a self-hosted sink.
+- `SECURITY_EVENT_SINKS=log,elasticsearch` also indexes normalized events into
+  `SECURITY_EVENT_ELASTICSEARCH_URL` /
+  `SECURITY_EVENT_ELASTICSEARCH_INDEX`.
+
+Built-in correlation alerts currently emit back into the same stream as
+`category=correlation_alert`:
+
+- `admin_failed_then_success_same_ip`
+- `admin_break_glass_after_failures_same_ip`
+- `aml_hit_and_wallet_drift_same_user`
+
 ## Tracing
 
 The backend now starts OpenTelemetry spans and can export them over OTLP/HTTP.
@@ -124,6 +154,8 @@ Current metrics include:
 - `reward_backend_http_request_duration_seconds`
 - `reward_backend_dependency_status`
 - `reward_backend_draw_requests_total`
+- `reward_backend_realtime_publish_duration_seconds`
+- `reward_backend_realtime_receive_latency_seconds`
 - `reward_backend_auth_notification_deliveries`
 - `reward_backend_auth_notification_oldest_pending_age_seconds`
 - `reward_backend_aml_review_hits_total`
@@ -172,6 +204,7 @@ The minimum production dashboard should show:
 - readiness by dependency
 - total request rate and 5xx ratio
 - draw success vs error rate
+- Holdem realtime publish P95 and client receive P95 by surface
 - notification backlog counts and oldest pending age
 - AML pending-hit queue depth and oldest pending age
 - stuck withdrawals by status and age
@@ -189,6 +222,7 @@ The minimum production alert set should cover:
 - readiness failures
 - 5xx spikes
 - draw error rate
+- Holdem realtime receive latency P95 above 200ms
 - withdraw stuck
 - notification backlog / dead-letter growth
 - AML pending hits breaching SLA
@@ -228,6 +262,28 @@ alerts. They are alert thresholds, not customer-facing SLAs.
 - SaaS webhook retry exhaustion threshold:
   `reward_backend_saas_webhook_retry_exhausted_total` counts failed webhook
   rows whose `attempts` are at least 8.
+- Holdem realtime latency:
+  `reward_backend_realtime_receive_latency_seconds{channel="holdem"}` pages
+  when the 10-minute P95 stays above 200ms for 10 minutes on any client
+  surface with a meaningful sample stream.
+
+## Holdem Realtime Baseline
+
+Holdem realtime latency is tracked at three points:
+
+- `realtime.publish.start` / `realtime.publish.end` are emitted from the backend
+  transport layer and recorded inside OpenTelemetry spans named
+  `realtime.publish`.
+- Web and mobile Holdem clients batch `realtime.received` samples and post them
+  back through the authenticated user API so the backend can attach those
+  samples to the active request span and Prometheus histograms.
+- The baseline latency metric is
+  `reward_backend_realtime_receive_latency_seconds{channel="holdem"}` with a
+  target of sub-100ms and an alert threshold of P95 > 200ms over 10 minutes.
+
+Client receive latency is based on the server event `sentAt` timestamp and the
+client receive wall clock. That makes it suitable for baselining and alerting,
+but badly skewed client clocks can still create noisy outliers.
 - SaaS payout-distribution breach:
   any `reward_backend_saas_distribution_snapshot_breach` series above 0 for
   15 minutes raises a ticket, keyed by `project_slug`, rolling `window`, and

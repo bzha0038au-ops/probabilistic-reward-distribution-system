@@ -26,6 +26,8 @@ import {
   RewardMissionMetricThresholdParamsSchema,
 } from './gamification';
 import {
+  CountryTierSchema,
+  UserJurisdictionStateSchema,
   UserFreezeCategorySchema,
   UserFreezeReasonSchema,
   UserFreezeScopeSchema,
@@ -213,6 +215,10 @@ export const AdminUserDetailSchema = z.object({
     email: z.string(),
     phone: z.string().nullable(),
     role: z.string(),
+    birthDate: z.string().nullable(),
+    registrationCountryCode: z.string().nullable(),
+    countryTier: CountryTierSchema,
+    countryResolvedAt: z.union([z.string(), z.date()]).nullable().optional(),
     createdAt: z.union([z.string(), z.date()]),
     updatedAt: z.union([z.string(), z.date()]),
     emailVerifiedAt: z.union([z.string(), z.date()]).nullable().optional(),
@@ -221,9 +227,11 @@ export const AdminUserDetailSchema = z.object({
     pityStreak: z.number().int(),
     lastDrawAt: z.union([z.string(), z.date()]).nullable().optional(),
     lastWinAt: z.union([z.string(), z.date()]).nullable().optional(),
+    kycProfileId: z.number().int().positive().nullable().optional(),
     kycTier: z.string(),
     kycTierSource: z.string(),
     activeScopes: z.array(UserFreezeScopeSchema),
+    jurisdiction: UserJurisdictionStateSchema,
   }),
   wallet: AdminUserWalletSnapshotSchema,
   freezes: z.array(FreezeRecordSchema),
@@ -330,6 +338,25 @@ export const CollusionDashboardQuerySchema = z.object({
   ),
 });
 
+export const AdminUserAssociationQuerySchema = z.object({
+  days: z.preprocess(
+    (value) => {
+      if (value === undefined || value === null || value === '') return undefined;
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : value;
+    },
+    z.number().int().min(1).max(365).optional()
+  ),
+  signalLimit: z.preprocess(
+    (value) => {
+      if (value === undefined || value === null || value === '') return undefined;
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : value;
+    },
+    z.number().int().min(1).max(24).optional()
+  ),
+});
+
 export const RiskManualFlagCreateSchema = z.object({
   userId: z.number().int().positive(),
   reason: z.string().min(1).max(255).optional(),
@@ -399,6 +426,77 @@ export const CollusionDashboardSchema = z.object({
   sharedIpTop: z.array(CollusionClusterSchema),
   sharedDeviceTop: z.array(CollusionClusterSchema),
   frequentTablePairs: z.array(CollusionFrequentPairSchema),
+});
+
+export const UserAssociationSignalKindSchema = z.enum([
+  'device',
+  'ip',
+  'payout',
+]);
+
+export const AdminUserAssociationSummarySchema = z.object({
+  deviceCount: z.number().int().nonnegative(),
+  ipCount: z.number().int().nonnegative(),
+  payoutCount: z.number().int().nonnegative(),
+  relatedUserCount: z.number().int().nonnegative(),
+  flaggedRelatedUserCount: z.number().int().nonnegative(),
+});
+
+export const AdminUserAssociationSignalSchema = z.object({
+  id: z.string().min(1),
+  kind: UserAssociationSignalKindSchema,
+  label: z.string().min(1),
+  fingerprint: z.string().nullable().optional(),
+  value: z.string().min(1),
+  eventCount: z.number().int().nonnegative(),
+  userCount: z.number().int().positive(),
+  lastSeenAt: DateLikeSchema.nullable(),
+  activityTypes: z.array(z.string()),
+  relatedUsers: z.array(RiskUserStatusSchema),
+});
+
+export const AdminUserAssociationRelatedUserSchema = RiskUserStatusSchema.extend({
+  relationTypes: z.array(UserAssociationSignalKindSchema),
+  sharedDevices: z.array(z.string()),
+  sharedIps: z.array(z.string()),
+  sharedPayouts: z.array(z.string()),
+});
+
+export const AdminUserAssociationGraphNodeSchema = z.object({
+  id: z.string().min(1),
+  type: z.enum(['focus_user', 'user', 'device', 'ip', 'payout']),
+  label: z.string().min(1),
+  subtitle: z.string().nullable(),
+});
+
+export const AdminUserAssociationGraphEdgeSchema = z.object({
+  source: z.string().min(1),
+  target: z.string().min(1),
+  type: z.enum([
+    'focus_device',
+    'focus_ip',
+    'focus_payout',
+    'shared_device',
+    'shared_ip',
+    'shared_payout',
+  ]),
+  label: z.string().min(1),
+});
+
+export const AdminUserAssociationGraphSchema = z.object({
+  user: RiskUserStatusSchema,
+  windowDays: z.number().int().positive(),
+  signalLimit: z.number().int().positive(),
+  generatedAt: DateLikeSchema,
+  summary: AdminUserAssociationSummarySchema,
+  deviceSignals: z.array(AdminUserAssociationSignalSchema),
+  ipSignals: z.array(AdminUserAssociationSignalSchema),
+  payoutSignals: z.array(AdminUserAssociationSignalSchema),
+  relatedUsers: z.array(AdminUserAssociationRelatedUserSchema),
+  graph: z.object({
+    nodes: z.array(AdminUserAssociationGraphNodeSchema),
+    edges: z.array(AdminUserAssociationGraphEdgeSchema),
+  }),
 });
 
 export const AdminPermissionScopeGroupSchema = z.enum([

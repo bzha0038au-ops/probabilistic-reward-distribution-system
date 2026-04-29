@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { DealerEvent } from '@reward/shared-types/dealer';
 import {
   ledgerEntries,
   roundEvents,
@@ -29,9 +30,15 @@ import {
   notFoundError,
   persistenceError,
 } from '../../shared/errors';
+import { logger } from '../../shared/logger';
 import { toDecimal, toMoneyString } from '../../shared/money';
 import { readSqlRows } from '../../shared/sql-result';
 import { parseSchema } from '../../shared/validation';
+import {
+  buildDealerEvent,
+  maybeGenerateDealerLanguageEvent,
+  publishDealerRealtimeToTopic,
+} from '../dealer-bot/service';
 import { applyPrizePoolDelta } from '../house/service';
 
 const TABLE_ROUND_EVENT_TYPE = 'table_round' as const;
@@ -357,6 +364,80 @@ export const getNextTablePhase = (
   }
 
   return definition.phases[currentIndex + 1]?.key ?? null;
+};
+
+const buildTableEngineRealtimeTopic = (tableId: number) => `public:table:${tableId}`;
+const buildTableEngineTableRef = (tableId: number) => `table-engine:${tableId}`;
+
+const buildTableEngineDealerEvent = (params: {
+  tableId: number;
+  roundId: number;
+  phase: string;
+  actionCode: string;
+  text: string;
+  source?: DealerEvent['source'];
+  metadata?: Record<string, unknown> | null;
+}) =>
+  buildDealerEvent({
+    kind: 'action',
+    source: params.source ?? 'rule',
+    gameType: 'table_engine',
+    tableId: params.tableId,
+    tableRef: buildTableEngineTableRef(params.tableId),
+    roundId: `table_round:${params.roundId}`,
+    referenceId: params.roundId,
+    phase: params.phase,
+    actionCode: params.actionCode,
+    text: params.text,
+    metadata: params.metadata ?? null,
+  });
+
+const publishTableEngineDealerEvent = (tableId: number, event: DealerEvent) => {
+  publishDealerRealtimeToTopic(buildTableEngineRealtimeTopic(tableId), event);
+};
+
+const emitAsyncTableEngineDealerLanguageEvent = (params: {
+  tableId: number;
+  roundId: number;
+  phase: string;
+  summary: Record<string, unknown>;
+}) => {
+  void (async () => {
+    const event = await maybeGenerateDealerLanguageEvent({
+      scenario: 'table_phase_entered',
+      locale: '',
+      gameType: 'table_engine',
+      tableId: params.tableId,
+      tableRef: buildTableEngineTableRef(params.tableId),
+      roundId: `table_round:${params.roundId}`,
+      referenceId: params.roundId,
+      phase: params.phase,
+      seatIndex: null,
+      summary: params.summary,
+    });
+    if (!event) {
+      return;
+    }
+
+    const appended = await appendTableRoundEvent({
+      roundId: params.roundId,
+      eventType: 'dealer_message',
+      actor: 'dealer',
+      payload: {
+        dealerEvent: event,
+      },
+    });
+
+    publishTableEngineDealerEvent(params.tableId, event);
+    return appended;
+  })().catch((error) => {
+    logger.warning('table engine dealer bot async emission failed', {
+      err: error,
+      tableId: params.tableId,
+      roundId: params.roundId,
+      phase: params.phase,
+    });
+  });
 };
 
 export const resolveTableBuyIn = (params: {
@@ -1041,7 +1122,7 @@ export async function openRound(params: {
   tableId: number;
   metadata?: Record<string, unknown> | null;
 }) {
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const table = await loadLockedTable(tx, params.tableId);
     if (!table) {
       throw notFoundError('Table not found.');
@@ -1124,8 +1205,47 @@ export async function openRound(params: {
       },
     });
 
-    return round;
+    const dealerRuleEvent = buildTableEngineDealerEvent({
+      tableId: table.id,
+      roundId: round.id,
+      phase: round.phase,
+      actionCode: 'phase_opened',
+      text: `${round.phase} is open. Dealer flow is live.`,
+      metadata: {
+        roundNumber: round.roundNumber,
+      },
+    });
+    await insertRoundEvent({
+      tx,
+      tableId: table.id,
+      roundId: round.id,
+      phase: round.phase,
+      eventType: 'dealer_action',
+      actor: 'dealer',
+      payload: {
+        dealerEvent: dealerRuleEvent,
+      },
+    });
+
+    return {
+      dealerRuleEvent,
+      round,
+    };
   });
+
+  publishTableEngineDealerEvent(result.round.tableId, result.dealerRuleEvent);
+  emitAsyncTableEngineDealerLanguageEvent({
+    tableId: result.round.tableId,
+    roundId: result.round.id,
+    phase: result.round.phase,
+    summary: {
+      roundNumber: result.round.roundNumber,
+      phase: result.round.phase,
+      actionCode: 'phase_opened',
+    },
+  });
+
+  return result.round;
 }
 
 export async function appendTableRoundEvent(params: {
@@ -1172,7 +1292,7 @@ export async function advanceRoundPhase(params: {
   roundId: number;
   payload?: Record<string, unknown> | null;
 }) {
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const round = await loadLockedRoundById(tx, params.roundId);
     if (!round) {
       throw notFoundError('Round not found.');
@@ -1238,8 +1358,48 @@ export async function advanceRoundPhase(params: {
       },
     });
 
-    return mapRoundRow(updatedRound);
+    const nextRound = mapRoundRow(updatedRound);
+    const dealerRuleEvent = buildTableEngineDealerEvent({
+      tableId: table.id,
+      roundId: round.id,
+      phase: nextPhase,
+      actionCode: 'phase_advanced',
+      text: `${nextPhase} phase begins.`,
+      metadata: {
+        fromPhase: round.phase,
+        toPhase: nextPhase,
+      },
+    });
+    await insertRoundEvent({
+      tx,
+      tableId: table.id,
+      roundId: round.id,
+      phase: nextPhase,
+      eventType: 'dealer_action',
+      actor: 'dealer',
+      payload: {
+        dealerEvent: dealerRuleEvent,
+      },
+    });
+
+    return {
+      dealerRuleEvent,
+      round: nextRound,
+    };
   });
+
+  publishTableEngineDealerEvent(result.round.tableId, result.dealerRuleEvent);
+  emitAsyncTableEngineDealerLanguageEvent({
+    tableId: result.round.tableId,
+    roundId: result.round.id,
+    phase: result.round.phase,
+    summary: {
+      phase: result.round.phase,
+      actionCode: 'phase_advanced',
+    },
+  });
+
+  return result.round;
 }
 
 export async function settleRound(params: {

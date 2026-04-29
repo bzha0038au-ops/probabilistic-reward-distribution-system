@@ -11,8 +11,10 @@ import {
   persistenceError,
   unprocessableEntityError,
 } from '../../shared/errors';
+import { logger } from '../../shared/logger';
 import { toDecimal, toMoneyString } from '../../shared/money';
 import { readSqlRows } from '../../shared/sql-result';
+import { sendWithdrawalStatusChangedNotification } from '../notification/service';
 import {
   appendFinanceReviewMetadata,
   appendFinanceStateMetadata,
@@ -43,6 +45,51 @@ import {
   type WithdrawalReviewPayload,
   type WithdrawalRow,
 } from './workflow';
+
+type SerializedWithdrawalLike = ReturnType<typeof serializeWithdrawal>;
+
+const readSerializedWithdrawalUserId = (withdrawal: SerializedWithdrawalLike) => {
+  if (!withdrawal) {
+    return null;
+  }
+
+  const serialized = withdrawal as Record<string, unknown>;
+  return typeof serialized.userId === 'number'
+    ? serialized.userId
+    : typeof serialized.user_id === 'number'
+      ? serialized.user_id
+      : null;
+};
+
+const queueWithdrawalStatusNotification = async (
+  previousStatus: string,
+  withdrawal: SerializedWithdrawalLike,
+) => {
+  if (!withdrawal || withdrawal.status === previousStatus) {
+    return;
+  }
+
+  const userId = readSerializedWithdrawalUserId(withdrawal);
+  if (!userId) {
+    return;
+  }
+
+  try {
+    await sendWithdrawalStatusChangedNotification({
+      userId,
+      withdrawalId: withdrawal.id,
+      amount: String(withdrawal.amount),
+      status: withdrawal.status,
+    });
+  } catch (error) {
+    logger.warning("failed to dispatch withdrawal status notification", {
+      err: error,
+      withdrawalId: withdrawal.id,
+      userId,
+      status: withdrawal.status,
+    });
+  }
+};
 
 const updateWithdrawalReviewOnly = async (
   tx: DbTransaction,
@@ -275,9 +322,14 @@ export async function approveWithdrawal(
   withdrawalId: number,
   review: WithdrawalReviewPayload = {},
 ) {
-  return db.transaction(async (tx) => {
+  const outcome = await db.transaction(async (tx) => {
     const row = await selectLockedWithdrawal(tx, withdrawalId);
-    if (!row) return null;
+    if (!row) {
+      return {
+        previousStatus: "requested",
+        result: null,
+      };
+    }
     if (
       row.status === 'approved' ||
       row.status === 'provider_submitted' ||
@@ -287,10 +339,16 @@ export async function approveWithdrawal(
       row.status === 'provider_failed' ||
       row.status === 'reversed'
     ) {
-      return serializeWithdrawal(row);
+      return {
+        previousStatus: row.status,
+        result: serializeWithdrawal(row),
+      };
     }
     if (row.status !== 'requested') {
-      return serializeWithdrawal(row);
+      return {
+        previousStatus: row.status,
+        result: serializeWithdrawal(row),
+      };
     }
 
     const approvalsRequired = readApprovalsRequired(row.metadata);
@@ -327,7 +385,10 @@ export async function approveWithdrawal(
         .where(eq(withdrawals.id, row.id))
         .returning();
 
-      return serializeWithdrawal(updated ?? row);
+      return {
+        previousStatus: row.status,
+        result: serializeWithdrawal(updated ?? row),
+      };
     }
 
     const metadata = appendFinanceStateMetadata(
@@ -376,17 +437,32 @@ export async function approveWithdrawal(
       );
     }
 
-    return serialized;
+    return {
+      previousStatus: row.status,
+      result: serialized,
+    };
   });
+
+  await queueWithdrawalStatusNotification(
+    outcome.previousStatus,
+    outcome.result,
+  );
+
+  return outcome.result;
 }
 
 export async function markWithdrawalProviderSubmitted(
   withdrawalId: number,
   review: WithdrawalReviewPayload = {},
 ) {
-  return db.transaction(async (tx) => {
+  const outcome = await db.transaction(async (tx) => {
     const row = await selectLockedWithdrawal(tx, withdrawalId);
-    if (!row) return null;
+    if (!row) {
+      return {
+        previousStatus: "approved",
+        result: null,
+      };
+    }
     if (
       row.status === 'provider_submitted' ||
       row.status === 'provider_processing' ||
@@ -395,10 +471,16 @@ export async function markWithdrawalProviderSubmitted(
       row.status === 'provider_failed' ||
       row.status === 'reversed'
     ) {
-      return serializeWithdrawal(row);
+      return {
+        previousStatus: row.status,
+        result: serializeWithdrawal(row),
+      };
     }
     if (row.status !== 'approved') {
-      return serializeWithdrawal(row);
+      return {
+        previousStatus: row.status,
+        result: serializeWithdrawal(row),
+      };
     }
 
     const reviewState = applyDualReviewGate(row.metadata, {
@@ -440,17 +522,32 @@ export async function markWithdrawalProviderSubmitted(
       .where(eq(withdrawals.id, row.id))
       .returning();
 
-    return serializeWithdrawal(updated ?? row);
+    return {
+      previousStatus: row.status,
+      result: serializeWithdrawal(updated ?? row),
+    };
   });
+
+  await queueWithdrawalStatusNotification(
+    outcome.previousStatus,
+    outcome.result,
+  );
+
+  return outcome.result;
 }
 
 export async function markWithdrawalProviderProcessing(
   withdrawalId: number,
   review: WithdrawalReviewPayload = {},
 ) {
-  return db.transaction(async (tx) => {
+  const outcome = await db.transaction(async (tx) => {
     const row = await selectLockedWithdrawal(tx, withdrawalId);
-    if (!row) return null;
+    if (!row) {
+      return {
+        previousStatus: "approved",
+        result: null,
+      };
+    }
     if (
       row.status === 'provider_processing' ||
       row.status === 'paid' ||
@@ -458,10 +555,16 @@ export async function markWithdrawalProviderProcessing(
       row.status === 'provider_failed' ||
       row.status === 'reversed'
     ) {
-      return serializeWithdrawal(row);
+      return {
+        previousStatus: row.status,
+        result: serializeWithdrawal(row),
+      };
     }
     if (row.status !== 'approved' && row.status !== 'provider_submitted') {
-      return serializeWithdrawal(row);
+      return {
+        previousStatus: row.status,
+        result: serializeWithdrawal(row),
+      };
     }
 
     const reviewState = applyDualReviewGate(row.metadata, {
@@ -503,22 +606,43 @@ export async function markWithdrawalProviderProcessing(
       .where(eq(withdrawals.id, row.id))
       .returning();
 
-    return serializeWithdrawal(updated ?? row);
+    return {
+      previousStatus: row.status,
+      result: serializeWithdrawal(updated ?? row),
+    };
   });
+
+  await queueWithdrawalStatusNotification(
+    outcome.previousStatus,
+    outcome.result,
+  );
+
+  return outcome.result;
 }
 
 export async function rejectWithdrawal(
   withdrawalId: number,
   review: WithdrawalReviewPayload = {},
 ) {
-  return db.transaction(async (tx) => {
+  const outcome = await db.transaction(async (tx) => {
     const row = await selectLockedWithdrawal(tx, withdrawalId);
-    if (!row) return null;
+    if (!row) {
+      return {
+        previousStatus: "requested",
+        result: null,
+      };
+    }
     if (row.status === 'rejected' || row.status === 'paid' || row.status === 'reversed') {
-      return serializeWithdrawal(row);
+      return {
+        previousStatus: row.status,
+        result: serializeWithdrawal(row),
+      };
     }
     if (row.status !== 'requested' && row.status !== 'approved') {
-      return serializeWithdrawal(row);
+      return {
+        previousStatus: row.status,
+        result: serializeWithdrawal(row),
+      };
     }
 
     const reviewState = applyDualReviewGate(row.metadata, {
@@ -534,7 +658,10 @@ export async function rejectWithdrawal(
       'withdrawal_reject',
     );
     if (!reviewState.confirmed) {
-      return persistWithdrawalMetadata(tx, row, reviewMetadata);
+      return {
+        previousStatus: row.status,
+        result: await persistWithdrawalMetadata(tx, row, reviewMetadata),
+      };
     }
 
     const result = await refundWithdrawal(tx, row, {
@@ -549,26 +676,47 @@ export async function rejectWithdrawal(
       operation: 'rejectWithdrawal',
     });
 
-    return result;
+    return {
+      previousStatus: row.status,
+      result,
+    };
   });
+
+  await queueWithdrawalStatusNotification(
+    outcome.previousStatus,
+    outcome.result,
+  );
+
+  return outcome.result;
 }
 
 export async function markWithdrawalProviderFailed(
   withdrawalId: number,
   review: WithdrawalReviewPayload = {},
 ) {
-  return db.transaction(async (tx) => {
+  const outcome = await db.transaction(async (tx) => {
     const row = await selectLockedWithdrawal(tx, withdrawalId);
-    if (!row) return null;
+    if (!row) {
+      return {
+        previousStatus: "approved",
+        result: null,
+      };
+    }
     if (row.status === 'provider_failed' || row.status === 'paid' || row.status === 'reversed') {
-      return serializeWithdrawal(row);
+      return {
+        previousStatus: row.status,
+        result: serializeWithdrawal(row),
+      };
     }
     if (
       row.status !== 'approved' &&
       row.status !== 'provider_submitted' &&
       row.status !== 'provider_processing'
     ) {
-      return serializeWithdrawal(row);
+      return {
+        previousStatus: row.status,
+        result: serializeWithdrawal(row),
+      };
     }
 
     const reviewState = applyDualReviewGate(row.metadata, {
@@ -585,25 +733,54 @@ export async function markWithdrawalProviderFailed(
       'withdrawal_mark_provider_failed',
     );
     if (!reviewState.confirmed) {
-      return persistWithdrawalMetadata(tx, row, reviewMetadata);
+      return {
+        previousStatus: row.status,
+        result: await persistWithdrawalMetadata(tx, row, reviewMetadata),
+      };
     }
 
-    return markWithdrawalProviderFailure(tx, row, reviewState, reviewMetadata);
+    return {
+      previousStatus: row.status,
+      result: await markWithdrawalProviderFailure(
+        tx,
+        row,
+        reviewState,
+        reviewMetadata,
+      ),
+    };
   });
+
+  await queueWithdrawalStatusNotification(
+    outcome.previousStatus,
+    outcome.result,
+  );
+
+  return outcome.result;
 }
 
 export async function payWithdrawal(
   withdrawalId: number,
   review: WithdrawalReviewPayload = {},
 ) {
-  return db.transaction(async (tx) => {
+  const outcome = await db.transaction(async (tx) => {
     const row = await selectLockedWithdrawal(tx, withdrawalId);
-    if (!row) return null;
+    if (!row) {
+      return {
+        previousStatus: "provider_processing",
+        result: null,
+      };
+    }
     if (row.status === 'paid' || row.status === 'rejected' || row.status === 'reversed') {
-      return serializeWithdrawal(row);
+      return {
+        previousStatus: row.status,
+        result: serializeWithdrawal(row),
+      };
     }
     if (row.status !== 'provider_processing') {
-      return serializeWithdrawal(row);
+      return {
+        previousStatus: row.status,
+        result: serializeWithdrawal(row),
+      };
     }
 
     const reviewState = applyDualReviewGate(row.metadata, {
@@ -620,7 +797,10 @@ export async function payWithdrawal(
       'withdrawal_pay',
     );
     if (!reviewState.confirmed) {
-      return persistWithdrawalMetadata(tx, row, reviewMetadata);
+      return {
+        previousStatus: row.status,
+        result: await persistWithdrawalMetadata(tx, row, reviewMetadata),
+      };
     }
     const processingChannel = normalizeOptionalString(
       reviewState.effectiveReview.processingChannel,
@@ -737,19 +917,37 @@ export async function payWithdrawal(
       operation: 'payWithdrawal',
     });
 
-    return result;
+    return {
+      previousStatus: row.status,
+      result,
+    };
   });
+
+  await queueWithdrawalStatusNotification(
+    outcome.previousStatus,
+    outcome.result,
+  );
+
+  return outcome.result;
 }
 
 export async function reverseWithdrawal(
   withdrawalId: number,
   review: WithdrawalReviewPayload = {},
 ) {
-  return db.transaction(async (tx) => {
+  const outcome = await db.transaction(async (tx) => {
     const row = await selectLockedWithdrawal(tx, withdrawalId);
-    if (!row) return null;
+    if (!row) {
+      return {
+        previousStatus: "requested",
+        result: null,
+      };
+    }
     if (row.status === 'reversed') {
-      return serializeWithdrawal(row);
+      return {
+        previousStatus: row.status,
+        result: serializeWithdrawal(row),
+      };
     }
     if (
       row.status !== 'requested' &&
@@ -759,7 +957,10 @@ export async function reverseWithdrawal(
       row.status !== 'provider_failed' &&
       row.status !== 'paid'
     ) {
-      return serializeWithdrawal(row);
+      return {
+        previousStatus: row.status,
+        result: serializeWithdrawal(row),
+      };
     }
 
     const reviewState = applyDualReviewGate(row.metadata, {
@@ -776,7 +977,10 @@ export async function reverseWithdrawal(
       'withdrawal_reverse',
     );
     if (!reviewState.confirmed) {
-      return persistWithdrawalMetadata(tx, row, reviewMetadata);
+      return {
+        previousStatus: row.status,
+        result: await persistWithdrawalMetadata(tx, row, reviewMetadata),
+      };
     }
 
     const result = await refundWithdrawal(tx, row, {
@@ -791,8 +995,18 @@ export async function reverseWithdrawal(
       operation: 'reverseWithdrawal',
     });
 
-    return result;
+    return {
+      previousStatus: row.status,
+      result,
+    };
   });
+
+  await queueWithdrawalStatusNotification(
+    outcome.previousStatus,
+    outcome.result,
+  );
+
+  return outcome.result;
 }
 
 export const startWithdrawalPayout = markWithdrawalProviderSubmitted;

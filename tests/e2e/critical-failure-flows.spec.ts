@@ -8,6 +8,7 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
 const apiBaseUrl = process.env.PLAYWRIGHT_API_BASE_URL;
 const adminOrigin =
   process.env.PLAYWRIGHT_ADMIN_BASE_URL ?? 'http://127.0.0.1:5173';
+const TEST_BIRTH_DATE = '1990-01-01';
 
 if (!databaseUrl) {
   throw new Error('TEST_DATABASE_URL must be set for e2e tests.');
@@ -165,7 +166,7 @@ const registerAdminAccount = async (email: string, password: string) => {
   await expectOk<{ email: string }>('/auth/register', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, birthDate: TEST_BIRTH_DATE }),
   });
 
   const [user] = await sql<Array<{ id: number }>>`
@@ -291,6 +292,7 @@ const registerAndSignInUser = async (page: Page, payload: {
   await page.goto('/register');
   await page.getByLabel('Email Address').fill(payload.email);
   await page.getByLabel('Password').fill(payload.password);
+  await page.getByLabel('Birth Date').fill(TEST_BIRTH_DATE);
   await page.getByRole('button', { name: 'Create Account' }).click();
 
   await expect(page).toHaveURL(/\/login\?registered=1$/);

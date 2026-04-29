@@ -8,11 +8,10 @@ import {
 } from "react";
 import type {
   DrawCatalogResponse,
-  DrawOverviewResponse,
   DrawPlayResponse,
   DrawPrizePresentation,
-  DrawResult,
 } from "@reward/shared-types/draw";
+import type { PlayModeType } from "@reward/shared-types/play-mode";
 import { createUserApiClient, type UserApiOverrides } from "@reward/user-core";
 
 import { getHighlightPrize, getHighlightDrawResult } from "../app-support";
@@ -29,7 +28,7 @@ type UnauthorizedHandler = (message: string) => Promise<boolean>;
 
 type DrawApi = Pick<
   ReturnType<typeof createUserApiClient>,
-  "getDrawOverview" | "playDraw" | "runDraw"
+  "getDrawOverview" | "playDraw" | "setPlayMode"
 >;
 
 type UseDrawOptions = {
@@ -42,44 +41,6 @@ type UseDrawOptions = {
   setMessage: (message: string | null) => void;
   syncBalance: (nextBalance: string) => void;
 };
-
-const calculateFallbackEndingBalance = (
-  currentBalance: string | undefined,
-  drawCost: string,
-  rewardAmount: string,
-) => {
-  const nextValue =
-    Number(currentBalance ?? "0") - Number(drawCost) + Number(rewardAmount);
-
-  if (!Number.isFinite(nextValue)) {
-    return currentBalance ?? "0.00";
-  }
-
-  return nextValue.toFixed(2);
-};
-
-const buildSingleDrawSummary = (
-  result: DrawResult,
-  overview: DrawOverviewResponse | null,
-  currentCatalog: DrawCatalogResponse,
-): DrawPlayResponse => ({
-  requestedCount: 1,
-  count: 1,
-  totalCost: result.drawCost,
-  totalReward: result.rewardAmount,
-  winCount: result.status === "won" ? 1 : 0,
-  endingBalance:
-    overview?.balance ??
-    calculateFallbackEndingBalance(
-      currentCatalog.balance,
-      result.drawCost,
-      result.rewardAmount,
-  ),
-  highestRarity: result.prize?.displayRarity ?? null,
-  pity: overview?.pity ?? currentCatalog.pity,
-  playMode: overview?.playMode ?? currentCatalog.playMode,
-  results: [result],
-});
 
 export function useDraw(options: UseDrawOptions) {
   const {
@@ -100,6 +61,7 @@ export function useDraw(options: UseDrawOptions) {
     null,
   );
   const [loadingDrawCatalog, setLoadingDrawCatalog] = useState(false);
+  const [updatingDrawPlayMode, setUpdatingDrawPlayMode] = useState(false);
   const [playingDrawCount, setPlayingDrawCount] = useState<number | null>(null);
   const [gachaReels, setGachaReels] = useState<
     [SlotReelWindow, SlotReelWindow, SlotReelWindow]
@@ -284,62 +246,6 @@ export function useDraw(options: UseDrawOptions) {
       startGachaSpin(drawCatalog.prizes);
       setPlayingDrawCount(count);
 
-      if (count === 1) {
-        const response = await api.runDraw({});
-
-        if (!response.ok) {
-          clearGachaAnimation();
-          setGachaAnimating(false);
-          setGachaLockedReels(0);
-          setGachaTone("idle");
-          setGachaReels(createRollingReels(drawCatalog.prizes));
-
-          if (response.status === 401) {
-            setPlayingDrawCount(null);
-            const onUnauthorized = handleUnauthorizedRef.current;
-            if (onUnauthorized) {
-              await onUnauthorized(
-                "Session expired or was revoked. Sign in again.",
-              );
-            }
-            return;
-          }
-
-          setError(response.error?.message ?? "Slot spin failed.");
-          setPlayingDrawCount(null);
-          return;
-        }
-
-        const overviewResponse = await loadDrawOverview();
-        const nextDrawPlay: DrawPlayResponse = buildSingleDrawSummary(
-          response.data as DrawResult,
-          overviewResponse.ok ? overviewResponse.data : null,
-          drawCatalog,
-        );
-
-        settleGachaSpin(nextDrawPlay, drawCatalog.prizes);
-
-        startTransition(() => {
-          setLastDrawPlay(nextDrawPlay);
-          syncBalance(nextDrawPlay.endingBalance);
-          setDrawCatalog((current) =>
-            current
-              ? {
-                  ...current,
-                  balance: nextDrawPlay.endingBalance,
-                  pity: nextDrawPlay.pity,
-                }
-              : current,
-          );
-        });
-
-        setMessage("Spin completed.");
-        setPlayingDrawCount(null);
-
-        await Promise.all([refreshDrawCatalog(), refreshRewardCenter()]);
-        return;
-      }
-
       const response = await api.playDraw({ count });
 
       if (!response.ok) {
@@ -393,7 +299,6 @@ export function useDraw(options: UseDrawOptions) {
       clearGachaAnimation,
       drawCatalog,
       handleUnauthorizedRef,
-      loadDrawOverview,
       refreshDrawCatalog,
       refreshRewardCenter,
       resetFeedback,
@@ -403,6 +308,42 @@ export function useDraw(options: UseDrawOptions) {
       startGachaSpin,
       syncBalance,
     ],
+  );
+
+  const setDrawPlayMode = useCallback(
+    async (type: PlayModeType) => {
+      setUpdatingDrawPlayMode(true);
+      const response = await api.setPlayMode("draw", { type });
+      setUpdatingDrawPlayMode(false);
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          const onUnauthorized = handleUnauthorizedRef.current;
+          if (onUnauthorized) {
+            await onUnauthorized(
+              "Session expired or was revoked. Sign in again.",
+            );
+          }
+          return false;
+        }
+
+        setError(response.error?.message ?? "Failed to update draw play mode.");
+        return false;
+      }
+
+      startTransition(() => {
+        setDrawCatalog((current) =>
+          current
+            ? {
+                ...current,
+                playMode: response.data.snapshot,
+              }
+            : current,
+        );
+      });
+      return true;
+    },
+    [api, handleUnauthorizedRef, setError],
   );
 
   useEffect(() => {
@@ -431,10 +372,12 @@ export function useDraw(options: UseDrawOptions) {
     highlightPrize,
     lastDrawPlay,
     loadingDrawCatalog,
+    updatingDrawPlayMode,
     multiDrawCount,
     playDraw,
     playingDrawCount,
     refreshDrawCatalog,
     resetDraw,
+    setDrawPlayMode,
   };
 }

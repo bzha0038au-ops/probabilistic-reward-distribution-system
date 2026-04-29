@@ -56,6 +56,35 @@ groups:
           description: At least one withdrawal has exceeded the stuck threshold.
           runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/runbooks/RewardBackendWithdrawalsStuck.md
 
+      - alert: RewardBackendHoldemRealtimeLatencyHigh
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le, surface) (
+              rate(
+                reward_backend_realtime_receive_latency_seconds_bucket{
+                  channel="holdem"
+                }[10m]
+              )
+            )
+          ) > 0.20
+          and
+          sum by (surface) (
+            rate(
+              reward_backend_realtime_receive_latency_seconds_count{
+                channel="holdem"
+              }[10m]
+            )
+          ) > 0.05
+        for: 10m
+        labels:
+          severity: page
+          service: reward-backend
+        annotations:
+          summary: Reward Holdem realtime latency is high
+          description: Holdem realtime receive latency P95 has stayed above 200ms for 10 minutes on {{ $labels.surface }} clients.
+          runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/runbooks/RewardBackendHoldemRealtimeLatencyHigh.md
+
       - alert: RewardBackendAmlHitsOverdue
         expr: reward_backend_aml_review_hits_total{state="overdue"} > 0
         for: 5m

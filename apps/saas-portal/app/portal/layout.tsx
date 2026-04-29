@@ -1,18 +1,15 @@
-import type { ReactNode } from "react";
-
 import { LogoutForm } from "@/components/logout-form";
 import { Badge } from "@/components/ui/badge";
-import { verifyBackendAccessToken } from "@/lib/auth/backend-session";
-import { getBackendAccessToken } from "@/lib/auth/server-token";
+import { requireCurrentUserSession } from "@/lib/current-user-session";
+import { PortalNav } from "@/modules/portal/components/portal-nav";
 
 export default async function PortalLayout({
   children,
-}: {
-  children: ReactNode;
-}) {
-  const currentUser = await verifyBackendAccessToken(
-    await getBackendAccessToken(),
-  );
+}: LayoutProps<"/portal">) {
+  const currentSession = await requireCurrentUserSession({
+    allowPendingLegal: true,
+    returnTo: "/portal",
+  });
 
   return (
     <main className="min-h-app-screen bg-[linear-gradient(180deg,_#f8fbff_0%,_#eef5ff_28%,_#f8fbff_100%)] text-slate-950">
@@ -44,11 +41,15 @@ export default async function PortalLayout({
               <p className="text-sm text-slate-500">
                 Signed in as{" "}
                 <span className="font-medium text-slate-900">
-                  {currentUser?.email ?? "unknown"}
+                  {currentSession.user.email}
                 </span>
               </p>
               <LogoutForm label="Sign out" />
             </div>
+          </div>
+
+          <div className="mt-6">
+            <PortalNav />
           </div>
         </header>
 

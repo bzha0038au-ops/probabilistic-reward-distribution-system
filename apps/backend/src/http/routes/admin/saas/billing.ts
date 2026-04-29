@@ -2,6 +2,7 @@ import type { AppInstance } from "../../types";
 import { API_ERROR_CODES } from "@reward/shared-types/api";
 import {
   SaasBillingAccountUpsertSchema,
+  SaasBillingDisputeReviewSchema,
   SaasBillingRunCreateSchema,
   SaasBillingRunSettleSchema,
   SaasBillingRunSyncSchema,
@@ -12,6 +13,7 @@ import { ADMIN_PERMISSION_KEYS } from "../../../../modules/admin-permission/defi
 import { recordAdminAction } from "../../../../modules/admin/audit";
 import {
   createBillingRun,
+  reviewBillingDispute,
   createBillingSetupSession,
   createBillingTopUp,
   createCustomerPortalSession,
@@ -406,6 +408,69 @@ export async function registerAdminSaasBillingRoutes(
           reply,
           error,
           "Failed to settle billing run.",
+        );
+      }
+    },
+  );
+
+  protectedRoutes.post(
+    "/admin/saas/disputes/:billingDisputeId/review",
+    {
+      config: { rateLimit: adminRateLimit },
+      preHandler: [
+        requireAdminPermission(ADMIN_PERMISSION_KEYS.FINANCE_RECONCILE, {
+          requireBreakGlass: true,
+        }),
+        enforceAdminLimit,
+      ],
+    },
+    async (request, reply) => {
+      const billingDisputeId = parseIdParam(request.params, "billingDisputeId");
+      if (!billingDisputeId) {
+        return sendError(
+          reply,
+          400,
+          "Invalid billing dispute id.",
+          undefined,
+          API_ERROR_CODES.INVALID_BILLING_DISPUTE_ID,
+        );
+      }
+
+      const parsed = parseSchema(
+        SaasBillingDisputeReviewSchema,
+        toObject(request.body),
+      );
+      if (!parsed.isValid) {
+        return sendError(
+          reply,
+          400,
+          "Invalid request.",
+          parsed.errors,
+          API_ERROR_CODES.INVALID_REQUEST,
+        );
+      }
+
+      try {
+        const dispute = await reviewBillingDispute(
+          billingDisputeId,
+          parsed.data,
+          request.admin?.adminId ?? null,
+          request.admin?.permissions ?? [],
+        );
+        await recordAdminAction({
+          adminId: request.admin?.adminId ?? null,
+          action: "saas_billing_dispute_review",
+          targetType: "saas_billing_dispute",
+          targetId: dispute.id,
+          metadata: parsed.data,
+          ip: request.ip,
+        });
+        return sendSuccess(reply, dispute);
+      } catch (error) {
+        return sendErrorForException(
+          reply,
+          error,
+          "Failed to review billing dispute.",
         );
       }
     },

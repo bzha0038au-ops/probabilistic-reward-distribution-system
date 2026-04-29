@@ -21,28 +21,27 @@ import type {
 
 import { db } from '../../db';
 import { getConfigView } from '../../shared/config';
-import { domainError, toAppError } from '../../shared/errors';
+import {
+  domainError,
+  internalInvariantError,
+  toAppError,
+} from '../../shared/errors';
 import { logger } from '../../shared/logger';
-import { sendAmlReviewNotification } from '../auth/notification-service';
+import { sendAmlHitAdminNotification } from "../notification/service";
 import { ensureUserFreeze, isUserFrozen } from '../risk/service';
-
-type CheckMetadata = Record<string, unknown> | null;
-
-type ScreeningSubject = {
-  userId: number;
-  email: string;
-  phone: string | null;
-};
-
-type ProviderDecision = {
-  providerKey: AmlProviderKey;
-  result: Exclude<AmlCheckResult, 'provider_error'>;
-  riskLevel: AmlRiskLevel;
-  providerReference?: string | null;
-  metadata?: Record<string, unknown> | null;
-  providerPayload?: unknown;
-  summary?: string | null;
-};
+import {
+  emitAmlHitSecurityEvent,
+  emitAmlReviewSecurityEvent,
+} from '../security-events/service';
+import type {
+  CheckMetadata,
+  ProviderDecision,
+  ScreeningSubject,
+} from './providers';
+import {
+  getRegisteredAmlProvider,
+  listRegisteredAmlProviderKeys,
+} from './providers';
 
 type ScreeningMode = 'always' | 'reuse_latest_clear';
 type AmlReviewAction = 'clear' | 'confirm' | 'escalate';
@@ -99,15 +98,6 @@ const amlCheckNotPendingError = () =>
     code: API_ERROR_CODES.AML_CHECK_NOT_PENDING,
   });
 
-const mockMatchKeywords = [
-  'aml',
-  'sanction',
-  'ofac',
-  'pep',
-  'watchlist',
-  'blocked',
-] as const;
-
 const toMetadataRecord = (value: unknown): Record<string, unknown> | null => {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return null;
@@ -116,37 +106,8 @@ const toMetadataRecord = (value: unknown): Record<string, unknown> | null => {
   return Object.fromEntries(Object.entries(value));
 };
 
-const readString = (value: unknown) =>
-  typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
-
 const isHitResult = (value: unknown) =>
   value === 'hit' || value === 'review_required';
-
-const readMockResultOverride = (
-  metadata: Record<string, unknown> | null
-): Exclude<AmlCheckResult, 'provider_error'> | null => {
-  const value = readString(metadata?.amlMockResult);
-  if (value === 'clear') {
-    return 'clear';
-  }
-  if (value === 'hit' || value === 'review_required') {
-    return 'hit';
-  }
-  return null;
-};
-
-const readMockSources = (
-  subject: ScreeningSubject,
-  metadata: Record<string, unknown> | null
-) => {
-  return [
-    subject.email,
-    subject.phone ?? '',
-    readString(metadata?.amlMockTerm) ?? '',
-  ]
-    .map((term) => term.toLowerCase().trim())
-    .filter((term) => term.length > 0);
-};
 
 const createCheckMetadata = (input: {
   subject: ScreeningSubject;
@@ -208,42 +169,15 @@ const getScreeningSubject = async (userId: number): Promise<ScreeningSubject> =>
   };
 };
 
-const screenWithMockProvider = async (input: {
-  checkpoint: AmlCheckpoint;
-  subject: ScreeningSubject;
-  metadata?: CheckMetadata;
-}): Promise<ProviderDecision> => {
-  const normalizedMetadata = toMetadataRecord(input.metadata);
-  const override = readMockResultOverride(normalizedMetadata);
-  const matchedTerms = mockMatchKeywords.filter((keyword, index, source) =>
-    source.indexOf(keyword) === index &&
-    readMockSources(input.subject, normalizedMetadata).some((source) =>
-      source.includes(keyword)
-    )
-  );
-  const result = override ?? (matchedTerms.length > 0 ? 'hit' : 'clear');
+const getConfiguredAmlProvider = (providerKey = config.amlProviderKey) => {
+  const provider = getRegisteredAmlProvider(providerKey);
+  if (provider) {
+    return provider;
+  }
 
-  return {
-    providerKey: 'mock',
-    result,
-    riskLevel: result === 'hit' ? 'high' : 'low',
-    providerReference: `mock:${input.checkpoint}:${input.subject.userId}:${Date.now()}`,
-    summary:
-      result === 'hit'
-        ? 'Mock AML provider matched review keywords.'
-        : 'Mock AML provider cleared the subject.',
-    metadata: {
-      matchedTerms,
-      overrideApplied: override,
-    },
-    providerPayload: {
-      provider: 'mock',
-      checkpoint: input.checkpoint,
-      matchedTerms,
-      overrideApplied: override,
-      evaluatedAt: new Date().toISOString(),
-    },
-  };
+  throw internalInvariantError(
+    `Configured AML provider "${providerKey}" is not registered. Registered AML providers: ${listRegisteredAmlProviderKeys().join(', ') || '(none)'}.`
+  );
 };
 
 const persistAmlCheck = async (input: {
@@ -292,6 +226,23 @@ const persistAmlCheck = async (input: {
     throw domainError(500, 'Failed to persist AML check.');
   }
 
+  if (isHitResult(created.result)) {
+    const metadata = toMetadataRecord(created.metadata);
+    await emitAmlHitSecurityEvent({
+      amlCheckId: created.id,
+      userId: created.userId,
+      checkpoint: created.checkpoint,
+      providerKey: created.providerKey,
+      riskLevel: created.riskLevel,
+      reviewStatus: created.reviewStatus ?? null,
+      providerReference: created.providerReference ?? null,
+      summary:
+        typeof metadata?.summary === 'string' ? metadata.summary : null,
+      slaDueAt: created.slaDueAt ?? null,
+      occurredAt: created.createdAt,
+    });
+  }
+
   return mapLegacyResult(created);
 };
 
@@ -304,6 +255,7 @@ const notifyAdminsForReview = async (input: {
 }) => {
   const recipients = await db
     .select({
+      userId: admins.userId,
       email: users.email,
     })
     .from(admins)
@@ -316,17 +268,17 @@ const notifyAdminsForReview = async (input: {
 
   const results = await Promise.allSettled(
     recipients.map((recipient) =>
-      sendAmlReviewNotification({
-        email: recipient.email,
-        userId: input.subject.userId,
-        userEmail: input.subject.email,
-        userPhone: input.subject.phone,
+      sendAmlHitAdminNotification({
+        adminUserId: recipient.userId,
+        adminEmail: recipient.email,
+        subjectUserId: input.subject.userId,
+        subjectEmail: input.subject.email,
+        subjectPhone: input.subject.phone,
         checkpoint: input.checkpoint,
         riskLevel: input.riskLevel,
         providerKey: input.providerKey,
         summary: input.summary ?? null,
-        occurredAt: new Date(),
-      })
+      }),
     )
   );
 
@@ -390,8 +342,9 @@ const performAmlScreening = async (input: {
   }
 
   const subject = await getScreeningSubject(input.userId);
+  const providerKey = config.amlProviderKey;
   try {
-    const decision = await screenWithMockProvider({
+    const decision = await getConfiguredAmlProvider(providerKey).screen({
       checkpoint: input.checkpoint,
       subject,
       metadata: input.metadata,
@@ -424,7 +377,7 @@ const performAmlScreening = async (input: {
       userId: input.userId,
       checkpoint: input.checkpoint,
       decision: {
-        providerKey: 'mock',
+        providerKey,
         result: 'provider_error',
         riskLevel: 'high',
         summary: 'AML provider execution failed.',
@@ -432,7 +385,7 @@ const performAmlScreening = async (input: {
           message: error instanceof Error ? error.message : String(error),
         },
         providerPayload: {
-          provider: 'mock',
+          provider: providerKey,
           failure: true,
           message: error instanceof Error ? error.message : String(error),
         },
@@ -600,7 +553,7 @@ export async function reviewPendingAmlHit(payload: {
   action: AmlReviewAction;
   note?: string | null;
 }): Promise<ReviewedAmlHitResult> {
-  return db.transaction(async (tx) => {
+  const reviewed = await db.transaction(async (tx) => {
     const now = new Date();
     const nextStatus: AmlReviewStatus =
       payload.action === 'clear'
@@ -799,6 +752,14 @@ export async function reviewPendingAmlHit(payload: {
       activeFreezeReason,
     };
   });
+
+  await emitAmlReviewSecurityEvent({
+    ...reviewed,
+    adminId: payload.adminId,
+    note: payload.note ?? null,
+  });
+
+  return reviewed;
 }
 
 export async function getPendingAmlMetrics() {
@@ -872,3 +833,5 @@ export async function screenUserWithdrawal(
     mode: 'always',
   });
 }
+
+export { getConfiguredAmlProvider };

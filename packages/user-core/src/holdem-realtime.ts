@@ -19,6 +19,13 @@ import {
   type HoldemTablesResponse,
 } from "@reward/shared-types/holdem";
 import {
+  DEALER_REALTIME_ACTION_EVENT,
+  DEALER_REALTIME_MESSAGE_EVENT,
+  DEALER_REALTIME_PACE_HINT_EVENT,
+  DealerEventSchema,
+  type DealerEvent,
+} from "@reward/shared-types/dealer";
+import {
   REALTIME_CLOSE_CODES,
   REALTIME_ERROR_CODES,
   RealtimeServerMessageSchema,
@@ -173,7 +180,10 @@ const patchSelectedHoldemTable = (params: {
       ...currentTable,
       id: publicTable.id,
       name: publicTable.name,
+      tableType: publicTable.tableType,
       status: publicTable.status,
+      rakePolicy: publicTable.rakePolicy,
+      tournament: publicTable.tournament,
       handNumber: publicTable.handNumber,
       stage: publicTable.stage,
       smallBlind: publicTable.smallBlind,
@@ -194,6 +204,7 @@ const patchSelectedHoldemTable = (params: {
       pendingActorTimeoutAction: publicTable.pendingActorTimeoutAction,
       availableActions: null,
       fairness: publicTable.fairness,
+      dealerEvents: currentTable.dealerEvents,
       recentHands: publicTable.recentHands,
       updatedAt: publicTable.updatedAt,
     },
@@ -208,7 +219,10 @@ const patchLobbyTableSummary = (params: {
   const summary = {
     id: update.table.id,
     name: update.table.name,
+    tableType: update.table.tableType,
     status: update.table.status,
+    rakePolicy: update.table.rakePolicy,
+    tournament: update.table.tournament,
     smallBlind: update.table.smallBlind,
     bigBlind: update.table.bigBlind,
     minimumBuyIn: update.table.minimumBuyIn,
@@ -322,6 +336,16 @@ export type HoldemRealtimeConnectionStatus =
 
 export type HoldemRealtimeSyncReason = "resume" | "resume_failed";
 
+export type HoldemRealtimeObservation = {
+  topic: string;
+  event: string;
+  sentAt: string;
+  receivedAt: string;
+  deliveryLatencyMs: number;
+  tableId: number | null;
+  roundId: string | null;
+};
+
 export type HoldemRealtimeClient = {
   markSynchronized: () => void;
   start: () => void;
@@ -337,7 +361,9 @@ export const createHoldemRealtimeClient = (params: {
   onUnauthorized: () => void | Promise<void>;
   onPublicUpdate: (update: HoldemRealtimeUpdate) => void;
   onPrivateUpdate: (update: HoldemRealtimePrivateUpdate) => void;
+  onDealerEvent?: (event: DealerEvent) => void;
   onTableMessage?: (message: HoldemTableMessage) => void;
+  onObservation?: (observation: HoldemRealtimeObservation) => void;
   onWarning?: (message: string) => void;
   reconnectDelayMs?: number;
 }): HoldemRealtimeClient => {
@@ -351,6 +377,51 @@ export const createHoldemRealtimeClient = (params: {
   let disposed = false;
   let started = false;
   let resyncing = false;
+
+  const buildObservation = (payload: {
+    topic: string;
+    event: string;
+    sentAt: string;
+    data: unknown;
+  }): HoldemRealtimeObservation | null => {
+    const sentAtMs = Date.parse(payload.sentAt);
+    if (!Number.isFinite(sentAtMs)) {
+      return null;
+    }
+
+    const receivedAtMs = Date.now();
+    const deliveryLatencyMs = receivedAtMs - sentAtMs;
+    if (deliveryLatencyMs < 0 || deliveryLatencyMs > 60_000) {
+      return null;
+    }
+
+    const data =
+      payload.data !== null && typeof payload.data === "object" ? payload.data : null;
+    const tableValue =
+      data && "table" in data && data.table !== null && typeof data.table === "object"
+        ? data.table
+        : null;
+    const tableId =
+      tableValue && "id" in tableValue && Number.isInteger(tableValue.id)
+        ? Number(tableValue.id)
+        : data && "tableId" in data && Number.isInteger(data.tableId)
+          ? Number(data.tableId)
+          : null;
+    const roundId =
+      data && "roundId" in data && typeof data.roundId === "string" && data.roundId !== ""
+        ? data.roundId
+        : null;
+
+    return {
+      topic: payload.topic,
+      event: payload.event,
+      sentAt: payload.sentAt,
+      receivedAt: new Date(receivedAtMs).toISOString(),
+      deliveryLatencyMs,
+      tableId,
+      roundId,
+    };
+  };
 
   const setStatus = (status: HoldemRealtimeConnectionStatus) => {
     if (currentStatus === status) {
@@ -544,6 +615,16 @@ export const createHoldemRealtimeClient = (params: {
         return;
       }
 
+      const observation = buildObservation({
+        topic: parsed.data.topic,
+        event: parsed.data.event,
+        sentAt: parsed.data.sentAt,
+        data: parsed.data.data,
+      });
+      if (observation) {
+        params.onObservation?.(observation);
+      }
+
       if (
         parsed.data.event === HOLDEM_REALTIME_LOBBY_EVENT ||
         parsed.data.event === HOLDEM_REALTIME_TABLE_EVENT
@@ -564,6 +645,20 @@ export const createHoldemRealtimeClient = (params: {
         }
 
         params.onTableMessage?.(payload.data);
+        return;
+      }
+
+      if (
+        parsed.data.event === DEALER_REALTIME_ACTION_EVENT ||
+        parsed.data.event === DEALER_REALTIME_MESSAGE_EVENT ||
+        parsed.data.event === DEALER_REALTIME_PACE_HINT_EVENT
+      ) {
+        const payload = DealerEventSchema.safeParse(parsed.data.data);
+        if (!payload.success) {
+          return;
+        }
+
+        params.onDealerEvent?.(payload.data);
         return;
       }
 

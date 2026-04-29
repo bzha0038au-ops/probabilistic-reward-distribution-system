@@ -2,7 +2,6 @@ import type {
   RewardCenterResponse,
   RewardMission,
   RewardMissionId,
-  RewardMissionMetric,
 } from "@reward/shared-types/gamification";
 
 import { toMoneyString } from "../../shared/money";
@@ -15,10 +14,15 @@ export type RewardCenterSnapshot = {
   drawCountAll: number;
   drawCountToday: number;
   depositCount: number;
+  depositCreditedCount: number;
   dailyClaims: Array<Date>;
   missionClaims: Array<{
     missionId: RewardMissionId | null;
     createdAt: Date;
+  }>;
+  qualifiedReferrals: Array<{
+    rewardId: RewardMissionId;
+    qualifiedAt: Date;
   }>;
   missions: RewardMissionDefinition[];
 };
@@ -85,9 +89,12 @@ const findMissionClaim = (
 };
 
 const evaluateMetricProgress = (
+  definition: Extract<RewardMissionDefinition, { type: "metric_threshold" }>,
   snapshot: RewardCenterSnapshot,
-  metric: RewardMissionMetric,
+  now: Date,
 ) => {
+  const { metric } = definition.params;
+
   if (metric === "verified_contacts") {
     return (
       Number(Boolean(snapshot.emailVerifiedAt)) +
@@ -103,7 +110,32 @@ const evaluateMetricProgress = (
     return snapshot.drawCountToday;
   }
 
-  return snapshot.depositCount;
+  if (metric === "deposit_count") {
+    return snapshot.depositCount;
+  }
+
+  if (metric === "deposit_credited_count") {
+    return snapshot.depositCreditedCount;
+  }
+
+  if (metric === "referral_success_count") {
+    return snapshot.qualifiedReferrals.filter((entry) => {
+      if (
+        definition.params.rewardId &&
+        entry.rewardId !== definition.params.rewardId
+      ) {
+        return false;
+      }
+
+      if (definition.params.cadence === "daily") {
+        return isSameDay(entry.qualifiedAt, now);
+      }
+
+      return true;
+    }).length;
+  }
+
+  return snapshot.depositCreditedCount;
 };
 
 const evaluateMission = (
@@ -126,6 +158,7 @@ const evaluateMission = (
           ? "claimed"
           : "in_progress",
       rewardAmount: definition.reward,
+      bonusUnlockWagerRatio: null,
       progressCurrent: todayDailyClaim ? 1 : 0,
       progressTarget: 1,
       claimable: false,
@@ -142,10 +175,11 @@ const evaluateMission = (
     definition.params.cadence,
   );
   const progressCurrent = Math.min(
-    evaluateMetricProgress(snapshot, definition.params.metric),
+    evaluateMetricProgress(definition, snapshot, now),
     definition.params.target,
   );
   const enabled = definition.isActive && Number(definition.reward) > 0;
+  const autoAwarded = definition.params.awardMode === "auto_grant";
 
   return {
     id: definition.id,
@@ -160,11 +194,18 @@ const evaluateMission = (
           ? "ready"
           : "in_progress",
     rewardAmount: definition.reward,
+    bonusUnlockWagerRatio:
+      definition.params.bonusUnlockWagerRatio === undefined
+        ? null
+        : toMoneyString(definition.params.bonusUnlockWagerRatio),
     progressCurrent,
     progressTarget: definition.params.target,
     claimable:
-      enabled && claim === null && progressCurrent >= definition.params.target,
-    autoAwarded: false,
+      enabled &&
+      !autoAwarded &&
+      claim === null &&
+      progressCurrent >= definition.params.target,
+    autoAwarded,
     claimedAt: claim?.createdAt ?? null,
     resetsAt: definition.params.cadence === "daily" ? nextResetAt : null,
   };
@@ -188,7 +229,7 @@ export function evaluateRewardCenter(
       streakDays,
       todayDailyClaimed: Boolean(todayDailyClaim),
       availableMissionCount: missions.filter(
-        (mission) => mission.status === "ready",
+        (mission) => mission.status === "ready" && !mission.autoAwarded,
       ).length,
       claimedMissionCount: missions.filter(
         (mission) => mission.status === "claimed",

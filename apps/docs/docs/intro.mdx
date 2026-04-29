@@ -1,0 +1,137 @@
+---
+title: Quickstart
+slug: /intro
+description: Minimal setup for the Reward Prize Engine.
+---
+
+import Tabs from "@theme/Tabs";
+import TabItem from "@theme/TabItem";
+
+# Ship a first reward in under 5 minutes
+
+The Prize Engine lets a tenant project send behavior, risk, and budget context into
+`/v1/engine/rewards` and receive a deterministic, idempotent reward decision back.
+
+Use the interactive explorer at [`/api-reference`](/api-reference) when you want to
+inspect live request shapes, headers, or response payloads.
+
+## What you need
+
+- A project API key with `reward:write`, `catalog:read`, and `fairness:read`.
+- The tenant environment you want to target: `sandbox` or `live`.
+- A server-side runtime. Do not call the Prize Engine from browser code.
+
+## Minimal request
+
+<Tabs>
+  <TabItem value="typescript" label="TypeScript SDK" default>
+
+```ts
+import { createPrizeEngineClient } from "@reward/prize-engine-sdk";
+
+const client = createPrizeEngineClient({
+  baseUrl: "https://api.reward.system",
+  environment: "sandbox",
+  getApiKey: () => process.env.PRIZE_ENGINE_API_KEY ?? null,
+});
+
+const result = await client.reward({
+  agent: {
+    agentId: "agent-checkout-bot",
+    groupId: "cohort-a",
+  },
+  behavior: {
+    actionType: "checkout.completed",
+    score: 0.82,
+    risk: 0.18,
+  },
+  budget: {
+    amount: "3.00",
+    currency: "USD",
+    window: "day",
+  },
+  idempotencyKey: "rw-checkout-2026-04-29-0001",
+});
+
+if (!result.ok) {
+  throw new Error(result.error.message);
+}
+
+console.log(result.data.result.rewardAmount);
+```
+
+  </TabItem>
+  <TabItem value="python" label="Python SDK">
+
+```python
+from prize_engine_sdk import PrizeEngineClient, create_idempotency_key
+
+client = PrizeEngineClient(
+    base_url="https://api.reward.system",
+    environment="sandbox",
+    api_key="pe_sandbox_example",
+)
+
+result = client.reward(
+    {
+        "agent": {"agentId": "agent-checkout-bot", "groupId": "cohort-a"},
+        "behavior": {
+            "actionType": "checkout.completed",
+            "score": 0.82,
+            "risk": 0.18,
+        },
+        "budget": {"amount": "3.00", "currency": "USD", "window": "day"},
+        "idempotencyKey": create_idempotency_key(),
+    }
+)
+
+if not result["ok"]:
+    raise RuntimeError(result["error"]["message"])
+
+print(result["data"]["result"]["rewardAmount"])
+```
+
+  </TabItem>
+  <TabItem value="curl" label="cURL">
+
+```bash
+curl -X POST "https://api.reward.system/v1/engine/rewards" \
+  -H "Authorization: Bearer $PRIZE_ENGINE_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "environment": "sandbox",
+    "agent": {
+      "agentId": "agent-checkout-bot",
+      "groupId": "cohort-a"
+    },
+    "behavior": {
+      "actionType": "checkout.completed",
+      "score": 0.82,
+      "risk": 0.18
+    },
+    "budget": {
+      "amount": "3.00",
+      "currency": "USD",
+      "window": "day"
+    },
+    "idempotencyKey": "rw-checkout-2026-04-29-0001"
+  }'
+```
+
+  </TabItem>
+</Tabs>
+
+## Recommended integration flow
+
+1. Call `GET /v1/engine/overview` at startup to pull the current catalog and fairness commit.
+2. Send business events to `POST /v1/engine/rewards`.
+3. Store the returned `idempotencyKey` and `result.id` on your side.
+4. Use `GET /v1/engine/fairness/reveal` after an epoch rolls over if you audit past reward outcomes.
+
+## Environment model
+
+- `sandbox`: isolated, non-billable, safe for QA and integration tests.
+- `live`: billable production traffic.
+
+The backend also echoes the resolved environment in the `X-Prize-Engine-Environment`
+response header.

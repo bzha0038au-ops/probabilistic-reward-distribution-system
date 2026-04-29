@@ -25,8 +25,38 @@ export const PhoneNumberSchema = z
   .trim()
   .regex(/^\+?[1-9]\d{7,14}$/, 'Invalid phone number.');
 
+const isValidBirthDate = (value: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.valueOf())) {
+    return false;
+  }
+
+  return parsed.toISOString().slice(0, 10) === value;
+};
+
+export const BirthDateSchema = z
+  .string()
+  .trim()
+  .refine(isValidBirthDate, 'Birth date must be in YYYY-MM-DD format.')
+  .refine((value) => {
+    const parsed = new Date(`${value}T00:00:00.000Z`);
+    return parsed.getTime() <= Date.now();
+  }, 'Birth date cannot be in the future.')
+  .refine((value) => {
+    const parsed = new Date(`${value}T00:00:00.000Z`);
+    const oldest = new Date();
+    oldest.setUTCFullYear(oldest.getUTCFullYear() - 120);
+    return parsed.getTime() >= oldest.getTime();
+  }, 'Birth date is too far in the past.');
+
 export const RegisterRequestSchema = AuthCredentialsSchema.extend({
+  birthDate: BirthDateSchema,
   referrerId: OptionalPositiveIntSchema,
+  deviceFingerprint: z.string().trim().min(1).max(255).optional(),
   legalAcceptances: z.array(LegalAcceptanceInputRefSchema).default([]),
 });
 

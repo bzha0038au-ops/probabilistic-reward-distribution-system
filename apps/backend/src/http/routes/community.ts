@@ -15,8 +15,14 @@ import {
   serializeCommunityPost,
   serializeCommunityThread,
 } from '../../modules/community/service';
+import { guardCommunitySubmission } from '../../modules/community/anti-spam-service';
+import { getEffectiveUserKycTier } from '../../modules/kyc/service';
 import { parseSchema } from '../../shared/validation';
-import { requireUserGuard, requireUserKycTier } from '../guards';
+import {
+  requireCurrentLegalAcceptance,
+  requireUserGuard,
+  requireUserKycTier,
+} from '../guards';
 import { sendError, sendErrorForException, sendSuccess } from '../respond';
 import { parsePositiveInt, toObject } from '../utils';
 
@@ -25,6 +31,7 @@ const requireCommunityWriter = requireUserKycTier({ minimum: 'tier_1' });
 export async function registerCommunityRoutes(app: AppInstance) {
   app.register(async (protectedRoutes) => {
     protectedRoutes.addHook('preHandler', requireUserGuard);
+    protectedRoutes.addHook('preHandler', requireCurrentLegalAcceptance);
 
     protectedRoutes.get('/community/threads', async (request, reply) => {
       const parsed = parseSchema(
@@ -127,10 +134,25 @@ export async function registerCommunityRoutes(app: AppInstance) {
         }
 
         try {
+          const kycTier =
+            request.userKycTier ??
+            (await getEffectiveUserKycTier(request.user!.userId));
+          const guard = await guardCommunitySubmission({
+            userId: request.user!.userId,
+            kycTier,
+            action: 'thread',
+            title: parsed.data.title,
+            body: parsed.data.body,
+            captchaToken: parsed.data.captchaToken,
+            remoteIp: request.ip,
+          });
           const result = await createCommunityThread({
             userId: request.user!.userId,
             title: parsed.data.title,
             body: parsed.data.body,
+            initialThreadStatus: guard.autoHidden ? 'hidden' : 'visible',
+            initialPostStatus: guard.autoHidden ? 'hidden' : 'visible',
+            queuedReport: guard.queuedReport,
           });
 
           return sendSuccess(
@@ -138,8 +160,12 @@ export async function registerCommunityRoutes(app: AppInstance) {
             {
               thread: serializeCommunityThread(result.thread),
               post: serializeCommunityPost(result.post),
+              reviewRequired: guard.reviewRequired,
+              autoHidden: guard.autoHidden,
+              moderationReason: guard.moderationReason,
+              moderationSource: guard.moderationSource,
             },
-            201
+            guard.reviewRequired ? 202 : 201
           );
         } catch (error) {
           return sendErrorForException(
@@ -181,10 +207,23 @@ export async function registerCommunityRoutes(app: AppInstance) {
         }
 
         try {
+          const kycTier =
+            request.userKycTier ??
+            (await getEffectiveUserKycTier(request.user!.userId));
+          const guard = await guardCommunitySubmission({
+            userId: request.user!.userId,
+            kycTier,
+            action: 'reply',
+            body: parsed.data.body,
+            captchaToken: parsed.data.captchaToken,
+            remoteIp: request.ip,
+          });
           const result = await createCommunityPost({
             userId: request.user!.userId,
             threadId,
             body: parsed.data.body,
+            initialPostStatus: guard.autoHidden ? 'hidden' : 'visible',
+            queuedReport: guard.queuedReport,
           });
 
           return sendSuccess(
@@ -192,8 +231,12 @@ export async function registerCommunityRoutes(app: AppInstance) {
             {
               thread: serializeCommunityThread(result.thread),
               post: serializeCommunityPost(result.post),
+              reviewRequired: guard.reviewRequired,
+              autoHidden: guard.autoHidden,
+              moderationReason: guard.moderationReason,
+              moderationSource: guard.moderationSource,
             },
-            201
+            guard.reviewRequired ? 202 : 201
           );
         } catch (error) {
           return sendErrorForException(

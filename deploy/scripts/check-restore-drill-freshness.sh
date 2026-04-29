@@ -11,7 +11,7 @@ it is older than the allowed age.
 
 Defaults:
   evidence-dir  docs/operations/evidence
-  max-age-days  90
+  max-age-days  45
 EOF
 }
 
@@ -61,7 +61,7 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
 fi
 
 evidence_dir="${1:-docs/operations/evidence}"
-max_age_days="${2:-90}"
+max_age_days="${2:-45}"
 
 if [[ ! -d "${evidence_dir}" ]]; then
   emit_output "" "" "" "" "${max_age_days}"

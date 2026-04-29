@@ -28,53 +28,109 @@ describe("markets admin page server", () => {
   })
 
   it("loads prediction markets from the backend API", async () => {
-    apiRequest.mockResolvedValue({
-      ok: true,
-      data: [
-        {
-          id: 9,
-          slug: "btc-above-100k-2026-04-29",
-          roundKey: "btc-2026-04-29-close",
-          title: "BTC closes above 100k on 2026-04-29 UTC",
-          description: "Daily close market",
-          resolutionRules: "Use the official exchange close at 23:59:59 UTC.",
-          sourceOfTruth: "Exchange settlement feed",
-          category: "crypto",
-          tags: ["btc", "daily-close"],
-          invalidPolicy: "refund_all",
-          mechanism: "pari_mutuel",
-          status: "locked",
-          outcomes: [
-            { key: "yes", label: "Yes" },
-            { key: "no", label: "No" },
-          ],
-          outcomePools: [
-            {
-              outcomeKey: "yes",
-              label: "Yes",
-              totalStakeAmount: "50.00",
-              positionCount: 3,
+    apiRequest
+      .mockResolvedValueOnce({
+        ok: true,
+        data: [
+          {
+            id: 9,
+            slug: "btc-above-100k-2026-04-29",
+            roundKey: "btc-2026-04-29-close",
+            title: "BTC closes above 100k on 2026-04-29 UTC",
+            description: "Daily close market",
+            resolutionRules: "Use the official exchange close at 23:59:59 UTC.",
+            sourceOfTruth: "Exchange settlement feed",
+            category: "crypto",
+            tags: ["btc", "daily-close"],
+            invalidPolicy: "refund_all",
+            mechanism: "pari_mutuel",
+            vigBps: 500,
+            status: "locked",
+            outcomes: [
+              { key: "yes", label: "Yes" },
+              { key: "no", label: "No" },
+            ],
+            outcomePools: [
+              {
+                outcomeKey: "yes",
+                label: "Yes",
+                totalStakeAmount: "50.00",
+                positionCount: 3,
+              },
+              {
+                outcomeKey: "no",
+                label: "No",
+                totalStakeAmount: "10.00",
+                positionCount: 1,
+              },
+            ],
+            totalPoolAmount: "60.00",
+            winningOutcomeKey: null,
+            winningPoolAmount: null,
+            oracle: null,
+            oracleBinding: {
+              id: 14,
+              provider: "api_pull",
+              name: "BTC close API",
+              status: "appealed",
+              lastCheckedAt: "2026-04-29T12:35:00.000Z",
+              lastReportedAt: "2026-04-29T12:31:00.000Z",
+              lastResolvedOutcomeKey: null,
+              createdAt: "2026-04-28T00:00:00.000Z",
+              updatedAt: "2026-04-29T12:35:00.000Z",
             },
-            {
-              outcomeKey: "no",
-              label: "No",
-              totalStakeAmount: "10.00",
-              positionCount: 1,
+            opensAt: "2026-04-28T00:00:00.000Z",
+            locksAt: "2026-04-29T12:00:00.000Z",
+            resolvesAt: "2026-04-29T12:30:00.000Z",
+            resolvedAt: null,
+            createdAt: "2026-04-28T00:00:00.000Z",
+            updatedAt: "2026-04-28T00:00:00.000Z",
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: [
+          {
+            id: 3,
+            marketId: 9,
+            oracleBindingId: 14,
+            appealKey: "9:14:oracle_value_unmapped",
+            reason: "oracle_value_unmapped",
+            status: "open",
+            provider: "api_pull",
+            title: "API oracle value could not be mapped to a market outcome.",
+            description: "Received value pending_review for this market.",
+            metadata: {
+              marketSlug: "btc-above-100k-2026-04-29",
             },
-          ],
-          totalPoolAmount: "60.00",
-          winningOutcomeKey: null,
-          winningPoolAmount: null,
-          oracle: null,
-          opensAt: "2026-04-28T00:00:00.000Z",
-          locksAt: "2026-04-29T12:00:00.000Z",
-          resolvesAt: "2026-04-29T12:30:00.000Z",
-          resolvedAt: null,
-          createdAt: "2026-04-28T00:00:00.000Z",
-          updatedAt: "2026-04-28T00:00:00.000Z",
-        },
-      ],
-    })
+            firstDetectedAt: "2026-04-29T12:35:00.000Z",
+            lastDetectedAt: "2026-04-29T12:35:00.000Z",
+            resolvedByAdminId: null,
+            resolvedAt: null,
+            createdAt: "2026-04-29T12:35:00.000Z",
+            updatedAt: "2026-04-29T12:35:00.000Z",
+            market: {
+              id: 9,
+              slug: "btc-above-100k-2026-04-29",
+              roundKey: "btc-2026-04-29-close",
+              title: "BTC closes above 100k on 2026-04-29 UTC",
+              status: "locked",
+              oracleBinding: {
+                id: 14,
+                provider: "api_pull",
+                name: "BTC close API",
+                status: "appealed",
+                lastCheckedAt: "2026-04-29T12:35:00.000Z",
+                lastReportedAt: "2026-04-29T12:31:00.000Z",
+                lastResolvedOutcomeKey: null,
+                createdAt: "2026-04-28T00:00:00.000Z",
+                updatedAt: "2026-04-29T12:35:00.000Z",
+              },
+            },
+          },
+        ],
+      })
 
     const result = await load({
       fetch: vi.fn(),
@@ -82,10 +138,17 @@ describe("markets admin page server", () => {
       locals: { locale: "en" },
     } as never)
 
-    expect(apiRequest).toHaveBeenCalledWith(
+    expect(apiRequest).toHaveBeenNthCalledWith(
+      1,
       expect.any(Function),
       {},
       "/admin/markets",
+    )
+    expect(apiRequest).toHaveBeenNthCalledWith(
+      2,
+      expect.any(Function),
+      {},
+      "/admin/markets/appeals",
     )
     expect(result).toEqual({
       markets: [
@@ -94,6 +157,14 @@ describe("markets admin page server", () => {
           slug: "btc-above-100k-2026-04-29",
           oracle: null,
           status: "locked",
+        }),
+      ],
+      appeals: [
+        expect.objectContaining({
+          id: 3,
+          marketId: 9,
+          reason: "oracle_value_unmapped",
+          status: "open",
         }),
       ],
       error: null,
@@ -116,9 +187,14 @@ describe("markets admin page server", () => {
         resolutionRules:
           "Use the official exchange close at 23:59:59 UTC and invalidate only if the source is unavailable.",
         sourceOfTruth: "Exchange settlement feed",
+        oracleProvider: "api_pull",
+        oracleBindingName: "BTC close API",
+        oracleBindingConfig:
+          '{"url":"https://api.example.com/btc-close","valuePath":"close","comparison":{"operator":"gte","threshold":"100000","outcomeKeyIfTrue":"yes","outcomeKeyIfFalse":"no"}}',
         category: "crypto",
         tags: "btc, daily-close",
         invalidPolicy: "refund_all",
+        vigPercent: "5.00",
         opensAt: "2026-04-28T00:00:00Z",
         locksAt: "2026-04-29T12:00:00Z",
         resolvesAt: "2026-04-29T12:30:00Z",
@@ -129,36 +205,50 @@ describe("markets admin page server", () => {
       locals: { locale: "en" },
     } as never)
 
-    expect(apiRequest).toHaveBeenCalledWith(
-      expect.any(Function),
-      {},
-      "/admin/markets",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          slug: "btc-above-100k-2026-04-29",
-          roundKey: "btc-2026-04-29-close",
-          title: "BTC closes above 100k on 2026-04-29 UTC",
-          description: "Daily close market",
-          resolutionRules:
-            "Use the official exchange close at 23:59:59 UTC and invalidate only if the source is unavailable.",
-          sourceOfTruth: "Exchange settlement feed",
-          category: "crypto",
-          tags: ["btc", "daily-close"],
-          invalidPolicy: "refund_all",
-          outcomes: [
-            { key: "yes", label: "Yes" },
-            { key: "no", label: "No" },
-          ],
-          opensAt: "2026-04-28T00:00:00Z",
-          locksAt: "2026-04-29T12:00:00Z",
-          resolvesAt: "2026-04-29T12:30:00Z",
-          totpCode: "123456",
-          breakGlassCode: null,
-        }),
+    expect(apiRequest).toHaveBeenCalledTimes(1)
+    const [, cookies, path, init] = apiRequest.mock.calls[0] ?? []
+    expect(cookies).toEqual({})
+    expect(path).toBe("/admin/markets")
+    expect(init).toMatchObject({
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    })
+    expect(JSON.parse(String(init?.body))).toEqual({
+      slug: "btc-above-100k-2026-04-29",
+      roundKey: "btc-2026-04-29-close",
+      title: "BTC closes above 100k on 2026-04-29 UTC",
+      description: "Daily close market",
+      resolutionRules:
+        "Use the official exchange close at 23:59:59 UTC and invalidate only if the source is unavailable.",
+      sourceOfTruth: "Exchange settlement feed",
+      category: "crypto",
+      tags: ["btc", "daily-close"],
+      invalidPolicy: "refund_all",
+      vigBps: 500,
+      oracleBinding: {
+        provider: "api_pull",
+        name: "BTC close API",
+        config: {
+          url: "https://api.example.com/btc-close",
+          valuePath: "close",
+          comparison: {
+            operator: "gte",
+            threshold: "100000",
+            outcomeKeyIfTrue: "yes",
+            outcomeKeyIfFalse: "no",
+          },
+        },
       },
-    )
+      outcomes: [
+        { key: "yes", label: "Yes" },
+        { key: "no", label: "No" },
+      ],
+      opensAt: "2026-04-28T00:00:00Z",
+      locksAt: "2026-04-29T12:00:00Z",
+      resolvesAt: "2026-04-29T12:30:00Z",
+      totpCode: "123456",
+      breakGlassCode: null,
+    })
     expect(result).toEqual({
       success: true,
       actionType: "create",
@@ -281,6 +371,41 @@ describe("markets admin page server", () => {
       success: true,
       actionType: "cancel",
       marketId: "11",
+    })
+  })
+
+  it("acknowledges a prediction market appeal", async () => {
+    apiRequest.mockResolvedValue({
+      ok: true,
+      data: { id: 3, status: "acknowledged" },
+    })
+
+    const result = await actions.acknowledgeAppeal({
+      request: makeRequest({
+        appealId: "3",
+        acknowledgeNote: "Investigating upstream market status feed.",
+      }),
+      fetch: vi.fn(),
+      cookies: {},
+      locals: { locale: "en" },
+    } as never)
+
+    expect(apiRequest).toHaveBeenCalledWith(
+      expect.any(Function),
+      {},
+      "/admin/markets/appeals/3/acknowledge",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          note: "Investigating upstream market status feed.",
+        }),
+      },
+    )
+    expect(result).toEqual({
+      success: true,
+      actionType: "acknowledgeAppeal",
+      appealId: "3",
     })
   })
 })

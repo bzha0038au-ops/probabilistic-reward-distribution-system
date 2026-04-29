@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+export const playModeGameKeyValues = [
+  "draw",
+  "blackjack",
+  "holdem",
+] as const;
+
 export const playModeTypeValues = [
   "standard",
   "dual_bet",
@@ -11,6 +17,9 @@ export const playModeOutcomeValues = ["win", "lose", "push", "miss"] as const;
 
 export const PlayModeTypeSchema = z.enum(playModeTypeValues);
 export type PlayModeType = z.infer<typeof PlayModeTypeSchema>;
+
+export const PlayModeGameKeySchema = z.enum(playModeGameKeyValues);
+export type PlayModeGameKey = z.infer<typeof PlayModeGameKeySchema>;
 
 export const PlayModeOutcomeSchema = z.enum(playModeOutcomeValues);
 export type PlayModeOutcome = z.infer<typeof PlayModeOutcomeSchema>;
@@ -29,3 +38,9 @@ export const PlayModeSnapshotSchema = z.object({
   carryActive: z.boolean(),
 });
 export type PlayModeSnapshot = z.infer<typeof PlayModeSnapshotSchema>;
+
+export const PlayModeStateResponseSchema = z.object({
+  gameKey: PlayModeGameKeySchema,
+  snapshot: PlayModeSnapshotSchema,
+});
+export type PlayModeStateResponse = z.infer<typeof PlayModeStateResponseSchema>;

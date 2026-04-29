@@ -21,6 +21,9 @@
   const unresolvedCount = $derived(
     reconciliationAlertsSummary?.unresolvedCount ?? 0,
   )
+  const zeroDriftStreakDays = $derived(
+    reconciliationAlertsSummary?.zeroDriftStreakDays ?? 0,
+  )
 </script>
 
 <section class="mt-6 grid gap-6 md:grid-cols-4">
@@ -64,6 +67,9 @@
         {/if}
       </div>
       <p class="text-2xl font-semibold">{unresolvedCount}</p>
+      <p class="text-xs text-slate-500">
+        {t("admin.metrics.reconciliationStreak")}: {zeroDriftStreakDays}
+      </p>
     </div>
   </a>
 </section>

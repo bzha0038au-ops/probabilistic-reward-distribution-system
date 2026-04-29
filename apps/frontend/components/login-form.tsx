@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { getBrowserDeviceFingerprint } from '@/lib/device-fingerprint';
 
 type LoginFormProps = {
   emailLabel: string;
@@ -45,8 +46,14 @@ export function LoginForm({
     formData.set('redirectTo', redirectTo);
 
     try {
+      const fingerprint = await getBrowserDeviceFingerprint();
       const response = await fetch('/api/auth/login', {
         method: 'POST',
+        headers: fingerprint
+          ? {
+              'x-device-fingerprint': fingerprint,
+            }
+          : undefined,
         body: formData,
       });
       const payload = (await response.json().catch(() => null)) as LoginResponse | null;

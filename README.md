@@ -132,6 +132,7 @@ Optional worker processes that are useful while developing payment or SaaS
 flows:
 
 ```bash
+pnpm dev:kyc-reverification
 pnpm dev:reconciliation
 pnpm dev:payment-webhooks
 pnpm dev:saas-billing
@@ -302,6 +303,7 @@ Production behavior is not just the Fastify API process. Several loops run as
 their own workers and are available locally too:
 
 - `pnpm dev:notifications`: drains auth notification deliveries from the durable outbox
+- `pnpm dev:kyc-reverification`: scans expiring KYC documents and forces reverification when required
 - `pnpm dev:reconciliation`: runs payment reconciliation cycles and repair workflows
 - `pnpm dev:payment-webhooks`: processes inbound payment webhook tasks
 - `pnpm dev:saas-billing`: runs SaaS billing and webhook automation loops
@@ -374,6 +376,7 @@ Run from the repo root:
 pnpm dev
 pnpm dev:user
 pnpm dev:notifications
+pnpm dev:kyc-reverification
 pnpm dev:reconciliation
 pnpm dev:payment-webhooks
 pnpm dev:saas-billing
@@ -392,6 +395,7 @@ pnpm ops:health
 pnpm ops:tail-errors
 pnpm ops:check-finance
 pnpm ops:freeze-deploys
+pnpm ops:rotate-secret
 pnpm ops:rotate-jwt
 pnpm ops:ai-diagnose
 pnpm ops:postmortem

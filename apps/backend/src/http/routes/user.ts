@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { AppInstance } from "./types";
+import { trace } from "@opentelemetry/api";
 import {
   BlackjackActionRequestSchema,
   BlackjackStartRequestSchema,
@@ -7,6 +8,7 @@ import {
 import {
   HoldemCreateTableRequestSchema,
   HoldemJoinTableRequestSchema,
+  HoldemRealtimeObservationsRequestSchema,
   HoldemTableMessageRequestSchema,
   HoldemSeatModeRequestSchema,
   HoldemTableActionRequestSchema,
@@ -15,6 +17,10 @@ import {
   DrawPlayRequestSchema,
   DrawRequestSchema,
 } from "@reward/shared-types/draw";
+import {
+  PlayModeGameKeySchema,
+  PlayModeRequestSchema,
+} from "@reward/shared-types/play-mode";
 import { KycSubmitRequestSchema } from "@reward/shared-types/kyc";
 import {
   PredictionMarketHistoryQuerySchema,
@@ -23,6 +29,12 @@ import {
 } from "@reward/shared-types/prediction-market";
 import { QuickEightRequestSchema } from "@reward/shared-types/quick-eight";
 import { RewardMissionClaimRequestSchema } from "@reward/shared-types/gamification";
+import {
+  NotificationListQuerySchema,
+  NotificationPushDeviceDeleteRequestSchema,
+  NotificationPushDeviceRegisterRequestSchema,
+  NotificationPreferencesUpdateRequestSchema,
+} from "@reward/shared-types/notification";
 
 import {
   getTransactionHistory,
@@ -30,7 +42,6 @@ import {
 } from "../../modules/wallet/service";
 import {
   executeDraw,
-  executeDrawPlay,
   getDrawCatalog,
   getDrawOverview,
   serializeDrawRecordForResponse,
@@ -38,15 +49,13 @@ import {
 import {
   actOnBlackjack,
   getBlackjackOverview,
-  startBlackjack,
 } from "../../modules/blackjack/service";
 import {
   actOnHoldem,
   createHoldemTableMessage,
-  createHoldemTable,
   getHoldemTable,
+  getHoldemTableType,
   listHoldemTableMessages,
-  joinHoldemTable,
   leaveHoldemTable,
   listHoldemTables,
   setHoldemSeatMode,
@@ -54,11 +63,20 @@ import {
   touchHoldemSeatPresence,
 } from "../../modules/holdem/service";
 import {
+  createHoldemTableWithMode,
+  executeDrawPlayWithMode,
+  getUserPlayModeState,
+  joinHoldemTableWithMode,
+  startBlackjackWithMode,
+  updateUserPlayModeState,
+} from "../../modules/play-mode/wrappers";
+import {
   getPredictionMarket,
   getPredictionMarketHistory,
   getPredictionMarketPortfolio,
   listPredictionMarkets,
   placePredictionPosition,
+  sellPredictionPosition,
 } from "../../modules/prediction-market/service";
 import { playQuickEight } from "../../modules/quick-eight/service";
 import { getHandHistory } from "../../modules/hand-history/service";
@@ -97,6 +115,17 @@ import {
   createWithdrawal,
 } from "../../modules/withdraw/service";
 import {
+  getUserNotificationSummary,
+  listUserNotificationPreferences,
+  listUserNotifications,
+  markAllUserNotificationsRead,
+  markUserNotificationRead,
+  registerUserNotificationPushDevice,
+  unregisterUserNotificationPushDevice,
+  updateUserNotificationPreferences,
+} from "../../modules/notification/service";
+import { trackUserDeviceFingerprint } from "../../modules/risk/service";
+import {
   requireCurrentLegalAcceptance,
   requireUserFreezeScope,
   requireUserGuard,
@@ -107,6 +136,7 @@ import { sendError, sendErrorForException, sendSuccess } from "../respond";
 import {
   parseLimit,
   parsePositiveInt,
+  readHeaderValue,
   readRecordValue,
   readStringValue,
   toAmountString,
@@ -122,7 +152,10 @@ import {
 import { getConfigView } from "../../shared/config";
 import { createRateLimiter } from "../../shared/rate-limit";
 import { parseSchema } from "../../shared/validation";
-import { recordDrawRequestOutcome } from "../../shared/observability";
+import {
+  recordDrawRequestOutcome,
+  recordRealtimeReceiveLatency,
+} from "../../shared/observability";
 
 const config = getConfigView();
 const drawRateLimit = {
@@ -207,11 +240,81 @@ const requireMultiplayerKycAccess = async (
   }
 };
 
+const isKycExemptHoldemTableType = (tableType: string | null | undefined) =>
+  tableType === "casual";
+
+const requireCreateHoldemTableKycAccess = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+) => {
+  if (isKycExemptHoldemTableType(readStringValue(request.body, "tableType"))) {
+    return;
+  }
+
+  return requireMultiplayerKycAccess(request, reply);
+};
+
+const requireExistingHoldemTableKycAccess = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+) => {
+  const tableId = parsePositiveInt(request.params, "tableId");
+  if (!tableId) {
+    return;
+  }
+
+  try {
+    const tableType = await getHoldemTableType(tableId);
+    if (tableType === null || isKycExemptHoldemTableType(tableType)) {
+      return;
+    }
+  } catch (error) {
+    return sendErrorForException(
+      reply,
+      error,
+      "Holdem table KYC access check failed",
+    );
+  }
+
+  return requireMultiplayerKycAccess(request, reply);
+};
+
 const resolveUserAgent = (request: { headers: { [key: string]: unknown } }) => {
   const value = request.headers["user-agent"];
   if (Array.isArray(value)) return value[0];
   return typeof value === "string" ? value : undefined;
 };
+
+const resolveRequestDeviceFingerprint = (request: FastifyRequest) =>
+  readHeaderValue(
+    request.headers as Record<string, unknown>,
+    "x-device-fingerprint",
+  );
+
+const captureUserEntrypointFingerprint = async (
+  request: FastifyRequest,
+  entrypoint: "bet" | "withdrawal",
+  activityType: string,
+  metadata?: Record<string, unknown> | null,
+) => {
+  const user = request.user;
+  if (!user) {
+    return null;
+  }
+
+  return trackUserDeviceFingerprint({
+    userId: user.userId,
+    deviceFingerprint: resolveRequestDeviceFingerprint(request),
+    entrypoint,
+    activityType,
+    ip: request.ip,
+    userAgent: resolveUserAgent(request),
+    sessionId: user.sessionId,
+    metadata,
+  });
+};
+
+const realtimeSpan = () => trace.getActiveSpan();
 
 const appendUserStepUpMetadata = (
   metadata: Record<string, unknown> | null,
@@ -272,6 +375,51 @@ export async function registerUserRoutes(app: AppInstance) {
     return sendSuccess(reply, reveal);
   });
 
+  app.register(async (pushRoutes) => {
+    pushRoutes.addHook("preHandler", requireUserGuard);
+
+    pushRoutes.post("/notification-push-devices", async (request, reply) => {
+      const user = request.user!;
+      const parsed = parseSchema(
+        NotificationPushDeviceRegisterRequestSchema,
+        toObject(request.body),
+      );
+      if (!parsed.isValid) {
+        return sendError(reply, 400, "Invalid request.", parsed.errors);
+      }
+
+      const device = await registerUserNotificationPushDevice(
+        user.userId,
+        parsed.data,
+        {
+          deviceFingerprint: resolveRequestDeviceFingerprint(request),
+        },
+      );
+      return sendSuccess(reply, device, 201);
+    });
+
+    pushRoutes.delete("/notification-push-devices", async (request, reply) => {
+      const user = request.user!;
+      const parsed = parseSchema(
+        NotificationPushDeviceDeleteRequestSchema,
+        toObject(request.body),
+      );
+      if (!parsed.isValid) {
+        return sendError(reply, 400, "Invalid request.", parsed.errors);
+      }
+
+      const device = await unregisterUserNotificationPushDevice(
+        user.userId,
+        parsed.data.token,
+      );
+      if (!device) {
+        return sendError(reply, 404, "Push device not found.");
+      }
+
+      return sendSuccess(reply, device);
+    });
+  });
+
   app.register(async (protectedRoutes) => {
     protectedRoutes.addHook("preHandler", requireUserGuard);
     protectedRoutes.addHook("preHandler", requireCurrentLegalAcceptance);
@@ -289,6 +437,85 @@ export async function registerUserRoutes(app: AppInstance) {
       return sendSuccess(reply, history);
     });
 
+    protectedRoutes.get("/notifications", async (request, reply) => {
+      const user = request.user!;
+      const parsed = parseSchema(
+        NotificationListQuerySchema,
+        toObject(request.query),
+      );
+      if (!parsed.isValid) {
+        return sendError(reply, 400, "Invalid request.", parsed.errors);
+      }
+
+      const notifications = await listUserNotifications(
+        user.userId,
+        parsed.data,
+      );
+      return sendSuccess(reply, notifications);
+    });
+
+    protectedRoutes.get("/notifications/summary", async (request, reply) => {
+      const user = request.user!;
+      const summary = await getUserNotificationSummary(user.userId);
+      return sendSuccess(reply, summary);
+    });
+
+    protectedRoutes.post(
+      "/notifications/:notificationId/read",
+      async (request, reply) => {
+        const user = request.user!;
+        const notificationId = parsePositiveInt(
+          request.params,
+          "notificationId",
+        );
+        if (!notificationId) {
+          return sendError(reply, 400, "Invalid notification id.");
+        }
+
+        const record = await markUserNotificationRead(
+          user.userId,
+          notificationId,
+        );
+        if (!record) {
+          return sendError(reply, 404, "Notification not found.");
+        }
+
+        return sendSuccess(reply, record);
+      },
+    );
+
+    protectedRoutes.post("/notifications/read-all", async (request, reply) => {
+      const user = request.user!;
+      const result = await markAllUserNotificationsRead(user.userId);
+      return sendSuccess(reply, result);
+    });
+
+    protectedRoutes.get("/notification-preferences", async (request, reply) => {
+      const user = request.user!;
+      const preferences = await listUserNotificationPreferences(user.userId);
+      return sendSuccess(reply, preferences);
+    });
+
+    protectedRoutes.patch(
+      "/notification-preferences",
+      async (request, reply) => {
+        const user = request.user!;
+        const parsed = parseSchema(
+          NotificationPreferencesUpdateRequestSchema,
+          toObject(request.body),
+        );
+        if (!parsed.isValid) {
+          return sendError(reply, 400, "Invalid request.", parsed.errors);
+        }
+
+        const preferences = await updateUserNotificationPreferences(
+          user.userId,
+          parsed.data,
+        );
+        return sendSuccess(reply, preferences);
+      },
+    );
+
     protectedRoutes.get("/kyc/profile", async (request, reply) => {
       const user = request.user!;
       const profile = await getUserKycProfile(user.userId);
@@ -304,7 +531,10 @@ export async function registerUserRoutes(app: AppInstance) {
       },
       async (request, reply) => {
         const user = request.user!;
-        const parsed = parseSchema(KycSubmitRequestSchema, toObject(request.body));
+        const parsed = parseSchema(
+          KycSubmitRequestSchema,
+          toObject(request.body),
+        );
         if (!parsed.isValid) {
           return sendError(reply, 400, "Invalid request.", parsed.errors);
         }
@@ -313,11 +543,7 @@ export async function registerUserRoutes(app: AppInstance) {
           const profile = await submitKycProfile(user.userId, parsed.data);
           return sendSuccess(reply, profile, 201);
         } catch (error) {
-          return sendErrorForException(
-            reply,
-            error,
-            "KYC submission failed",
-          );
+          return sendErrorForException(reply, error, "KYC submission failed");
         }
       },
     );
@@ -390,6 +616,56 @@ export async function registerUserRoutes(app: AppInstance) {
       return sendSuccess(reply, catalog);
     });
 
+    protectedRoutes.get("/play-modes/:gameKey", async (request, reply) => {
+      const user = request.user!;
+      const parsedGameKey = parseSchema(
+        PlayModeGameKeySchema,
+        readStringValue(toObject(request.params), "gameKey"),
+      );
+      if (!parsedGameKey.isValid) {
+        return sendError(
+          reply,
+          400,
+          "Invalid play mode game key.",
+          parsedGameKey.errors,
+        );
+      }
+
+      const state = await getUserPlayModeState(user.userId, parsedGameKey.data);
+      return sendSuccess(reply, state);
+    });
+
+    protectedRoutes.post("/play-modes/:gameKey", async (request, reply) => {
+      const user = request.user!;
+      const parsedGameKey = parseSchema(
+        PlayModeGameKeySchema,
+        readStringValue(toObject(request.params), "gameKey"),
+      );
+      if (!parsedGameKey.isValid) {
+        return sendError(
+          reply,
+          400,
+          "Invalid play mode game key.",
+          parsedGameKey.errors,
+        );
+      }
+
+      const parsedBody = parseSchema(
+        PlayModeRequestSchema,
+        toObject(request.body),
+      );
+      if (!parsedBody.isValid) {
+        return sendError(reply, 400, "Invalid request.", parsedBody.errors);
+      }
+
+      const state = await updateUserPlayModeState(
+        user.userId,
+        parsedGameKey.data,
+        parsedBody.data,
+      );
+      return sendSuccess(reply, state);
+    });
+
     protectedRoutes.get("/blackjack", async (request, reply) => {
       const user = request.user!;
       const overview = await getBlackjackOverview(user.userId);
@@ -439,6 +715,58 @@ export async function registerUserRoutes(app: AppInstance) {
       },
     );
 
+    protectedRoutes.post(
+      "/holdem/realtime-observations",
+      async (request, reply) => {
+        const user = request.user!;
+        const parsed = parseSchema(
+          HoldemRealtimeObservationsRequestSchema,
+          toObject(request.body),
+        );
+        if (!parsed.isValid) {
+          return sendError(reply, 400, "Invalid request.", parsed.errors);
+        }
+
+        const span = realtimeSpan();
+        span?.setAttributes({
+          "app.realtime.channel": "holdem",
+          "app.realtime.surface": parsed.data.surface,
+          "app.realtime.accepted_count": parsed.data.observations.length,
+          "enduser.id": String(user.userId),
+        });
+
+        for (const observation of parsed.data.observations) {
+          span?.addEvent("realtime.received", {
+            "app.realtime.channel": "holdem",
+            "app.realtime.surface": parsed.data.surface,
+            "app.realtime.topic": observation.topic,
+            "app.realtime.event": observation.event,
+            "app.realtime.sent_at": observation.sentAt,
+            "app.realtime.received_at": observation.receivedAt,
+            "app.realtime.delivery_latency_ms": observation.deliveryLatencyMs,
+            ...(observation.tableId !== null
+              ? { "app.holdem.table_id": observation.tableId }
+              : {}),
+            ...(observation.roundId !== null
+              ? { "app.holdem.round_id": observation.roundId }
+              : {}),
+          });
+          recordRealtimeReceiveLatency({
+            surface: parsed.data.surface,
+            channel: "holdem",
+            event: observation.event,
+            latencyMs: observation.deliveryLatencyMs,
+          });
+        }
+
+        return sendSuccess(
+          reply,
+          { accepted: parsed.data.observations.length },
+          202,
+        );
+      },
+    );
+
     protectedRoutes.get("/hand-history/:roundId", async (request, reply) => {
       const user = request.user!;
       const roundId = readStringValue(request.params, "roundId");
@@ -464,7 +792,10 @@ export async function registerUserRoutes(app: AppInstance) {
         }
 
         try {
-          const bundle = await getHandHistoryEvidenceBundle(user.userId, roundId);
+          const bundle = await getHandHistoryEvidenceBundle(
+            user.userId,
+            roundId,
+          );
           return sendSuccess(reply, bundle);
         } catch (error) {
           return sendErrorForException(
@@ -479,15 +810,42 @@ export async function registerUserRoutes(app: AppInstance) {
     protectedRoutes.get("/rewards/center", async (request, reply) => {
       const user = request.user!;
       try {
-        const { getRewardCenter } = await import(
-          "../../modules/gamification/service"
-        );
+        const { getRewardCenter } =
+          await import("../../modules/gamification/service");
         const center = await getRewardCenter(user.userId);
         return sendSuccess(reply, center);
       } catch (error) {
-        return sendErrorForException(reply, error, "Reward center read failed.");
+        return sendErrorForException(
+          reply,
+          error,
+          "Reward center read failed.",
+        );
       }
     });
+
+    protectedRoutes.get(
+      "/experiments/:expKey/variant",
+      async (request, reply) => {
+        const user = request.user!;
+        const expKey = readStringValue(request.params, "expKey");
+        if (!expKey) {
+          return sendError(reply, 400, "Invalid experiment key.");
+        }
+
+        try {
+          const { getVariant } =
+            await import("../../modules/experiments/service");
+          const variant = await getVariant(user.userId, expKey);
+          return sendSuccess(reply, variant);
+        } catch (error) {
+          return sendErrorForException(
+            reply,
+            error,
+            "Experiment variant read failed.",
+          );
+        }
+      },
+    );
 
     protectedRoutes.post(
       "/rewards/claim",
@@ -506,9 +864,8 @@ export async function registerUserRoutes(app: AppInstance) {
         }
 
         try {
-          const { claimRewardMission } = await import(
-            "../../modules/gamification/service"
-          );
+          const { claimRewardMission } =
+            await import("../../modules/gamification/service");
           const result = await claimRewardMission(
             user.userId,
             parsed.data.missionId,
@@ -546,6 +903,14 @@ export async function registerUserRoutes(app: AppInstance) {
         }
 
         try {
+          await captureUserEntrypointFingerprint(
+            request,
+            "bet",
+            "prediction_market_position",
+            {
+              marketId,
+            },
+          );
           const result = await placePredictionPosition(user.userId, marketId, {
             outcomeKey: parsed.data.outcomeKey,
             stakeAmount: parsed.data.stakeAmount,
@@ -562,13 +927,60 @@ export async function registerUserRoutes(app: AppInstance) {
     );
 
     protectedRoutes.post(
+      "/markets/:marketId/positions/:positionId/sell",
+      {
+        config: { rateLimit: financeRateLimit },
+        preHandler: [
+          enforceUserFinanceLimit,
+          requireGameplayAccess,
+          requireVerifiedDrawUser,
+        ],
+      },
+      async (request, reply) => {
+        const user = request.user!;
+        const marketId = parsePositiveInt(request.params, "marketId");
+        const positionId = parsePositiveInt(request.params, "positionId");
+        if (!marketId) {
+          return sendError(reply, 400, "Invalid market id.");
+        }
+        if (!positionId) {
+          return sendError(reply, 400, "Invalid position id.");
+        }
+
+        try {
+          await captureUserEntrypointFingerprint(
+            request,
+            "bet",
+            "prediction_market_position_sell",
+            {
+              marketId,
+              positionId,
+            },
+          );
+          const result = await sellPredictionPosition(
+            user.userId,
+            marketId,
+            positionId,
+          );
+          return sendSuccess(reply, result);
+        } catch (error) {
+          return sendErrorForException(
+            reply,
+            error,
+            "Prediction market position sell failed",
+          );
+        }
+      },
+    );
+
+    protectedRoutes.post(
       "/holdem/tables",
       {
         config: { rateLimit: drawRateLimit },
         preHandler: [
           enforceUserDrawLimit,
           requireGameplayAccess,
-          requireMultiplayerKycAccess,
+          requireCreateHoldemTableKycAccess,
           requireVerifiedDrawUser,
         ],
       },
@@ -583,13 +995,25 @@ export async function registerUserRoutes(app: AppInstance) {
         }
 
         try {
-          const result = await createHoldemTable(user.userId, {
+          await captureUserEntrypointFingerprint(
+            request,
+            "bet",
+            "holdem_create_table",
+          );
+          const result = await createHoldemTableWithMode(user.userId, {
             tableName: parsed.data.tableName,
             buyInAmount: parsed.data.buyInAmount,
+            tableType: parsed.data.tableType,
+            maxSeats: parsed.data.maxSeats,
+            tournament: parsed.data.tournament,
           });
           return sendSuccess(reply, result, 201);
         } catch (error) {
-          return sendErrorForException(reply, error, "Holdem table create failed");
+          return sendErrorForException(
+            reply,
+            error,
+            "Holdem table create failed",
+          );
         }
       },
     );
@@ -601,7 +1025,7 @@ export async function registerUserRoutes(app: AppInstance) {
         preHandler: [
           enforceUserDrawLimit,
           requireGameplayAccess,
-          requireMultiplayerKycAccess,
+          requireExistingHoldemTableKycAccess,
           requireVerifiedDrawUser,
         ],
       },
@@ -621,12 +1045,24 @@ export async function registerUserRoutes(app: AppInstance) {
         }
 
         try {
-          const result = await joinHoldemTable(user.userId, tableId, {
+          await captureUserEntrypointFingerprint(
+            request,
+            "bet",
+            "holdem_join_table",
+            {
+              tableId,
+            },
+          );
+          const result = await joinHoldemTableWithMode(user.userId, tableId, {
             buyInAmount: parsed.data.buyInAmount,
           });
           return sendSuccess(reply, result);
         } catch (error) {
-          return sendErrorForException(reply, error, "Holdem table join failed");
+          return sendErrorForException(
+            reply,
+            error,
+            "Holdem table join failed",
+          );
         }
       },
     );
@@ -638,7 +1074,7 @@ export async function registerUserRoutes(app: AppInstance) {
         preHandler: [
           enforceUserDrawLimit,
           requireGameplayAccess,
-          requireMultiplayerKycAccess,
+          requireExistingHoldemTableKycAccess,
           requireVerifiedDrawUser,
         ],
       },
@@ -653,7 +1089,11 @@ export async function registerUserRoutes(app: AppInstance) {
           const result = await leaveHoldemTable(user.userId, tableId);
           return sendSuccess(reply, result);
         } catch (error) {
-          return sendErrorForException(reply, error, "Holdem table leave failed");
+          return sendErrorForException(
+            reply,
+            error,
+            "Holdem table leave failed",
+          );
         }
       },
     );
@@ -665,7 +1105,7 @@ export async function registerUserRoutes(app: AppInstance) {
         preHandler: [
           enforceUserDrawLimit,
           requireGameplayAccess,
-          requireMultiplayerKycAccess,
+          requireExistingHoldemTableKycAccess,
           requireVerifiedDrawUser,
         ],
       },
@@ -677,10 +1117,22 @@ export async function registerUserRoutes(app: AppInstance) {
         }
 
         try {
+          await captureUserEntrypointFingerprint(
+            request,
+            "bet",
+            "holdem_start_hand",
+            {
+              tableId,
+            },
+          );
           const result = await startHoldemTableHand(user.userId, tableId);
           return sendSuccess(reply, result);
         } catch (error) {
-          return sendErrorForException(reply, error, "Holdem hand start failed");
+          return sendErrorForException(
+            reply,
+            error,
+            "Holdem hand start failed",
+          );
         }
       },
     );
@@ -688,10 +1140,7 @@ export async function registerUserRoutes(app: AppInstance) {
     protectedRoutes.post(
       "/holdem/tables/:tableId/presence",
       {
-        preHandler: [
-          requireGameplayAccess,
-          requireVerifiedDrawUser,
-        ],
+        preHandler: [requireGameplayAccess, requireVerifiedDrawUser],
       },
       async (request, reply) => {
         const user = request.user!;
@@ -704,7 +1153,11 @@ export async function registerUserRoutes(app: AppInstance) {
           const result = await touchHoldemSeatPresence(user.userId, tableId);
           return sendSuccess(reply, result);
         } catch (error) {
-          return sendErrorForException(reply, error, "Holdem seat presence failed");
+          return sendErrorForException(
+            reply,
+            error,
+            "Holdem seat presence failed",
+          );
         }
       },
     );
@@ -712,10 +1165,7 @@ export async function registerUserRoutes(app: AppInstance) {
     protectedRoutes.post(
       "/holdem/tables/:tableId/seat-mode",
       {
-        preHandler: [
-          requireGameplayAccess,
-          requireVerifiedDrawUser,
-        ],
+        preHandler: [requireGameplayAccess, requireVerifiedDrawUser],
       },
       async (request, reply) => {
         const user = request.user!;
@@ -769,6 +1219,15 @@ export async function registerUserRoutes(app: AppInstance) {
         }
 
         try {
+          await captureUserEntrypointFingerprint(
+            request,
+            "bet",
+            "holdem_action",
+            {
+              tableId,
+              action: parsed.data.action,
+            },
+          );
           const result = await actOnHoldem(user.userId, tableId, {
             action: parsed.data.action,
             amount: parsed.data.amount,
@@ -783,10 +1242,7 @@ export async function registerUserRoutes(app: AppInstance) {
     protectedRoutes.post(
       "/holdem/tables/:tableId/messages",
       {
-        preHandler: [
-          requireGameplayAccess,
-          requireVerifiedDrawUser,
-        ],
+        preHandler: [requireGameplayAccess, requireVerifiedDrawUser],
       },
       async (request, reply) => {
         const user = request.user!;
@@ -841,11 +1297,12 @@ export async function registerUserRoutes(app: AppInstance) {
         }
 
         try {
-          const result = await startBlackjack(user.userId, {
-            stakeAmount: parsed.data.stakeAmount,
-            clientNonce: parsed.data.clientNonce ?? null,
-            playMode: parsed.data.playMode ?? null,
-          });
+          await captureUserEntrypointFingerprint(
+            request,
+            "bet",
+            "blackjack_start",
+          );
+          const result = await startBlackjackWithMode(user.userId, parsed.data);
           return sendSuccess(reply, result);
         } catch (error) {
           return sendErrorForException(reply, error, "Blackjack start failed");
@@ -879,6 +1336,15 @@ export async function registerUserRoutes(app: AppInstance) {
         }
 
         try {
+          await captureUserEntrypointFingerprint(
+            request,
+            "bet",
+            "blackjack_action",
+            {
+              gameId,
+              action: parsed.data.action,
+            },
+          );
           const result = await actOnBlackjack(
             user.userId,
             gameId,
@@ -912,7 +1378,13 @@ export async function registerUserRoutes(app: AppInstance) {
         }
 
         try {
-          const result = await executeDrawPlay(user.userId, parsed.data);
+          await captureUserEntrypointFingerprint(request, "bet", "draw_play", {
+            count: parsed.data.count,
+          });
+          const result = await executeDrawPlayWithMode(
+            user.userId,
+            parsed.data,
+          );
           recordDrawRequestOutcome("success");
           return sendSuccess(reply, result);
         } catch (error) {
@@ -943,6 +1415,11 @@ export async function registerUserRoutes(app: AppInstance) {
         }
 
         try {
+          await captureUserEntrypointFingerprint(
+            request,
+            "bet",
+            "quick_eight_play",
+          );
           const round = await playQuickEight(user.userId, {
             numbers: parsed.data.numbers,
             stakeAmount: parsed.data.stakeAmount,
@@ -973,6 +1450,7 @@ export async function registerUserRoutes(app: AppInstance) {
         }
 
         try {
+          await captureUserEntrypointFingerprint(request, "bet", "draw_single");
           const record = await executeDraw(user.userId, {
             clientNonce: parsed.data.clientNonce ?? null,
           });
@@ -1007,7 +1485,11 @@ export async function registerUserRoutes(app: AppInstance) {
       "/bank-cards",
       {
         config: { rateLimit: financeRateLimit },
-        preHandler: [enforceUserFinanceLimit, requireVerifiedFinanceUser],
+        preHandler: [
+          enforceUserFinanceLimit,
+          requireWithdrawalAccess,
+          requireVerifiedFinanceUser,
+        ],
       },
       async (request, reply) => {
         const user = request.user!;
@@ -1034,7 +1516,11 @@ export async function registerUserRoutes(app: AppInstance) {
       "/bank-cards/:bankCardId/default",
       {
         config: { rateLimit: financeRateLimit },
-        preHandler: [enforceUserFinanceLimit, requireVerifiedFinanceUser],
+        preHandler: [
+          enforceUserFinanceLimit,
+          requireWithdrawalAccess,
+          requireVerifiedFinanceUser,
+        ],
       },
       async (request, reply) => {
         const user = request.user!;
@@ -1123,7 +1609,11 @@ export async function registerUserRoutes(app: AppInstance) {
       "/crypto-withdraw-addresses",
       {
         config: { rateLimit: financeRateLimit },
-        preHandler: [enforceUserFinanceLimit, requireVerifiedFinanceUser],
+        preHandler: [
+          enforceUserFinanceLimit,
+          requireWithdrawalAccess,
+          requireVerifiedFinanceUser,
+        ],
       },
       async (request, reply) => {
         const user = request.user!;
@@ -1160,7 +1650,11 @@ export async function registerUserRoutes(app: AppInstance) {
       "/crypto-withdraw-addresses/:payoutMethodId/default",
       {
         config: { rateLimit: financeRateLimit },
-        preHandler: [enforceUserFinanceLimit, requireVerifiedFinanceUser],
+        preHandler: [
+          enforceUserFinanceLimit,
+          requireWithdrawalAccess,
+          requireVerifiedFinanceUser,
+        ],
       },
       async (request, reply) => {
         const user = request.user!;
@@ -1200,7 +1694,11 @@ export async function registerUserRoutes(app: AppInstance) {
       "/payout-methods",
       {
         config: { rateLimit: financeRateLimit },
-        preHandler: [enforceUserFinanceLimit, requireVerifiedFinanceUser],
+        preHandler: [
+          enforceUserFinanceLimit,
+          requireWithdrawalAccess,
+          requireVerifiedFinanceUser,
+        ],
       },
       async (request, reply) => {
         const user = request.user!;
@@ -1391,6 +1889,15 @@ export async function registerUserRoutes(app: AppInstance) {
         );
 
         try {
+          const trackedDevice = await captureUserEntrypointFingerprint(
+            request,
+            "withdrawal",
+            "fiat_withdrawal_request",
+            {
+              payoutMethodId,
+              bankCardId,
+            },
+          );
           const created = await createWithdrawal({
             userId: user.userId,
             amount,
@@ -1401,6 +1908,9 @@ export async function registerUserRoutes(app: AppInstance) {
               ip: request.ip,
               userAgent: resolveUserAgent(request),
               sessionId: user.sessionId,
+              deviceFingerprint:
+                trackedDevice?.fingerprint ??
+                resolveRequestDeviceFingerprint(request),
             },
           });
 
@@ -1446,6 +1956,14 @@ export async function registerUserRoutes(app: AppInstance) {
         );
 
         try {
+          const trackedDevice = await captureUserEntrypointFingerprint(
+            request,
+            "withdrawal",
+            "crypto_withdrawal_request",
+            {
+              payoutMethodId,
+            },
+          );
           const created = await createCryptoWithdrawal({
             userId: user.userId,
             amount,
@@ -1455,6 +1973,9 @@ export async function registerUserRoutes(app: AppInstance) {
               ip: request.ip,
               userAgent: resolveUserAgent(request),
               sessionId: user.sessionId,
+              deviceFingerprint:
+                trackedDevice?.fingerprint ??
+                resolveRequestDeviceFingerprint(request),
             },
           });
 

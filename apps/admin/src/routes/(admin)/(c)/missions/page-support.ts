@@ -52,6 +52,8 @@ const missionTemplates: Record<RewardMissionDefinitionType, Record<string, unkno
       metric: "draw_count_all",
       target: 1,
       cadence: "one_time",
+      awardMode: "manual_claim",
+      bonusUnlockWagerRatio: 1,
       sortOrder: 100,
     },
   };
@@ -69,6 +71,8 @@ const metricLabels: Record<RewardMissionMetric, string> = {
   draw_count_all: "累计抽奖次数",
   draw_count_today: "今日抽奖次数",
   deposit_count: "累计充值申请数",
+  deposit_credited_count: "累计到账充值数",
+  referral_success_count: "成功推荐人数",
 };
 
 export const stringifyMissionTemplate = (type: RewardMissionDefinitionType) =>
@@ -128,7 +132,7 @@ export const buildMissionPreview = (form: MissionForm): MissionPreview => {
       title: params.title,
       description: params.description,
       reward: form.reward || "0",
-      autoAwarded: false,
+      autoAwarded: params.awardMode === "auto_grant",
       cadence: params.cadence,
       target: params.target,
       progressPercent: 0,

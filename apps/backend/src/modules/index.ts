@@ -4,6 +4,7 @@ export * from './auth/service';
 export * from './bank-card/service';
 export * from './bonus/service';
 export * from './draw/service';
+export * from './experiments/service';
 export * from './fairness/service';
 export * from './gamification/service';
 export * from './house/service';

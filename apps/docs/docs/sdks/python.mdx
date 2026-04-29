@@ -1,0 +1,51 @@
+---
+title: Python SDK
+description: Use the draft Python mirror for server-to-server integrations.
+---
+
+# Python SDK
+
+The repository ships a draft Python mirror in
+`packages/prize-engine-sdk/python/prize_engine_sdk.py`.
+
+It intentionally stays on the Python standard library so a tenant can vendor it into
+an existing worker or backend without additional dependencies.
+
+## Minimal usage
+
+```python
+from prize_engine_sdk import PrizeEngineClient, create_idempotency_key
+
+client = PrizeEngineClient(
+    base_url="https://api.reward.system",
+    environment="sandbox",
+    api_key="pe_sandbox_example",
+)
+
+reward = client.reward(
+    {
+        "agent": {"agentId": "agent-checkout-bot", "groupId": "cohort-a"},
+        "behavior": {
+            "actionType": "checkout.completed",
+            "score": 0.82,
+            "risk": 0.18,
+        },
+        "budget": {"amount": "3.00", "currency": "USD", "window": "day"},
+        "idempotencyKey": create_idempotency_key(),
+    }
+)
+```
+
+## Covered surface
+
+- `PrizeEngineClient.reward(...)`
+- `PrizeEngineClient.draw(...)` as a deprecated alias
+- `PrizeEngineClient.observability.distribution(...)`
+- retry logic for `429` and `5xx`
+- helper-based idempotency keys
+
+## When to use it
+
+Use the Python mirror when a tenant runtime is Python-first and only needs a thin,
+trusted server-side client. If you need generated clients in more languages later, the
+same OpenAPI document exposed by this docs app can become the source of truth.

@@ -164,6 +164,8 @@ vi.mock('../modules/saas/distribution-monitoring', () => ({
 import {
   buildLivenessReport,
   buildReadinessReport,
+  recordRealtimePublishDuration,
+  recordRealtimeReceiveLatency,
   recordPaymentOutboundIdempotencyConflict,
   recordPaymentWebhookSignatureVerification,
   recordStripeApiFailure,
@@ -225,11 +227,13 @@ describe('observability', () => {
       providers: {
         emailProvider: 'mock',
         smsProvider: 'mock',
+        pushProvider: 'expo_push',
       },
     });
     getNotificationProviderStatus.mockReturnValue({
       emailProvider: 'mock',
       smsProvider: 'mock',
+      pushProvider: 'expo_push',
     });
     getPendingAmlMetrics.mockResolvedValue({
       pendingCount: 0,
@@ -300,6 +304,7 @@ describe('observability', () => {
     getNotificationProviderStatus.mockReturnValue({
       emailProvider: 'unavailable',
       smsProvider: 'mock',
+      pushProvider: 'expo_push',
     });
     assertNotificationChannelAvailable.mockImplementation((channel: string) => {
       if (channel === 'email') {
@@ -358,6 +363,7 @@ describe('observability', () => {
       providers: {
         emailProvider: 'mock',
         smsProvider: 'mock',
+        pushProvider: 'expo_push',
       },
     });
     getPendingAmlMetrics.mockResolvedValueOnce({
@@ -547,6 +553,29 @@ describe('observability', () => {
     expect(metrics).toContain('reward_backend_payment_outbound_idempotency_conflicts_total');
     expect(metrics).toContain('reward_backend_stripe_api_requests_total');
     expect(metrics).toContain('reward_backend_stripe_api_failures_total');
+  });
+
+  it('records realtime publish and receive latency histograms', async () => {
+    recordRealtimePublishDuration({
+      scope: 'topic',
+      channel: 'holdem',
+      event: 'holdem.table.updated',
+      durationMs: 42,
+    });
+    recordRealtimeReceiveLatency({
+      surface: 'web',
+      channel: 'holdem',
+      event: 'holdem.table.updated',
+      latencyMs: 87,
+    });
+
+    const metrics = await renderMetrics();
+
+    expect(metrics).toContain('reward_backend_realtime_publish_duration_seconds');
+    expect(metrics).toContain('scope="topic"');
+    expect(metrics).toContain('channel="holdem"');
+    expect(metrics).toContain('reward_backend_realtime_receive_latency_seconds');
+    expect(metrics).toContain('surface="web"');
   });
 
   it('records per-route HTTP metrics', async () => {

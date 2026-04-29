@@ -1,4 +1,4 @@
-export const USER_REALTIME_ROUTE = '/realtime';
+export const USER_REALTIME_ROUTE = "/realtime";
 export const USER_API_ROUTES = {
     auth: {
         register: "/auth/register",
@@ -24,6 +24,11 @@ export const USER_API_ROUTES = {
     communityThreads: "/community/threads",
     wallet: "/wallet",
     transactions: "/transactions",
+    notifications: "/notifications",
+    notificationSummary: "/notifications/summary",
+    notificationPreferences: "/notification-preferences",
+    notificationPushDevices: "/notification-push-devices",
+    experiments: "/experiments",
     kycProfile: "/kyc/profile",
     rewardCenter: "/rewards/center",
     rewardClaim: "/rewards/claim",
@@ -32,8 +37,10 @@ export const USER_API_ROUTES = {
     marketHistory: "/markets/history",
     fairnessCommit: "/fairness/commit",
     fairnessReveal: "/fairness/reveal",
+    playModes: "/play-modes",
     handHistory: "/hand-history",
     holdemTables: "/holdem/tables",
+    holdemRealtimeObservations: "/holdem/realtime-observations",
     blackjack: "/blackjack",
     blackjackStart: "/blackjack/start",
     draw: "/draw",
@@ -56,8 +63,40 @@ export const LOCAL_API_BASE_URLS = {
     android: "http://10.0.2.2:4000",
 };
 const fallbackError = { message: "Request failed." };
+const networkFailureCode = "NETWORK_REQUEST_FAILED";
+const genericNetworkFailureMessage = "Network request failed. Check that the API server is reachable and try again.";
+const normalizeRequestFailure = (error) => {
+    if (error instanceof Error) {
+        const message = error.message.trim();
+        if (!message) {
+            return {
+                message: genericNetworkFailureMessage,
+                code: networkFailureCode,
+            };
+        }
+        if (message.toLowerCase() === "network request failed") {
+            return {
+                message: genericNetworkFailureMessage,
+                code: networkFailureCode,
+            };
+        }
+        return {
+            message: `Request failed: ${message}`,
+            code: networkFailureCode,
+        };
+    }
+    return {
+        message: genericNetworkFailureMessage,
+        code: networkFailureCode,
+    };
+};
+const toRequestFailureResult = (error) => ({
+    ok: false,
+    error: normalizeRequestFailure(error),
+    status: 0,
+});
 const trimTrailingSlash = (value) => value.replace(/\/+$/, "");
-const resolveRealtimeProtocol = (protocol) => protocol === 'https:' ? 'wss:' : 'ws:';
+const resolveRealtimeProtocol = (protocol) => protocol === "https:" ? "wss:" : "ws:";
 const toSearch = (params) => {
     const search = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) {
@@ -73,10 +112,10 @@ export const resolveUserRealtimeUrl = (payload) => {
     const url = new URL(USER_REALTIME_ROUTE, `${trimTrailingSlash(payload.baseUrl)}/`);
     url.protocol = resolveRealtimeProtocol(url.protocol);
     if (payload.authToken) {
-        url.searchParams.set('token', payload.authToken);
+        url.searchParams.set("token", payload.authToken);
     }
     for (const [key, value] of Object.entries(payload.query ?? {})) {
-        if (value === undefined || value === null || value === '') {
+        if (value === undefined || value === null || value === "") {
             continue;
         }
         url.searchParams.set(key, String(value));
@@ -108,11 +147,16 @@ export async function requestUserApi({ path, baseUrl, init = {}, locale, authTok
     if (authToken) {
         headers.set("Authorization", `Bearer ${authToken}`);
     }
-    const response = await fetchImpl(`${trimTrailingSlash(baseUrl)}${path}`, {
-        ...init,
-        headers,
-    });
-    return parseApiResponse(response);
+    try {
+        const response = await fetchImpl(`${trimTrailingSlash(baseUrl)}${path}`, {
+            ...init,
+            headers,
+        });
+        return parseApiResponse(response);
+    }
+    catch (error) {
+        return toRequestFailureResult(error);
+    }
 }
 export function createUserApiClient(runtime) {
     const resolveLocale = async (overrides) => {
@@ -130,14 +174,33 @@ export function createUserApiClient(runtime) {
         }
         return runtime.getAuthToken ? await runtime.getAuthToken() : undefined;
     };
-    const request = async (path, init = {}, overrides = {}) => requestUserApi({
-        path,
-        init,
-        baseUrl: overrides.baseUrl ?? runtime.baseUrl,
-        locale: await resolveLocale(overrides),
-        authToken: await resolveAuthToken(overrides),
-        fetchImpl: overrides.fetchImpl ?? runtime.fetchImpl,
-    });
+    const request = async (path, init = {}, overrides = {}) => {
+        try {
+            const extraHeaders = runtime.getExtraHeaders
+                ? await runtime.getExtraHeaders()
+                : undefined;
+            const headers = new Headers(init.headers ?? {});
+            for (const [key, value] of Object.entries(extraHeaders ?? {})) {
+                if (value.trim() !== "") {
+                    headers.set(key, value);
+                }
+            }
+            return requestUserApi({
+                path,
+                init: {
+                    ...init,
+                    headers,
+                },
+                baseUrl: overrides.baseUrl ?? runtime.baseUrl,
+                locale: await resolveLocale(overrides),
+                authToken: await resolveAuthToken(overrides),
+                fetchImpl: overrides.fetchImpl ?? runtime.fetchImpl,
+            });
+        }
+        catch (error) {
+            return toRequestFailureResult(error);
+        }
+    };
     return {
         request,
         register(payload) {
@@ -309,6 +372,54 @@ export function createUserApiClient(runtime) {
         getTransactionHistory(limit, overrides = {}) {
             return request(`${USER_API_ROUTES.transactions}${toSearch({ limit })}`, { cache: "no-store" }, overrides);
         },
+        listNotifications(params = {}, overrides = {}) {
+            return request(`${USER_API_ROUTES.notifications}${toSearch({
+                limit: params.limit,
+                unreadOnly: params.unreadOnly,
+            })}`, { cache: "no-store" }, overrides);
+        },
+        getNotificationSummary(overrides = {}) {
+            return request(USER_API_ROUTES.notificationSummary, { cache: "no-store" }, overrides);
+        },
+        markNotificationRead(notificationId, overrides = {}) {
+            return request(`${USER_API_ROUTES.notifications}/${notificationId}/read`, {
+                method: "POST",
+                cache: "no-store",
+            }, overrides);
+        },
+        markAllNotificationsRead(overrides = {}) {
+            return request(`${USER_API_ROUTES.notifications}/read-all`, {
+                method: "POST",
+                cache: "no-store",
+            }, overrides);
+        },
+        listNotificationPreferences(overrides = {}) {
+            return request(USER_API_ROUTES.notificationPreferences, { cache: "no-store" }, overrides);
+        },
+        updateNotificationPreferences(payload, overrides = {}) {
+            return request(USER_API_ROUTES.notificationPreferences, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+                cache: "no-store",
+            }, overrides);
+        },
+        registerNotificationPushDevice(payload, overrides = {}) {
+            return request(USER_API_ROUTES.notificationPushDevices, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+                cache: "no-store",
+            }, overrides);
+        },
+        unregisterNotificationPushDevice(payload, overrides = {}) {
+            return request(USER_API_ROUTES.notificationPushDevices, {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+                cache: "no-store",
+            }, overrides);
+        },
         getKycProfile(overrides = {}) {
             return request(USER_API_ROUTES.kycProfile, { cache: "no-store" }, overrides);
         },
@@ -407,6 +518,15 @@ export function createUserApiClient(runtime) {
         getHoldemTableMessages(tableId, overrides = {}) {
             return request(`${USER_API_ROUTES.holdemTables}/${tableId}/messages`, { cache: "no-store" }, overrides);
         },
+        reportHoldemRealtimeObservations(payload, overrides = {}) {
+            return request(USER_API_ROUTES.holdemRealtimeObservations, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+                cache: "no-store",
+                keepalive: true,
+            }, overrides);
+        },
         touchHoldemTablePresence(tableId, overrides = {}) {
             return request(`${USER_API_ROUTES.holdemTables}/${tableId}/presence`, {
                 method: "POST",
@@ -490,6 +610,9 @@ export function createUserApiClient(runtime) {
         getRewardCenter(overrides = {}) {
             return request(USER_API_ROUTES.rewardCenter, { cache: "no-store" }, overrides);
         },
+        getExperimentVariant(expKey, overrides = {}) {
+            return request(`${USER_API_ROUTES.experiments}/${encodeURIComponent(expKey)}/variant`, { cache: "no-store" }, overrides);
+        },
         getFairnessCommit(overrides = {}) {
             return request(USER_API_ROUTES.fairnessCommit, { cache: "no-store" }, {
                 ...overrides,
@@ -501,6 +624,17 @@ export function createUserApiClient(runtime) {
                 ...overrides,
                 auth: false,
             });
+        },
+        getPlayMode(gameKey, overrides = {}) {
+            return request(`${USER_API_ROUTES.playModes}/${gameKey}`, { cache: "no-store" }, overrides);
+        },
+        setPlayMode(gameKey, payload, overrides = {}) {
+            return request(`${USER_API_ROUTES.playModes}/${gameKey}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+                cache: "no-store",
+            }, overrides);
         },
         claimRewardMission(missionId, overrides = {}) {
             return request(USER_API_ROUTES.rewardClaim, {
@@ -531,6 +665,12 @@ export function createUserApiClient(runtime) {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
+                cache: "no-store",
+            }, overrides);
+        },
+        sellPredictionPosition(marketId, positionId, overrides = {}) {
+            return request(`${USER_API_ROUTES.markets}/${marketId}/positions/${positionId}/sell`, {
+                method: "POST",
                 cache: "no-store",
             }, overrides);
         },

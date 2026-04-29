@@ -22,7 +22,10 @@ export function AppScreenShell(props: AppScreenShellProps) {
   return (
     <SafeAreaView style={props.styles.safeArea}>
       <StatusBar style="light" />
-      <ScrollView contentContainerStyle={props.styles.container}>
+      <ScrollView
+        contentContainerStyle={props.styles.container}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={props.styles.hero}>
           <Text style={props.styles.kicker}>{props.hero.kicker}</Text>
           <Text style={props.styles.title}>{props.hero.title}</Text>

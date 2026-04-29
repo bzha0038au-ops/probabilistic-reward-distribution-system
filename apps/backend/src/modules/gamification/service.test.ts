@@ -79,11 +79,13 @@ const missionDefinitions = (
       id: "top_up_starter",
       type: "metric_threshold",
       params: {
-        title: "Top-up starter",
-        description: "Create your first deposit request.",
-        metric: "deposit_count",
+        title: "First deposit bonus",
+        description: "Complete your first credited deposit.",
+        metric: "deposit_credited_count",
         target: 1,
         cadence: "one_time",
+        awardMode: "auto_grant",
+        bonusUnlockWagerRatio: 1,
         sortOrder: 50,
       },
       reward: "10.00",
@@ -91,6 +93,24 @@ const missionDefinitions = (
       createdAt: atLocalNoon(2026, 4, 1),
       updatedAt: atLocalNoon(2026, 4, 1),
       sortOrder: 50,
+    },
+    {
+      id: "referral_starter",
+      type: "metric_threshold",
+      params: {
+        title: "Invite a friend",
+        description: "Invite one friend who reaches Tier 1 KYC.",
+        metric: "referral_success_count",
+        target: 1,
+        cadence: "one_time",
+        rewardId: "referral_program",
+        sortOrder: 60,
+      },
+      reward: "7.00",
+      isActive: true,
+      createdAt: atLocalNoon(2026, 4, 1),
+      updatedAt: atLocalNoon(2026, 4, 1),
+      sortOrder: 60,
     },
   ];
 
@@ -145,8 +165,10 @@ describe("evaluateRewardCenter", () => {
         drawCountAll: 4,
         drawCountToday: 3,
         depositCount: 1,
+        depositCreditedCount: 1,
         dailyClaims: [atLocalNoon(2026, 4, 27), atLocalNoon(2026, 4, 26)],
         missionClaims: [],
+        qualifiedReferrals: [],
         missions: missionDefinitions(),
       },
       now,
@@ -155,7 +177,7 @@ describe("evaluateRewardCenter", () => {
     expect(center.summary.bonusBalance).toBe("12.50");
     expect(center.summary.streakDays).toBe(2);
     expect(center.summary.todayDailyClaimed).toBe(true);
-    expect(center.summary.availableMissionCount).toBe(4);
+    expect(center.summary.availableMissionCount).toBe(3);
     expect(center.missions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -182,7 +204,14 @@ describe("evaluateRewardCenter", () => {
         expect.objectContaining({
           id: "top_up_starter",
           status: "ready",
-          claimable: true,
+          claimable: false,
+          autoAwarded: true,
+          bonusUnlockWagerRatio: "1.00",
+        }),
+        expect.objectContaining({
+          id: "referral_starter",
+          status: "in_progress",
+          claimable: false,
         }),
       ]),
     );
@@ -198,6 +227,7 @@ describe("evaluateRewardCenter", () => {
         drawCountAll: 1,
         drawCountToday: 3,
         depositCount: 0,
+        depositCreditedCount: 0,
         dailyClaims: [],
         missionClaims: [
           {
@@ -209,6 +239,7 @@ describe("evaluateRewardCenter", () => {
             createdAt: atLocalNoon(2026, 4, 27),
           },
         ],
+        qualifiedReferrals: [],
         missions: missionDefinitions({
           daily_checkin: {
             isActive: false,
@@ -245,6 +276,10 @@ describe("evaluateRewardCenter", () => {
           id: "top_up_starter",
           status: "in_progress",
         }),
+        expect.objectContaining({
+          id: "referral_starter",
+          status: "in_progress",
+        }),
       ]),
     );
   });
@@ -259,13 +294,16 @@ describe("evaluateRewardCenter", () => {
         drawCountAll: 9,
         drawCountToday: 3,
         depositCount: 2,
+        depositCreditedCount: 2,
         dailyClaims: [],
         missionClaims: [],
+        qualifiedReferrals: [],
         missions: missionDefinitions({
           profile_security: { reward: "0.00" },
           first_draw: { isActive: false },
           draw_streak_daily: { reward: "0.00" },
           top_up_starter: { isActive: false },
+          referral_starter: { isActive: false },
         }),
       },
       now,
@@ -278,6 +316,7 @@ describe("evaluateRewardCenter", () => {
         expect.objectContaining({ id: "first_draw", status: "disabled" }),
         expect.objectContaining({ id: "draw_streak_daily", status: "disabled" }),
         expect.objectContaining({ id: "top_up_starter", status: "disabled" }),
+        expect.objectContaining({ id: "referral_starter", status: "disabled" }),
       ]),
     );
   });
@@ -292,8 +331,10 @@ describe("evaluateRewardCenter", () => {
         drawCountAll: 5,
         drawCountToday: 0,
         depositCount: 0,
+        depositCreditedCount: 0,
         dailyClaims: [],
         missionClaims: [],
+        qualifiedReferrals: [],
         missions: [
           {
             id: "custom_draw_five",
@@ -330,5 +371,54 @@ describe("evaluateRewardCenter", () => {
         progressTarget: 5,
       }),
     ]);
+  });
+
+  it("counts qualified referrals against referral missions", () => {
+    const now = atLocalNoon(2026, 4, 27);
+    const center = evaluateRewardCenter(
+      {
+        bonusBalance: "4.00",
+        emailVerifiedAt: null,
+        phoneVerifiedAt: null,
+        drawCountAll: 0,
+        drawCountToday: 0,
+        depositCount: 0,
+        depositCreditedCount: 0,
+        dailyClaims: [],
+        missionClaims: [],
+        qualifiedReferrals: [
+          {
+            rewardId: "referral_program",
+            qualifiedAt: atLocalNoon(2026, 4, 27),
+          },
+        ],
+        missions: missionDefinitions({
+          referral_starter: {
+            params: {
+              title: "Invite a friend",
+              description: "Invite one friend who reaches Tier 1 KYC.",
+              metric: "referral_success_count",
+              target: 1,
+              cadence: "one_time",
+              rewardId: "referral_program",
+              sortOrder: 60,
+            },
+          },
+        }),
+      },
+      now,
+    );
+
+    expect(center.missions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "referral_starter",
+          status: "ready",
+          claimable: true,
+          progressCurrent: 1,
+          progressTarget: 1,
+        }),
+      ]),
+    );
   });
 });

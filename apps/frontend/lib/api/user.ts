@@ -60,6 +60,7 @@ export const USER_API_ROUTES = {
     current: "/legal/current",
     acceptances: "/legal/acceptances",
   },
+  communityThreads: "/community/threads",
   wallet: "/wallet",
   handHistory: "/hand-history",
   holdemTables: "/holdem/tables",

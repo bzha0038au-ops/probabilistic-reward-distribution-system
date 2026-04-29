@@ -50,6 +50,7 @@ type RequestOutcome = {
 };
 
 const password = 'Password123!';
+const TEST_BIRTH_DATE = '1990-01-01';
 
 const percentile = (values: number[], ratio: number) => {
   if (values.length === 0) {
@@ -357,7 +358,11 @@ async function main() {
       );
 
       await runWithConcurrency(emails, setupConcurrency, async (email) => {
-        await postJson('/auth/register', { email, password });
+        await postJson('/auth/register', {
+          email,
+          password,
+          birthDate: TEST_BIRTH_DATE,
+        });
       });
 
       await runWithConcurrency(emails, setupConcurrency, async (email) => {

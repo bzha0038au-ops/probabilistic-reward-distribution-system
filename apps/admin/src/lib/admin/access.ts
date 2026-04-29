@@ -1,4 +1,4 @@
-import type { AdminSessionPayload } from "$lib/server/admin-session"
+import type { AdminSessionPayload } from "$lib/server/admin-session-core"
 
 export const ADMIN_PERMISSION_KEYS = {
   ANALYTICS_READ: "analytics.read",
@@ -261,7 +261,7 @@ const readScopeKeys = (admin: AdminAccessSession) => {
   }
 
   return (admin?.permissions ?? []).filter(
-    (permission) =>
+    (permission: string) =>
       permission === "engine:*" ||
       permission.startsWith("c:") ||
       permission.startsWith("b:"),
@@ -280,7 +280,7 @@ const hasScope = (admin: AdminAccessSession, scopeKey: string) =>
   new Set(readScopeKeys(admin)).has(scopeKey)
 
 const hasScopePrefix = (admin: AdminAccessSession, prefix: string) =>
-  readScopeKeys(admin).some((scopeKey) => scopeKey.startsWith(prefix))
+  readScopeKeys(admin).some((scopeKey: string) => scopeKey.startsWith(prefix))
 
 export const canAccessControlCenter = (admin: AdminAccessSession) =>
   hasAnyPermission(admin, CONTROL_CENTER_PERMISSIONS)

@@ -20,6 +20,7 @@ import {
   communityModerationActions,
   communityPosts,
   communityReports,
+  communityThreads,
   freezeRecords,
 } from '@reward/database';
 import { eq } from '@reward/database/orm';
@@ -201,6 +202,164 @@ describeIntegrationSuite('backend community integration', () => {
         targetId: createdPostId,
       });
     }
+  );
+
+  it(
+    'auto-hides spammy thread submissions and pushes them into the forum moderation queue',
+    { timeout: 15_000 },
+    async () => {
+      const author = await seedUserWithWallet({
+        email: 'community-spam-author@example.com',
+      });
+      await verifyUserContacts(author.id, { email: true });
+
+      const { token: authorToken } = await getCreateUserSessionToken()({
+        userId: author.id,
+        email: author.email,
+        role: 'user',
+      });
+
+      const createThreadResponse = await getApp().inject({
+        method: 'POST',
+        url: '/community/threads',
+        headers: buildUserAuthHeaders(authorToken),
+        payload: {
+          title: 'Telegram reward drop',
+          body: 'Guaranteed bonus at https://t.me/reward-drop right now.',
+        },
+      });
+
+      expect(createThreadResponse.statusCode).toBe(202);
+      expect(createThreadResponse.json().data).toMatchObject({
+        reviewRequired: true,
+        autoHidden: true,
+        moderationSource: 'automated_signal',
+        thread: {
+          status: 'hidden',
+        },
+        post: {
+          status: 'hidden',
+        },
+      });
+
+      const createdThreadId = createThreadResponse.json().data.thread.id as number;
+      const createdPostId = createThreadResponse.json().data.post.id as number;
+
+      const [thread] = await getDb()
+        .select({
+          status: communityThreads.status,
+        })
+        .from(communityThreads)
+        .where(eq(communityThreads.id, createdThreadId))
+        .limit(1);
+
+      const [report] = await getDb()
+        .select({
+          source: communityReports.source,
+          metadata: communityReports.metadata,
+        })
+        .from(communityReports)
+        .where(eq(communityReports.postId, createdPostId))
+        .limit(1);
+
+      expect(thread?.status).toBe('hidden');
+      expect(report).toMatchObject({
+        source: 'automated_signal',
+        metadata: expect.objectContaining({
+          autoHidden: true,
+          signalProviders: expect.arrayContaining(['link', 'contact']),
+        }),
+      });
+
+      const listResponse = await getApp().inject({
+        method: 'GET',
+        url: '/community/threads',
+        headers: buildUserAuthHeaders(authorToken),
+      });
+
+      expect(listResponse.statusCode).toBe(200);
+      expect(listResponse.json().data.items).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: createdThreadId,
+          }),
+        ]),
+      );
+
+      const seededAdmin = await seedAdminAccount({
+        email: 'community-spam-admin@example.com',
+      });
+      await grantAdminPermissions(
+        seededAdmin.admin.id,
+        SECURITY_ADMIN_PERMISSION_KEYS,
+      );
+      const adminSession = await enrollAdminMfa({
+        email: seededAdmin.user.email,
+        password: seededAdmin.password,
+      });
+
+      const overviewResponse = await getApp().inject({
+        method: 'GET',
+        url: '/admin/forum/moderation/overview',
+        headers: buildAdminCookieHeaders(adminSession.token),
+      });
+
+      expect(overviewResponse.statusCode).toBe(200);
+      expect(overviewResponse.json().data.queue).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            postId: createdPostId,
+            source: 'automated_signal',
+            autoHidden: true,
+            signalProviders: expect.arrayContaining(['link', 'contact']),
+          }),
+        ]),
+      );
+    },
+  );
+
+  it(
+    'enforces tighter community thread rate limits for tier_1 writers',
+    { timeout: 15_000 },
+    async () => {
+      const author = await seedUserWithWallet({
+        email: 'community-tier1-rate-limit@example.com',
+      });
+      await verifyUserContacts(author.id, { email: true });
+
+      const { token: authorToken } = await getCreateUserSessionToken()({
+        userId: author.id,
+        email: author.email,
+        role: 'user',
+      });
+
+      for (const title of ['Thread 1', 'Thread 2']) {
+        const response = await getApp().inject({
+          method: 'POST',
+          url: '/community/threads',
+          headers: buildUserAuthHeaders(authorToken),
+          payload: {
+            title,
+            body: `${title} body`,
+          },
+        });
+
+        expect(response.statusCode).toBe(201);
+      }
+
+      const limitedResponse = await getApp().inject({
+        method: 'POST',
+        url: '/community/threads',
+        headers: buildUserAuthHeaders(authorToken),
+        payload: {
+          title: 'Thread 3',
+          body: 'Thread 3 body',
+        },
+      });
+
+      expect(limitedResponse.statusCode).toBe(429);
+      expect(limitedResponse.json().error.code).toBe('TOO_MANY_REQUESTS');
+    },
   );
 
   it(

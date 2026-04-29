@@ -28,6 +28,14 @@ variables before the app starts.
 - `DRAW_COST` (optional seed value for `system_config.draw_cost`)
 - `DRAW_POOL_CACHE_TTL_SECONDS` (optional, probability pool cache TTL; `0` disables)
 - `REDIS_URL` (optional, enables shared rate limiting + probability pool cache)
+- `AML_PROVIDER_KEY` (defaults to `mock`; opaque provider key string, for example `openssl rand -hex 16`, and it must match a backend-registered AML provider)
+- `SECURITY_EVENT_SINKS` (comma-separated `log`, `webhook`, `elasticsearch`;
+  default `log`, which is the intended path for Datadog Logs / stdout collectors)
+- `SECURITY_EVENT_WEBHOOK_URL`
+- `SECURITY_EVENT_REQUEST_TIMEOUT_MS`
+- `SECURITY_EVENT_ELASTICSEARCH_URL`
+- `SECURITY_EVENT_ELASTICSEARCH_API_KEY`
+- `SECURITY_EVENT_ELASTICSEARCH_INDEX`
 - `PAYMENT_OPERATING_MODE` (defaults to `manual_review`; only set
   `automated` after an explicit operational approval)
 - `PAYMENT_AUTOMATED_MODE_OPT_IN` (defaults to `false`; automated execution is
@@ -38,6 +46,11 @@ variables before the app starts.
 - `PAYMENT_RECONCILIATION_LOOKBACK_MINUTES`
 - `PAYMENT_RECONCILIATION_PENDING_TIMEOUT_MINUTES`
 - `PAYMENT_RECONCILIATION_MAX_ORDERS_PER_PROVIDER`
+- `WALLET_RECONCILIATION_ENABLED`, `WALLET_RECONCILIATION_INTERVAL_MS`
+- `WALLET_RECONCILIATION_SLA_HOURS`
+- `WALLET_RECONCILIATION_SLACK_WEBHOOK_URL` (optional Slack incoming webhook for wallet drift alerts)
+- `WALLET_RECONCILIATION_PAGERDUTY_ROUTING_KEY` (optional PagerDuty Events v2 routing key for wallet drift alerts)
+- `WALLET_RECONCILIATION_NOTIFY_REQUEST_TIMEOUT_MS`
 - `PAYMENT_PROVIDER_SECRET_REF_DIR` (optional mounted root for
   `payment_providers.config.secretRefs.*`; a ref like
   `sm/payment/stripe/api-key` resolves to
@@ -62,6 +75,14 @@ variables before the app starts.
   `AUTH_NOTIFICATION_SMS_THROTTLE_WINDOW_MS`,
   `AUTH_NOTIFICATION_ALERT_THROTTLE_MAX`,
   `AUTH_NOTIFICATION_ALERT_THROTTLE_WINDOW_MS`
+- `KYC_REVERIFICATION_WORKER_ENABLED`,
+  `KYC_REVERIFICATION_WORKER_INTERVAL_MS`,
+  `KYC_REVERIFICATION_NOTICE_DAYS`
+- `DB_PARTITION_MAINTENANCE_ENABLED`,
+  `DB_PARTITION_MAINTENANCE_INTERVAL_MS`,
+  `DB_PARTITION_MAINTENANCE_FUTURE_MONTHS`,
+  `DB_PARTITION_MAINTENANCE_ARCHIVE_AFTER_MONTHS`,
+  `DB_PARTITION_MAINTENANCE_ARCHIVE_SCHEMA`
 - `HOLDEM_TURN_TIMEOUT_MS`, `HOLDEM_TIMEOUT_WORKER_ENABLED`,
   `HOLDEM_TIMEOUT_WORKER_INTERVAL_MS`,
   `HOLDEM_TIMEOUT_WORKER_BATCH_SIZE`

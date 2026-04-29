@@ -4,10 +4,11 @@ import {
   saasBillingRuns,
   saasUsageEvents,
 } from "@reward/database";
-import { and, desc, eq, gte, isNull, lt } from "@reward/database/orm";
+import { and, desc, eq, gte, isNull, lt, sql } from "@reward/database/orm";
 import type {
   SaasBillingCollectionMethod,
   SaasBillingRunCreate,
+  SaasBillingRunExternalSyncStage,
   SaasBillingRunSettle,
   SaasBillingRunSync,
 } from "@reward/shared-types/saas";
@@ -26,6 +27,7 @@ import {
   BILLING_RUN_TERMINAL_STATUSES,
   buildBillingRunInvoiceActionIdempotencyKey,
   buildBillingRunStripeFingerprint,
+  isBillingRunSyncConflictError,
   resolveBillingDecisionPricing,
   resolveBillingPeriod,
   selectBillingAccountVersionForPeriod,
@@ -36,6 +38,9 @@ import {
   createStripeInvoiceForBillingRun,
   findStripeInvoiceForBillingRun,
   loadTenantBillingContext,
+  markBillingRunSyncProcessing,
+  recordBillingRunSyncFailure,
+  recordBillingRunSyncSuccess,
   resolveBillingRunCollectionMethod,
   syncBillingRunFromInvoice,
 } from "./billing-service-support";
@@ -49,6 +54,7 @@ import {
   toSaasAdminActor,
   toSaasBillingRun,
 } from "./records";
+import { SAAS_STATUS_REQUEST_REFERENCE_TYPE } from "../saas-status/constants";
 
 const loadBillingRun = async (billingRunId: number) => {
   const [run] = await db
@@ -225,6 +231,7 @@ export async function createBillingRun(
           eq(saasUsageEvents.tenantId, tenant.id),
           eq(saasUsageEvents.environment, BILLING_LIVE_ENVIRONMENT),
           isNull(saasUsageEvents.billingRunId),
+          sql`${saasUsageEvents.referenceType} is distinct from ${SAAS_STATUS_REQUEST_REFERENCE_TYPE}`,
           gte(saasUsageEvents.createdAt, periodStart),
           lt(saasUsageEvents.createdAt, periodEnd),
         ),
@@ -243,6 +250,7 @@ export async function createBillingRun(
         and(
           eq(saasUsageEvents.billingRunId, billingRun.id),
           eq(saasUsageEvents.environment, BILLING_LIVE_ENVIRONMENT),
+          sql`${saasUsageEvents.referenceType} is distinct from ${SAAS_STATUS_REQUEST_REFERENCE_TYPE}`,
         ),
       );
 
@@ -264,6 +272,15 @@ export async function createBillingRun(
     const usageFeeAmount = toDecimal(usageSummary.usageFeeAmount);
     const baseFeeAmount = toDecimal(billingAccountVersion.baseMonthlyFee);
     const totalAmount = baseFeeAmount.plus(usageFeeAmount);
+    const existingMetadata = normalizeMetadata(billingRun.metadata);
+    const nextRunMetadata =
+      existingMetadata && Reflect.has(existingMetadata, "externalSync")
+        ? Object.fromEntries(
+            Object.entries(existingMetadata).filter(
+              ([key]) => key !== "externalSync",
+            ),
+          )
+        : existingMetadata;
 
     const [updatedRun] = await tx
       .update(saasBillingRuns)
@@ -279,6 +296,7 @@ export async function createBillingRun(
         drawCount: usageSummary.drawCount,
         stripeCustomerId: billingAccountVersion.stripeCustomerId,
         metadata: normalizeMetadata({
+          ...(nextRunMetadata ?? {}),
           generatedBy: adminId ? "manual" : "automation",
           periodStart: periodStart.toISOString(),
           periodEnd: periodEnd.toISOString(),
@@ -323,38 +341,80 @@ export async function syncBillingRun(
   permissions?: string[],
 ) {
   const actor = toSaasAdminActor(adminId ?? null, permissions);
-  const run = await loadBillingRun(billingRunId);
+  const loadedRun = await loadBillingRun(billingRunId);
+  const syncAction =
+    payload.sendInvoice === true
+      ? "sync_and_send"
+      : payload.finalize === true
+        ? "sync_and_finalize"
+        : "sync";
 
-  await assertTenantCapability(actor, run.tenantId, "billing:write");
+  await assertTenantCapability(actor, loadedRun.tenantId, "billing:write");
+  let syncStage: SaasBillingRunExternalSyncStage = "precondition";
+  let observedInvoiceStatus: string | null = null;
+  const run = await markBillingRunSyncProcessing(loadedRun, {
+    action: syncAction,
+    stage: syncStage,
+  });
 
-  if (!isSaasStripeEnabled()) {
-    throw badRequestError("SAAS Stripe is not configured.", {
-      code: API_ERROR_CODES.SAAS_STRIPE_NOT_CONFIGURED,
-    });
+  try {
+    if (!isSaasStripeEnabled()) {
+      throw badRequestError("SAAS Stripe is not configured.", {
+        code: API_ERROR_CODES.SAAS_STRIPE_NOT_CONFIGURED,
+      });
+    }
+
+    if (!run.stripeCustomerId) {
+      throw badRequestError("Stripe customer is not configured for this tenant.", {
+        code: API_ERROR_CODES.STRIPE_CUSTOMER_NOT_CONFIGURED,
+      });
+    }
+
+    const collectionMethod = await resolveBillingRunCollectionMethod(run);
+    syncStage = "invoice_lookup";
+    let invoice = await findOrCreateBillingRunInvoice(run);
+    observedInvoiceStatus = invoice.status;
+
+    if (payload.finalize) {
+      syncStage = "invoice_finalize";
+      invoice = await finalizeBillingRunInvoice(run, invoice);
+      observedInvoiceStatus = invoice.status;
+    }
+
+    if (payload.sendInvoice) {
+      syncStage = "invoice_send";
+      invoice = await sendBillingRunInvoice(run, collectionMethod, invoice);
+      observedInvoiceStatus = invoice.status;
+    }
+
+    return syncBillingRunFromInvoice(
+      run,
+      invoice,
+      payload.sendInvoice ? "invoice.sent" : undefined,
+      {
+        action: syncAction,
+        stage: syncStage,
+      },
+    );
+  } catch (error) {
+    if (isBillingRunSyncConflictError(error)) {
+      throw error;
+    }
+
+    try {
+      await recordBillingRunSyncFailure(run, {
+        action: syncAction,
+        stage: syncStage,
+        error,
+        recoveryPath: "retry_sync_or_wait_for_reconciliation",
+        observedInvoiceStatus,
+        eventType: payload.sendInvoice ? "invoice.sent" : null,
+      });
+    } catch {
+      // Preserve the original sync error when failure bookkeeping cannot be written.
+    }
+    throw error;
   }
-
-  if (!run.stripeCustomerId) {
-    throw badRequestError("Stripe customer is not configured for this tenant.", {
-      code: API_ERROR_CODES.STRIPE_CUSTOMER_NOT_CONFIGURED,
-    });
-  }
-
-  const collectionMethod = await resolveBillingRunCollectionMethod(run);
-  let invoice = await findOrCreateBillingRunInvoice(run);
-
-  if (payload.finalize) {
-    invoice = await finalizeBillingRunInvoice(run, invoice);
-  }
-
-  if (payload.sendInvoice) {
-    invoice = await sendBillingRunInvoice(run, collectionMethod, invoice);
-  }
-
-  return syncBillingRunFromInvoice(
-    run,
-    invoice,
-    payload.sendInvoice ? "invoice.sent" : undefined,
-  );
 }
 
 export async function refreshBillingRun(
@@ -363,9 +423,9 @@ export async function refreshBillingRun(
   permissions?: string[],
 ) {
   const actor = toSaasAdminActor(adminId ?? null, permissions);
-  const run = await loadBillingRun(billingRunId);
+  const loadedRun = await loadBillingRun(billingRunId);
 
-  await assertTenantCapability(actor, run.tenantId, "tenant:read");
+  await assertTenantCapability(actor, loadedRun.tenantId, "tenant:read");
 
   if (!isSaasStripeEnabled()) {
     throw badRequestError("SAAS Stripe is not configured.", {
@@ -373,14 +433,26 @@ export async function refreshBillingRun(
     });
   }
 
+  const run = await markBillingRunSyncProcessing(loadedRun, {
+    action: "refresh",
+    stage: "invoice_refresh",
+  });
   const invoice = run.stripeInvoiceId
     ? await getSaasStripeClient().invoices.retrieve(run.stripeInvoiceId)
     : await findStripeInvoiceForBillingRun(run);
   if (!invoice) {
-    return toSaasBillingRun(run);
+    return toSaasBillingRun(
+      await recordBillingRunSyncSuccess(run, {
+        action: "refresh",
+        stage: "invoice_refresh",
+      }),
+    );
   }
 
-  return syncBillingRunFromInvoice(run, invoice);
+  return syncBillingRunFromInvoice(run, invoice, undefined, {
+    action: "refresh",
+    stage: "invoice_refresh",
+  });
 }
 
 export async function settleBillingRun(
@@ -390,44 +462,79 @@ export async function settleBillingRun(
   permissions?: string[],
 ) {
   const actor = toSaasAdminActor(adminId ?? null, permissions);
-  const run = await loadBillingRun(billingRunId);
+  const loadedRun = await loadBillingRun(billingRunId);
 
-  await assertTenantCapability(actor, run.tenantId, "billing:settle");
+  await assertTenantCapability(actor, loadedRun.tenantId, "billing:settle");
+  let syncStage: SaasBillingRunExternalSyncStage = "precondition";
+  let observedInvoiceStatus: string | null = null;
+  const run = await markBillingRunSyncProcessing(loadedRun, {
+    action: "settle",
+    stage: syncStage,
+  });
 
-  if (!run.stripeInvoiceId) {
-    throw badRequestError(
-      "Stripe invoice has not been created for this billing run.",
+  try {
+    if (!run.stripeInvoiceId) {
+      throw badRequestError(
+        "Stripe invoice has not been created for this billing run.",
+        {
+          code: API_ERROR_CODES.STRIPE_INVOICE_NOT_CREATED_FOR_BILLING_RUN,
+        },
+      );
+    }
+
+    if (!isSaasStripeEnabled()) {
+      throw badRequestError("SAAS Stripe is not configured.", {
+        code: API_ERROR_CODES.SAAS_STRIPE_NOT_CONFIGURED,
+      });
+    }
+
+    const stripe = getSaasStripeClient();
+    syncStage = "invoice_retrieve";
+    let invoice = await stripe.invoices.retrieve(run.stripeInvoiceId);
+    observedInvoiceStatus = invoice.status;
+    if (invoice.status === "draft") {
+      syncStage = "invoice_finalize";
+      invoice = await finalizeBillingRunInvoice(run, invoice);
+      observedInvoiceStatus = invoice.status;
+    }
+
+    syncStage = "invoice_pay";
+    invoice = await stripe.invoices.pay(
+      invoice.id,
       {
-        code: API_ERROR_CODES.STRIPE_INVOICE_NOT_CREATED_FOR_BILLING_RUN,
+        paid_out_of_band: payload.paidOutOfBand ?? false,
+      },
+      {
+        idempotencyKey: buildBillingRunInvoiceActionIdempotencyKey(
+          run,
+          "pay",
+          payload.paidOutOfBand ?? false,
+        ),
       },
     );
-  }
+    observedInvoiceStatus = invoice.status;
 
-  if (!isSaasStripeEnabled()) {
-    throw badRequestError("SAAS Stripe is not configured.", {
-      code: API_ERROR_CODES.SAAS_STRIPE_NOT_CONFIGURED,
+    return syncBillingRunFromInvoice(run, invoice, "invoice.paid", {
+      action: "settle",
+      stage: syncStage,
     });
+  } catch (error) {
+    if (isBillingRunSyncConflictError(error)) {
+      throw error;
+    }
+
+    try {
+      await recordBillingRunSyncFailure(run, {
+        action: "settle",
+        stage: syncStage,
+        error,
+        recoveryPath: "retry_settle_or_wait_for_reconciliation",
+        observedInvoiceStatus,
+        eventType: "invoice.paid",
+      });
+    } catch {
+      // Preserve the original settle error when failure bookkeeping cannot be written.
+    }
+    throw error;
   }
-
-  const stripe = getSaasStripeClient();
-  let invoice = await stripe.invoices.retrieve(run.stripeInvoiceId);
-  if (invoice.status === "draft") {
-    invoice = await finalizeBillingRunInvoice(run, invoice);
-  }
-
-  invoice = await stripe.invoices.pay(
-    invoice.id,
-    {
-      paid_out_of_band: payload.paidOutOfBand ?? false,
-    },
-    {
-      idempotencyKey: buildBillingRunInvoiceActionIdempotencyKey(
-        run,
-        "pay",
-        payload.paidOutOfBand ?? false,
-      ),
-    },
-  );
-
-  return syncBillingRunFromInvoice(run, invoice, "invoice.paid");
 }

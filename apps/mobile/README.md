@@ -19,6 +19,9 @@ pnpm mobile:ios
 pnpm mobile:android
 pnpm mobile:android:dev-client
 pnpm mobile:android:regression
+pnpm --dir apps/mobile e2e:prepare
+pnpm --dir apps/mobile e2e:maestro:holdem
+pnpm --dir apps/mobile e2e:maestro:prediction-market
 pnpm --dir apps/mobile check
 ```
 
@@ -38,7 +41,7 @@ Notes:
 
 - Keep the backend running on `http://127.0.0.1:4000` before launching the app.
 - The regression script auto-detects the Android SDK from `ANDROID_HOME`, `ANDROID_SDK_ROOT`, `~/Library/Android/sdk`, or `~/Android/Sdk`.
-- On a debug build, the login screen exposes a `Use seeded user` button. Use that path for repeatable reward-center regression checks.
+- On a debug build, the login screen exposes a `Use seeded user` button. By default it uses `mobile.e2e.alice@example.com` / `User123!` for repeatable regression checks.
 - If you need a non-emulator Metro host, set `REWARD_ANDROID_DEV_SERVER_HOST` before running `pnpm mobile:android:regression`.
 
 ## EAS Release
@@ -71,8 +74,54 @@ Notes:
 - EAS build versions are configured to use remote versioning, so production builds auto-increment build numbers on EAS.
 - The app uses `runtimeVersion.policy = "fingerprint"` so OTA compatibility tracks native-runtime changes safely.
 - The first `eas init` / `eas build` will still need to bind the Expo project and write `extra.eas.projectId` into app config.
+- Local push-token registration in a dev build also needs a project ID. Either bind the app with `eas init` so Expo can infer it, or set `EXPO_PUBLIC_EXPO_PROJECT_ID=<your-eas-project-uuid>` in `apps/mobile/.env`.
+- Android push-token registration also needs Firebase/FCM native config. Add `google-services.json` and apply the Google services Gradle plugin before expecting `/notification-push-devices` to register on Android.
+- Put the Firebase file at `apps/mobile/google-services.json`. The app config and Gradle files will auto-detect it and enable Google services on the next native build.
+- Remote push notification registration does not work on Android emulators or iOS simulators. Use a physical device for the final `/notification-push-devices` verification.
 - If you want non-default store identifiers, set `ios.bundleIdentifier` and `android.package` before the first store submission.
 - For fully non-interactive submit in CI, also fill store-side fields such as `submit.production.ios.ascAppId` and an Android `serviceAccountKeyPath`.
+
+## Maestro E2E
+
+Use Maestro for native validation of the `holdem` and `prediction-market` routes.
+
+Prerequisites:
+
+```bash
+pnpm db:up
+pnpm db:seed:manual
+pnpm dev:backend
+pnpm mobile:android
+```
+
+Install Maestro CLI once per machine:
+
+```bash
+curl -Ls "https://get.maestro.mobile.dev" | bash
+```
+
+Then prepare deterministic fixtures and run either flow:
+
+```bash
+pnpm --dir apps/mobile e2e:prepare
+pnpm --dir apps/mobile e2e:maestro:holdem
+pnpm --dir apps/mobile e2e:prepare
+pnpm --dir apps/mobile e2e:maestro:prediction-market
+```
+
+What the fixture script sets up:
+
+- `mobile.e2e.alice@example.com` / `User123!`
+- `mobile.e2e.bob@example.com` / `User123!`
+- Tier-2 verified wallets for both users
+- A waiting Holdem table named `Mobile Maestro E2E Holdem`
+- An open prediction market with slug `mobile-maestro-e2e-market`
+
+Notes:
+
+- The default Android `appId` is `com.anonymous.rewardmobile`.
+- Override `REWARD_MOBILE_APP_ID` when targeting iOS or a custom native identifier.
+- The flows assume a native debug build from `expo run:android` / `expo run:ios`, not the web build.
 
 ## API Base URL
 

@@ -20,6 +20,7 @@ import {
   gte,
   inArray,
   lte,
+  ne,
   sql,
 } from "@reward/database/orm";
 import { API_ERROR_CODES } from "@reward/shared-types/api";
@@ -40,8 +41,15 @@ import {
   serviceUnavailableError,
   unprocessableEntityError,
 } from "../../shared/errors";
+import { getConfigView } from "../../shared/config";
+import { logger } from "../../shared/logger";
 import { toDecimal, toMoneyString } from "../../shared/money";
 import { getSessionSecret } from "../../shared/session-secret";
+import {
+  sendKycExpiryReminderNotification,
+  sendKycReverificationRequiredNotification,
+} from "../auth/notification-service";
+import { sendKycStatusChangedNotification } from "../notification/service";
 import {
   KYC_TIER_1_MAX_STAKE_AMOUNT_KEY,
   KYC_TIER_2_MAX_DAILY_WITHDRAWAL_AMOUNT_KEY,
@@ -52,6 +60,8 @@ import {
   releaseUserFreeze,
   releaseUserFreezeByFilter,
 } from "../risk/service";
+import { assertUserJurisdictionFeatureAllowed } from "../risk/jurisdiction-service";
+import { settlePendingReferralsForApprovedUser } from "../referral/service";
 
 type DbExecutor = DbClient | DbTransaction;
 
@@ -61,6 +71,12 @@ const KYC_FREEZE_CATEGORY = "compliance" as const;
 const KYC_FREEZE_REASON = "pending_kyc" as const;
 const DEFAULT_TIER_1_MAX_STAKE_AMOUNT = 100;
 const DEFAULT_TIER_2_MAX_DAILY_WITHDRAWAL_AMOUNT = 5000;
+const KYC_REVERIFICATION_REQUIRED_FLAG = "reverification_required";
+const KYC_DOCUMENT_EXPIRED_FLAG = "document_expired";
+const KYC_POLICY_REFRESH_REQUIRED_FLAG = "policy_refresh_required";
+const KYC_EXPIRY_NOTICE_SENT_AT_METADATA_KEY = "expiryNoticeSentAt";
+
+const appConfig = getConfigView();
 
 const KYC_TIER_RANK: Record<KycTier, number> = {
   tier_0: 0,
@@ -77,6 +93,10 @@ const PENDING_KYC_FREEZE_SCOPE_BY_TIER: Record<
 };
 
 type ReviewDecision = "approved" | "rejected" | "request_more_info";
+type KycReverificationTrigger =
+  | "document_expired"
+  | "policy_update"
+  | "admin_trigger";
 type KycCapabilitySet = {
   allowsRealMoneyPlay: boolean;
   allowsWithdrawal: boolean;
@@ -98,10 +118,54 @@ const readRiskFlags = (value: unknown) =>
     ? value.filter((item): item is string => typeof item === "string")
     : [];
 
+const mergeRiskFlags = (
+  current: unknown,
+  ...additions: Array<string | null | undefined>
+): string[] =>
+  [
+    ...new Set([
+      ...readRiskFlags(current),
+      ...additions.filter((value): value is string => Boolean(value)),
+    ]),
+  ];
+
 const trimReason = (value: string | null | undefined) => {
   const trimmed = value?.trim() ?? "";
   return trimmed === "" ? null : trimmed;
 };
+
+const formatDateOnly = (value: Date) => value.toISOString().slice(0, 10);
+
+const buildVerificationUrl = () =>
+  new URL("/app/verification", appConfig.webBaseUrl).toString();
+
+const resolveActiveSubmissionVersion = (profile: {
+  activeSubmissionVersion: number | null;
+  currentTier: KycTier;
+  status: KycStatus;
+  submissionVersion: number;
+}) => {
+  if (profile.activeSubmissionVersion) {
+    return profile.activeSubmissionVersion;
+  }
+
+  if (profile.currentTier !== "tier_0" && profile.status === "approved") {
+    return profile.submissionVersion;
+  }
+
+  return null;
+};
+
+const readDocumentMetadata = (value: unknown) => toRecord(value) ?? {};
+
+const markExpiryNoticeMetadata = (value: unknown, noticedAt: Date) => ({
+  ...readDocumentMetadata(value),
+  [KYC_EXPIRY_NOTICE_SENT_AT_METADATA_KEY]: noticedAt.toISOString(),
+});
+
+const hasExpiryNoticeMetadata = (value: unknown) =>
+  typeof readDocumentMetadata(value)[KYC_EXPIRY_NOTICE_SENT_AT_METADATA_KEY] ===
+  "string";
 
 export const isKycTierAtLeast = (currentTier: KycTier, minimumTier: KycTier) =>
   KYC_TIER_RANK[currentTier] >= KYC_TIER_RANK[minimumTier];
@@ -195,13 +259,14 @@ const previewDocumentRows = async (
     submissionVersion: number;
     kind: string;
     label: string | null;
-    fileName: string;
-    mimeType: string;
-    sizeBytes: number | null;
-    storagePath: string;
-    createdAt: Date;
-    metadata: unknown;
-  }>,
+      fileName: string;
+      mimeType: string;
+      sizeBytes: number | null;
+      storagePath: string;
+      expiresAt: Date | null;
+      createdAt: Date;
+      metadata: unknown;
+    }>,
 ) =>
   Promise.all(
     rows.map(async (row) => ({
@@ -216,6 +281,7 @@ const previewDocumentRows = async (
       sizeBytes: row.sizeBytes,
       storagePath: "",
       previewUrl: await buildPreviewUrl(origin, row.id),
+      expiresAt: row.expiresAt,
       createdAt: row.createdAt,
       metadata: toRecord(row.metadata),
     })),
@@ -435,7 +501,8 @@ export async function getAdminKycDetail(profileId: number, origin: string) {
         | "submitted"
         | "approved"
         | "rejected"
-        | "request_more_info",
+        | "request_more_info"
+        | "reverification_requested",
       fromStatus: row.fromStatus as KycStatus,
       toStatus: row.toStatus as KycStatus,
       metadata: toRecord(row.metadata),
@@ -454,6 +521,68 @@ const validateReviewReason = (
   }
 };
 
+const queueExpiryReminderNotification = async (params: {
+  email: string;
+  currentTier: KycTier;
+  expiresAt: Date;
+  executor: DbExecutor;
+}) => {
+  try {
+    await sendKycExpiryReminderNotification(
+      {
+        email: params.email,
+        verificationUrl: buildVerificationUrl(),
+        currentTier: params.currentTier,
+        expiresAt: params.expiresAt,
+      },
+      params.executor,
+    );
+    return true;
+  } catch (error) {
+    logger.warning("failed to queue KYC expiry reminder notification", {
+      err: error,
+      recipient: params.email,
+      currentTier: params.currentTier,
+      expiresAt: params.expiresAt.toISOString(),
+    });
+    return false;
+  }
+};
+
+const queueReverificationRequiredNotification = async (params: {
+  email: string;
+  targetTier: KycTier;
+  trigger: KycReverificationTrigger;
+  occurredAt: Date;
+  operatorReason: string | null;
+  expiresAt?: Date | null;
+  executor: DbExecutor;
+}) => {
+  try {
+    await sendKycReverificationRequiredNotification(
+      {
+        email: params.email,
+        verificationUrl: buildVerificationUrl(),
+        targetTier: params.targetTier,
+        reverificationType: params.trigger,
+        occurredAt: params.occurredAt,
+        operatorReason: params.operatorReason,
+        expiresAt: params.expiresAt ?? null,
+      },
+      params.executor,
+    );
+    return true;
+  } catch (error) {
+    logger.warning("failed to queue KYC reverification notification", {
+      err: error,
+      recipient: params.email,
+      targetTier: params.targetTier,
+      trigger: params.trigger,
+    });
+    return false;
+  }
+};
+
 export async function reviewKycProfile(payload: {
   profileId: number;
   adminId: number;
@@ -463,7 +592,7 @@ export async function reviewKycProfile(payload: {
   const reviewReason = trimReason(payload.reason);
   validateReviewReason(payload.decision, reviewReason);
 
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const [existing] = await tx
       .select({
         id: kycProfiles.id,
@@ -472,6 +601,7 @@ export async function reviewKycProfile(payload: {
         requestedTier: kycProfiles.requestedTier,
         status: kycProfiles.status,
         submissionVersion: kycProfiles.submissionVersion,
+        activeSubmissionVersion: kycProfiles.activeSubmissionVersion,
         freezeRecordId: kycProfiles.freezeRecordId,
       })
       .from(kycProfiles)
@@ -550,6 +680,10 @@ export async function reviewKycProfile(payload: {
         currentTier: nextCurrentTier,
         requestedTier:
           payload.decision === "approved" ? null : existing.requestedTier,
+        activeSubmissionVersion:
+          payload.decision === "approved"
+            ? existing.submissionVersion
+            : existing.activeSubmissionVersion,
         status: nextStatus,
         rejectionReason:
           payload.decision === "rejected" ? reviewReason : null,
@@ -586,8 +720,43 @@ export async function reviewKycProfile(payload: {
       },
     });
 
-    return updated;
+    if (payload.decision === "approved") {
+      await settlePendingReferralsForApprovedUser(
+        {
+          referredUserId: existing.userId,
+          currentTier: nextCurrentTier,
+        },
+        tx,
+      );
+    }
+
+    return {
+      updated,
+      notify: {
+        userId: existing.userId,
+        targetTier: existing.requestedTier ?? existing.currentTier,
+        rejectionReason: reviewReason,
+      },
+    };
   });
+
+  try {
+    await sendKycStatusChangedNotification({
+      userId: result.notify.userId,
+      status: result.updated.status as KycStatus,
+      targetTier: result.notify.targetTier,
+      rejectionReason: result.notify.rejectionReason,
+    });
+  } catch (error) {
+    logger.warning("failed to dispatch KYC status notification", {
+      err: error,
+      profileId: payload.profileId,
+      userId: result.notify.userId,
+      decision: payload.decision,
+    });
+  }
+
+  return result.updated;
 }
 
 export async function loadKycDocumentPreview(token: string) {
@@ -898,10 +1067,26 @@ export async function getUserKycProfile(userId: number) {
   ]);
 
   return {
-    ...profile,
+    id: profile.id,
+    userId: profile.userId,
     currentTier,
+    requestedTier: profile.requestedTier as KycTier | null,
+    status: profile.status as KycStatus,
+    submissionVersion: profile.submissionVersion,
+    legalName: profile.legalName,
+    documentType: profile.documentType,
+    documentNumberLast4: profile.documentNumberLast4,
+    countryCode: profile.countryCode,
+    notes: profile.notes,
+    rejectionReason: profile.rejectionReason,
     submittedData: toRecord(profile.submittedData),
     riskFlags: readRiskFlags(profile.riskFlags),
+    freezeRecordId: profile.freezeRecordId,
+    reviewedByAdminId: profile.reviewedByAdminId,
+    submittedAt: profile.submittedAt,
+    reviewedAt: profile.reviewedAt,
+    createdAt: profile.createdAt,
+    updatedAt: profile.updatedAt,
     documents: documents.map((document) => ({
       id: document.id,
       profileId: document.profileId,
@@ -914,6 +1099,7 @@ export async function getUserKycProfile(userId: number) {
       sizeBytes: document.sizeBytes,
       storagePath: document.storagePath,
       createdAt: document.createdAt,
+      expiresAt: document.expiresAt,
       metadata: toRecord(document.metadata),
     })),
     reviewEvents: reviewEvents.map((event) => ({
@@ -923,6 +1109,312 @@ export async function getUserKycProfile(userId: number) {
       toStatus: event.toStatus as KycStatus,
       metadata: toRecord(event.metadata),
     })),
+  };
+}
+
+export async function triggerKycReverification(payload: {
+  profileId: number;
+  adminId?: number | null;
+  reason?: string | null;
+  trigger?: KycReverificationTrigger;
+  expiresAt?: Date | null;
+}) {
+  const reviewReason = trimReason(payload.reason);
+  const trigger = payload.trigger ?? "policy_update";
+
+  return db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select({
+        id: kycProfiles.id,
+        userId: kycProfiles.userId,
+        userEmail: users.email,
+        currentTier: kycProfiles.currentTier,
+        requestedTier: kycProfiles.requestedTier,
+        status: kycProfiles.status,
+        submissionVersion: kycProfiles.submissionVersion,
+        activeSubmissionVersion: kycProfiles.activeSubmissionVersion,
+        riskFlags: kycProfiles.riskFlags,
+        freezeRecordId: kycProfiles.freezeRecordId,
+      })
+      .from(kycProfiles)
+      .innerJoin(users, eq(kycProfiles.userId, users.id))
+      .where(eq(kycProfiles.id, payload.profileId))
+      .limit(1);
+
+    if (!existing) {
+      throw notFoundError("KYC profile not found.", {
+        code: API_ERROR_CODES.KYC_PROFILE_NOT_FOUND,
+      });
+    }
+
+    const currentTier = existing.currentTier as KycTier;
+    const currentStatus = existing.status as KycStatus;
+    const currentRiskFlags = readRiskFlags(existing.riskFlags);
+    const alreadyRequiresReverification =
+      currentTier === "tier_0" &&
+      currentStatus === "more_info_required" &&
+      currentRiskFlags.includes(KYC_REVERIFICATION_REQUIRED_FLAG);
+
+    if (alreadyRequiresReverification) {
+      return {
+        id: existing.id,
+        status: currentStatus,
+        freezeRecordId: existing.freezeRecordId ?? null,
+        currentTier,
+        requestedTier: existing.requestedTier as KycTier | null,
+        changed: false,
+      };
+    }
+
+    if (currentTier === "tier_0") {
+      throw conflictError(
+        "Only active KYC tiers can be forced into reverification.",
+        {
+          code: API_ERROR_CODES.INVALID_REQUEST,
+        },
+      );
+    }
+
+    const now = new Date();
+    const targetTier = currentTier as Exclude<KycTier, "tier_0">;
+    const nextRiskFlags = mergeRiskFlags(
+      existing.riskFlags,
+      KYC_REVERIFICATION_REQUIRED_FLAG,
+      trigger === "document_expired"
+        ? KYC_DOCUMENT_EXPIRED_FLAG
+        : KYC_POLICY_REFRESH_REQUIRED_FLAG,
+    );
+
+    await releaseUserFreezeByFilter(
+      {
+        userId: existing.userId,
+        reason: KYC_FREEZE_REASON,
+      },
+      tx,
+    );
+
+    const activeSubmissionVersion = resolveActiveSubmissionVersion({
+      activeSubmissionVersion: existing.activeSubmissionVersion,
+      currentTier,
+      status: currentStatus,
+      submissionVersion: existing.submissionVersion,
+    });
+
+    const pendingFreeze = await ensureUserFreeze(
+      {
+        userId: existing.userId,
+        category: KYC_FREEZE_CATEGORY,
+        reason: KYC_FREEZE_REASON,
+        scope: PENDING_KYC_FREEZE_SCOPE_BY_TIER[targetTier],
+        metadata: {
+          kycProfileId: existing.id,
+          requestedTier: targetTier,
+          trigger,
+          activeSubmissionVersion,
+          previousStatus: currentStatus,
+        },
+      },
+      { executor: tx },
+    );
+
+    const [updated] = await tx
+      .update(kycProfiles)
+      .set({
+        currentTier: "tier_0",
+        requestedTier: targetTier,
+        activeSubmissionVersion: null,
+        status: "more_info_required",
+        rejectionReason: null,
+        riskFlags: nextRiskFlags,
+        freezeRecordId: pendingFreeze?.id ?? existing.freezeRecordId ?? null,
+        reviewedByAdminId: payload.adminId ?? null,
+        reviewedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(kycProfiles.id, payload.profileId))
+      .returning({
+        id: kycProfiles.id,
+        status: kycProfiles.status,
+        freezeRecordId: kycProfiles.freezeRecordId,
+        currentTier: kycProfiles.currentTier,
+        requestedTier: kycProfiles.requestedTier,
+      });
+
+    await tx.insert(kycReviewEvents).values({
+      profileId: existing.id,
+      userId: existing.userId,
+      submissionVersion: existing.submissionVersion,
+      action: "reverification_requested",
+      fromStatus: currentStatus,
+      toStatus: "more_info_required",
+      targetTier,
+      actorAdminId: payload.adminId ?? null,
+      reason: reviewReason,
+      metadata: {
+        trigger,
+        previousTier: currentTier,
+        previousStatus: currentStatus,
+        supersededRequestedTier: existing.requestedTier ?? null,
+        activeSubmissionVersion,
+        freezeRecordId: pendingFreeze?.id ?? null,
+        expiresAt: payload.expiresAt?.toISOString() ?? null,
+      },
+    });
+
+    await queueReverificationRequiredNotification({
+      email: existing.userEmail,
+      targetTier,
+      trigger,
+      occurredAt: now,
+      operatorReason: reviewReason,
+      expiresAt: payload.expiresAt ?? null,
+      executor: tx,
+    });
+
+    return {
+      id: updated.id,
+      status: updated.status as KycStatus,
+      freezeRecordId: updated.freezeRecordId ?? null,
+      currentTier: updated.currentTier as KycTier,
+      requestedTier: updated.requestedTier as KycTier | null,
+      changed: true,
+    };
+  });
+}
+
+export async function runKycReverificationSweep(now = new Date()) {
+  const noticeCutoff = new Date(
+    now.getTime() + appConfig.kycReverificationNoticeDays * 24 * 60 * 60 * 1000,
+  );
+
+  const candidateRows = await db
+    .select({
+      profileId: kycProfiles.id,
+      userId: kycProfiles.userId,
+      userEmail: users.email,
+      currentTier: kycProfiles.currentTier,
+      status: kycProfiles.status,
+      submissionVersion: kycProfiles.submissionVersion,
+      activeSubmissionVersion: kycProfiles.activeSubmissionVersion,
+      documentId: kycDocuments.id,
+      documentSubmissionVersion: kycDocuments.submissionVersion,
+      expiresAt: kycDocuments.expiresAt,
+      metadata: kycDocuments.metadata,
+    })
+    .from(kycProfiles)
+    .innerJoin(users, eq(kycProfiles.userId, users.id))
+    .innerJoin(kycDocuments, eq(kycDocuments.profileId, kycProfiles.id))
+    .where(
+      and(
+        ne(kycProfiles.currentTier, "tier_0"),
+        lte(kycDocuments.expiresAt, noticeCutoff),
+      ),
+    )
+    .orderBy(asc(kycProfiles.id), asc(kycDocuments.expiresAt), asc(kycDocuments.id));
+
+  type KycExpiryCandidateRow = (typeof candidateRows)[number];
+  const rowsByProfileId = new Map<number, KycExpiryCandidateRow[]>();
+  for (const row of candidateRows) {
+    const current = rowsByProfileId.get(row.profileId) ?? [];
+    current.push(row);
+    rowsByProfileId.set(row.profileId, current);
+  }
+
+  let expiryRemindersQueued = 0;
+  let reverificationRequested = 0;
+  let skippedProfiles = 0;
+
+  for (const rows of rowsByProfileId.values()) {
+    const profile = rows[0];
+    if (!profile) {
+      continue;
+    }
+
+    const activeSubmissionVersion = resolveActiveSubmissionVersion({
+      activeSubmissionVersion: profile.activeSubmissionVersion,
+      currentTier: profile.currentTier as KycTier,
+      status: profile.status as KycStatus,
+      submissionVersion: profile.submissionVersion,
+    });
+
+    if (!activeSubmissionVersion) {
+      skippedProfiles += 1;
+      continue;
+    }
+
+    const activeRows = rows.filter(
+      (row) =>
+        row.documentSubmissionVersion === activeSubmissionVersion &&
+        row.expiresAt !== null,
+    );
+
+    if (activeRows.length === 0) {
+      skippedProfiles += 1;
+      continue;
+    }
+
+    const soonestExpiry = activeRows[0]?.expiresAt;
+    if (!soonestExpiry) {
+      skippedProfiles += 1;
+      continue;
+    }
+
+    if (soonestExpiry.getTime() <= now.getTime()) {
+      const result = await triggerKycReverification({
+        profileId: profile.profileId,
+        trigger: "document_expired",
+        reason: `Active KYC document expired on ${formatDateOnly(soonestExpiry)}.`,
+        expiresAt: soonestExpiry,
+      });
+
+      if (result.changed) {
+        reverificationRequested += 1;
+      } else {
+        skippedProfiles += 1;
+      }
+      continue;
+    }
+
+    if (activeRows.some((row) => hasExpiryNoticeMetadata(row.metadata))) {
+      skippedProfiles += 1;
+      continue;
+    }
+
+    let queuedReminder = false;
+    await db.transaction(async (tx) => {
+      queuedReminder = await queueExpiryReminderNotification({
+        email: profile.userEmail,
+        currentTier: profile.currentTier as KycTier,
+        expiresAt: soonestExpiry,
+        executor: tx,
+      });
+
+      if (!queuedReminder) {
+        return;
+      }
+
+      for (const row of activeRows) {
+        await tx
+          .update(kycDocuments)
+          .set({
+            metadata: markExpiryNoticeMetadata(row.metadata, now),
+          })
+          .where(eq(kycDocuments.id, row.documentId));
+      }
+
+      expiryRemindersQueued += 1;
+    });
+
+    if (!queuedReminder) {
+      skippedProfiles += 1;
+    }
+  }
+
+  return {
+    scannedProfiles: rowsByProfileId.size,
+    expiryRemindersQueued,
+    reverificationRequested,
+    skippedProfiles,
   };
 }
 
@@ -961,8 +1453,12 @@ export async function submitKycProfile(
       documentType: payload.documentType,
       documentNumberLast4: payload.documentNumberLast4,
       countryCode: payload.countryCode ?? null,
+      documentExpiresAt: payload.documentExpiresAt ?? null,
       notes: payload.notes ?? null,
     };
+    const documentExpiresAt = payload.documentExpiresAt
+      ? new Date(payload.documentExpiresAt)
+      : null;
     const freezeScope = PENDING_KYC_FREEZE_SCOPE_BY_TIER[payload.targetTier];
 
     await releaseUserFreezeByFilter(
@@ -993,6 +1489,7 @@ export async function submitKycProfile(
           .set({
             currentTier,
             requestedTier: payload.targetTier,
+            activeSubmissionVersion: profile.activeSubmissionVersion,
             status: "pending",
             submissionVersion: nextSubmissionVersion,
             legalName: payload.legalName,
@@ -1017,6 +1514,7 @@ export async function submitKycProfile(
             userId,
             currentTier,
             requestedTier: payload.targetTier,
+            activeSubmissionVersion: null,
             status: "pending",
             submissionVersion: nextSubmissionVersion,
             legalName: payload.legalName,
@@ -1044,6 +1542,7 @@ export async function submitKycProfile(
         mimeType: document.mimeType,
         sizeBytes: document.sizeBytes,
         storagePath: `data:${document.mimeType};base64,${document.contentBase64}`,
+        expiresAt: document.kind === "selfie" ? null : documentExpiresAt,
         metadata: null,
       })),
     );
@@ -1073,6 +1572,11 @@ export async function assertKycStakeAllowed(
   amount: string,
   executor: DbExecutor = db,
 ) {
+  await assertUserJurisdictionFeatureAllowed(
+    userId,
+    "real_money_gameplay",
+    executor,
+  );
   const currentTier = await getEnforcedUserKycTier(userId, executor);
   if (!currentTier) {
     throw forbiddenError("Tier 1 verification required for real-money play.", {
@@ -1107,6 +1611,11 @@ export async function assertKycWithdrawalAllowed(
   totalToday: string,
   executor: DbExecutor = db,
 ) {
+  await assertUserJurisdictionFeatureAllowed(
+    userId,
+    "withdrawal",
+    executor,
+  );
   const currentTier = await getEnforcedUserKycTier(userId, executor);
   if (!currentTier) {
     throw forbiddenError("Tier 2 verification required for withdrawals.", {

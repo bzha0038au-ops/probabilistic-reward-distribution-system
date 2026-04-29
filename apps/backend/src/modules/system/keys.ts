@@ -102,12 +102,39 @@ export const HOLDEM_TIME_BANK_MS_KEY = 'holdem.time_bank_ms';
 export const HOLDEM_DISCONNECT_GRACE_SECONDS_KEY =
   'holdem.disconnect_grace_seconds';
 export const HOLDEM_SEAT_LEASE_SECONDS_KEY = 'holdem.seat_lease_seconds';
+export const DEALER_BOT_ENABLED_KEY = 'dealer_bot.enabled';
+export const DEALER_BOT_LANGUAGE_PROVIDER_KEY = 'dealer_bot.language_provider';
+export const DEALER_BOT_TABLE_RATE_LIMIT_COUNT_KEY =
+  'dealer_bot.table_rate_limit_count';
+export const DEALER_BOT_TABLE_RATE_LIMIT_WINDOW_SECONDS_KEY =
+  'dealer_bot.table_rate_limit_window_seconds';
+export const DEALER_BOT_BUDGET_TENANT_ID_KEY = 'dealer_bot.budget_tenant_id';
+export const DEALER_BOT_BUDGET_PROJECT_ID_KEY = 'dealer_bot.budget_project_id';
+export const DEALER_BOT_LANGUAGE_CALL_COST_KEY = 'dealer_bot.language_call_cost';
+export const DEALER_BOT_OPENAI_MODEL_KEY = 'dealer_bot.openai_model';
+export const DEALER_BOT_OPENAI_BASE_URL_KEY = 'dealer_bot.openai_base_url';
+export const DEALER_BOT_OPENAI_TIMEOUT_MS_KEY = 'dealer_bot.openai_timeout_ms';
+export const DEALER_BOT_BLOCKED_TERMS_KEY = 'dealer_bot.blocked_terms';
 export const SAAS_USAGE_ALERT_MAX_MINUTE_QPS_KEY =
   'saas_usage_alert.max_minute_qps';
 export const SAAS_USAGE_ALERT_MAX_SINGLE_PAYOUT_AMOUNT_KEY =
   'saas_usage_alert.max_single_payout_amount';
 export const SAAS_USAGE_ALERT_MAX_ANTI_EXPLOIT_RATE_PCT_KEY =
   'saas_usage_alert.max_anti_exploit_rate_pct';
+export const SAAS_STATUS_API_ERROR_RATE_WARN_KEY =
+  'saas_status.api_error_rate_pct_warn';
+export const SAAS_STATUS_API_ERROR_RATE_OUTAGE_KEY =
+  'saas_status.api_error_rate_pct_outage';
+export const SAAS_STATUS_API_P95_MS_WARN_KEY =
+  'saas_status.api_p95_ms_warn';
+export const SAAS_STATUS_API_P95_MS_OUTAGE_KEY =
+  'saas_status.api_p95_ms_outage';
+export const SAAS_STATUS_WORKER_LAG_MS_WARN_KEY =
+  'saas_status.worker_lag_ms_warn';
+export const SAAS_STATUS_WORKER_LAG_MS_OUTAGE_KEY =
+  'saas_status.worker_lag_ms_outage';
+export const SAAS_STATUS_MONTHLY_SLA_TARGET_PCT_KEY =
+  'saas_status.monthly_sla_target_pct';
 export const ANALYTICS_STATS_DELAY_KEY = 'analytics.stats_visibility_delay_minutes';
 export const ANALYTICS_PUBLIC_STATS_KEY = 'analytics.public_stats_enabled';
 export const ANALYTICS_POOL_PUBLIC_KEY = 'analytics.pool_balance_public';

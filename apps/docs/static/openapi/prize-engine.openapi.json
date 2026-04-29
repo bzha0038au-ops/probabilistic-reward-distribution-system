@@ -1,0 +1,5737 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Reward Prize Engine API",
+    "version": "0.1.0",
+    "description": "Tenant-facing Prize Engine endpoints for catalog reads, fairness verification, reward decisions, observability, and ledger lookups."
+  },
+  "tags": [
+    {
+      "name": "Prize Engine",
+      "description": "External B-side reward engine API."
+    }
+  ],
+  "servers": [
+    {
+      "url": "https://api.reward.system",
+      "description": "Production API host"
+    },
+    {
+      "url": "http://localhost:3001",
+      "description": "Local backend"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "API key",
+        "description": "Preferred transport for project API keys."
+      },
+      "apiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "Alternative header-based project API key transport."
+      }
+    },
+    "schemas": {
+      "ErrorEnvelope": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string"
+              },
+              "code": {
+                "type": "string",
+                "minLength": 1
+              },
+              "details": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "message"
+            ],
+            "additionalProperties": false
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "traceId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ok",
+          "error"
+        ],
+        "additionalProperties": false
+      },
+      "PrizeEngineOverview": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "tenantId": {
+                "type": "integer"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "environment": {
+                "type": "string",
+                "enum": [
+                  "sandbox",
+                  "live"
+                ]
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "active",
+                  "suspended",
+                  "archived"
+                ]
+              },
+              "currency": {
+                "type": "string"
+              },
+              "drawCost": {
+                "type": "string"
+              },
+              "prizePoolBalance": {
+                "type": "string"
+              },
+              "strategy": {
+                "type": "string",
+                "enum": [
+                  "weighted_gacha",
+                  "epsilon_greedy",
+                  "softmax",
+                  "thompson"
+                ]
+              },
+              "strategyParams": {
+                "type": "object",
+                "additionalProperties": {}
+              },
+              "fairnessEpochSeconds": {
+                "type": "integer",
+                "exclusiveMinimum": true,
+                "minimum": 0
+              },
+              "maxDrawCount": {
+                "type": "integer",
+                "exclusiveMinimum": true,
+                "minimum": 0
+              },
+              "missWeight": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "id",
+              "tenantId",
+              "slug",
+              "name",
+              "environment",
+              "status",
+              "currency",
+              "drawCost",
+              "prizePoolBalance",
+              "strategy",
+              "strategyParams",
+              "fairnessEpochSeconds",
+              "maxDrawCount",
+              "missWeight"
+            ],
+            "additionalProperties": false
+          },
+          "fairness": {
+            "type": "object",
+            "properties": {
+              "epoch": {
+                "type": "integer"
+              },
+              "epochSeconds": {
+                "type": "integer"
+              },
+              "commitHash": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "epoch",
+              "epochSeconds",
+              "commitHash"
+            ],
+            "additionalProperties": false
+          },
+          "prizes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "rewardAmount": {
+                  "type": "string"
+                },
+                "displayRarity": {
+                  "type": "string",
+                  "enum": [
+                    "common",
+                    "rare",
+                    "epic",
+                    "legendary"
+                  ]
+                },
+                "stock": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "stockState": {
+                  "type": "string",
+                  "enum": [
+                    "available",
+                    "low",
+                    "sold_out"
+                  ]
+                },
+                "isFeatured": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "rewardAmount",
+                "displayRarity",
+                "stock",
+                "stockState",
+                "isFeatured"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "featuredPrizes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "rewardAmount": {
+                  "type": "string"
+                },
+                "displayRarity": {
+                  "type": "string",
+                  "enum": [
+                    "common",
+                    "rare",
+                    "epic",
+                    "legendary"
+                  ]
+                },
+                "stock": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "stockState": {
+                  "type": "string",
+                  "enum": [
+                    "available",
+                    "low",
+                    "sold_out"
+                  ]
+                },
+                "isFeatured": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "rewardAmount",
+                "displayRarity",
+                "stock",
+                "stockState",
+                "isFeatured"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "project",
+          "fairness",
+          "prizes",
+          "featuredPrizes"
+        ],
+        "additionalProperties": false
+      },
+      "PrizeEngineOverviewEnvelope": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "project": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "integer"
+                  },
+                  "tenantId": {
+                    "type": "integer"
+                  },
+                  "slug": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "environment": {
+                    "type": "string",
+                    "enum": [
+                      "sandbox",
+                      "live"
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "suspended",
+                      "archived"
+                    ]
+                  },
+                  "currency": {
+                    "type": "string"
+                  },
+                  "drawCost": {
+                    "type": "string"
+                  },
+                  "prizePoolBalance": {
+                    "type": "string"
+                  },
+                  "strategy": {
+                    "type": "string",
+                    "enum": [
+                      "weighted_gacha",
+                      "epsilon_greedy",
+                      "softmax",
+                      "thompson"
+                    ]
+                  },
+                  "strategyParams": {
+                    "type": "object",
+                    "additionalProperties": {}
+                  },
+                  "fairnessEpochSeconds": {
+                    "type": "integer",
+                    "exclusiveMinimum": true,
+                    "minimum": 0
+                  },
+                  "maxDrawCount": {
+                    "type": "integer",
+                    "exclusiveMinimum": true,
+                    "minimum": 0
+                  },
+                  "missWeight": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "id",
+                  "tenantId",
+                  "slug",
+                  "name",
+                  "environment",
+                  "status",
+                  "currency",
+                  "drawCost",
+                  "prizePoolBalance",
+                  "strategy",
+                  "strategyParams",
+                  "fairnessEpochSeconds",
+                  "maxDrawCount",
+                  "missWeight"
+                ],
+                "additionalProperties": false
+              },
+              "fairness": {
+                "type": "object",
+                "properties": {
+                  "epoch": {
+                    "type": "integer"
+                  },
+                  "epochSeconds": {
+                    "type": "integer"
+                  },
+                  "commitHash": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "epoch",
+                  "epochSeconds",
+                  "commitHash"
+                ],
+                "additionalProperties": false
+              },
+              "prizes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "rewardAmount": {
+                      "type": "string"
+                    },
+                    "displayRarity": {
+                      "type": "string",
+                      "enum": [
+                        "common",
+                        "rare",
+                        "epic",
+                        "legendary"
+                      ]
+                    },
+                    "stock": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "stockState": {
+                      "type": "string",
+                      "enum": [
+                        "available",
+                        "low",
+                        "sold_out"
+                      ]
+                    },
+                    "isFeatured": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "rewardAmount",
+                    "displayRarity",
+                    "stock",
+                    "stockState",
+                    "isFeatured"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "featuredPrizes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "rewardAmount": {
+                      "type": "string"
+                    },
+                    "displayRarity": {
+                      "type": "string",
+                      "enum": [
+                        "common",
+                        "rare",
+                        "epic",
+                        "legendary"
+                      ]
+                    },
+                    "stock": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "stockState": {
+                      "type": "string",
+                      "enum": [
+                        "available",
+                        "low",
+                        "sold_out"
+                      ]
+                    },
+                    "isFeatured": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "rewardAmount",
+                    "displayRarity",
+                    "stock",
+                    "stockState",
+                    "isFeatured"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "project",
+              "fairness",
+              "prizes",
+              "featuredPrizes"
+            ],
+            "additionalProperties": false
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "traceId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ok",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "PrizeEngineFairnessCommit": {
+        "type": "object",
+        "properties": {
+          "epoch": {
+            "type": "integer"
+          },
+          "epochSeconds": {
+            "type": "integer"
+          },
+          "commitHash": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "epoch",
+          "epochSeconds",
+          "commitHash"
+        ],
+        "additionalProperties": false
+      },
+      "PrizeEngineFairnessCommitEnvelope": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "epoch": {
+                "type": "integer"
+              },
+              "epochSeconds": {
+                "type": "integer"
+              },
+              "commitHash": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "epoch",
+              "epochSeconds",
+              "commitHash"
+            ],
+            "additionalProperties": false
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "traceId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ok",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "PrizeEngineFairnessReveal": {
+        "type": "object",
+        "properties": {
+          "epoch": {
+            "type": "integer"
+          },
+          "epochSeconds": {
+            "type": "integer"
+          },
+          "commitHash": {
+            "type": "string"
+          },
+          "seed": {
+            "type": "string"
+          },
+          "revealedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "string",
+                "format": "date-time"
+              }
+            ]
+          }
+        },
+        "required": [
+          "epoch",
+          "epochSeconds",
+          "commitHash",
+          "seed",
+          "revealedAt"
+        ],
+        "additionalProperties": false
+      },
+      "PrizeEngineFairnessRevealEnvelope": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "epoch": {
+                "type": "integer"
+              },
+              "epochSeconds": {
+                "type": "integer"
+              },
+              "commitHash": {
+                "type": "string"
+              },
+              "seed": {
+                "type": "string"
+              },
+              "revealedAt": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "epoch",
+              "epochSeconds",
+              "commitHash",
+              "seed",
+              "revealedAt"
+            ],
+            "additionalProperties": false
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "traceId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ok",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "PrizeEngineRewardRequest": {
+        "type": "object",
+        "properties": {
+          "environment": {
+            "type": "string",
+            "enum": [
+              "sandbox",
+              "live"
+            ]
+          },
+          "agent": {
+            "type": "object",
+            "properties": {
+              "agentId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "groupId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "nullable": true
+              },
+              "metadata": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "required": [
+              "agentId"
+            ],
+            "additionalProperties": false
+          },
+          "behavior": {
+            "type": "object",
+            "properties": {
+              "actionType": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "score": {
+                "type": "number"
+              },
+              "novelty": {
+                "type": "number"
+              },
+              "risk": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "context": {
+                "type": "object",
+                "additionalProperties": {}
+              },
+              "signals": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "required": [
+              "actionType",
+              "score"
+            ],
+            "additionalProperties": false
+          },
+          "riskEnvelope": {
+            "type": "object",
+            "properties": {
+              "dailyBudgetCap": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "nullable": true
+              },
+              "maxSinglePayout": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "nullable": true
+              },
+              "varianceCap": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "nullable": true
+              },
+              "group": {
+                "type": "object",
+                "properties": {
+                  "maxDrawCount": {
+                    "type": "integer",
+                    "exclusiveMinimum": true,
+                    "minimum": 0,
+                    "nullable": true
+                  },
+                  "dailyBudgetCap": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "nullable": true
+                  },
+                  "varianceCap": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "nullable": true
+                  }
+                },
+                "additionalProperties": false
+              },
+              "agent": {
+                "type": "object",
+                "properties": {
+                  "maxDrawCount": {
+                    "type": "integer",
+                    "exclusiveMinimum": true,
+                    "minimum": 0,
+                    "nullable": true
+                  },
+                  "dailyBudgetCap": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "nullable": true
+                  },
+                  "varianceCap": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "nullable": true
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          },
+          "budget": {
+            "type": "object",
+            "properties": {
+              "amount": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "nullable": true
+              },
+              "remaining": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "nullable": true
+              },
+              "currency": {
+                "type": "string",
+                "minLength": 3,
+                "maxLength": 16,
+                "nullable": true
+              },
+              "window": {
+                "type": "string",
+                "enum": [
+                  "request",
+                  "session",
+                  "day",
+                  "campaign",
+                  "lifetime"
+                ],
+                "nullable": true
+              },
+              "metadata": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "additionalProperties": false
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "clientNonce": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "nullable": true
+          }
+        },
+        "required": [
+          "agent",
+          "behavior",
+          "idempotencyKey"
+        ],
+        "additionalProperties": false
+      },
+      "PrizeEngineRewardResponse": {
+        "type": "object",
+        "properties": {
+          "agent": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "projectId": {
+                "type": "integer"
+              },
+              "agentId": {
+                "type": "string"
+              },
+              "groupId": {
+                "type": "string",
+                "nullable": true
+              },
+              "ownerMetadata": {
+                "type": "object",
+                "additionalProperties": {},
+                "nullable": true
+              },
+              "fingerprint": {
+                "type": "string",
+                "nullable": true
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "active",
+                  "suspended",
+                  "archived"
+                ]
+              },
+              "createdAt": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "projectId",
+              "agentId",
+              "status",
+              "createdAt"
+            ],
+            "additionalProperties": false
+          },
+          "player": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "projectId": {
+                "type": "integer"
+              },
+              "externalPlayerId": {
+                "type": "string"
+              },
+              "displayName": {
+                "type": "string",
+                "nullable": true
+              },
+              "balance": {
+                "type": "string"
+              },
+              "pityStreak": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "metadata": {
+                "type": "object",
+                "additionalProperties": {},
+                "nullable": true
+              },
+              "createdAt": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                ]
+              },
+              "updatedAt": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "projectId",
+              "externalPlayerId",
+              "displayName",
+              "balance",
+              "pityStreak",
+              "createdAt",
+              "updatedAt"
+            ],
+            "additionalProperties": false
+          },
+          "result": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "playerId": {
+                "type": "integer"
+              },
+              "prizeId": {
+                "type": "integer",
+                "nullable": true
+              },
+              "drawCost": {
+                "type": "string"
+              },
+              "rewardAmount": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "createdAt": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                ]
+              },
+              "selectionStrategy": {
+                "type": "string"
+              },
+              "fairness": {
+                "type": "object",
+                "properties": {
+                  "epoch": {
+                    "type": "integer"
+                  },
+                  "epochSeconds": {
+                    "type": "integer"
+                  },
+                  "commitHash": {
+                    "type": "string"
+                  },
+                  "clientNonce": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "serverNonce": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "nonceSource": {
+                    "type": "string",
+                    "enum": [
+                      "client",
+                      "server"
+                    ]
+                  },
+                  "rngDigest": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "totalWeight": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "randomPick": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "strategy": {
+                    "type": "string",
+                    "enum": [
+                      "weighted_gacha",
+                      "epsilon_greedy",
+                      "softmax",
+                      "thompson"
+                    ]
+                  },
+                  "epsilon": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "nullable": true
+                  },
+                  "decision": {
+                    "type": "string",
+                    "enum": [
+                      "explore",
+                      "exploit"
+                    ],
+                    "nullable": true
+                  },
+                  "selectionDigest": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "candidateCount": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "nullable": true
+                  },
+                  "selectedArmId": {
+                    "type": "integer",
+                    "nullable": true
+                  },
+                  "selectedArmKind": {
+                    "type": "string",
+                    "enum": [
+                      "prize",
+                      "miss"
+                    ],
+                    "nullable": true
+                  },
+                  "risk": {
+                    "type": "object",
+                    "properties": {
+                      "inputRisk": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "previousAccumulatedRisk": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "decayedAccumulatedRisk": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "effectiveRisk": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "weightDecayAlpha": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "riskStateHalfLifeSeconds": {
+                        "type": "integer",
+                        "exclusiveMinimum": true,
+                        "minimum": 0
+                      },
+                      "weightMultiplier": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "basePrizeWeightTotal": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "adjustedPrizeWeightTotal": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "inputRisk",
+                      "previousAccumulatedRisk",
+                      "decayedAccumulatedRisk",
+                      "effectiveRisk",
+                      "weightDecayAlpha",
+                      "riskStateHalfLifeSeconds",
+                      "weightMultiplier",
+                      "basePrizeWeightTotal",
+                      "adjustedPrizeWeightTotal"
+                    ],
+                    "additionalProperties": false,
+                    "nullable": true
+                  },
+                  "algorithm": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false,
+                "nullable": true
+              },
+              "prize": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "rewardAmount": {
+                    "type": "string"
+                  },
+                  "displayRarity": {
+                    "type": "string",
+                    "enum": [
+                      "common",
+                      "rare",
+                      "epic",
+                      "legendary"
+                    ]
+                  },
+                  "stock": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "stockState": {
+                    "type": "string",
+                    "enum": [
+                      "available",
+                      "low",
+                      "sold_out"
+                    ]
+                  },
+                  "isFeatured": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "rewardAmount",
+                  "displayRarity",
+                  "stock",
+                  "stockState",
+                  "isFeatured"
+                ],
+                "additionalProperties": false,
+                "nullable": true
+              },
+              "envelope": {
+                "type": "object",
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "normal",
+                      "mute"
+                    ]
+                  },
+                  "triggered": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "scope": {
+                          "type": "string",
+                          "enum": [
+                            "tenant",
+                            "project",
+                            "group",
+                            "agent"
+                          ]
+                        },
+                        "window": {
+                          "type": "string",
+                          "enum": [
+                            "minute",
+                            "hour",
+                            "day"
+                          ]
+                        },
+                        "reason": {
+                          "type": "string",
+                          "enum": [
+                            "budget_cap",
+                            "variance_cap",
+                            "anti_exploit"
+                          ]
+                        },
+                        "strategy": {
+                          "type": "string",
+                          "enum": [
+                            "reject",
+                            "mute"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "scope",
+                        "window",
+                        "reason",
+                        "strategy"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "mode",
+                  "triggered"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "playerId",
+              "prizeId",
+              "drawCost",
+              "rewardAmount",
+              "status",
+              "createdAt",
+              "fairness"
+            ],
+            "additionalProperties": false
+          },
+          "legacy": {
+            "type": "object",
+            "properties": {
+              "route": {
+                "type": "string",
+                "enum": [
+                  "/v1/engine/draws"
+                ]
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "legacy_gacha"
+                ]
+              },
+              "deprecated": {
+                "type": "boolean",
+                "enum": [
+                  true
+                ]
+              },
+              "sunsetAt": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "route",
+              "mode",
+              "deprecated",
+              "sunsetAt"
+            ],
+            "additionalProperties": false
+          },
+          "behavior": {
+            "type": "object",
+            "properties": {
+              "actionType": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "score": {
+                "type": "number"
+              },
+              "novelty": {
+                "type": "number"
+              },
+              "risk": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "context": {
+                "type": "object",
+                "additionalProperties": {}
+              },
+              "signals": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "required": [
+              "actionType",
+              "score"
+            ],
+            "additionalProperties": false
+          },
+          "riskEnvelope": {
+            "type": "object",
+            "properties": {
+              "dailyBudgetCap": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "nullable": true
+              },
+              "maxSinglePayout": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "nullable": true
+              },
+              "varianceCap": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "nullable": true
+              },
+              "group": {
+                "type": "object",
+                "properties": {
+                  "maxDrawCount": {
+                    "type": "integer",
+                    "exclusiveMinimum": true,
+                    "minimum": 0,
+                    "nullable": true
+                  },
+                  "dailyBudgetCap": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "nullable": true
+                  },
+                  "varianceCap": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "nullable": true
+                  }
+                },
+                "additionalProperties": false
+              },
+              "agent": {
+                "type": "object",
+                "properties": {
+                  "maxDrawCount": {
+                    "type": "integer",
+                    "exclusiveMinimum": true,
+                    "minimum": 0,
+                    "nullable": true
+                  },
+                  "dailyBudgetCap": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "nullable": true
+                  },
+                  "varianceCap": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "nullable": true
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          },
+          "budget": {
+            "type": "object",
+            "properties": {
+              "amount": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "nullable": true
+              },
+              "remaining": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "nullable": true
+              },
+              "currency": {
+                "type": "string",
+                "minLength": 3,
+                "maxLength": 16,
+                "nullable": true
+              },
+              "window": {
+                "type": "string",
+                "enum": [
+                  "request",
+                  "session",
+                  "day",
+                  "campaign",
+                  "lifetime"
+                ],
+                "nullable": true
+              },
+              "metadata": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "additionalProperties": false
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "replayed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "agent",
+          "player",
+          "result",
+          "behavior",
+          "idempotencyKey",
+          "replayed"
+        ],
+        "additionalProperties": false
+      },
+      "PrizeEngineRewardResponseEnvelope": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "agent": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "integer"
+                  },
+                  "projectId": {
+                    "type": "integer"
+                  },
+                  "agentId": {
+                    "type": "string"
+                  },
+                  "groupId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "ownerMetadata": {
+                    "type": "object",
+                    "additionalProperties": {},
+                    "nullable": true
+                  },
+                  "fingerprint": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "suspended",
+                      "archived"
+                    ]
+                  },
+                  "createdAt": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "projectId",
+                  "agentId",
+                  "status",
+                  "createdAt"
+                ],
+                "additionalProperties": false
+              },
+              "player": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "integer"
+                  },
+                  "projectId": {
+                    "type": "integer"
+                  },
+                  "externalPlayerId": {
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "balance": {
+                    "type": "string"
+                  },
+                  "pityStreak": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": {},
+                    "nullable": true
+                  },
+                  "createdAt": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    ]
+                  },
+                  "updatedAt": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "projectId",
+                  "externalPlayerId",
+                  "displayName",
+                  "balance",
+                  "pityStreak",
+                  "createdAt",
+                  "updatedAt"
+                ],
+                "additionalProperties": false
+              },
+              "result": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "integer"
+                  },
+                  "playerId": {
+                    "type": "integer"
+                  },
+                  "prizeId": {
+                    "type": "integer",
+                    "nullable": true
+                  },
+                  "drawCost": {
+                    "type": "string"
+                  },
+                  "rewardAmount": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "createdAt": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    ]
+                  },
+                  "selectionStrategy": {
+                    "type": "string"
+                  },
+                  "fairness": {
+                    "type": "object",
+                    "properties": {
+                      "epoch": {
+                        "type": "integer"
+                      },
+                      "epochSeconds": {
+                        "type": "integer"
+                      },
+                      "commitHash": {
+                        "type": "string"
+                      },
+                      "clientNonce": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "serverNonce": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "nonceSource": {
+                        "type": "string",
+                        "enum": [
+                          "client",
+                          "server"
+                        ]
+                      },
+                      "rngDigest": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "totalWeight": {
+                        "type": "number",
+                        "nullable": true
+                      },
+                      "randomPick": {
+                        "type": "number",
+                        "nullable": true
+                      },
+                      "strategy": {
+                        "type": "string",
+                        "enum": [
+                          "weighted_gacha",
+                          "epsilon_greedy",
+                          "softmax",
+                          "thompson"
+                        ]
+                      },
+                      "epsilon": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1,
+                        "nullable": true
+                      },
+                      "decision": {
+                        "type": "string",
+                        "enum": [
+                          "explore",
+                          "exploit"
+                        ],
+                        "nullable": true
+                      },
+                      "selectionDigest": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "candidateCount": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "nullable": true
+                      },
+                      "selectedArmId": {
+                        "type": "integer",
+                        "nullable": true
+                      },
+                      "selectedArmKind": {
+                        "type": "string",
+                        "enum": [
+                          "prize",
+                          "miss"
+                        ],
+                        "nullable": true
+                      },
+                      "risk": {
+                        "type": "object",
+                        "properties": {
+                          "inputRisk": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          },
+                          "previousAccumulatedRisk": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          },
+                          "decayedAccumulatedRisk": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          },
+                          "effectiveRisk": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          },
+                          "weightDecayAlpha": {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          "riskStateHalfLifeSeconds": {
+                            "type": "integer",
+                            "exclusiveMinimum": true,
+                            "minimum": 0
+                          },
+                          "weightMultiplier": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          },
+                          "basePrizeWeightTotal": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "adjustedPrizeWeightTotal": {
+                            "type": "integer",
+                            "minimum": 0
+                          }
+                        },
+                        "required": [
+                          "inputRisk",
+                          "previousAccumulatedRisk",
+                          "decayedAccumulatedRisk",
+                          "effectiveRisk",
+                          "weightDecayAlpha",
+                          "riskStateHalfLifeSeconds",
+                          "weightMultiplier",
+                          "basePrizeWeightTotal",
+                          "adjustedPrizeWeightTotal"
+                        ],
+                        "additionalProperties": false,
+                        "nullable": true
+                      },
+                      "algorithm": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false,
+                    "nullable": true
+                  },
+                  "prize": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "integer"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "rewardAmount": {
+                        "type": "string"
+                      },
+                      "displayRarity": {
+                        "type": "string",
+                        "enum": [
+                          "common",
+                          "rare",
+                          "epic",
+                          "legendary"
+                        ]
+                      },
+                      "stock": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "stockState": {
+                        "type": "string",
+                        "enum": [
+                          "available",
+                          "low",
+                          "sold_out"
+                        ]
+                      },
+                      "isFeatured": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "rewardAmount",
+                      "displayRarity",
+                      "stock",
+                      "stockState",
+                      "isFeatured"
+                    ],
+                    "additionalProperties": false,
+                    "nullable": true
+                  },
+                  "envelope": {
+                    "type": "object",
+                    "properties": {
+                      "mode": {
+                        "type": "string",
+                        "enum": [
+                          "normal",
+                          "mute"
+                        ]
+                      },
+                      "triggered": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "scope": {
+                              "type": "string",
+                              "enum": [
+                                "tenant",
+                                "project",
+                                "group",
+                                "agent"
+                              ]
+                            },
+                            "window": {
+                              "type": "string",
+                              "enum": [
+                                "minute",
+                                "hour",
+                                "day"
+                              ]
+                            },
+                            "reason": {
+                              "type": "string",
+                              "enum": [
+                                "budget_cap",
+                                "variance_cap",
+                                "anti_exploit"
+                              ]
+                            },
+                            "strategy": {
+                              "type": "string",
+                              "enum": [
+                                "reject",
+                                "mute"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "scope",
+                            "window",
+                            "reason",
+                            "strategy"
+                          ],
+                          "additionalProperties": false
+                        }
+                      }
+                    },
+                    "required": [
+                      "mode",
+                      "triggered"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "id",
+                  "playerId",
+                  "prizeId",
+                  "drawCost",
+                  "rewardAmount",
+                  "status",
+                  "createdAt",
+                  "fairness"
+                ],
+                "additionalProperties": false
+              },
+              "legacy": {
+                "type": "object",
+                "properties": {
+                  "route": {
+                    "type": "string",
+                    "enum": [
+                      "/v1/engine/draws"
+                    ]
+                  },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "legacy_gacha"
+                    ]
+                  },
+                  "deprecated": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  },
+                  "sunsetAt": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "route",
+                  "mode",
+                  "deprecated",
+                  "sunsetAt"
+                ],
+                "additionalProperties": false
+              },
+              "behavior": {
+                "type": "object",
+                "properties": {
+                  "actionType": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "score": {
+                    "type": "number"
+                  },
+                  "novelty": {
+                    "type": "number"
+                  },
+                  "risk": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "context": {
+                    "type": "object",
+                    "additionalProperties": {}
+                  },
+                  "signals": {
+                    "type": "object",
+                    "additionalProperties": {}
+                  }
+                },
+                "required": [
+                  "actionType",
+                  "score"
+                ],
+                "additionalProperties": false
+              },
+              "riskEnvelope": {
+                "type": "object",
+                "properties": {
+                  "dailyBudgetCap": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "nullable": true
+                  },
+                  "maxSinglePayout": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "nullable": true
+                  },
+                  "varianceCap": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "nullable": true
+                  },
+                  "group": {
+                    "type": "object",
+                    "properties": {
+                      "maxDrawCount": {
+                        "type": "integer",
+                        "exclusiveMinimum": true,
+                        "minimum": 0,
+                        "nullable": true
+                      },
+                      "dailyBudgetCap": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ],
+                        "nullable": true
+                      },
+                      "varianceCap": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ],
+                        "nullable": true
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "agent": {
+                    "type": "object",
+                    "properties": {
+                      "maxDrawCount": {
+                        "type": "integer",
+                        "exclusiveMinimum": true,
+                        "minimum": 0,
+                        "nullable": true
+                      },
+                      "dailyBudgetCap": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ],
+                        "nullable": true
+                      },
+                      "varianceCap": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ],
+                        "nullable": true
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "additionalProperties": false
+              },
+              "budget": {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "nullable": true
+                  },
+                  "remaining": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "nullable": true
+                  },
+                  "currency": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 16,
+                    "nullable": true
+                  },
+                  "window": {
+                    "type": "string",
+                    "enum": [
+                      "request",
+                      "session",
+                      "day",
+                      "campaign",
+                      "lifetime"
+                    ],
+                    "nullable": true
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                  }
+                },
+                "additionalProperties": false
+              },
+              "idempotencyKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "replayed": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "agent",
+              "player",
+              "result",
+              "behavior",
+              "idempotencyKey",
+              "replayed"
+            ],
+            "additionalProperties": false
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "traceId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ok",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "PrizeEngineLegacyDrawRequest": {
+        "type": "object",
+        "properties": {
+          "environment": {
+            "type": "string",
+            "enum": [
+              "sandbox",
+              "live"
+            ]
+          },
+          "player": {
+            "type": "object",
+            "properties": {
+              "playerId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "displayName": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160,
+                "nullable": true
+              },
+              "metadata": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "required": [
+              "playerId"
+            ],
+            "additionalProperties": false
+          },
+          "clientNonce": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "nullable": true
+          },
+          "risk": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "groupId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "nullable": true
+          },
+          "group_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "nullable": true
+          },
+          "agent": {
+            "type": "object",
+            "properties": {
+              "idempotencyKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 191,
+                "nullable": true
+              },
+              "requestSignature": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512,
+                "nullable": true
+              },
+              "fingerprint": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255,
+                "nullable": true
+              },
+              "behaviorTemplate": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255,
+                "nullable": true
+              },
+              "correlationGroup": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 191,
+                "nullable": true
+              },
+              "occurredAt": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                ],
+                "nullable": true
+              },
+              "metadata": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "additionalProperties": false
+          },
+          "riskEnvelope": {
+            "type": "object",
+            "properties": {
+              "dailyBudgetCap": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "nullable": true
+              },
+              "maxSinglePayout": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "nullable": true
+              },
+              "varianceCap": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "nullable": true
+              },
+              "group": {
+                "type": "object",
+                "properties": {
+                  "maxDrawCount": {
+                    "type": "integer",
+                    "exclusiveMinimum": true,
+                    "minimum": 0,
+                    "nullable": true
+                  },
+                  "dailyBudgetCap": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "nullable": true
+                  },
+                  "varianceCap": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "nullable": true
+                  }
+                },
+                "additionalProperties": false
+              },
+              "agent": {
+                "type": "object",
+                "properties": {
+                  "maxDrawCount": {
+                    "type": "integer",
+                    "exclusiveMinimum": true,
+                    "minimum": 0,
+                    "nullable": true
+                  },
+                  "dailyBudgetCap": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "nullable": true
+                  },
+                  "varianceCap": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "nullable": true
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          },
+          "rewardContext": {
+            "type": "object",
+            "properties": {
+              "agent": {
+                "type": "object",
+                "properties": {
+                  "agentId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "groupId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "nullable": true
+                  },
+                  "ownerMetadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                  },
+                  "fingerprint": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255,
+                    "nullable": true
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "suspended",
+                      "archived"
+                    ]
+                  }
+                },
+                "required": [
+                  "agentId"
+                ],
+                "additionalProperties": false
+              },
+              "behavior": {
+                "type": "object",
+                "properties": {
+                  "actionType": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "score": {
+                    "type": "number"
+                  },
+                  "novelty": {
+                    "type": "number"
+                  },
+                  "risk": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "context": {
+                    "type": "object",
+                    "additionalProperties": {}
+                  },
+                  "signals": {
+                    "type": "object",
+                    "additionalProperties": {}
+                  }
+                },
+                "required": [
+                  "actionType",
+                  "score"
+                ],
+                "additionalProperties": false
+              },
+              "riskEnvelope": {
+                "type": "object",
+                "properties": {
+                  "dailyBudgetCap": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "nullable": true
+                  },
+                  "maxSinglePayout": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "nullable": true
+                  },
+                  "varianceCap": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "nullable": true
+                  },
+                  "group": {
+                    "type": "object",
+                    "properties": {
+                      "maxDrawCount": {
+                        "type": "integer",
+                        "exclusiveMinimum": true,
+                        "minimum": 0,
+                        "nullable": true
+                      },
+                      "dailyBudgetCap": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ],
+                        "nullable": true
+                      },
+                      "varianceCap": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ],
+                        "nullable": true
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "agent": {
+                    "type": "object",
+                    "properties": {
+                      "maxDrawCount": {
+                        "type": "integer",
+                        "exclusiveMinimum": true,
+                        "minimum": 0,
+                        "nullable": true
+                      },
+                      "dailyBudgetCap": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ],
+                        "nullable": true
+                      },
+                      "varianceCap": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ],
+                        "nullable": true
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "additionalProperties": false
+              },
+              "budget": {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "nullable": true
+                  },
+                  "remaining": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "nullable": true
+                  },
+                  "currency": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 16,
+                    "nullable": true
+                  },
+                  "window": {
+                    "type": "string",
+                    "enum": [
+                      "request",
+                      "session",
+                      "day",
+                      "campaign",
+                      "lifetime"
+                    ],
+                    "nullable": true
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "agent",
+              "behavior"
+            ],
+            "additionalProperties": false
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "player"
+        ],
+        "additionalProperties": false
+      },
+      "PrizeEngineDrawResponse": {
+        "type": "object",
+        "properties": {
+          "agent": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "projectId": {
+                "type": "integer"
+              },
+              "agentId": {
+                "type": "string"
+              },
+              "groupId": {
+                "type": "string",
+                "nullable": true
+              },
+              "ownerMetadata": {
+                "type": "object",
+                "additionalProperties": {},
+                "nullable": true
+              },
+              "fingerprint": {
+                "type": "string",
+                "nullable": true
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "active",
+                  "suspended",
+                  "archived"
+                ]
+              },
+              "createdAt": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "projectId",
+              "agentId",
+              "status",
+              "createdAt"
+            ],
+            "additionalProperties": false
+          },
+          "player": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "projectId": {
+                "type": "integer"
+              },
+              "externalPlayerId": {
+                "type": "string"
+              },
+              "displayName": {
+                "type": "string",
+                "nullable": true
+              },
+              "balance": {
+                "type": "string"
+              },
+              "pityStreak": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "metadata": {
+                "type": "object",
+                "additionalProperties": {},
+                "nullable": true
+              },
+              "createdAt": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                ]
+              },
+              "updatedAt": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "projectId",
+              "externalPlayerId",
+              "displayName",
+              "balance",
+              "pityStreak",
+              "createdAt",
+              "updatedAt"
+            ],
+            "additionalProperties": false
+          },
+          "result": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "playerId": {
+                "type": "integer"
+              },
+              "prizeId": {
+                "type": "integer",
+                "nullable": true
+              },
+              "drawCost": {
+                "type": "string"
+              },
+              "rewardAmount": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "createdAt": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                ]
+              },
+              "selectionStrategy": {
+                "type": "string"
+              },
+              "fairness": {
+                "type": "object",
+                "properties": {
+                  "epoch": {
+                    "type": "integer"
+                  },
+                  "epochSeconds": {
+                    "type": "integer"
+                  },
+                  "commitHash": {
+                    "type": "string"
+                  },
+                  "clientNonce": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "serverNonce": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "nonceSource": {
+                    "type": "string",
+                    "enum": [
+                      "client",
+                      "server"
+                    ]
+                  },
+                  "rngDigest": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "totalWeight": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "randomPick": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "strategy": {
+                    "type": "string",
+                    "enum": [
+                      "weighted_gacha",
+                      "epsilon_greedy",
+                      "softmax",
+                      "thompson"
+                    ]
+                  },
+                  "epsilon": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "nullable": true
+                  },
+                  "decision": {
+                    "type": "string",
+                    "enum": [
+                      "explore",
+                      "exploit"
+                    ],
+                    "nullable": true
+                  },
+                  "selectionDigest": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "candidateCount": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "nullable": true
+                  },
+                  "selectedArmId": {
+                    "type": "integer",
+                    "nullable": true
+                  },
+                  "selectedArmKind": {
+                    "type": "string",
+                    "enum": [
+                      "prize",
+                      "miss"
+                    ],
+                    "nullable": true
+                  },
+                  "risk": {
+                    "type": "object",
+                    "properties": {
+                      "inputRisk": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "previousAccumulatedRisk": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "decayedAccumulatedRisk": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "effectiveRisk": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "weightDecayAlpha": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "riskStateHalfLifeSeconds": {
+                        "type": "integer",
+                        "exclusiveMinimum": true,
+                        "minimum": 0
+                      },
+                      "weightMultiplier": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "basePrizeWeightTotal": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "adjustedPrizeWeightTotal": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "inputRisk",
+                      "previousAccumulatedRisk",
+                      "decayedAccumulatedRisk",
+                      "effectiveRisk",
+                      "weightDecayAlpha",
+                      "riskStateHalfLifeSeconds",
+                      "weightMultiplier",
+                      "basePrizeWeightTotal",
+                      "adjustedPrizeWeightTotal"
+                    ],
+                    "additionalProperties": false,
+                    "nullable": true
+                  },
+                  "algorithm": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false,
+                "nullable": true
+              },
+              "prize": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "rewardAmount": {
+                    "type": "string"
+                  },
+                  "displayRarity": {
+                    "type": "string",
+                    "enum": [
+                      "common",
+                      "rare",
+                      "epic",
+                      "legendary"
+                    ]
+                  },
+                  "stock": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "stockState": {
+                    "type": "string",
+                    "enum": [
+                      "available",
+                      "low",
+                      "sold_out"
+                    ]
+                  },
+                  "isFeatured": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "rewardAmount",
+                  "displayRarity",
+                  "stock",
+                  "stockState",
+                  "isFeatured"
+                ],
+                "additionalProperties": false,
+                "nullable": true
+              },
+              "envelope": {
+                "type": "object",
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "normal",
+                      "mute"
+                    ]
+                  },
+                  "triggered": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "scope": {
+                          "type": "string",
+                          "enum": [
+                            "tenant",
+                            "project",
+                            "group",
+                            "agent"
+                          ]
+                        },
+                        "window": {
+                          "type": "string",
+                          "enum": [
+                            "minute",
+                            "hour",
+                            "day"
+                          ]
+                        },
+                        "reason": {
+                          "type": "string",
+                          "enum": [
+                            "budget_cap",
+                            "variance_cap",
+                            "anti_exploit"
+                          ]
+                        },
+                        "strategy": {
+                          "type": "string",
+                          "enum": [
+                            "reject",
+                            "mute"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "scope",
+                        "window",
+                        "reason",
+                        "strategy"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "mode",
+                  "triggered"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "playerId",
+              "prizeId",
+              "drawCost",
+              "rewardAmount",
+              "status",
+              "createdAt",
+              "fairness"
+            ],
+            "additionalProperties": false
+          },
+          "legacy": {
+            "type": "object",
+            "properties": {
+              "route": {
+                "type": "string",
+                "enum": [
+                  "/v1/engine/draws"
+                ]
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "legacy_gacha"
+                ]
+              },
+              "deprecated": {
+                "type": "boolean",
+                "enum": [
+                  true
+                ]
+              },
+              "sunsetAt": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "route",
+              "mode",
+              "deprecated",
+              "sunsetAt"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "agent",
+          "player",
+          "result"
+        ],
+        "additionalProperties": false
+      },
+      "PrizeEngineDrawResponseEnvelope": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "agent": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "integer"
+                  },
+                  "projectId": {
+                    "type": "integer"
+                  },
+                  "agentId": {
+                    "type": "string"
+                  },
+                  "groupId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "ownerMetadata": {
+                    "type": "object",
+                    "additionalProperties": {},
+                    "nullable": true
+                  },
+                  "fingerprint": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "suspended",
+                      "archived"
+                    ]
+                  },
+                  "createdAt": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "projectId",
+                  "agentId",
+                  "status",
+                  "createdAt"
+                ],
+                "additionalProperties": false
+              },
+              "player": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "integer"
+                  },
+                  "projectId": {
+                    "type": "integer"
+                  },
+                  "externalPlayerId": {
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "balance": {
+                    "type": "string"
+                  },
+                  "pityStreak": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": {},
+                    "nullable": true
+                  },
+                  "createdAt": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    ]
+                  },
+                  "updatedAt": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "projectId",
+                  "externalPlayerId",
+                  "displayName",
+                  "balance",
+                  "pityStreak",
+                  "createdAt",
+                  "updatedAt"
+                ],
+                "additionalProperties": false
+              },
+              "result": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "integer"
+                  },
+                  "playerId": {
+                    "type": "integer"
+                  },
+                  "prizeId": {
+                    "type": "integer",
+                    "nullable": true
+                  },
+                  "drawCost": {
+                    "type": "string"
+                  },
+                  "rewardAmount": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "createdAt": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    ]
+                  },
+                  "selectionStrategy": {
+                    "type": "string"
+                  },
+                  "fairness": {
+                    "type": "object",
+                    "properties": {
+                      "epoch": {
+                        "type": "integer"
+                      },
+                      "epochSeconds": {
+                        "type": "integer"
+                      },
+                      "commitHash": {
+                        "type": "string"
+                      },
+                      "clientNonce": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "serverNonce": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "nonceSource": {
+                        "type": "string",
+                        "enum": [
+                          "client",
+                          "server"
+                        ]
+                      },
+                      "rngDigest": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "totalWeight": {
+                        "type": "number",
+                        "nullable": true
+                      },
+                      "randomPick": {
+                        "type": "number",
+                        "nullable": true
+                      },
+                      "strategy": {
+                        "type": "string",
+                        "enum": [
+                          "weighted_gacha",
+                          "epsilon_greedy",
+                          "softmax",
+                          "thompson"
+                        ]
+                      },
+                      "epsilon": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1,
+                        "nullable": true
+                      },
+                      "decision": {
+                        "type": "string",
+                        "enum": [
+                          "explore",
+                          "exploit"
+                        ],
+                        "nullable": true
+                      },
+                      "selectionDigest": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "candidateCount": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "nullable": true
+                      },
+                      "selectedArmId": {
+                        "type": "integer",
+                        "nullable": true
+                      },
+                      "selectedArmKind": {
+                        "type": "string",
+                        "enum": [
+                          "prize",
+                          "miss"
+                        ],
+                        "nullable": true
+                      },
+                      "risk": {
+                        "type": "object",
+                        "properties": {
+                          "inputRisk": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          },
+                          "previousAccumulatedRisk": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          },
+                          "decayedAccumulatedRisk": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          },
+                          "effectiveRisk": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          },
+                          "weightDecayAlpha": {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          "riskStateHalfLifeSeconds": {
+                            "type": "integer",
+                            "exclusiveMinimum": true,
+                            "minimum": 0
+                          },
+                          "weightMultiplier": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          },
+                          "basePrizeWeightTotal": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "adjustedPrizeWeightTotal": {
+                            "type": "integer",
+                            "minimum": 0
+                          }
+                        },
+                        "required": [
+                          "inputRisk",
+                          "previousAccumulatedRisk",
+                          "decayedAccumulatedRisk",
+                          "effectiveRisk",
+                          "weightDecayAlpha",
+                          "riskStateHalfLifeSeconds",
+                          "weightMultiplier",
+                          "basePrizeWeightTotal",
+                          "adjustedPrizeWeightTotal"
+                        ],
+                        "additionalProperties": false,
+                        "nullable": true
+                      },
+                      "algorithm": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false,
+                    "nullable": true
+                  },
+                  "prize": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "integer"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "rewardAmount": {
+                        "type": "string"
+                      },
+                      "displayRarity": {
+                        "type": "string",
+                        "enum": [
+                          "common",
+                          "rare",
+                          "epic",
+                          "legendary"
+                        ]
+                      },
+                      "stock": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "stockState": {
+                        "type": "string",
+                        "enum": [
+                          "available",
+                          "low",
+                          "sold_out"
+                        ]
+                      },
+                      "isFeatured": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "rewardAmount",
+                      "displayRarity",
+                      "stock",
+                      "stockState",
+                      "isFeatured"
+                    ],
+                    "additionalProperties": false,
+                    "nullable": true
+                  },
+                  "envelope": {
+                    "type": "object",
+                    "properties": {
+                      "mode": {
+                        "type": "string",
+                        "enum": [
+                          "normal",
+                          "mute"
+                        ]
+                      },
+                      "triggered": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "scope": {
+                              "type": "string",
+                              "enum": [
+                                "tenant",
+                                "project",
+                                "group",
+                                "agent"
+                              ]
+                            },
+                            "window": {
+                              "type": "string",
+                              "enum": [
+                                "minute",
+                                "hour",
+                                "day"
+                              ]
+                            },
+                            "reason": {
+                              "type": "string",
+                              "enum": [
+                                "budget_cap",
+                                "variance_cap",
+                                "anti_exploit"
+                              ]
+                            },
+                            "strategy": {
+                              "type": "string",
+                              "enum": [
+                                "reject",
+                                "mute"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "scope",
+                            "window",
+                            "reason",
+                            "strategy"
+                          ],
+                          "additionalProperties": false
+                        }
+                      }
+                    },
+                    "required": [
+                      "mode",
+                      "triggered"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "id",
+                  "playerId",
+                  "prizeId",
+                  "drawCost",
+                  "rewardAmount",
+                  "status",
+                  "createdAt",
+                  "fairness"
+                ],
+                "additionalProperties": false
+              },
+              "legacy": {
+                "type": "object",
+                "properties": {
+                  "route": {
+                    "type": "string",
+                    "enum": [
+                      "/v1/engine/draws"
+                    ]
+                  },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "legacy_gacha"
+                    ]
+                  },
+                  "deprecated": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  },
+                  "sunsetAt": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "route",
+                  "mode",
+                  "deprecated",
+                  "sunsetAt"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "agent",
+              "player",
+              "result"
+            ],
+            "additionalProperties": false
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "traceId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ok",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "PrizeEngineProjectObservability": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "tenantId": {
+                "type": "integer"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "environment": {
+                "type": "string",
+                "enum": [
+                  "sandbox",
+                  "live"
+                ]
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "active",
+                  "suspended",
+                  "archived"
+                ]
+              },
+              "currency": {
+                "type": "string"
+              },
+              "drawCost": {
+                "type": "string"
+              },
+              "prizePoolBalance": {
+                "type": "string"
+              },
+              "fairnessEpochSeconds": {
+                "type": "integer",
+                "exclusiveMinimum": true,
+                "minimum": 0
+              },
+              "maxDrawCount": {
+                "type": "integer",
+                "exclusiveMinimum": true,
+                "minimum": 0
+              },
+              "missWeight": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "id",
+              "tenantId",
+              "slug",
+              "name",
+              "environment",
+              "status",
+              "currency",
+              "drawCost",
+              "prizePoolBalance",
+              "fairnessEpochSeconds",
+              "maxDrawCount",
+              "missWeight"
+            ],
+            "additionalProperties": false
+          },
+          "window": {
+            "type": "object",
+            "properties": {
+              "days": {
+                "type": "integer",
+                "exclusiveMinimum": true,
+                "minimum": 0
+              },
+              "startedAt": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                ]
+              },
+              "endedAt": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                ]
+              },
+              "baseline": {
+                "type": "string",
+                "enum": [
+                  "current_catalog"
+                ]
+              }
+            },
+            "required": [
+              "days",
+              "startedAt",
+              "endedAt",
+              "baseline"
+            ],
+            "additionalProperties": false
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "totalDrawCount": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "uniquePlayerCount": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "winCount": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "missCount": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "hitRate": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "expectedHitRate": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "hitRateDrift": {
+                "type": "number"
+              },
+              "actualDrawCostAmount": {
+                "type": "string"
+              },
+              "actualRewardAmount": {
+                "type": "string"
+              },
+              "expectedRewardAmount": {
+                "type": "string"
+              },
+              "actualPayoutRate": {
+                "type": "number"
+              },
+              "expectedPayoutRate": {
+                "type": "number"
+              },
+              "payoutRateDrift": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "totalDrawCount",
+              "uniquePlayerCount",
+              "winCount",
+              "missCount",
+              "hitRate",
+              "expectedHitRate",
+              "hitRateDrift",
+              "actualDrawCostAmount",
+              "actualRewardAmount",
+              "expectedRewardAmount",
+              "actualPayoutRate",
+              "expectedPayoutRate",
+              "payoutRateDrift"
+            ],
+            "additionalProperties": false
+          },
+          "distribution": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "bucketKey": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "prize",
+                    "miss",
+                    "retired_prize"
+                  ]
+                },
+                "prizeId": {
+                  "type": "integer",
+                  "nullable": true
+                },
+                "label": {
+                  "type": "string"
+                },
+                "configuredWeight": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "configuredRewardAmount": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "expectedProbability": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "actualDrawCount": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "actualProbability": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "actualRewardAmount": {
+                  "type": "string"
+                },
+                "probabilityDrift": {
+                  "type": "number"
+                },
+                "expectedPayoutRateContribution": {
+                  "type": "number"
+                },
+                "actualPayoutRateContribution": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "bucketKey",
+                "kind",
+                "prizeId",
+                "label",
+                "configuredWeight",
+                "configuredRewardAmount",
+                "expectedProbability",
+                "actualDrawCount",
+                "actualProbability",
+                "actualRewardAmount",
+                "probabilityDrift",
+                "expectedPayoutRateContribution",
+                "actualPayoutRateContribution"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "project",
+          "window",
+          "summary",
+          "distribution"
+        ],
+        "additionalProperties": false
+      },
+      "PrizeEngineProjectObservabilityEnvelope": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "project": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "integer"
+                  },
+                  "tenantId": {
+                    "type": "integer"
+                  },
+                  "slug": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "environment": {
+                    "type": "string",
+                    "enum": [
+                      "sandbox",
+                      "live"
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "suspended",
+                      "archived"
+                    ]
+                  },
+                  "currency": {
+                    "type": "string"
+                  },
+                  "drawCost": {
+                    "type": "string"
+                  },
+                  "prizePoolBalance": {
+                    "type": "string"
+                  },
+                  "fairnessEpochSeconds": {
+                    "type": "integer",
+                    "exclusiveMinimum": true,
+                    "minimum": 0
+                  },
+                  "maxDrawCount": {
+                    "type": "integer",
+                    "exclusiveMinimum": true,
+                    "minimum": 0
+                  },
+                  "missWeight": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "id",
+                  "tenantId",
+                  "slug",
+                  "name",
+                  "environment",
+                  "status",
+                  "currency",
+                  "drawCost",
+                  "prizePoolBalance",
+                  "fairnessEpochSeconds",
+                  "maxDrawCount",
+                  "missWeight"
+                ],
+                "additionalProperties": false
+              },
+              "window": {
+                "type": "object",
+                "properties": {
+                  "days": {
+                    "type": "integer",
+                    "exclusiveMinimum": true,
+                    "minimum": 0
+                  },
+                  "startedAt": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    ]
+                  },
+                  "endedAt": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    ]
+                  },
+                  "baseline": {
+                    "type": "string",
+                    "enum": [
+                      "current_catalog"
+                    ]
+                  }
+                },
+                "required": [
+                  "days",
+                  "startedAt",
+                  "endedAt",
+                  "baseline"
+                ],
+                "additionalProperties": false
+              },
+              "summary": {
+                "type": "object",
+                "properties": {
+                  "totalDrawCount": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "uniquePlayerCount": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "winCount": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "missCount": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "hitRate": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "expectedHitRate": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "hitRateDrift": {
+                    "type": "number"
+                  },
+                  "actualDrawCostAmount": {
+                    "type": "string"
+                  },
+                  "actualRewardAmount": {
+                    "type": "string"
+                  },
+                  "expectedRewardAmount": {
+                    "type": "string"
+                  },
+                  "actualPayoutRate": {
+                    "type": "number"
+                  },
+                  "expectedPayoutRate": {
+                    "type": "number"
+                  },
+                  "payoutRateDrift": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "totalDrawCount",
+                  "uniquePlayerCount",
+                  "winCount",
+                  "missCount",
+                  "hitRate",
+                  "expectedHitRate",
+                  "hitRateDrift",
+                  "actualDrawCostAmount",
+                  "actualRewardAmount",
+                  "expectedRewardAmount",
+                  "actualPayoutRate",
+                  "expectedPayoutRate",
+                  "payoutRateDrift"
+                ],
+                "additionalProperties": false
+              },
+              "distribution": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "bucketKey": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "prize",
+                        "miss",
+                        "retired_prize"
+                      ]
+                    },
+                    "prizeId": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "configuredWeight": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "configuredRewardAmount": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "expectedProbability": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "actualDrawCount": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "actualProbability": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "actualRewardAmount": {
+                      "type": "string"
+                    },
+                    "probabilityDrift": {
+                      "type": "number"
+                    },
+                    "expectedPayoutRateContribution": {
+                      "type": "number"
+                    },
+                    "actualPayoutRateContribution": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "bucketKey",
+                    "kind",
+                    "prizeId",
+                    "label",
+                    "configuredWeight",
+                    "configuredRewardAmount",
+                    "expectedProbability",
+                    "actualDrawCount",
+                    "actualProbability",
+                    "actualRewardAmount",
+                    "probabilityDrift",
+                    "expectedPayoutRateContribution",
+                    "actualPayoutRateContribution"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "project",
+              "window",
+              "summary",
+              "distribution"
+            ],
+            "additionalProperties": false
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "traceId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ok",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "PrizeEngineLedgerResponse": {
+        "type": "object",
+        "properties": {
+          "agent": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "projectId": {
+                "type": "integer"
+              },
+              "agentId": {
+                "type": "string"
+              },
+              "groupId": {
+                "type": "string",
+                "nullable": true
+              },
+              "ownerMetadata": {
+                "type": "object",
+                "additionalProperties": {},
+                "nullable": true
+              },
+              "fingerprint": {
+                "type": "string",
+                "nullable": true
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "active",
+                  "suspended",
+                  "archived"
+                ]
+              },
+              "createdAt": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "projectId",
+              "agentId",
+              "status",
+              "createdAt"
+            ],
+            "additionalProperties": false
+          },
+          "player": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "projectId": {
+                "type": "integer"
+              },
+              "externalPlayerId": {
+                "type": "string"
+              },
+              "displayName": {
+                "type": "string",
+                "nullable": true
+              },
+              "balance": {
+                "type": "string"
+              },
+              "pityStreak": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "metadata": {
+                "type": "object",
+                "additionalProperties": {},
+                "nullable": true
+              },
+              "createdAt": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                ]
+              },
+              "updatedAt": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "projectId",
+              "externalPlayerId",
+              "displayName",
+              "balance",
+              "pityStreak",
+              "createdAt",
+              "updatedAt"
+            ],
+            "additionalProperties": false
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "projectId": {
+                  "type": "integer"
+                },
+                "playerId": {
+                  "type": "integer"
+                },
+                "environment": {
+                  "type": "string",
+                  "enum": [
+                    "sandbox",
+                    "live"
+                  ]
+                },
+                "entryType": {
+                  "type": "string"
+                },
+                "amount": {
+                  "type": "string"
+                },
+                "balanceBefore": {
+                  "type": "string"
+                },
+                "balanceAfter": {
+                  "type": "string"
+                },
+                "referenceType": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "referenceId": {
+                  "type": "integer",
+                  "nullable": true
+                },
+                "metadata": {
+                  "type": "object",
+                  "additionalProperties": {},
+                  "nullable": true
+                },
+                "createdAt": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "projectId",
+                "playerId",
+                "environment",
+                "entryType",
+                "amount",
+                "balanceBefore",
+                "balanceAfter",
+                "createdAt"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "agent",
+          "player",
+          "entries"
+        ],
+        "additionalProperties": false
+      },
+      "PrizeEngineLedgerResponseEnvelope": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "agent": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "integer"
+                  },
+                  "projectId": {
+                    "type": "integer"
+                  },
+                  "agentId": {
+                    "type": "string"
+                  },
+                  "groupId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "ownerMetadata": {
+                    "type": "object",
+                    "additionalProperties": {},
+                    "nullable": true
+                  },
+                  "fingerprint": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "suspended",
+                      "archived"
+                    ]
+                  },
+                  "createdAt": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "projectId",
+                  "agentId",
+                  "status",
+                  "createdAt"
+                ],
+                "additionalProperties": false
+              },
+              "player": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "integer"
+                  },
+                  "projectId": {
+                    "type": "integer"
+                  },
+                  "externalPlayerId": {
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "balance": {
+                    "type": "string"
+                  },
+                  "pityStreak": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": {},
+                    "nullable": true
+                  },
+                  "createdAt": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    ]
+                  },
+                  "updatedAt": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "projectId",
+                  "externalPlayerId",
+                  "displayName",
+                  "balance",
+                  "pityStreak",
+                  "createdAt",
+                  "updatedAt"
+                ],
+                "additionalProperties": false
+              },
+              "entries": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "integer"
+                    },
+                    "projectId": {
+                      "type": "integer"
+                    },
+                    "playerId": {
+                      "type": "integer"
+                    },
+                    "environment": {
+                      "type": "string",
+                      "enum": [
+                        "sandbox",
+                        "live"
+                      ]
+                    },
+                    "entryType": {
+                      "type": "string"
+                    },
+                    "amount": {
+                      "type": "string"
+                    },
+                    "balanceBefore": {
+                      "type": "string"
+                    },
+                    "balanceAfter": {
+                      "type": "string"
+                    },
+                    "referenceType": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "referenceId": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "metadata": {
+                      "type": "object",
+                      "additionalProperties": {},
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "projectId",
+                    "playerId",
+                    "environment",
+                    "entryType",
+                    "amount",
+                    "balanceBefore",
+                    "balanceAfter",
+                    "createdAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "agent",
+              "player",
+              "entries"
+            ],
+            "additionalProperties": false
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "traceId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ok",
+          "data"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "paths": {
+    "/v1/engine/overview": {
+      "get": {
+        "tags": [
+          "Prize Engine"
+        ],
+        "summary": "Fetch the current project catalog and fairness commit.",
+        "description": "Returns the active project, fairness commit, and prize catalog for the requested environment.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "environment",
+            "in": "query",
+            "required": true,
+            "description": "Target project environment.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "sandbox",
+                "live"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Overview loaded.",
+            "headers": {
+              "X-Prize-Engine-Environment": {
+                "description": "The resolved project environment for the response.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "sandbox",
+                    "live"
+                  ]
+                }
+              },
+              "X-Prize-Engine-Sandbox": {
+                "description": "Present when the request was served from the sandbox environment.",
+                "schema": {
+                  "type": "string",
+                  "example": "true"
+                }
+              },
+              "X-Prize-Engine-Warning": {
+                "description": "Human-readable sandbox safety warning.",
+                "schema": {
+                  "type": "string",
+                  "example": "SANDBOX - non-billable and isolated from live distribution"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrizeEngineOverviewEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request body or query string failed validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The API key was missing or invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The API key or project exhausted an auth or rate-limit budget.",
+            "headers": {
+              "Retry-After": {
+                "description": "Number of seconds until the caller should retry.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The backend failed while processing the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/engine/fairness/commit": {
+      "get": {
+        "tags": [
+          "Prize Engine"
+        ],
+        "summary": "Read the active fairness commit for the current epoch.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "environment",
+            "in": "query",
+            "required": true,
+            "description": "Target project environment.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "sandbox",
+                "live"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Fairness commit loaded.",
+            "headers": {
+              "X-Prize-Engine-Environment": {
+                "description": "The resolved project environment for the response.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "sandbox",
+                    "live"
+                  ]
+                }
+              },
+              "X-Prize-Engine-Sandbox": {
+                "description": "Present when the request was served from the sandbox environment.",
+                "schema": {
+                  "type": "string",
+                  "example": "true"
+                }
+              },
+              "X-Prize-Engine-Warning": {
+                "description": "Human-readable sandbox safety warning.",
+                "schema": {
+                  "type": "string",
+                  "example": "SANDBOX - non-billable and isolated from live distribution"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrizeEngineFairnessCommitEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request body or query string failed validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The API key was missing or invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The API key or project exhausted an auth or rate-limit budget.",
+            "headers": {
+              "Retry-After": {
+                "description": "Number of seconds until the caller should retry.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The backend failed while processing the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/engine/fairness/reveal": {
+      "get": {
+        "tags": [
+          "Prize Engine"
+        ],
+        "summary": "Reveal a fairness seed for a past epoch.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "environment",
+            "in": "query",
+            "required": true,
+            "description": "Target project environment.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "sandbox",
+                "live"
+              ]
+            }
+          },
+          {
+            "name": "epoch",
+            "in": "query",
+            "required": true,
+            "description": "Epoch number to reveal.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Fairness seed revealed.",
+            "headers": {
+              "X-Prize-Engine-Environment": {
+                "description": "The resolved project environment for the response.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "sandbox",
+                    "live"
+                  ]
+                }
+              },
+              "X-Prize-Engine-Sandbox": {
+                "description": "Present when the request was served from the sandbox environment.",
+                "schema": {
+                  "type": "string",
+                  "example": "true"
+                }
+              },
+              "X-Prize-Engine-Warning": {
+                "description": "Human-readable sandbox safety warning.",
+                "schema": {
+                  "type": "string",
+                  "example": "SANDBOX - non-billable and isolated from live distribution"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrizeEngineFairnessRevealEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request body or query string failed validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The API key was missing or invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The API key or project exhausted an auth or rate-limit budget.",
+            "headers": {
+              "Retry-After": {
+                "description": "Number of seconds until the caller should retry.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The backend failed while processing the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/engine/rewards": {
+      "post": {
+        "tags": [
+          "Prize Engine"
+        ],
+        "summary": "Create an idempotent reward decision.",
+        "description": "Primary write route for tenants. Replayed idempotency keys return the original decision with a 200.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrizeEngineRewardRequest"
+              },
+              "example": {
+                "environment": "sandbox",
+                "agent": {
+                  "agentId": "agent-checkout-bot",
+                  "groupId": "cohort-a"
+                },
+                "behavior": {
+                  "actionType": "checkout.completed",
+                  "score": 0.82,
+                  "risk": 0.18
+                },
+                "budget": {
+                  "amount": "3.00",
+                  "currency": "USD",
+                  "window": "day"
+                },
+                "idempotencyKey": "rw-checkout-2026-04-29-0001"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Existing reward decision replayed for the same idempotency key.",
+            "headers": {
+              "X-Prize-Engine-Environment": {
+                "description": "The resolved project environment for the response.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "sandbox",
+                    "live"
+                  ]
+                }
+              },
+              "X-Prize-Engine-Sandbox": {
+                "description": "Present when the request was served from the sandbox environment.",
+                "schema": {
+                  "type": "string",
+                  "example": "true"
+                }
+              },
+              "X-Prize-Engine-Warning": {
+                "description": "Human-readable sandbox safety warning.",
+                "schema": {
+                  "type": "string",
+                  "example": "SANDBOX - non-billable and isolated from live distribution"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrizeEngineRewardResponseEnvelope"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Reward decision created.",
+            "headers": {
+              "X-Prize-Engine-Environment": {
+                "description": "The resolved project environment for the response.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "sandbox",
+                    "live"
+                  ]
+                }
+              },
+              "X-Prize-Engine-Sandbox": {
+                "description": "Present when the request was served from the sandbox environment.",
+                "schema": {
+                  "type": "string",
+                  "example": "true"
+                }
+              },
+              "X-Prize-Engine-Warning": {
+                "description": "Human-readable sandbox safety warning.",
+                "schema": {
+                  "type": "string",
+                  "example": "SANDBOX - non-billable and isolated from live distribution"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrizeEngineRewardResponseEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request body or query string failed validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The API key was missing or invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The API key or project exhausted an auth or rate-limit budget.",
+            "headers": {
+              "Retry-After": {
+                "description": "Number of seconds until the caller should retry.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The backend failed while processing the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/engine/draws": {
+      "post": {
+        "tags": [
+          "Prize Engine"
+        ],
+        "summary": "Legacy gacha-style draw route.",
+        "description": "Deprecated compatibility path. New tenants should integrate against /v1/engine/rewards.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrizeEngineLegacyDrawRequest"
+              },
+              "example": {
+                "environment": "sandbox",
+                "player": {
+                  "playerId": "player-42",
+                  "displayName": "Checkout cohort"
+                },
+                "groupId": "cohort-a",
+                "risk": 0.18,
+                "idempotencyKey": "dr-checkout-2026-04-29-0001"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Legacy draw completed.",
+            "headers": {
+              "X-Prize-Engine-Environment": {
+                "description": "The resolved project environment for the response.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "sandbox",
+                    "live"
+                  ]
+                }
+              },
+              "X-Prize-Engine-Sandbox": {
+                "description": "Present when the request was served from the sandbox environment.",
+                "schema": {
+                  "type": "string",
+                  "example": "true"
+                }
+              },
+              "X-Prize-Engine-Warning": {
+                "description": "Human-readable sandbox safety warning.",
+                "schema": {
+                  "type": "string",
+                  "example": "SANDBOX - non-billable and isolated from live distribution"
+                }
+              },
+              "Deprecation": {
+                "description": "Signals that this route is deprecated.",
+                "schema": {
+                  "type": "string",
+                  "example": "true"
+                }
+              },
+              "Sunset": {
+                "description": "RFC 1123 timestamp for route sunset.",
+                "schema": {
+                  "type": "string",
+                  "example": "Tue, 28 Oct 2026 00:00:00 GMT"
+                }
+              },
+              "Link": {
+                "description": "Successor route relation.",
+                "schema": {
+                  "type": "string",
+                  "example": "</v1/engine/rewards>; rel=\"successor-version\""
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrizeEngineDrawResponseEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request body or query string failed validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The API key was missing or invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The API key or project exhausted an auth or rate-limit budget.",
+            "headers": {
+              "Retry-After": {
+                "description": "Number of seconds until the caller should retry.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The backend failed while processing the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/engine/observability/distribution": {
+      "get": {
+        "tags": [
+          "Prize Engine"
+        ],
+        "summary": "Inspect distribution drift and payout observability.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "environment",
+            "in": "query",
+            "required": true,
+            "description": "Target project environment.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "sandbox",
+                "live"
+              ]
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "description": "Trailing window size in days.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 90
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Observability report loaded.",
+            "headers": {
+              "X-Prize-Engine-Environment": {
+                "description": "The resolved project environment for the response.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "sandbox",
+                    "live"
+                  ]
+                }
+              },
+              "X-Prize-Engine-Sandbox": {
+                "description": "Present when the request was served from the sandbox environment.",
+                "schema": {
+                  "type": "string",
+                  "example": "true"
+                }
+              },
+              "X-Prize-Engine-Warning": {
+                "description": "Human-readable sandbox safety warning.",
+                "schema": {
+                  "type": "string",
+                  "example": "SANDBOX - non-billable and isolated from live distribution"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrizeEngineProjectObservabilityEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request body or query string failed validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The API key was missing or invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The API key or project exhausted an auth or rate-limit budget.",
+            "headers": {
+              "Retry-After": {
+                "description": "Number of seconds until the caller should retry.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The backend failed while processing the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/engine/ledger": {
+      "get": {
+        "tags": [
+          "Prize Engine"
+        ],
+        "summary": "Fetch a player ledger slice for a project environment.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "environment",
+            "in": "query",
+            "required": true,
+            "description": "Target project environment.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "sandbox",
+                "live"
+              ]
+            }
+          },
+          {
+            "name": "playerId",
+            "in": "query",
+            "required": true,
+            "description": "External player identifier.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of ledger entries to return.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ledger loaded.",
+            "headers": {
+              "X-Prize-Engine-Environment": {
+                "description": "The resolved project environment for the response.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "sandbox",
+                    "live"
+                  ]
+                }
+              },
+              "X-Prize-Engine-Sandbox": {
+                "description": "Present when the request was served from the sandbox environment.",
+                "schema": {
+                  "type": "string",
+                  "example": "true"
+                }
+              },
+              "X-Prize-Engine-Warning": {
+                "description": "Human-readable sandbox safety warning.",
+                "schema": {
+                  "type": "string",
+                  "example": "SANDBOX - non-billable and isolated from live distribution"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrizeEngineLedgerResponseEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request body or query string failed validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The API key was missing or invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The API key or project exhausted an auth or rate-limit budget.",
+            "headers": {
+              "Retry-After": {
+                "description": "Number of seconds until the caller should retry.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The backend failed while processing the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

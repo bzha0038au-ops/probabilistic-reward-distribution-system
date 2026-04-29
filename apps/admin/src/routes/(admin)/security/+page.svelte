@@ -7,6 +7,7 @@
     type PendingBreakGlassSubmission,
   } from "$lib/break-glass"
   import type {
+    JurisdictionFeature,
     UserFreezeReason,
     UserFreezeScope,
   } from "@reward/shared-types/risk"
@@ -32,6 +33,16 @@
     status: string
     createdAt?: string
     releasedAt?: string | null
+  }
+
+  interface JurisdictionRule {
+    id: number
+    countryCode: string
+    minimumAge: number
+    allowedFeatures: JurisdictionFeature[]
+    notes?: string | null
+    createdAt?: string
+    updatedAt?: string
   }
 
   interface CursorPage<T> {
@@ -67,6 +78,7 @@
   interface PageData {
     authEvents: CursorPage<AuthEvent>
     freezeRecords: Paginated<FreezeRecord>
+    jurisdictionRules: JurisdictionRule[]
     adminActions: CursorPage<AdminAction>
     error: string | null
   }
@@ -108,6 +120,8 @@
     return queryString ? `?${queryString}` : ""
   })
   const actionError = $derived($page.form?.error as string | undefined)
+  const actionMessage = $derived($page.form?.message as string | undefined)
+  const jurisdictionRules = $derived(data.jurisdictionRules ?? [])
   const freezeReasonOptions: UserFreezeReason[] = [
     "manual_admin",
     "account_lock",
@@ -123,6 +137,11 @@
     "gameplay_lock",
     "topup_lock",
   ]
+  const jurisdictionFeatureOptions: JurisdictionFeature[] = [
+    "real_money_gameplay",
+    "topup",
+    "withdrawal",
+  ]
 
   const formatDate = (value?: string | null) => {
     if (!value) return "-"
@@ -131,6 +150,19 @@
   }
 
   const formatFreezeValue = (value: string) => value.replaceAll("_", " ")
+  const formatJurisdictionFeature = (value: JurisdictionFeature) =>
+    ({
+      real_money_gameplay: t("security.jurisdiction.features.realMoneyGameplay"),
+      topup: t("security.jurisdiction.features.topup"),
+      withdrawal: t("security.jurisdiction.features.withdrawal"),
+    })[value] ?? value
+  const deriveCountryTier = (allowedFeatures: JurisdictionFeature[]) => {
+    if (allowedFeatures.length === 0) return t("security.jurisdiction.tiers.blocked")
+    if (allowedFeatures.length === jurisdictionFeatureOptions.length) {
+      return t("security.jurisdiction.tiers.full")
+    }
+    return t("security.jurisdiction.tiers.restricted")
+  }
   const activeBreakGlassPolicy = $derived(pendingBreakGlass?.policy ?? null)
   const breakGlassStepUpHint = $derived(
     stepUpCode.trim() === ""
@@ -227,6 +259,12 @@
   </div>
 {/if}
 
+{#if actionMessage}
+  <div class="alert alert-success mt-6 text-sm">
+    <span>{actionMessage}</span>
+  </div>
+{/if}
+
 <section class="mt-6 card bg-base-100 shadow">
   <div class="card-body gap-3">
     <div>
@@ -245,6 +283,116 @@
         placeholder={t("security.stepUp.placeholder")}
       />
     </label>
+  </div>
+</section>
+
+<section class="mt-6 card bg-base-100 shadow">
+  <div class="card-body gap-6">
+    <div>
+      <h2 class="card-title">{t("security.jurisdiction.title")}</h2>
+      <p class="text-sm text-slate-500">
+        {t("security.jurisdiction.description")}
+      </p>
+    </div>
+
+    <form
+      method="post"
+      action="?/saveJurisdictionRule"
+      class="grid gap-4 rounded-2xl border border-base-300 p-4 lg:grid-cols-2"
+    >
+      <input type="hidden" name="totpCode" value={stepUpCode} />
+      <label class="form-control">
+        <span class="label-text mb-2">
+          {t("security.jurisdiction.countryCode")}
+        </span>
+        <input
+          name="countryCode"
+          maxlength="2"
+          class="input input-bordered uppercase"
+          placeholder="US"
+          required
+        />
+      </label>
+      <label class="form-control">
+        <span class="label-text mb-2">
+          {t("security.jurisdiction.minimumAge")}
+        </span>
+        <input
+          name="minimumAge"
+          type="number"
+          min="0"
+          max="120"
+          value="18"
+          class="input input-bordered"
+          required
+        />
+      </label>
+      <fieldset class="form-control lg:col-span-2">
+        <span class="label-text mb-2">
+          {t("security.jurisdiction.allowedFeatures")}
+        </span>
+        <div class="grid gap-3 md:grid-cols-3">
+          {#each jurisdictionFeatureOptions as feature}
+            <label class="flex items-center gap-3 rounded-xl border border-base-300 px-4 py-3">
+              <input type="checkbox" name="allowedFeatures" value={feature} checked />
+              <span class="text-sm">{formatJurisdictionFeature(feature)}</span>
+            </label>
+          {/each}
+        </div>
+      </fieldset>
+      <label class="form-control lg:col-span-2">
+        <span class="label-text mb-2">{t("security.jurisdiction.notes")}</span>
+        <textarea
+          name="notes"
+          rows="3"
+          class="textarea textarea-bordered"
+          placeholder={t("security.jurisdiction.notesPlaceholder")}
+        ></textarea>
+      </label>
+      <div class="lg:col-span-2 flex justify-end">
+        <button class="btn btn-primary" type="submit">
+          {t("security.jurisdiction.save")}
+        </button>
+      </div>
+    </form>
+
+    <div class="overflow-x-auto">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>{t("security.jurisdiction.headers.countryCode")}</th>
+            <th>{t("security.jurisdiction.headers.countryTier")}</th>
+            <th>{t("security.jurisdiction.headers.minimumAge")}</th>
+            <th>{t("security.jurisdiction.headers.allowedFeatures")}</th>
+            <th>{t("security.jurisdiction.headers.updatedAt")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each jurisdictionRules as rule}
+            <tr>
+              <td class="font-mono text-xs">{rule.countryCode}</td>
+              <td>{deriveCountryTier(rule.allowedFeatures)}</td>
+              <td>{rule.minimumAge}</td>
+              <td class="text-sm text-slate-600">
+                {#if rule.allowedFeatures.length === 0}
+                  {t("security.jurisdiction.noFeatures")}
+                {:else}
+                  {rule.allowedFeatures.map((feature) => formatJurisdictionFeature(feature)).join(", ")}
+                {/if}
+              </td>
+              <td>{formatDate(rule.updatedAt ?? rule.createdAt)}</td>
+            </tr>
+          {/each}
+          {#if jurisdictionRules.length === 0}
+            <tr>
+              <td colspan="5" class="text-center text-sm text-slate-500">
+                {t("security.jurisdiction.empty")}
+              </td>
+            </tr>
+          {/if}
+        </tbody>
+      </table>
+    </div>
   </div>
 </section>
 

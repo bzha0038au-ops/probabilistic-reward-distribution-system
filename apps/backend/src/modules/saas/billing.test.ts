@@ -7,8 +7,11 @@ import {
 } from '@reward/database';
 
 import {
+  billingRunSyncConflictError,
   buildBillingRunInvoiceCreateIdempotencyKey,
   buildBillingTopUpIdempotencyKey,
+  isBillingRunSyncConflictError,
+  resolveBillingRunExternalSyncTransition,
   resolveBillingDecisionPricing,
   selectBillingAccountVersionForPeriod,
   summarizeUsageEventsForBilling,
@@ -63,6 +66,16 @@ const makeBillingRun = (
     finalizedAt: null,
     sentAt: null,
     paidAt: null,
+    externalSyncStatus: 'idle',
+    externalSyncAction: null,
+    externalSyncStage: null,
+    externalSyncError: null,
+    externalSyncRecoveryPath: null,
+    externalSyncObservedInvoiceStatus: null,
+    externalSyncEventType: null,
+    externalSyncRevision: 0,
+    externalSyncAttemptedAt: null,
+    externalSyncCompletedAt: null,
     metadata: null,
     createdByAdminId: null,
     createdAt: new Date('2026-05-01T00:00:00.000Z'),
@@ -273,5 +286,30 @@ describe('saas billing helpers', () => {
         })
       )
     );
+  });
+
+  it('allows only valid external sync state transitions', () => {
+    expect(resolveBillingRunExternalSyncTransition('idle', 'processing')).toBe(
+      'processing'
+    );
+    expect(
+      resolveBillingRunExternalSyncTransition('processing', 'processing')
+    ).toBe('processing');
+    expect(
+      resolveBillingRunExternalSyncTransition('processing', 'succeeded')
+    ).toBe('succeeded');
+    expect(resolveBillingRunExternalSyncTransition('failed', 'processing')).toBe(
+      'processing'
+    );
+    expect(() =>
+      resolveBillingRunExternalSyncTransition('idle', 'failed')
+    ).toThrow('Billing run external sync transition is invalid.');
+  });
+
+  it('identifies billing run sync CAS conflicts', () => {
+    const error = billingRunSyncConflictError();
+
+    expect(isBillingRunSyncConflictError(error)).toBe(true);
+    expect(isBillingRunSyncConflictError(new Error('other'))).toBe(false);
   });
 });

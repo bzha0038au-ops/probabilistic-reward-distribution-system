@@ -8,8 +8,16 @@ export const amlCheckpointValues = [
 export const AmlCheckpointSchema = z.enum(amlCheckpointValues);
 export type AmlCheckpoint = z.infer<typeof AmlCheckpointSchema>;
 
-export const amlProviderKeyValues = ['mock'] as const;
-export const AmlProviderKeySchema = z.enum(amlProviderKeyValues);
+export const AML_PROVIDER_KEY_PATTERN = /^[a-z0-9][a-z0-9._:-]{0,31}$/;
+export const AmlProviderKeySchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(32)
+  .regex(
+    AML_PROVIDER_KEY_PATTERN,
+    'AML provider key must start with a lowercase letter or digit and only contain lowercase letters, digits, ".", "_", ":" or "-".'
+  );
 export type AmlProviderKey = z.infer<typeof AmlProviderKeySchema>;
 
 export const amlCheckResultValues = [

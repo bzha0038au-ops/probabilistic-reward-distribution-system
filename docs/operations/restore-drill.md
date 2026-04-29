@@ -1,16 +1,17 @@
 # Restore Drill
 
-Run this drill at least once every 90 days. The goal is to prove that backups
-are usable and that responders can recover the system without inventing steps
-during an incident. The repo scheduler in
+Run this drill every month. The goal is to prove that backups are usable and
+that responders can recover the system without inventing steps during an
+incident. The repo scheduler in
 [`.github/workflows/operations-backup.yml`](../../.github/workflows/operations-backup.yml)
-already performs the monthly variant; use this doc for manual or ad hoc drills.
+already performs the monthly staging variant; use this doc for manual or ad hoc
+drills.
 
 ## Drill Objective
 
 - restore a recent production-like backup into an isolated target
 - run invariant and sanity checks successfully
-- measure actual RTO and estimated RPO
+- emit explicit actual RTO and estimated RPO metrics
 - capture gaps, missing approvals, or unclear steps
 
 ## Preparation
@@ -28,6 +29,7 @@ already performs the monthly variant; use this doc for manual or ad hoc drills.
 2. Restore the backup into the isolated target:
 
 ```bash
+DRILL_ENVIRONMENT=staging \
 TARGET_DATABASE_URL=postgres://... \
 BACKUP_ENCRYPTION_PASSPHRASE=change-me \
 RUN_BACKEND_SMOKE=true \
@@ -45,8 +47,11 @@ RUN_BACKEND_SMOKE=true \
 ## Evidence To Capture
 
 - backup artifact name and timestamp
+- backup creation timestamp from the logical dump metadata
 - restore target identifier
 - start and end time
+- estimated RPO
+- actual RTO
 - actual restore duration
 - actual post-restore validation duration
 - blockers, manual fixes, or missing permissions
@@ -63,7 +68,9 @@ RUN_BACKEND_SMOKE=true \
 Every drill should produce:
 
 - a short drill report
+- a machine-readable summary with `estimated_rpo_seconds` and `actual_rto_seconds`
 - a list of runbook corrections
 - a ticket for every manual step worth automating
 - a saved copy under `docs/operations/evidence/`; the monthly scheduler opens
   an automated PR with `restore-drill-YYYY-MM.*`
+- a refreshed [`dr-drills.md`](./dr-drills.md) ledger entry

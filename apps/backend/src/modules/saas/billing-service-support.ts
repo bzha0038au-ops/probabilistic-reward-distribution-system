@@ -1,4 +1,5 @@
 import Decimal from "decimal.js";
+import type { PgUpdateSetSource } from "drizzle-orm/pg-core/query-builders/update";
 import { API_ERROR_CODES } from "@reward/shared-types/api";
 import {
   saasBillingAccounts,
@@ -7,24 +8,36 @@ import {
   saasBillingTopUps,
   saasTenants,
 } from "@reward/database";
-import { eq } from "@reward/database/orm";
-import type { SaasBillingCollectionMethod } from "@reward/shared-types/saas";
+import { and, eq, sql } from "@reward/database/orm";
+import type {
+  SaasBillingCollectionMethod,
+  SaasBillingRunExternalSyncAction,
+  SaasBillingRunExternalSyncStage,
+} from "@reward/shared-types/saas";
 
 import { db } from "../../db";
 import { getConfigView } from "../../shared/config";
 import { badRequestError, notFoundError } from "../../shared/errors";
 import { toDecimal, toMoneyString } from "../../shared/money";
 import {
+  BILLING_RUN_DISPATCHED_STATUSES,
+  BILLING_RUN_TERMINAL_STATUSES,
+  billingRunSyncConflictError,
   buildBillingInvoiceMetadata,
   buildBillingRunInvoiceCreateIdempotencyKey,
   buildBillingRunInvoiceLineItemIdempotencyKey,
   buildBillingRunStripeFingerprint,
   readBillingRunDecisionBreakdown,
+  resolveBillingRunExternalSyncTransition,
   resolveBillingDecisionPricing,
   parseStripeInvoiceObject,
   resolveBillingRunStatusFromInvoice,
   resolveStripeCreditAppliedAmount,
 } from "./billing";
+import {
+  readSaasBillingBudgetPolicy,
+  redactBillingMetadata,
+} from "./billing-budget";
 import {
   getSaasStripeClient,
   getSaasStripeInvoiceDueDays,
@@ -84,9 +97,10 @@ export const buildBillingAccountSnapshot = (
   baseMonthlyFee: toMoneyString(row.baseMonthlyFee),
   drawFee: new Decimal(row.drawFee).toFixed(4),
   decisionPricing: resolveBillingDecisionPricing(row.metadata, row.drawFee),
+  budgetPolicy: readSaasBillingBudgetPolicy(row.metadata),
   currency: row.currency,
   isBillable: Boolean(row.isBillable),
-  metadata: normalizeMetadata(row.metadata),
+  metadata: redactBillingMetadata(row.metadata),
   effectiveAt: row.effectiveAt.toISOString(),
   createdByAdminId: row.createdByAdminId,
   createdAt: row.createdAt.toISOString(),
@@ -111,46 +125,224 @@ export const findStripeInvoiceForBillingRun = async (
   return results.data[0] ?? null;
 };
 
+const truncateSyncError = (error: unknown) =>
+  error instanceof Error && error.message.trim()
+    ? error.message.trim().slice(0, 2_000)
+    : "Unknown billing sync error.";
+
+const hasExpiredBillingRunSyncClaim = (
+  run: typeof saasBillingRuns.$inferSelect,
+  now: Date,
+) => {
+  if (run.externalSyncStatus !== "processing") {
+    return false;
+  }
+
+  if (!run.externalSyncAttemptedAt) {
+    return true;
+  }
+
+  return (
+    run.externalSyncAttemptedAt.getTime() <=
+    now.getTime() - config.saasBillingRunSyncLockTimeoutMs
+  );
+};
+
+const assertBillingRunSyncClaimable = (
+  run: typeof saasBillingRuns.$inferSelect,
+  now: Date,
+) => {
+  if (
+    run.externalSyncStatus === "processing" &&
+    !hasExpiredBillingRunSyncClaim(run, now)
+  ) {
+    throw billingRunSyncConflictError();
+  }
+};
+
+const updateBillingRunWithCompareAndSwap = async (
+  run: typeof saasBillingRuns.$inferSelect,
+  values: PgUpdateSetSource<typeof saasBillingRuns>,
+) => {
+  const [updated] = await db
+    .update(saasBillingRuns)
+    .set(values)
+    .where(
+      and(
+        eq(saasBillingRuns.id, run.id),
+        eq(saasBillingRuns.externalSyncRevision, run.externalSyncRevision),
+      ),
+    )
+    .returning();
+
+  if (!updated) {
+    throw billingRunSyncConflictError();
+  }
+
+  return updated;
+};
+
+const buildBillingRunExternalSyncColumns = (
+  run: typeof saasBillingRuns.$inferSelect,
+  params: {
+    nextStatus: typeof saasBillingRuns.$inferSelect["externalSyncStatus"];
+    action: SaasBillingRunExternalSyncAction;
+    stage: SaasBillingRunExternalSyncStage;
+    error?: string | null;
+    recoveryPath?: string | null;
+    observedInvoiceStatus?: string | null;
+    eventType?: string | null;
+    attemptedAt?: Date | null;
+    completedAt?: Date | null;
+  },
+) => ({
+  externalSyncStatus: resolveBillingRunExternalSyncTransition(
+    run.externalSyncStatus,
+    params.nextStatus,
+  ),
+  externalSyncAction: params.action,
+  externalSyncStage: params.stage,
+  externalSyncError: params.error ?? null,
+  externalSyncRecoveryPath: params.recoveryPath ?? null,
+  externalSyncObservedInvoiceStatus: params.observedInvoiceStatus ?? null,
+  externalSyncEventType: params.eventType ?? null,
+  externalSyncRevision: sql<number>`${saasBillingRuns.externalSyncRevision} + 1`,
+  externalSyncAttemptedAt: params.attemptedAt ?? run.externalSyncAttemptedAt,
+  externalSyncCompletedAt: params.completedAt ?? null,
+});
+
+export const markBillingRunSyncProcessing = async (
+  run: typeof saasBillingRuns.$inferSelect,
+  params: {
+    action: SaasBillingRunExternalSyncAction;
+    stage: SaasBillingRunExternalSyncStage;
+    observedInvoiceStatus?: string | null;
+    eventType?: string | null;
+  },
+) => {
+  const now = new Date();
+  assertBillingRunSyncClaimable(run, now);
+
+  return updateBillingRunWithCompareAndSwap(run, {
+    ...buildBillingRunExternalSyncColumns(run, {
+      nextStatus: "processing",
+      action: params.action,
+      stage: params.stage,
+      observedInvoiceStatus:
+        params.observedInvoiceStatus ?? run.stripeInvoiceStatus ?? null,
+      eventType: params.eventType ?? null,
+      attemptedAt: now,
+      completedAt: null,
+    }),
+    updatedAt: now,
+  });
+};
+
+export const recordBillingRunSyncSuccess = async (
+  run: typeof saasBillingRuns.$inferSelect,
+  params: {
+    action: SaasBillingRunExternalSyncAction;
+    stage: SaasBillingRunExternalSyncStage;
+    observedInvoiceStatus?: string | null;
+    eventType?: string | null;
+  },
+) => {
+  const now = new Date();
+  return updateBillingRunWithCompareAndSwap(run, {
+    ...buildBillingRunExternalSyncColumns(run, {
+      nextStatus: "succeeded",
+      action: params.action,
+      stage: params.stage,
+      observedInvoiceStatus: params.observedInvoiceStatus ?? null,
+      eventType: params.eventType ?? null,
+      attemptedAt: run.externalSyncAttemptedAt ?? now,
+      completedAt: now,
+    }),
+    updatedAt: now,
+  });
+};
+
+export const recordBillingRunSyncFailure = async (
+  run: typeof saasBillingRuns.$inferSelect,
+  params: {
+    action: SaasBillingRunExternalSyncAction;
+    stage: SaasBillingRunExternalSyncStage;
+    error: unknown;
+    recoveryPath: string;
+    observedInvoiceStatus?: string | null;
+    eventType?: string | null;
+  },
+) => {
+  const nextStatus =
+    BILLING_RUN_TERMINAL_STATUSES.has(run.status) ||
+    BILLING_RUN_DISPATCHED_STATUSES.has(run.status)
+      ? run.status
+      : "failed";
+  const now = new Date();
+
+  return updateBillingRunWithCompareAndSwap(run, {
+    status: nextStatus,
+    ...buildBillingRunExternalSyncColumns(run, {
+      nextStatus: "failed",
+      action: params.action,
+      stage: params.stage,
+      error: truncateSyncError(params.error),
+      recoveryPath: params.recoveryPath,
+      observedInvoiceStatus: params.observedInvoiceStatus ?? null,
+      eventType: params.eventType ?? null,
+      attemptedAt: run.externalSyncAttemptedAt ?? now,
+      completedAt: now,
+    }),
+    updatedAt: now,
+  });
+};
+
 export const syncBillingRunFromInvoice = async (
   run: typeof saasBillingRuns.$inferSelect,
   invoice: StripeInvoice,
   eventType?: string,
+  syncContext?: {
+    action?: SaasBillingRunExternalSyncAction;
+    stage?: SaasBillingRunExternalSyncStage;
+  },
 ) => {
   const creditAppliedAmount = resolveStripeCreditAppliedAmount(invoice);
-  const [updated] = await db
-    .update(saasBillingRuns)
-    .set({
-      status: resolveBillingRunStatusFromInvoice(
-        invoice,
-        run.status,
-        eventType,
-      ),
-      stripeCustomerId:
-        typeof invoice.customer === "string"
-          ? invoice.customer
-          : run.stripeCustomerId,
-      stripeInvoiceId: invoice.id,
-      stripeInvoiceStatus: invoice.status,
-      stripeHostedInvoiceUrl: invoice.hosted_invoice_url,
-      stripeInvoicePdf: invoice.invoice_pdf,
-      creditAppliedAmount,
-      totalAmount: toMoneyString(
-        Number(invoice.amount_due ?? invoice.total ?? 0) / 100,
-      ),
-      syncedAt: new Date(),
-      finalizedAt: invoice.status_transitions?.finalized_at
-        ? new Date(invoice.status_transitions.finalized_at * 1000)
-        : run.finalizedAt,
-      sentAt: eventType === "invoice.sent" ? new Date() : run.sentAt,
-      paidAt: invoice.status_transitions?.paid_at
-        ? new Date(invoice.status_transitions.paid_at * 1000)
-        : run.paidAt,
-      updatedAt: new Date(),
-    })
-    .where(eq(saasBillingRuns.id, run.id))
-    .returning();
+  const now = new Date();
+  const updated = await updateBillingRunWithCompareAndSwap(run, {
+    status: resolveBillingRunStatusFromInvoice(invoice, run.status, eventType),
+    stripeCustomerId:
+      typeof invoice.customer === "string"
+        ? invoice.customer
+        : run.stripeCustomerId,
+    stripeInvoiceId: invoice.id,
+    stripeInvoiceStatus: invoice.status,
+    stripeHostedInvoiceUrl: invoice.hosted_invoice_url,
+    stripeInvoicePdf: invoice.invoice_pdf,
+    creditAppliedAmount,
+    totalAmount: toMoneyString(
+      Number(invoice.amount_due ?? invoice.total ?? 0) / 100,
+    ),
+    syncedAt: now,
+    finalizedAt: invoice.status_transitions?.finalized_at
+      ? new Date(invoice.status_transitions.finalized_at * 1000)
+      : run.finalizedAt,
+    sentAt: eventType === "invoice.sent" ? now : run.sentAt,
+    paidAt: invoice.status_transitions?.paid_at
+      ? new Date(invoice.status_transitions.paid_at * 1000)
+      : run.paidAt,
+    ...buildBillingRunExternalSyncColumns(run, {
+      nextStatus: "succeeded",
+      action: syncContext?.action ?? (eventType ? "stripe_webhook" : "sync"),
+      stage: syncContext?.stage ?? "persist_invoice_state",
+      observedInvoiceStatus: invoice.status,
+      eventType: eventType ?? null,
+      attemptedAt: run.externalSyncAttemptedAt ?? now,
+      completedAt: now,
+    }),
+    updatedAt: now,
+  });
 
-  return toSaasBillingRun(updated ?? run);
+  return toSaasBillingRun(updated);
 };
 
 export const resolveBillingRunCollectionMethod = async (

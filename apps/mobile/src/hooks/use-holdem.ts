@@ -12,12 +12,18 @@ import {
   HOLDEM_REALTIME_LOBBY_TOPIC,
   HOLDEM_TABLE_MESSAGE_LIMIT,
   buildHoldemRealtimeTableTopic,
+  type HoldemRealtimeObservationSurface,
   type HoldemAction,
+  type HoldemTableType,
   type HoldemTableMessage,
   type HoldemTableMessageRequest,
   type HoldemTableResponse,
   type HoldemTablesResponse,
 } from "@reward/shared-types/holdem";
+import type {
+  PlayModeSnapshot,
+  PlayModeType,
+} from "@reward/shared-types/play-mode";
 import type {
   HandHistory,
   HoldemSignedEvidenceBundle,
@@ -30,11 +36,14 @@ import {
   createUserApiClient,
   type HoldemRealtimeClient,
   type HoldemRealtimeConnectionStatus,
+  type HoldemRealtimeObservation,
 } from "@reward/user-core";
 
 type UnauthorizedHandler = (message: string) => Promise<boolean>;
 type IntervalHandle = ReturnType<typeof setInterval>;
 type TimeoutHandle = ReturnType<typeof setTimeout>;
+const DEFAULT_HOLDEM_TOURNAMENT_STARTING_STACK_AMOUNT = "1000.00";
+const DEFAULT_HOLDEM_TOURNAMENT_PAYOUT_PLACES = "1";
 
 type HoldemApi = Pick<
   ReturnType<typeof createUserApiClient>,
@@ -44,6 +53,9 @@ type HoldemApi = Pick<
   | "getHandHistory"
   | "getHandHistoryEvidenceBundle"
   | "postHoldemTableMessage"
+  | "reportHoldemRealtimeObservations"
+  | "getPlayMode"
+  | "setPlayMode"
   | "touchHoldemTablePresence"
   | "setHoldemSeatMode"
   | "createHoldemTable"
@@ -63,16 +75,23 @@ type HoldemBusyAction =
   | HoldemAction
   | null;
 
+type HoldemCreateTableType = HoldemTableType;
+
 type UseHoldemOptions = {
   api: HoldemApi;
   authTokenRef: MutableRefObject<string | null>;
   handleUnauthorizedRef: MutableRefObject<UnauthorizedHandler | null>;
   enabled: boolean;
+  observabilitySurface: HoldemRealtimeObservationSurface;
   realtimeBaseUrl: string;
   refreshBalance: () => Promise<boolean>;
   resetFeedback: () => void;
   setError: (message: string | null) => void;
 };
+
+const HOLDEM_REALTIME_OBSERVATION_BATCH_SIZE = 20;
+const HOLDEM_REALTIME_OBSERVATION_FLUSH_INTERVAL_MS = 5_000;
+const HOLDEM_REALTIME_OBSERVATION_MAX_PENDING = 100;
 
 export function useHoldem(options: UseHoldemOptions) {
   const {
@@ -80,6 +99,7 @@ export function useHoldem(options: UseHoldemOptions) {
     authTokenRef,
     handleUnauthorizedRef,
     enabled,
+    observabilitySurface,
     realtimeBaseUrl,
     refreshBalance,
     resetFeedback,
@@ -89,6 +109,9 @@ export function useHoldem(options: UseHoldemOptions) {
   const [holdemTables, setHoldemTables] = useState<HoldemTablesResponse | null>(
     null,
   );
+  const [holdemPlayMode, setHoldemPlayModeState] =
+    useState<PlayModeSnapshot | null>(null);
+  const [updatingHoldemPlayMode, setUpdatingHoldemPlayMode] = useState(false);
   const [selectedHoldemTableId, setSelectedHoldemTableId] = useState<
     number | null
   >(null);
@@ -98,6 +121,15 @@ export function useHoldem(options: UseHoldemOptions) {
   const [holdemBuyInAmount, setHoldemBuyInAmount] = useState(
     HOLDEM_CONFIG.minimumBuyIn,
   );
+  const [holdemCreateTableType, setHoldemCreateTableType] =
+    useState<HoldemCreateTableType>("casual");
+  const [holdemCreateMaxSeats, setHoldemCreateMaxSeats] = useState(2);
+  const [
+    holdemTournamentStartingStackAmount,
+    setHoldemTournamentStartingStackAmount,
+  ] = useState(DEFAULT_HOLDEM_TOURNAMENT_STARTING_STACK_AMOUNT);
+  const [holdemTournamentPayoutPlaces, setHoldemTournamentPayoutPlaces] =
+    useState(DEFAULT_HOLDEM_TOURNAMENT_PAYOUT_PLACES);
   const [holdemActionAmount, setHoldemActionAmount] = useState(
     HOLDEM_CONFIG.bigBlind,
   );
@@ -125,13 +157,111 @@ export function useHoldem(options: UseHoldemOptions) {
   const holdemRealtimeClientRef = useRef<HoldemRealtimeClient | null>(null);
   const holdemReplayCacheRef = useRef(new Map<string, HandHistory>());
   const holdemReplayRequestIdRef = useRef(0);
+  const realtimeObservationDisposedRef = useRef(false);
+  const realtimeObservationQueueRef = useRef<HoldemRealtimeObservation[]>([]);
+  const realtimeObservationFlushTimerRef = useRef<TimeoutHandle | null>(null);
+  const realtimeObservationFlushInFlightRef = useRef(false);
+
+  const clearRealtimeObservationFlushTimer = useCallback(() => {
+    if (realtimeObservationFlushTimerRef.current) {
+      clearTimeout(realtimeObservationFlushTimerRef.current);
+      realtimeObservationFlushTimerRef.current = null;
+    }
+  }, []);
+
+  const flushRealtimeObservations = useCallback(async () => {
+    if (
+      realtimeObservationDisposedRef.current ||
+      realtimeObservationFlushInFlightRef.current ||
+      realtimeObservationQueueRef.current.length === 0
+    ) {
+      return;
+    }
+
+    clearRealtimeObservationFlushTimer();
+    realtimeObservationFlushInFlightRef.current = true;
+    const batch = realtimeObservationQueueRef.current.splice(
+      0,
+      HOLDEM_REALTIME_OBSERVATION_BATCH_SIZE,
+    );
+
+    try {
+      const response = await api.reportHoldemRealtimeObservations({
+        surface: observabilitySurface,
+        observations: batch,
+      });
+      if (!response.ok && (response.status ?? 0) >= 500) {
+        throw new Error(response.error.message);
+      }
+    } catch {
+      if (!realtimeObservationDisposedRef.current) {
+        realtimeObservationQueueRef.current = [
+          ...batch,
+          ...realtimeObservationQueueRef.current,
+        ].slice(-HOLDEM_REALTIME_OBSERVATION_MAX_PENDING);
+      }
+    } finally {
+      realtimeObservationFlushInFlightRef.current = false;
+      if (
+        !realtimeObservationDisposedRef.current &&
+        realtimeObservationQueueRef.current.length > 0
+      ) {
+        realtimeObservationFlushTimerRef.current = setTimeout(() => {
+          void flushRealtimeObservations();
+        }, HOLDEM_REALTIME_OBSERVATION_FLUSH_INTERVAL_MS);
+      }
+    }
+  }, [api, clearRealtimeObservationFlushTimer, observabilitySurface]);
+
+  const enqueueRealtimeObservation = useCallback(
+    (observation: HoldemRealtimeObservation) => {
+      if (realtimeObservationDisposedRef.current) {
+        return;
+      }
+
+      realtimeObservationQueueRef.current.push(observation);
+      if (
+        realtimeObservationQueueRef.current.length >
+        HOLDEM_REALTIME_OBSERVATION_MAX_PENDING
+      ) {
+        realtimeObservationQueueRef.current.splice(
+          0,
+          realtimeObservationQueueRef.current.length -
+            HOLDEM_REALTIME_OBSERVATION_MAX_PENDING,
+        );
+      }
+
+      if (
+        realtimeObservationQueueRef.current.length >=
+        HOLDEM_REALTIME_OBSERVATION_BATCH_SIZE
+      ) {
+        void flushRealtimeObservations();
+        return;
+      }
+
+      if (!realtimeObservationFlushTimerRef.current) {
+        realtimeObservationFlushTimerRef.current = setTimeout(() => {
+          void flushRealtimeObservations();
+        }, HOLDEM_REALTIME_OBSERVATION_FLUSH_INTERVAL_MS);
+      }
+    },
+    [flushRealtimeObservations],
+  );
 
   const resetHoldem = useCallback(() => {
     setHoldemTables(null);
+    setHoldemPlayModeState(null);
+    setUpdatingHoldemPlayMode(false);
     setSelectedHoldemTableId(null);
     setSelectedHoldemTable(null);
     setHoldemTableName("");
     setHoldemBuyInAmount(HOLDEM_CONFIG.minimumBuyIn);
+    setHoldemCreateTableType("casual");
+    setHoldemCreateMaxSeats(2);
+    setHoldemTournamentStartingStackAmount(
+      DEFAULT_HOLDEM_TOURNAMENT_STARTING_STACK_AMOUNT,
+    );
+    setHoldemTournamentPayoutPlaces(DEFAULT_HOLDEM_TOURNAMENT_PAYOUT_PLACES);
     setHoldemActionAmount(HOLDEM_CONFIG.bigBlind);
     setLoadingHoldemLobby(false);
     setLoadingHoldemTable(false);
@@ -147,6 +277,14 @@ export function useHoldem(options: UseHoldemOptions) {
     holdemReplayCacheRef.current.clear();
     holdemReplayRequestIdRef.current += 1;
   }, []);
+
+  useEffect(() => {
+    return () => {
+      realtimeObservationDisposedRef.current = true;
+      clearRealtimeObservationFlushTimer();
+      realtimeObservationQueueRef.current = [];
+    };
+  }, [clearRealtimeObservationFlushTimer]);
 
   useEffect(() => {
     holdemTablesRef.current = holdemTables;
@@ -166,6 +304,52 @@ export function useHoldem(options: UseHoldemOptions) {
       await onUnauthorized("Session expired or was revoked. Sign in again.");
     }
   }, [handleUnauthorizedRef]);
+
+  const refreshHoldemPlayMode = useCallback(async () => {
+    if (!authTokenRef.current) {
+      return false;
+    }
+
+    const response = await api.getPlayMode("holdem");
+    if (!response.ok) {
+      if (response.status === 401) {
+        await handleUnauthorized();
+        return false;
+      }
+
+      setError(response.error?.message ?? "Failed to load Hold'em play mode.");
+      return false;
+    }
+
+    startTransition(() => {
+      setHoldemPlayModeState(response.data.snapshot);
+    });
+    return true;
+  }, [api, authTokenRef, handleUnauthorized, setError]);
+
+  const setHoldemPlayMode = useCallback(
+    async (type: PlayModeType) => {
+      setUpdatingHoldemPlayMode(true);
+      const response = await api.setPlayMode("holdem", { type });
+      setUpdatingHoldemPlayMode(false);
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          await handleUnauthorized();
+          return false;
+        }
+
+        setError(response.error?.message ?? "Failed to update Hold'em play mode.");
+        return false;
+      }
+
+      startTransition(() => {
+        setHoldemPlayModeState(response.data.snapshot);
+      });
+      return true;
+    },
+    [api, handleUnauthorized, setError],
+  );
 
   const refreshHoldemLobby = useCallback(
     async (preferredTableId?: number | null) => {
@@ -485,10 +669,37 @@ export function useHoldem(options: UseHoldemOptions) {
           api.createHoldemTable({
             tableName: holdemTableName.trim() || undefined,
             buyInAmount: holdemBuyInAmount.trim(),
+            tableType: holdemCreateTableType,
+            maxSeats: holdemCreateMaxSeats,
+            tournament:
+              holdemCreateTableType === "tournament"
+                ? {
+                    startingStackAmount:
+                      holdemTournamentStartingStackAmount.trim() || undefined,
+                    payoutPlaces: (() => {
+                      const parsed = Number.parseInt(
+                        holdemTournamentPayoutPlaces.trim(),
+                        10,
+                      );
+                      return Number.isFinite(parsed) && parsed > 0
+                        ? parsed
+                        : undefined;
+                    })(),
+                  }
+                : undefined,
           }),
         { refreshWallet: true },
       ),
-    [api, holdemBuyInAmount, holdemTableName, runHoldemMutation],
+    [
+      api,
+      holdemBuyInAmount,
+      holdemCreateMaxSeats,
+      holdemCreateTableType,
+      holdemTableName,
+      holdemTournamentPayoutPlaces,
+      holdemTournamentStartingStackAmount,
+      runHoldemMutation,
+    ],
   );
 
   const joinHoldemTable = useCallback(
@@ -757,6 +968,7 @@ export function useHoldem(options: UseHoldemOptions) {
           );
         });
       },
+      onObservation: enqueueRealtimeObservation,
       onWarning: (message) => {
         if (!disposed) {
           setError(message);
@@ -785,6 +997,7 @@ export function useHoldem(options: UseHoldemOptions) {
     authTokenRef,
     enabled,
     handleUnauthorized,
+    enqueueRealtimeObservation,
     realtimeBaseUrl,
     setError,
     syncAuthoritativeHoldemState,
@@ -803,6 +1016,13 @@ export function useHoldem(options: UseHoldemOptions) {
     ]);
   }, [enabled, selectedHoldemTableId]);
 
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+    void refreshHoldemPlayMode();
+  }, [enabled, refreshHoldemPlayMode]);
+
   return {
     actingHoldem,
     actOnHoldemTable,
@@ -811,6 +1031,11 @@ export function useHoldem(options: UseHoldemOptions) {
     getHoldemEvidenceBundle,
     holdemActionAmount,
     holdemBuyInAmount,
+    holdemCreateMaxSeats,
+    holdemCreateTableType,
+    holdemTournamentPayoutPlaces,
+    holdemTournamentStartingStackAmount,
+    holdemPlayMode,
     holdemReplayError,
     holdemRealtimeStatus,
     holdemTableName,
@@ -824,6 +1049,7 @@ export function useHoldem(options: UseHoldemOptions) {
     loadingHoldemTable,
     openHoldemReplay,
     refreshHoldemLobby,
+    refreshHoldemPlayMode,
     refreshHoldemTableMessages,
     refreshHoldemTable,
     resetHoldem,
@@ -835,9 +1061,15 @@ export function useHoldem(options: UseHoldemOptions) {
     sendingHoldemMessage,
     setHoldemActionAmount,
     setHoldemBuyInAmount,
+    setHoldemCreateMaxSeats,
+    setHoldemCreateTableType,
+    setHoldemTournamentPayoutPlaces,
+    setHoldemTournamentStartingStackAmount,
+    setHoldemPlayMode,
     setHoldemTableName,
     setHoldemSeatMode,
     setSelectedHoldemTableId,
     startHoldemTable,
+    updatingHoldemPlayMode,
   };
 }

@@ -180,4 +180,15 @@ export const actions: Actions = {
       successMessage: getKycCopy(locals.locale).messages.moreInfoRequested,
       action: "requestMoreInfo",
     }),
+  requestReverification: async ({ request, fetch, cookies, params, locals }) =>
+    submitReviewAction({
+      request,
+      fetch,
+      cookies,
+      profileIdRaw: params.profileId,
+      locale: locals.locale,
+      path: "/request-reverification",
+      successMessage: getKycCopy(locals.locale).messages.reverificationRequested,
+      action: "requestReverification",
+    }),
 }

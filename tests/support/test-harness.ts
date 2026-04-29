@@ -18,6 +18,12 @@ const sharedArtifactsDir = path.join(repoRoot, '.tmp', 'tests');
 const TEST_DATABASE_NAME = 'reward_local';
 const TEST_DATABASE_IDENTIFIER_LIMIT = 63;
 const EXTERNAL_TEST_DATABASE_MODES = new Set(['external', 'service']);
+const REQUIRED_TEST_SCHEMA_TABLES = [
+  'notification_deliveries',
+  'notification_preferences',
+  'notification_push_devices',
+  'notification_records',
+] as const;
 
 type CommandOptions = {
   cwd?: string;
@@ -27,6 +33,7 @@ type CommandOptions = {
 
 type ServiceOptions = CommandOptions & {
   healthUrl: string;
+  shutdownTimeoutMs?: number;
   startupTimeoutMs?: number;
 };
 
@@ -138,6 +145,38 @@ const applyLegacyTestSchemaShims = async (databaseUrl: string) => {
       create index if not exists freeze_records_scope_idx
       on freeze_records (scope)
     `;
+  } finally {
+    await sql.end({ timeout: 5 }).catch(() => undefined);
+  }
+};
+
+const assertRequiredTestSchemaTables = async (databaseUrl: string) => {
+  const sql = createSqlClient(databaseUrl);
+  const tableList = REQUIRED_TEST_SCHEMA_TABLES.map((tableName) =>
+    `'${tableName.replace(/'/g, "''")}'`,
+  ).join(', ');
+
+  try {
+    const rows = (await sql.unsafe(
+      `
+        select tablename
+        from pg_tables
+        where schemaname = 'public'
+          and tablename in (${tableList})
+      `,
+    )) as Array<{ tablename: string }>;
+    const foundTables = new Set(rows.map((row) => row.tablename));
+    const missingTables = REQUIRED_TEST_SCHEMA_TABLES.filter(
+      (tableName) => !foundTables.has(tableName),
+    );
+
+    if (missingTables.length > 0) {
+      throw new Error(
+        `Test database bootstrap is missing required tables: ${missingTables.join(
+          ', ',
+        )}. Check apps/database/drizzle/meta/_journal.json for missing migration entries.`,
+      );
+    }
   } finally {
     await sql.end({ timeout: 5 }).catch(() => undefined);
   }
@@ -322,7 +361,10 @@ export async function waitForHttp(
   );
 }
 
-const stopChildProcess = async (child: ChildProcess) => {
+const stopChildProcess = async (
+  child: ChildProcess,
+  timeoutMs = 10_000,
+) => {
   if (child.exitCode !== null || child.signalCode !== null) {
     return;
   }
@@ -333,7 +375,7 @@ const stopChildProcess = async (child: ChildProcess) => {
     new Promise<boolean>((resolve) => {
       child.once('exit', () => resolve(true));
     }),
-    delay(10_000).then(() => false),
+    delay(timeoutMs).then(() => false),
   ]);
 
   if (!exited) {
@@ -356,25 +398,64 @@ export async function startService(
   });
 
   let startupError: unknown = null;
+  let exitError: Error | null = null;
   child.once('error', (error) => {
     startupError = error;
   });
+  child.once('exit', (code, signal) => {
+    if (code === 0) {
+      return;
+    }
+
+    exitError = new Error(
+      `${toCommandLabel(command, args)} exited before startup completed with ${code ?? 'null'}${signal ? ` (${signal})` : ''}.`,
+    );
+  });
 
   try {
-    await waitForHttp(options.healthUrl, {
-      timeoutMs: options.startupTimeoutMs ?? 45_000,
-    });
+    await Promise.race([
+      waitForHttp(options.healthUrl, {
+        timeoutMs: options.startupTimeoutMs ?? 45_000,
+      }),
+      new Promise<never>((_resolve, reject) => {
+        child.once('exit', (code, signal) => {
+          if (code === 0) {
+            reject(
+              new Error(
+                `${toCommandLabel(command, args)} exited before startup completed.`,
+              ),
+            );
+            return;
+          }
+
+          reject(
+            new Error(
+              `${toCommandLabel(command, args)} exited before startup completed with ${code ?? 'null'}${signal ? ` (${signal})` : ''}.`,
+            ),
+          );
+        });
+      }),
+    ]);
   } catch (error) {
-    await stopChildProcess(child);
-    if (startupError) {
-      throw startupError;
+    await stopChildProcess(child, options.shutdownTimeoutMs);
+    if (startupError ?? exitError) {
+      throw startupError ?? exitError;
     }
     throw error;
   }
 
+  if (startupError ?? exitError) {
+    await stopChildProcess(child, options.shutdownTimeoutMs);
+    if (startupError) {
+      throw startupError;
+    }
+
+    throw exitError;
+  }
+
   return {
     stop: async () => {
-      await stopChildProcess(child);
+      await stopChildProcess(child, options.shutdownTimeoutMs);
     },
   };
 }
@@ -452,6 +533,7 @@ export async function startTestDatabase(profile: string): Promise<TestDatabase> 
         },
       );
       await applyLegacyTestSchemaShims(databaseUrl);
+      await assertRequiredTestSchemaTables(databaseUrl);
     } catch (error) {
       await dropExternalTestDatabase(adminDatabaseUrl, databaseName).catch(() => undefined);
       await rm(runDir, { recursive: true, force: true });
@@ -512,6 +594,7 @@ export async function startTestDatabase(profile: string): Promise<TestDatabase> 
       },
     );
     await applyLegacyTestSchemaShims(databaseUrl);
+    await assertRequiredTestSchemaTables(databaseUrl);
   } catch (error) {
     await instance.stop().catch(() => undefined);
     await instance.cleanup().catch(() => undefined);

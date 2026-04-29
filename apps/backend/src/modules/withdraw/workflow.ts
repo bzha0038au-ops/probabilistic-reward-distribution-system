@@ -3,6 +3,7 @@ import Decimal from 'decimal.js';
 
 import {
   authSessions,
+  deviceFingerprints,
   cryptoWithdrawAddresses,
   fiatPayoutMethods,
   payoutMethods,
@@ -60,6 +61,7 @@ export type WithdrawalRequestContext = {
   ip?: string | null;
   userAgent?: string | null;
   sessionId?: string | null;
+  deviceFingerprint?: string | null;
 };
 
 type WithdrawalRiskSignal =
@@ -359,32 +361,55 @@ export const evaluateWithdrawalControls = async (
 
   const requestIp = normalizeOptionalString(payload.requestContext.ip);
   const requestUserAgent = normalizeOptionalString(payload.requestContext.userAgent);
+  const requestDeviceFingerprint = normalizeOptionalString(
+    payload.requestContext.deviceFingerprint,
+  );
 
   if (requestIp && sharedIpThreshold > 1) {
-    const result = await tx.execute(sql`
-      SELECT count(DISTINCT ${authSessions.userId})::int AS total
-      FROM ${authSessions}
-      WHERE ${authSessions.subjectRole} = 'user'
-        AND ${authSessions.ip} = ${requestIp}
+    let result = await tx.execute(sql`
+      SELECT count(DISTINCT ${deviceFingerprints.userId})::int AS total
+      FROM ${deviceFingerprints}
+      WHERE ${deviceFingerprints.ip} = ${requestIp}
     `);
 
     sharedIpUserCount = countRows(result);
+    if (sharedIpUserCount === 0) {
+      result = await tx.execute(sql`
+        SELECT count(DISTINCT ${authSessions.userId})::int AS total
+        FROM ${authSessions}
+        WHERE ${authSessions.subjectRole} = 'user'
+          AND ${authSessions.ip} = ${requestIp}
+      `);
+      sharedIpUserCount = countRows(result);
+    }
     if (sharedIpUserCount >= sharedIpThreshold) {
       riskSignals.push('shared_ip_cluster');
       suspiciousSignals.push('shared_ip_cluster');
     }
   }
 
-  if (requestIp && requestUserAgent && sharedDeviceThreshold > 1) {
-    const result = await tx.execute(sql`
-      SELECT count(DISTINCT ${authSessions.userId})::int AS total
-      FROM ${authSessions}
-      WHERE ${authSessions.subjectRole} = 'user'
-        AND ${authSessions.ip} = ${requestIp}
-        AND ${authSessions.userAgent} = ${requestUserAgent}
-    `);
+  if (sharedDeviceThreshold > 1) {
+    let result = null;
+    if (requestDeviceFingerprint) {
+      result = await tx.execute(sql`
+        SELECT count(DISTINCT ${deviceFingerprints.userId})::int AS total
+        FROM ${deviceFingerprints}
+        WHERE ${deviceFingerprints.fingerprint} = ${requestDeviceFingerprint}
+      `);
+      sharedDeviceUserCount = countRows(result);
+    }
 
-    sharedDeviceUserCount = countRows(result);
+    if (sharedDeviceUserCount === 0 && requestIp && requestUserAgent) {
+      result = await tx.execute(sql`
+        SELECT count(DISTINCT ${authSessions.userId})::int AS total
+        FROM ${authSessions}
+        WHERE ${authSessions.subjectRole} = 'user'
+          AND ${authSessions.ip} = ${requestIp}
+          AND ${authSessions.userAgent} = ${requestUserAgent}
+      `);
+      sharedDeviceUserCount = countRows(result);
+    }
+
     if (sharedDeviceUserCount >= sharedDeviceThreshold) {
       riskSignals.push('shared_device_cluster');
       suspiciousSignals.push('shared_device_cluster');
@@ -484,6 +509,7 @@ export const evaluateWithdrawalControls = async (
         ip: requestIp,
         userAgent: requestUserAgent,
         sessionId: normalizeOptionalString(payload.requestContext.sessionId),
+        deviceFingerprint: requestDeviceFingerprint,
       },
     },
   };

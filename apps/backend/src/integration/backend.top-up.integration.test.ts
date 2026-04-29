@@ -8,8 +8,8 @@ import {
   itIntegration as it,
   seedUserWithWallet,
 } from './integration-test-support';
-import { asc, eq } from '@reward/database/orm';
-import { deposits, ledgerEntries, userWallets } from '@reward/database';
+import { asc, eq, sql } from '@reward/database/orm';
+import { deposits, ledgerEntries, missions, userWallets } from '@reward/database';
 
 vi.mock('../modules/aml', () => ({
   screenUserFirstDeposit: vi.fn(async () => undefined),
@@ -143,6 +143,110 @@ describeIntegrationSuite('backend top-up integration', () => {
           ]),
         }),
       });
+    },
+  );
+
+  it(
+    'credited first deposits auto-award the starter bonus into bonus balance',
+    async () => {
+      const user = await seedUserWithWallet({
+        email: 'top-up-first-deposit-bonus@example.com',
+      });
+
+      await getDb().insert(missions).values({
+        id: 'top_up_starter',
+        type: 'metric_threshold',
+        params: {
+          title: 'First deposit bonus',
+          description:
+            'Complete your first credited deposit to receive an automatic starter bonus.',
+          metric: 'deposit_credited_count',
+          target: 1,
+          cadence: 'one_time',
+          awardMode: 'auto_grant',
+          bonusUnlockWagerRatio: 1,
+          sortOrder: 50,
+        },
+        reward: '10.00',
+        isActive: true,
+      });
+
+      const requestedDeposit = expectPresent(
+        await getTopUpModule().createTopUp({
+          userId: user.id,
+          amount: '25.50',
+        }),
+      );
+
+      const providerPending = await getTopUpModule().markDepositProviderPending(
+        requestedDeposit.id,
+        {
+          processingChannel: 'manual_bank',
+          operatorNote: 'receipt queued',
+        },
+      );
+      expect(providerPending?.status).toBe('provider_pending');
+
+      const providerSucceeded =
+        await getTopUpModule().markDepositProviderSucceeded(
+          requestedDeposit.id,
+          {
+            processingChannel: 'manual_bank',
+            settlementReference: 'dep-bonus-001',
+            operatorNote: 'receipt matched',
+          },
+        );
+      expect(providerSucceeded?.status).toBe('provider_succeeded');
+
+      const credited = await getTopUpModule().creditDeposit(
+        requestedDeposit.id,
+        {
+          processingChannel: 'manual_bank',
+          operatorNote: 'wallet credited',
+        },
+      );
+      expect(credited?.status).toBe('credited');
+
+      const [wallet] = await getDb()
+        .select({
+          withdrawableBalance: userWallets.withdrawableBalance,
+          bonusBalance: userWallets.bonusBalance,
+        })
+        .from(userWallets)
+        .where(eq(userWallets.userId, user.id))
+        .limit(1);
+
+      expect(wallet).toEqual({
+        withdrawableBalance: '25.50',
+        bonusBalance: '10.00',
+      });
+
+      const entries = await getDb()
+        .select({
+          entryType: ledgerEntries.entryType,
+          amount: ledgerEntries.amount,
+          missionId: sql<string | null>`${ledgerEntries.metadata} ->> 'missionId'`,
+          bonusUnlockWagerRatio:
+            sql<string | null>`${ledgerEntries.metadata} ->> 'bonusUnlockWagerRatio'`,
+        })
+        .from(ledgerEntries)
+        .where(eq(ledgerEntries.userId, user.id))
+        .orderBy(asc(ledgerEntries.id));
+
+      expect(entries).toEqual([
+        {
+          entryType: 'deposit_credit',
+          amount: '25.50',
+          missionId: null,
+          bonusUnlockWagerRatio: null,
+        },
+        {
+          entryType: 'gamification_reward',
+          amount: '10.00',
+          missionId: 'top_up_starter',
+          bonusUnlockWagerRatio: '1.00',
+        },
+      ]);
     },
   );
 

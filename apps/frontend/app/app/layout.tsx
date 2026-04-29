@@ -8,13 +8,12 @@ import { buttonVariants } from '@/components/ui/button';
 import { getServerTranslations } from '@/lib/i18n/server';
 import { cn } from '@/lib/utils';
 import { CurrentSessionProvider } from '@/modules/app/components/current-session-provider';
+import { NotificationsBell } from '@/modules/app/components/notifications-bell';
 import { requireCurrentUserSession } from '@/modules/app/server/current-session';
 
 export default async function ProtectedAppLayout({
   children,
-}: {
-  children: ReactNode;
-}) {
+}: LayoutProps<'/app'>) {
   const t = await getServerTranslations();
   const currentSession = await requireCurrentUserSession();
   if (currentSession.legal.requiresAcceptance) {
@@ -27,6 +26,8 @@ export default async function ProtectedAppLayout({
     { href: '/app/payments', label: t('app.navPayments') },
     { href: '/app/verification', label: 'KYC' },
     { href: '/app/security', label: t('app.navSecurity') },
+    { href: '/app/notifications', label: t('app.navNotifications') },
+    { href: '/app/community', label: t('app.navCommunity') },
     { href: '/app/markets', label: t('app.navMarkets') },
     { href: '/app/slot', label: t('app.navGacha') },
     { href: '/app/quick-eight', label: t('app.navQuickEight') },
@@ -65,13 +66,14 @@ export default async function ProtectedAppLayout({
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
+                <NotificationsBell />
                 <LocaleSwitcher />
                 <LogoutForm label={t('common.signOut')} />
               </div>
             </div>
           </header>
 
-          {children}
+          {children as ReactNode}
         </div>
       </main>
     </CurrentSessionProvider>

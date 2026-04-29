@@ -98,6 +98,54 @@ export const saasBillingRunStatusValues = [
 export const SaasBillingRunStatusSchema = z.enum(saasBillingRunStatusValues);
 export type SaasBillingRunStatus = z.infer<typeof SaasBillingRunStatusSchema>;
 
+export const saasBillingRunExternalSyncStatusValues = [
+  "idle",
+  "processing",
+  "succeeded",
+  "failed",
+] as const;
+export const SaasBillingRunExternalSyncStatusSchema = z.enum(
+  saasBillingRunExternalSyncStatusValues,
+);
+export type SaasBillingRunExternalSyncStatus = z.infer<
+  typeof SaasBillingRunExternalSyncStatusSchema
+>;
+
+export const saasBillingRunExternalSyncActionValues = [
+  "sync",
+  "sync_and_finalize",
+  "sync_and_send",
+  "refresh",
+  "settle",
+  "reconciliation",
+  "stripe_webhook",
+] as const;
+export const SaasBillingRunExternalSyncActionSchema = z.enum(
+  saasBillingRunExternalSyncActionValues,
+);
+export type SaasBillingRunExternalSyncAction = z.infer<
+  typeof SaasBillingRunExternalSyncActionSchema
+>;
+
+export const saasBillingRunExternalSyncStageValues = [
+  "precondition",
+  "invoice_lookup",
+  "invoice_finalize",
+  "invoice_send",
+  "invoice_retrieve",
+  "invoice_pay",
+  "invoice_refresh",
+  "invoice_reconcile",
+  "invoice_webhook",
+  "persist_invoice_state",
+] as const;
+export const SaasBillingRunExternalSyncStageSchema = z.enum(
+  saasBillingRunExternalSyncStageValues,
+);
+export type SaasBillingRunExternalSyncStage = z.infer<
+  typeof SaasBillingRunExternalSyncStageSchema
+>;
+
 export const saasBillingTopUpStatusValues = [
   "pending",
   "synced",
@@ -108,6 +156,44 @@ export const SaasBillingTopUpStatusSchema = z.enum(
 );
 export type SaasBillingTopUpStatus = z.infer<
   typeof SaasBillingTopUpStatusSchema
+>;
+
+export const saasBillingDisputeStatusValues = [
+  "submitted",
+  "under_review",
+  "resolved",
+  "rejected",
+] as const;
+export const SaasBillingDisputeStatusSchema = z.enum(
+  saasBillingDisputeStatusValues,
+);
+export type SaasBillingDisputeStatus = z.infer<
+  typeof SaasBillingDisputeStatusSchema
+>;
+
+export const saasBillingDisputeReasonValues = [
+  "invoice_amount",
+  "duplicate_charge",
+  "service_quality",
+  "other",
+] as const;
+export const SaasBillingDisputeReasonSchema = z.enum(
+  saasBillingDisputeReasonValues,
+);
+export type SaasBillingDisputeReason = z.infer<
+  typeof SaasBillingDisputeReasonSchema
+>;
+
+export const saasBillingDisputeResolutionValues = [
+  "full_refund",
+  "partial_refund",
+  "reject",
+] as const;
+export const SaasBillingDisputeResolutionSchema = z.enum(
+  saasBillingDisputeResolutionValues,
+);
+export type SaasBillingDisputeResolution = z.infer<
+  typeof SaasBillingDisputeResolutionSchema
 >;
 
 export const saasStripeWebhookEventStatusValues = [
@@ -318,6 +404,7 @@ export const SaasTenantSchema = z.object({
   status: SaaSResourceStatusSchema,
   riskEnvelope: SaasTenantRiskEnvelopeSchema,
   metadata: z.record(z.string(), z.unknown()).nullable().optional(),
+  onboardedAt: z.union([z.string(), z.date()]).nullable().optional(),
   createdAt: z.union([z.string(), z.date()]),
   updatedAt: z.union([z.string(), z.date()]),
 });
@@ -414,6 +501,33 @@ export type SaasBillingDecisionPricing = z.infer<
   typeof SaasBillingDecisionPricingSchema
 >;
 
+const DateLikeSchema = z.union([z.string(), z.date()]);
+
+export const SaasBillingBudgetAlertStateSchema = z.object({
+  month: z.string().nullable(),
+  thresholdAlertedAt: DateLikeSchema.nullable().optional(),
+  forecast7dAlertedAt: DateLikeSchema.nullable().optional(),
+  forecast30dAlertedAt: DateLikeSchema.nullable().optional(),
+  hardCapReachedAt: DateLikeSchema.nullable().optional(),
+  hardCapAlertedAt: DateLikeSchema.nullable().optional(),
+});
+export type SaasBillingBudgetAlertState = z.infer<
+  typeof SaasBillingBudgetAlertStateSchema
+>;
+
+export const SaasBillingBudgetPolicySchema = z.object({
+  monthlyBudget: z.string().nullable(),
+  alertThresholdPct: z.number().positive().max(100).nullable(),
+  hardCap: z.string().nullable(),
+  alertEmailEnabled: z.boolean(),
+  alertWebhookUrl: z.string().url().nullable(),
+  alertWebhookConfigured: z.boolean(),
+  state: SaasBillingBudgetAlertStateSchema,
+});
+export type SaasBillingBudgetPolicy = z.infer<
+  typeof SaasBillingBudgetPolicySchema
+>;
+
 export const SaasBillingDecisionPricingInputSchema = z.object({
   reject: MoneyLikeSchema,
   mute: MoneyLikeSchema,
@@ -444,6 +558,7 @@ export const SaasBillingAccountSchema = z.object({
   baseMonthlyFee: z.string(),
   drawFee: z.string(),
   decisionPricing: SaasBillingDecisionPricingSchema,
+  budgetPolicy: SaasBillingBudgetPolicySchema,
   currency: z.string(),
   isBillable: z.boolean(),
   metadata: z.record(z.string(), z.unknown()).nullable().optional(),
@@ -455,6 +570,7 @@ export type SaasBillingAccount = z.infer<typeof SaasBillingAccountSchema>;
 export const SaasTenantBootstrapSchema = z.object({
   sandboxProject: SaasProjectSchema,
   sandboxPrizes: z.array(SaasProjectPrizeSchema),
+  sandboxRewardEnvelopes: z.array(SaasRewardEnvelopeSchema),
   billingAccount: SaasBillingAccountSchema,
 });
 export type SaasTenantBootstrap = z.infer<typeof SaasTenantBootstrapSchema>;
@@ -524,6 +640,121 @@ export const SaasUsageEventSchema = z.object({
   createdAt: z.union([z.string(), z.date()]),
 });
 export type SaasUsageEvent = z.infer<typeof SaasUsageEventSchema>;
+
+export const saasReportExportResourceValues = [
+  "saas_usage_events",
+  "saas_ledger_entries",
+  "agent_risk_state",
+] as const;
+export const SaasReportExportResourceSchema = z.enum(
+  saasReportExportResourceValues,
+);
+export type SaasReportExportResource = z.infer<
+  typeof SaasReportExportResourceSchema
+>;
+
+export const saasReportExportFormatValues = ["csv", "json"] as const;
+export const SaasReportExportFormatSchema = z.enum(
+  saasReportExportFormatValues,
+);
+export type SaasReportExportFormat = z.infer<
+  typeof SaasReportExportFormatSchema
+>;
+
+export const saasReportExportStatusValues = [
+  "pending",
+  "processing",
+  "completed",
+  "failed",
+] as const;
+export const SaasReportExportStatusSchema = z.enum(
+  saasReportExportStatusValues,
+);
+export type SaasReportExportStatus = z.infer<
+  typeof SaasReportExportStatusSchema
+>;
+
+const MAX_SAAS_REPORT_EXPORT_RANGE_MS = 366 * 24 * 60 * 60 * 1000;
+
+export const SaasReportExportCreateSchema = z
+  .object({
+    projectId: PositiveIntSchema.optional().nullable(),
+    resource: SaasReportExportResourceSchema,
+    format: SaasReportExportFormatSchema,
+    fromAt: z.union([z.string().datetime(), z.date()]),
+    toAt: z.union([z.string().datetime(), z.date()]),
+  })
+  .superRefine((value, ctx) => {
+    const fromAt = new Date(value.fromAt);
+    const toAt = new Date(value.toAt);
+
+    if (Number.isNaN(fromAt.getTime())) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Invalid report export start time.",
+        path: ["fromAt"],
+      });
+      return;
+    }
+
+    if (Number.isNaN(toAt.getTime())) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Invalid report export end time.",
+        path: ["toAt"],
+      });
+      return;
+    }
+
+    if (fromAt > toAt) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Report export start time must be before the end time.",
+        path: ["fromAt"],
+      });
+    }
+
+    if (toAt.getTime() - fromAt.getTime() > MAX_SAAS_REPORT_EXPORT_RANGE_MS) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Report export time range is too large.",
+        path: ["toAt"],
+      });
+    }
+  });
+export type SaasReportExportCreate = z.infer<
+  typeof SaasReportExportCreateSchema
+>;
+
+export const SaasReportExportListQuerySchema = z.object({
+  limit: LimitedPageSizeSchema.optional(),
+});
+export type SaasReportExportListQuery = z.infer<
+  typeof SaasReportExportListQuerySchema
+>;
+
+export const SaasReportExportJobSchema = z.object({
+  id: z.number().int(),
+  tenantId: z.number().int(),
+  projectId: z.number().int().nullable(),
+  createdByAdminId: z.number().int().nullable(),
+  resource: SaasReportExportResourceSchema,
+  format: SaasReportExportFormatSchema,
+  status: SaasReportExportStatusSchema,
+  rowCount: z.number().int().nonnegative().nullable(),
+  contentType: z.string().nullable(),
+  fileName: z.string().nullable(),
+  fromAt: z.union([z.string(), z.date()]),
+  toAt: z.union([z.string(), z.date()]),
+  lastError: z.string().nullable(),
+  completedAt: z.union([z.string(), z.date()]).nullable().optional(),
+  expiresAt: z.union([z.string(), z.date()]).nullable().optional(),
+  downloadUrl: z.string().url().nullable().optional(),
+  downloadUrlExpiresAt: z.union([z.string(), z.date()]).nullable().optional(),
+  createdAt: z.union([z.string(), z.date()]),
+  updatedAt: z.union([z.string(), z.date()]),
+});
+export type SaasReportExportJob = z.infer<typeof SaasReportExportJobSchema>;
 
 export const SaasTenantUsageProjectSchema = z.object({
   id: z.number().int(),
@@ -612,6 +843,21 @@ export type SaasTenantUsageDashboard = z.infer<
   typeof SaasTenantUsageDashboardSchema
 >;
 
+export const SaasBillingRunExternalSyncSchema = z.object({
+  status: SaasBillingRunExternalSyncStatusSchema,
+  action: SaasBillingRunExternalSyncActionSchema.nullable(),
+  stage: SaasBillingRunExternalSyncStageSchema.nullable(),
+  error: z.string().nullable(),
+  recoveryPath: z.string().nullable(),
+  observedInvoiceStatus: z.string().nullable(),
+  eventType: z.string().nullable(),
+  attemptedAt: z.union([z.string(), z.date()]).nullable().optional(),
+  completedAt: z.union([z.string(), z.date()]).nullable().optional(),
+});
+export type SaasBillingRunExternalSync = z.infer<
+  typeof SaasBillingRunExternalSyncSchema
+>;
+
 export const SaasBillingRunSchema = z.object({
   id: z.number().int(),
   tenantId: z.number().int(),
@@ -635,6 +881,7 @@ export const SaasBillingRunSchema = z.object({
   finalizedAt: z.union([z.string(), z.date()]).nullable().optional(),
   sentAt: z.union([z.string(), z.date()]).nullable().optional(),
   paidAt: z.union([z.string(), z.date()]).nullable().optional(),
+  externalSync: SaasBillingRunExternalSyncSchema,
   metadata: z.record(z.string(), z.unknown()).nullable().optional(),
   createdByAdminId: z.number().int().nullable(),
   createdAt: z.union([z.string(), z.date()]),
@@ -659,6 +906,93 @@ export const SaasBillingTopUpSchema = z.object({
   updatedAt: z.union([z.string(), z.date()]),
 });
 export type SaasBillingTopUp = z.infer<typeof SaasBillingTopUpSchema>;
+
+export const SaasBillingDisputeSchema = z.object({
+  id: z.number().int(),
+  tenantId: z.number().int(),
+  billingRunId: z.number().int(),
+  billingAccountId: z.number().int().nullable(),
+  status: SaasBillingDisputeStatusSchema,
+  reason: SaasBillingDisputeReasonSchema,
+  summary: z.string(),
+  description: z.string(),
+  requestedRefundAmount: z.string(),
+  approvedRefundAmount: z.string().nullable().optional(),
+  currency: z.string(),
+  resolutionType: SaasBillingDisputeResolutionSchema.nullable().optional(),
+  resolutionNotes: z.string().nullable().optional(),
+  stripeCreditNoteId: z.string().nullable().optional(),
+  stripeCreditNoteStatus: z.string().nullable().optional(),
+  stripeCreditNotePdf: z.string().nullable().optional(),
+  createdByAdminId: z.number().int().nullable(),
+  resolvedByAdminId: z.number().int().nullable().optional(),
+  resolvedAt: z.union([z.string(), z.date()]).nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
+  createdAt: z.union([z.string(), z.date()]),
+  updatedAt: z.union([z.string(), z.date()]),
+});
+export type SaasBillingDispute = z.infer<typeof SaasBillingDisputeSchema>;
+
+export const SaasBillingDailyReportPointSchema = z.object({
+  date: DateLikeSchema,
+  usageAmount: z.string(),
+  totalAmount: z.string(),
+});
+export type SaasBillingDailyReportPoint = z.infer<
+  typeof SaasBillingDailyReportPointSchema
+>;
+
+export const SaasBillingForecastScenarioSchema = z.object({
+  trailingDays: z.number().int().positive(),
+  dailyRunRate: z.string(),
+  projectedUsageAmount: z.string(),
+  projectedTotalAmount: z.string(),
+  exceedsBudget: z.boolean(),
+});
+export type SaasBillingForecastScenario = z.infer<
+  typeof SaasBillingForecastScenarioSchema
+>;
+
+export const SaasTenantBillingInsightsSchema = z.object({
+  tenantId: z.number().int(),
+  currency: z.string(),
+  window: z.object({
+    monthStart: DateLikeSchema,
+    monthEnd: DateLikeSchema,
+    generatedAt: DateLikeSchema,
+    daysElapsed: z.number().int().positive(),
+    daysRemaining: z.number().int().nonnegative(),
+  }),
+  budgetPolicy: SaasBillingBudgetPolicySchema,
+  summary: z.object({
+    baseMonthlyFee: z.string(),
+    currentUsageAmount: z.string(),
+    currentTotalAmount: z.string(),
+    trailing7dUsageAmount: z.string(),
+    trailing30dUsageAmount: z.string(),
+    monthlyBudget: z.string().nullable(),
+    budgetThresholdAmount: z.string().nullable(),
+    hardCap: z.string().nullable(),
+    remainingBudgetAmount: z.string().nullable(),
+    remainingHardCapAmount: z.string().nullable(),
+    thresholdBreached: z.boolean(),
+    hardCapReached: z.boolean(),
+  }),
+  forecasts: z.object({
+    trailing7d: SaasBillingForecastScenarioSchema,
+    trailing30d: SaasBillingForecastScenarioSchema,
+  }),
+  alerts: z.object({
+    thresholdExceeded: z.boolean(),
+    forecast7dExceeded: z.boolean(),
+    forecast30dExceeded: z.boolean(),
+    hardCapReached: z.boolean(),
+  }),
+  dailyReport: z.array(SaasBillingDailyReportPointSchema),
+});
+export type SaasTenantBillingInsights = z.infer<
+  typeof SaasTenantBillingInsightsSchema
+>;
 
 export const SaasTenantInviteSchema = z.object({
   id: z.number().int(),
@@ -763,6 +1097,15 @@ export const SaasTenantCreateSchema = z.object({
 });
 export type SaasTenantCreate = z.infer<typeof SaasTenantCreateSchema>;
 
+export const SaasPortalTenantCreateSchema = z.object({
+  name: z.string().min(1).max(160),
+  slug: z.string().min(2).max(64).optional(),
+  billingEmail: z.string().email().optional().nullable(),
+});
+export type SaasPortalTenantCreate = z.infer<
+  typeof SaasPortalTenantCreateSchema
+>;
+
 export const SaasTenantRiskEnvelopePatchSchema = z.object({
   tenantId: PositiveIntSchema,
   dailyBudgetCap: MoneyLikeSchema.optional().nullable(),
@@ -821,6 +1164,17 @@ export const SaasProjectPrizePatchSchema =
   SaasProjectPrizeCreateSchema.partial();
 export type SaasProjectPrizePatch = z.infer<typeof SaasProjectPrizePatchSchema>;
 
+export const SaasRewardEnvelopeUpsertSchema = z.object({
+  window: SaasRewardEnvelopeWindowSchema,
+  onCapHitStrategy: SaasRewardEnvelopeCapHitStrategySchema,
+  budgetCap: MoneyLikeSchema,
+  expectedPayoutPerCall: MoneyLikeSchema,
+  varianceCap: MoneyLikeSchema,
+});
+export type SaasRewardEnvelopeUpsert = z.infer<
+  typeof SaasRewardEnvelopeUpsertSchema
+>;
+
 export const SaasApiKeyCreateSchema = z.object({
   projectId: PositiveIntSchema,
   label: z.string().min(1).max(120),
@@ -859,6 +1213,20 @@ export const SaasBillingAccountUpsertSchema = z.object({
 });
 export type SaasBillingAccountUpsert = z.infer<
   typeof SaasBillingAccountUpsertSchema
+>;
+
+export const SaasBillingBudgetPolicyPatchSchema = z.object({
+  tenantId: PositiveIntSchema,
+  monthlyBudget: MoneyLikeSchema.optional().nullable(),
+  alertThresholdPct: z.number().positive().max(100).optional().nullable(),
+  hardCap: MoneyLikeSchema.optional().nullable(),
+  alertEmailEnabled: z.boolean().optional(),
+  alertWebhookUrl: z.string().url().max(2048).optional().nullable(),
+  alertWebhookSecret: z.string().min(8).max(255).optional().nullable(),
+  clearAlertWebhook: z.boolean().optional(),
+});
+export type SaasBillingBudgetPolicyPatch = z.infer<
+  typeof SaasBillingBudgetPolicyPatchSchema
 >;
 
 export const SaasTenantMembershipCreateSchema = z.object({
@@ -901,6 +1269,23 @@ export const SaasApiKeyRotationSchema = z.object({
 });
 export type SaasApiKeyRotation = z.infer<typeof SaasApiKeyRotationSchema>;
 
+export const SaasPortalTenantRegistrationSchema = z.object({
+  tenant: SaasTenantProvisioningSchema,
+  membership: SaasTenantMembershipSchema,
+  issuedKey: SaasApiKeyIssueSchema,
+});
+export type SaasPortalTenantRegistration = z.infer<
+  typeof SaasPortalTenantRegistrationSchema
+>;
+
+export const SaasTenantInviteDeliverySchema = z.object({
+  invite: SaasTenantInviteSchema,
+  inviteUrl: z.string().url(),
+});
+export type SaasTenantInviteDelivery = z.infer<
+  typeof SaasTenantInviteDeliverySchema
+>;
+
 export const SaasBillingRunCreateSchema = z.object({
   tenantId: PositiveIntSchema,
   periodStart: z.string().datetime().optional(),
@@ -930,6 +1315,28 @@ export const SaasBillingTopUpCreateSchema = z.object({
 });
 export type SaasBillingTopUpCreate = z.infer<
   typeof SaasBillingTopUpCreateSchema
+>;
+
+export const SaasBillingDisputeCreateSchema = z.object({
+  tenantId: PositiveIntSchema,
+  billingRunId: PositiveIntSchema,
+  reason: SaasBillingDisputeReasonSchema,
+  summary: z.string().min(1).max(160),
+  description: z.string().min(1).max(4000),
+  requestedRefundAmount: MoneyLikeSchema,
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+export type SaasBillingDisputeCreate = z.infer<
+  typeof SaasBillingDisputeCreateSchema
+>;
+
+export const SaasBillingDisputeReviewSchema = z.object({
+  resolutionType: SaasBillingDisputeResolutionSchema,
+  approvedRefundAmount: MoneyLikeSchema.optional(),
+  resolutionNotes: z.string().max(4000).optional().nullable(),
+});
+export type SaasBillingDisputeReview = z.infer<
+  typeof SaasBillingDisputeReviewSchema
 >;
 
 export const SaasTenantLinkCreateSchema = z.object({
@@ -1368,6 +1775,72 @@ export type PrizeEngineRewardResponse = z.infer<
   typeof PrizeEngineRewardResponseSchema
 >;
 
+export const SaasOverviewSandboxUiCopySchema = z
+  .object({
+    badgePrimary: z.string().min(1).max(64),
+    badgeSecondary: z.string().min(1).max(64),
+    title: z.string().min(1).max(160),
+    description: z.string().min(1).max(4_000),
+    focusActionLabel: z.string().min(1).max(64),
+    issueStarterKeyLabel: z.string().min(1).max(64),
+    copySnippetLabel: z.string().min(1).max(64),
+    latestSecretMessage: z.string().min(1).max(4_000),
+    placeholderSecretMessage: z.string().min(1).max(4_000),
+    emptyStateMessage: z.string().min(1).max(4_000),
+  })
+  .strict();
+export type SaasOverviewSandboxUiCopy = z.infer<
+  typeof SaasOverviewSandboxUiCopySchema
+>;
+
+export const SaasOverviewSnippetUiCopySchema = z
+  .object({
+    title: z.string().min(1).max(160),
+    description: z.string().min(1).max(4_000),
+  })
+  .strict();
+export type SaasOverviewSnippetUiCopy = z.infer<
+  typeof SaasOverviewSnippetUiCopySchema
+>;
+
+export const SaasOverviewUiCopySchema = z
+  .object({
+    overview: z
+      .object({
+        sandbox: SaasOverviewSandboxUiCopySchema,
+        snippet: SaasOverviewSnippetUiCopySchema,
+      })
+      .strict(),
+  })
+  .strict();
+export type SaasOverviewUiCopy = z.infer<typeof SaasOverviewUiCopySchema>;
+
+export const defaultSaasOverviewUiCopy: SaasOverviewUiCopy = {
+  overview: {
+    sandbox: {
+      badgePrimary: "D2 sandbox",
+      badgeSecondary: "zero-friction onboarding",
+      title: "Sandbox is already provisioned",
+      description:
+        "New tenants land with a sandbox project, seeded sample prizes, test reward envelopes, and a copy-ready SDK path. This route keeps the first successful integration within one screen.",
+      focusActionLabel: "Focus sandbox project",
+      issueStarterKeyLabel: "Issue starter key",
+      copySnippetLabel: "Copy SDK snippet",
+      latestSecretMessage:
+        "A fresh sandbox secret is in memory from this session, so the snippet on the right is genuinely copy-and-run.",
+      placeholderSecretMessage:
+        "Issue a starter key first if you want the snippet on the right to include a fresh secret instead of the placeholder token.",
+      emptyStateMessage:
+        "No sandbox project is visible for the selected tenant yet.",
+    },
+    snippet: {
+      title: "Copy-and-run hello-reward",
+      description:
+        "Uses the provisioned sandbox environment and a tenant-specific key so new operators can verify the path immediately.",
+    },
+  },
+};
+
 export const SaasOverviewSchema = z.object({
   summary: z.object({
     tenantCount: z.number().int().nonnegative(),
@@ -1394,6 +1867,7 @@ export const SaasOverviewSchema = z.object({
   apiKeys: z.array(SaasApiKeySchema),
   billingRuns: z.array(SaasBillingRunSchema),
   topUps: z.array(SaasBillingTopUpSchema),
+  disputes: z.array(SaasBillingDisputeSchema),
   invites: z.array(SaasTenantInviteSchema),
   tenantLinks: z.array(SaasTenantLinkSchema),
   agentControls: z.array(SaasAgentControlSchema),
@@ -1401,5 +1875,6 @@ export const SaasOverviewSchema = z.object({
   outboundWebhooks: z.array(SaasOutboundWebhookSchema),
   outboundDeliveries: z.array(SaasOutboundWebhookDeliverySchema),
   recentUsage: z.array(SaasUsageEventSchema),
+  uiCopy: SaasOverviewUiCopySchema,
 });
 export type SaasOverview = z.infer<typeof SaasOverviewSchema>;

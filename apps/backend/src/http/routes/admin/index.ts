@@ -45,6 +45,7 @@ export async function registerAdminRoutes(app: AppInstance) {
       const { registerAdminPrizeRoutes } = await import('./prizes');
       const { registerAdminPermissionRoutes } = await import('./permissions');
       const { registerAdminLegalRoutes } = await import('./legal');
+      const { registerAdminDataRightsRoutes } = await import('./data-rights');
       const { registerAdminSaasRoutes } = await import('./saas');
       const { registerAdminTableRoutes } = await import('./tables');
 
@@ -53,6 +54,7 @@ export async function registerAdminRoutes(app: AppInstance) {
       await registerAdminPrizeRoutes(adminRoutes);
       await registerAdminPermissionRoutes(adminRoutes);
       await registerAdminLegalRoutes(adminRoutes);
+      await registerAdminDataRightsRoutes(adminRoutes);
       await registerAdminSaasRoutes(adminRoutes);
       await registerAdminTableRoutes(adminRoutes);
     }

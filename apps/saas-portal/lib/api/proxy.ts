@@ -8,8 +8,39 @@ type AllowedRoute = {
 
 const ALLOWED_BROWSER_ROUTES: readonly AllowedRoute[] = [
   { pattern: /^\/portal\/saas\/overview$/, methods: ["GET"], auth: true },
+  { pattern: /^\/portal\/saas\/tenants$/, methods: ["POST"], auth: true },
   {
     pattern: /^\/portal\/saas\/invites\/accept$/,
+    methods: ["POST"],
+    auth: true,
+  },
+  {
+    pattern: /^\/portal\/saas\/tenants\/\d+\/reports\/exports$/,
+    methods: ["GET", "POST"],
+    auth: true,
+  },
+  {
+    pattern: /^\/portal\/saas\/tenants\/\d+\/disputes$/,
+    methods: ["POST"],
+    auth: true,
+  },
+  {
+    pattern: /^\/portal\/saas\/tenants\/\d+\/memberships$/,
+    methods: ["POST"],
+    auth: true,
+  },
+  {
+    pattern: /^\/portal\/saas\/tenants\/\d+\/memberships\/\d+$/,
+    methods: ["DELETE"],
+    auth: true,
+  },
+  {
+    pattern: /^\/portal\/saas\/tenants\/\d+\/invites$/,
+    methods: ["POST"],
+    auth: true,
+  },
+  {
+    pattern: /^\/portal\/saas\/tenants\/\d+\/invites\/\d+\/revoke$/,
     methods: ["POST"],
     auth: true,
   },
@@ -46,6 +77,11 @@ const ALLOWED_BROWSER_ROUTES: readonly AllowedRoute[] = [
   {
     pattern: /^\/portal\/saas\/tenants\/\d+\/billing\/setup-session$/,
     methods: ["POST"],
+    auth: true,
+  },
+  {
+    pattern: /^\/portal\/saas\/tenants\/\d+\/billing\/budget-policy$/,
+    methods: ["PATCH"],
     auth: true,
   },
 ] as const;
