@@ -4,9 +4,9 @@ const minimalBackend = process.env.PLAYWRIGHT_MINIMAL_BACKEND === 'true';
 
 export async function registerRoutes(app: AppInstance) {
   const { registerObservabilityRoutes } = await import('./observability');
+  const { registerSaasStatusRoutes } = await import('./saas-status');
   const { registerInternalRoutes } = await import('./internal');
   const { registerPaymentRoutes } = await import('./payment');
-  const { registerPortalRoutes } = await import('./portal');
   const { registerAuthRoutes } = await import('./auth');
   const { registerCommunityRoutes } = await import('./community');
   const { registerLegalRoutes } = await import('./legal');
@@ -14,9 +14,11 @@ export async function registerRoutes(app: AppInstance) {
   const { registerAdminRoutes } = await import('./admin');
 
   await registerObservabilityRoutes(app);
+  await registerSaasStatusRoutes(app);
   await registerInternalRoutes(app);
   await registerPaymentRoutes(app);
   if (!minimalBackend) {
+    const { registerPortalRoutes } = await import('./portal');
     const { registerSaasRoutes } = await import('./saas');
     const { registerPrizeEngineRoutes } = await import('./prize-engine');
 

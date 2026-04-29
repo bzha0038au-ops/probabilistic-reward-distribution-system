@@ -533,6 +533,146 @@
       "when": 1777510800000,
       "tag": "0077_holdem_table_messages",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "6",
+      "when": 1777514400000,
+      "tag": "0078_prediction_market_vig",
+      "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "6",
+      "when": 1777518000000,
+      "tag": "0079_device_fingerprints",
+      "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "6",
+      "when": 1777521600000,
+      "tag": "0080_play_mode_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "6",
+      "when": 1777525200000,
+      "tag": "0080_saas_report_exports",
+      "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "6",
+      "when": 1777528800000,
+      "tag": "0081_security_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "6",
+      "when": 1777532400000,
+      "tag": "0082_jurisdiction_rules",
+      "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "6",
+      "when": 1777536000000,
+      "tag": "0083_kyc_reverification",
+      "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "6",
+      "when": 1777539600000,
+      "tag": "0084_data_rights",
+      "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "6",
+      "when": 1777543200000,
+      "tag": "0085_prediction_market_oracles",
+      "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "6",
+      "when": 1777546800000,
+      "tag": "0086_saas_portal_onboarding",
+      "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "6",
+      "when": 1777550400000,
+      "tag": "0087_first_deposit_bonus_mission",
+      "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "6",
+      "when": 1777554000000,
+      "tag": "0088_experiments",
+      "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "6",
+      "when": 1777557600000,
+      "tag": "0089_referrals_and_growth_mission",
+      "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "6",
+      "when": 1777561200000,
+      "tag": "0090_saas_billing_disputes",
+      "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "6",
+      "when": 1777564800000,
+      "tag": "0091_forum_automated_moderation",
+      "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "6",
+      "when": 1777568400000,
+      "tag": "0092_time_partition_large_append_only_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "6",
+      "when": 1777572000000,
+      "tag": "0093_notification_center",
+      "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "6",
+      "when": 1777575600000,
+      "tag": "0094_saas_status_public_page",
+      "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "6",
+      "when": 1777579200000,
+      "tag": "0095_saas_billing_run_external_sync",
+      "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "6",
+      "when": 1777582800000,
+      "tag": "0096_notification_push_devices",
+      "breakpoints": true
     }
   ]
 }

@@ -1,8 +1,8 @@
 import nodemailer from "nodemailer";
 import { and, desc, eq, ilike, lte, sql } from "@reward/database/orm";
 import type {
-  AuthNotificationChannel,
-  AuthNotificationKind,
+  NotificationChannel,
+  NotificationKind,
   NotificationDeliveryAttemptStatus,
   NotificationDeliveryQuery,
   NotificationDeliveryStatus,
@@ -10,26 +10,33 @@ import type {
   NotificationProvider,
   NotificationProviderStatus,
 } from "@reward/shared-types/notification";
+import type { RealtimeJsonValue } from "@reward/shared-types/realtime";
 import { notificationDeliveryStatusValues } from "@reward/shared-types/notification";
 
 import { client, db, type DbClient, type DbTransaction } from "../../db";
+import { publishRealtimeToUser } from "../../realtime";
 import { getConfigView } from "../../shared/config";
 import { logger } from "../../shared/logger";
 import { createRateLimiter } from "../../shared/rate-limit";
 import {
   notificationDeliveries,
   notificationDeliveryAttempts,
+  notificationPushDevices,
+  notificationRecords,
 } from "@reward/database";
 
 export type DeliveryPayload = Record<string, unknown>;
 
 export type NotificationDeliveryLike = {
   id: number;
-  kind: AuthNotificationKind;
-  channel: AuthNotificationChannel;
+  userId: number | null;
+  notificationRecordId: number | null;
+  kind: NotificationKind;
+  channel: NotificationChannel;
   recipient: string;
   provider: NotificationProvider;
   subject: string;
+  body: string | null;
   payload: DeliveryPayload;
 };
 
@@ -93,6 +100,8 @@ const hasTwilioProvider = () =>
     (config.authTwilioFromNumber || config.authTwilioMessagingServiceSid),
   );
 
+const hasExpoPushProvider = () => true;
+
 const maskEmail = (email: string) => {
   const [name = "", domain = ""] = email.split("@");
   const visible = name.slice(0, 2);
@@ -105,9 +114,20 @@ const maskPhone = (phone: string) =>
     : `${"*".repeat(Math.max(phone.length - 4, 1))}${phone.slice(-4)}`;
 
 export const maskRecipient = (
-  channel: AuthNotificationChannel,
+  channel: NotificationChannel,
   recipient: string,
-) => (channel === "email" ? maskEmail(recipient) : maskPhone(recipient));
+) => {
+  if (channel === "email") {
+    return maskEmail(recipient);
+  }
+  if (channel === "sms") {
+    return maskPhone(recipient);
+  }
+  if (channel === "push") {
+    return truncate(recipient, 24);
+  }
+  return recipient;
+};
 
 export const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
@@ -115,10 +135,17 @@ export const normalizePhone = (phone: string) =>
   phone.trim().replace(/[^\d+]/g, "");
 
 export const normalizeRecipient = (
-  channel: AuthNotificationChannel,
+  channel: NotificationChannel,
   recipient: string,
-) =>
-  channel === "email" ? normalizeEmail(recipient) : normalizePhone(recipient);
+) => {
+  if (channel === "email") {
+    return normalizeEmail(recipient);
+  }
+  if (channel === "sms") {
+    return normalizePhone(recipient);
+  }
+  return recipient.trim();
+};
 
 export const truncate = (value: string, max = 500) =>
   value.length <= max ? value : `${value.slice(0, max - 1)}…`;
@@ -182,7 +209,7 @@ export class NotificationThrottleError extends Error {
 export class NotificationProviderUnavailableError extends Error {
   constructor(
     message: string,
-    readonly channel: AuthNotificationChannel,
+    readonly channel: NotificationChannel,
   ) {
     super(message);
     this.name = "NotificationProviderUnavailableError";
@@ -211,8 +238,14 @@ export class NotificationDeliveryError extends Error {
 }
 
 export const resolveNotificationProvider = (
-  channel: AuthNotificationChannel,
+  channel: NotificationChannel,
 ): NotificationProvider => {
+  if (channel === "in_app") {
+    return "in_app";
+  }
+  if (channel === "push" && hasExpoPushProvider()) {
+    return "expo_push";
+  }
   if (channel === "email" && hasSmtpProvider()) {
     return "smtp";
   }
@@ -228,26 +261,34 @@ export const resolveNotificationProvider = (
 
   throw new NotificationProviderUnavailableError(
     channel === "email"
-      ? "Auth email provider is not configured."
-      : "Auth SMS provider is not configured.",
+      ? "Notification email provider is not configured."
+      : channel === "sms"
+        ? "Notification SMS provider is not configured."
+        : channel === "push"
+          ? "Notification push provider is not configured."
+        : "Notification channel provider is not configured.",
     channel,
   );
 };
 
 export const assertNotificationChannelAvailable = (
-  channel: AuthNotificationChannel,
+  channel: NotificationChannel,
 ) => {
   resolveNotificationProvider(channel);
 };
 
-const resolveLimiter = (kind: AuthNotificationKind) => {
+const resolveLimiter = (kind: NotificationKind) => {
   if (kind === "phone_verification") {
     return {
       enabled: config.authNotificationSmsThrottleMax > 0,
       limiter: getSmsLimiter(),
     };
   }
-  if (kind === "security_alert" || kind === "aml_review") {
+  if (
+    kind === "security_alert" ||
+    kind === "aml_review" ||
+    kind === "kyc_reverification"
+  ) {
     return {
       enabled: config.authNotificationAlertThrottleMax > 0,
       limiter: getAlertLimiter(),
@@ -260,7 +301,7 @@ const resolveLimiter = (kind: AuthNotificationKind) => {
 };
 
 export const enforceRecipientThrottle = async (payload: {
-  kind: AuthNotificationKind;
+  kind: NotificationKind;
   recipientKey: string;
 }) => {
   const selected = resolveLimiter(payload.kind);
@@ -397,6 +438,53 @@ const renderEmailBody = (delivery: NotificationDeliveryLike) => {
         summary ?? "Mock AML screening reported a potential sanctions/watchlist match.",
       ].join("\n");
     }
+    case "kyc_reverification": {
+      const reverificationType = readString(
+        delivery.payload,
+        "reverificationType",
+      );
+      const verificationUrl = readString(delivery.payload, "verificationUrl");
+      const currentTier = readOptionalString(delivery.payload, "currentTier");
+      const targetTier = readOptionalString(delivery.payload, "targetTier");
+      const operatorReason = readOptionalString(
+        delivery.payload,
+        "operatorReason",
+      );
+      const occurredAtValue = readOptionalString(delivery.payload, "occurredAt");
+      const expiresAtValue = readOptionalString(delivery.payload, "expiresAt");
+      const occurredAt = occurredAtValue ? new Date(occurredAtValue) : null;
+      const expiresAt = expiresAtValue ? new Date(expiresAtValue) : null;
+
+      if (reverificationType === "document_expiring_soon") {
+        return [
+          "One of your KYC identity documents is expiring soon.",
+          "",
+          `Current tier: ${currentTier ?? "unknown"}`,
+          `Document expires at: ${expiresAt?.toISOString() ?? "unknown"}`,
+          "",
+          `Review and resubmit documents: ${verificationUrl}`,
+        ].join("\n");
+      }
+
+      const reverificationReasonLabel =
+        reverificationType === "document_expired"
+          ? "Document expired"
+          : reverificationType === "policy_update"
+            ? "Policy update"
+            : "Manual reverification request";
+
+      return [
+        "Your account requires KYC re-verification before protected access can continue.",
+        "",
+        `Reason: ${reverificationReasonLabel}`,
+        `Previous tier: ${targetTier ?? currentTier ?? "unknown"}`,
+        `Triggered at: ${occurredAt?.toISOString() ?? "unknown"}`,
+        `Expired document at: ${expiresAt?.toISOString() ?? "not provided"}`,
+        `Operator note: ${operatorReason ?? "none"}`,
+        "",
+        `Upload refreshed documents: ${verificationUrl}`,
+      ].join("\n");
+    }
     case "saas_tenant_invite": {
       const inviteUrl = readString(delivery.payload, "inviteUrl");
       const tenantName = readString(delivery.payload, "tenantName");
@@ -411,6 +499,75 @@ const renderEmailBody = (delivery: NotificationDeliveryLike) => {
         `Expires at: ${expiresAt.toISOString()}`,
         "",
         `Accept invitation: ${inviteUrl}`,
+      ].join("\n");
+    }
+    case "saas_billing_budget_alert": {
+      const tenantName = readString(delivery.payload, "tenantName");
+      const eventType = readString(delivery.payload, "eventType");
+      const month = readString(delivery.payload, "month");
+      const currency = readString(delivery.payload, "currency");
+      const currentTotalAmount = readString(
+        delivery.payload,
+        "currentTotalAmount",
+      );
+      const currentUsageAmount = readString(
+        delivery.payload,
+        "currentUsageAmount",
+      );
+      const monthlyBudget = readOptionalString(delivery.payload, "monthlyBudget");
+      const budgetThresholdAmount = readOptionalString(
+        delivery.payload,
+        "budgetThresholdAmount",
+      );
+      const hardCap = readOptionalString(delivery.payload, "hardCap");
+      const projectedTotalAmount7d = readString(
+        delivery.payload,
+        "projectedTotalAmount7d",
+      );
+      const projectedTotalAmount30d = readString(
+        delivery.payload,
+        "projectedTotalAmount30d",
+      );
+      const dailyRunRate7d = readString(delivery.payload, "dailyRunRate7d");
+      const dailyRunRate30d = readString(delivery.payload, "dailyRunRate30d");
+      const hardCapReachedAt = readOptionalString(
+        delivery.payload,
+        "hardCapReachedAt",
+      );
+      return [
+        `Reward SaaS billing alert for tenant "${tenantName}".`,
+        "",
+        `Event: ${eventType}`,
+        `Month: ${month}`,
+        `Current total: ${currentTotalAmount} ${currency}`,
+        `Current usage: ${currentUsageAmount} ${currency}`,
+        `Budget target: ${monthlyBudget ?? "not configured"}`,
+        `Threshold amount: ${budgetThresholdAmount ?? "not configured"}`,
+        `Hard cap: ${hardCap ?? "not configured"}`,
+        `7d monthly projection: ${projectedTotalAmount7d} ${currency}`,
+        `30d monthly projection: ${projectedTotalAmount30d} ${currency}`,
+        `7d daily run rate: ${dailyRunRate7d} ${currency}`,
+        `30d daily run rate: ${dailyRunRate30d} ${currency}`,
+        `Hard cap reached at: ${hardCapReachedAt ?? "not reached"}`,
+      ].join("\n");
+    }
+    case "saas_onboarding_complete": {
+      const tenantName = readString(delivery.payload, "tenantName");
+      const projectName = readString(delivery.payload, "projectName");
+      const environment = readString(delivery.payload, "environment");
+      const completedAt = readIsoDate(delivery.payload, "completedAt");
+      const activityType = readString(delivery.payload, "activityType");
+      const subjectId = readOptionalString(delivery.payload, "subjectId");
+      return [
+        `Your Reward SaaS tenant "${tenantName}" completed its first successful hello-reward call.`,
+        "",
+        `Project: ${projectName}`,
+        `Environment: ${environment}`,
+        `First successful call type: ${activityType}`,
+        `Subject id: ${subjectId ?? "not provided"}`,
+        `Completed at: ${completedAt.toISOString()}`,
+        "",
+        "The tenant is now marked as onboarded in the portal.",
       ].join("\n");
     }
     default:
@@ -435,7 +592,7 @@ const renderSmsBody = (delivery: NotificationDeliveryLike) => {
 };
 
 export const redactNotificationPayload = (
-  kind: AuthNotificationKind,
+  kind: NotificationKind,
   payload: DeliveryPayload,
 ) => {
   switch (kind) {
@@ -474,6 +631,16 @@ export const redactNotificationPayload = (
         summary: readOptionalString(payload, "summary"),
         occurredAt: readOptionalString(payload, "occurredAt"),
       };
+    case "kyc_reverification":
+      return {
+        reverificationType: readOptionalString(payload, "reverificationType"),
+        verificationUrl: "[redacted]",
+        currentTier: readOptionalString(payload, "currentTier"),
+        targetTier: readOptionalString(payload, "targetTier"),
+        operatorReason: readOptionalString(payload, "operatorReason"),
+        occurredAt: readOptionalString(payload, "occurredAt"),
+        expiresAt: readOptionalString(payload, "expiresAt"),
+      };
     case "saas_tenant_invite":
       return {
         inviteUrl: "[redacted]",
@@ -481,6 +648,41 @@ export const redactNotificationPayload = (
         role: readOptionalString(payload, "role"),
         invitedBy: readOptionalString(payload, "invitedBy"),
         expiresAt: readOptionalString(payload, "expiresAt"),
+      };
+    case "saas_billing_budget_alert":
+      return {
+        tenantName: readOptionalString(payload, "tenantName"),
+        eventType: readOptionalString(payload, "eventType"),
+        month: readOptionalString(payload, "month"),
+        currency: readOptionalString(payload, "currency"),
+        currentTotalAmount: readOptionalString(payload, "currentTotalAmount"),
+        currentUsageAmount: readOptionalString(payload, "currentUsageAmount"),
+        monthlyBudget: readOptionalString(payload, "monthlyBudget"),
+        budgetThresholdAmount: readOptionalString(
+          payload,
+          "budgetThresholdAmount",
+        ),
+        hardCap: readOptionalString(payload, "hardCap"),
+        projectedTotalAmount7d: readOptionalString(
+          payload,
+          "projectedTotalAmount7d",
+        ),
+        projectedTotalAmount30d: readOptionalString(
+          payload,
+          "projectedTotalAmount30d",
+        ),
+        dailyRunRate7d: readOptionalString(payload, "dailyRunRate7d"),
+        dailyRunRate30d: readOptionalString(payload, "dailyRunRate30d"),
+        hardCapReachedAt: readOptionalString(payload, "hardCapReachedAt"),
+      };
+    case "saas_onboarding_complete":
+      return {
+        tenantName: readOptionalString(payload, "tenantName"),
+        projectName: readOptionalString(payload, "projectName"),
+        environment: readOptionalString(payload, "environment"),
+        activityType: readOptionalString(payload, "activityType"),
+        subjectId: readOptionalString(payload, "subjectId"),
+        completedAt: readOptionalString(payload, "completedAt"),
       };
     default:
       return {};
@@ -503,7 +705,7 @@ const sendViaSmtp = async (
     from: config.authEmailFrom,
     to: delivery.recipient,
     subject: delivery.subject,
-    text: renderEmailBody(delivery),
+    text: delivery.body ?? renderEmailBody(delivery),
   });
 
   return {
@@ -520,7 +722,7 @@ const sendViaTwilio = async (
     ...(config.authTwilioMessagingServiceSid
       ? { MessagingServiceSid: config.authTwilioMessagingServiceSid }
       : { From: config.authTwilioFromNumber }),
-    Body: renderSmsBody(delivery),
+    Body: delivery.body ?? renderSmsBody(delivery),
   });
 
   const response = await withTimeout((signal) =>
@@ -571,6 +773,156 @@ const sendViaTwilio = async (
   };
 };
 
+const markPushDeviceDelivered = async (token: string) => {
+  await db
+    .update(notificationPushDevices)
+    .set({
+      lastDeliveredAt: new Date(),
+      lastError: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(notificationPushDevices.token, token));
+};
+
+const markPushDeviceErrored = async (token: string, error: string) => {
+  await db
+    .update(notificationPushDevices)
+    .set({
+      lastError: truncate(error, 500),
+      updatedAt: new Date(),
+    })
+    .where(eq(notificationPushDevices.token, token));
+};
+
+const deactivatePushDevice = async (token: string, error: string) => {
+  await db
+    .update(notificationPushDevices)
+    .set({
+      active: false,
+      lastError: truncate(error, 500),
+      deactivatedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(notificationPushDevices.token, token));
+};
+
+const sendViaExpoPush = async (
+  delivery: NotificationDeliveryLike,
+): Promise<ProviderSendResult> => {
+  const response = await withTimeout((signal) =>
+    fetch("https://exp.host/--/api/v2/push/send", {
+      method: "POST",
+      signal,
+      headers: {
+        accept: "application/json",
+        "accept-encoding": "gzip, deflate",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify([
+        {
+          to: delivery.recipient,
+          title: delivery.subject,
+          body: delivery.body ?? delivery.subject,
+          data: {
+            kind: delivery.kind,
+            notificationRecordId: delivery.notificationRecordId,
+            ...(delivery.payload ?? {}),
+          },
+          sound: "default",
+        },
+      ]),
+    }),
+  );
+
+  const responseText = await response.text();
+  let parsed: Record<string, unknown> = {};
+  if (responseText) {
+    try {
+      parsed = JSON.parse(responseText) as Record<string, unknown>;
+    } catch {
+      parsed = { raw: responseText };
+    }
+  }
+
+  if (!response.ok) {
+    await markPushDeviceErrored(
+      delivery.recipient,
+      `Expo push request failed with status ${response.status}`,
+    );
+    throw new NotificationDeliveryError(
+      `Expo push request failed with status ${response.status}`,
+      {
+        retryable:
+          response.status >= 500 ||
+          response.status === 408 ||
+          response.status === 429,
+        responseCode: response.status,
+        metadata: parsed,
+      },
+    );
+  }
+
+  const entries = Array.isArray(parsed.data)
+    ? parsed.data
+    : parsed.data
+      ? [parsed.data]
+      : [];
+  const entry =
+    entries[0] && typeof entries[0] === "object"
+      ? (entries[0] as Record<string, unknown>)
+      : null;
+
+  if (!entry) {
+    await markPushDeviceErrored(
+      delivery.recipient,
+      "Expo push response did not include a ticket.",
+    );
+    throw new NotificationDeliveryError(
+      "Expo push response did not include a ticket.",
+      {
+        retryable: true,
+        responseCode: response.status,
+        metadata: parsed,
+      },
+    );
+  }
+
+  if (entry.status !== "ok") {
+    const details =
+      entry.details && typeof entry.details === "object"
+        ? (entry.details as Record<string, unknown>)
+        : null;
+    const expoError =
+      details && typeof details.error === "string" ? details.error : null;
+    const message =
+      typeof entry.message === "string"
+        ? entry.message
+        : expoError
+          ? `Expo push error: ${expoError}`
+          : "Expo push rejected notification.";
+
+    if (expoError === "DeviceNotRegistered") {
+      await deactivatePushDevice(delivery.recipient, message);
+    } else {
+      await markPushDeviceErrored(delivery.recipient, message);
+    }
+
+    throw new NotificationDeliveryError(message, {
+      retryable: false,
+      responseCode: response.status,
+      metadata: parsed,
+    });
+  }
+
+  await markPushDeviceDelivered(delivery.recipient);
+
+  return {
+    providerMessageId: typeof entry.id === "string" ? entry.id : null,
+    responseCode: response.status,
+    metadata: parsed,
+  };
+};
+
 const sendViaWebhook = async (
   delivery: NotificationDeliveryLike,
 ): Promise<ProviderSendResult> => {
@@ -586,6 +938,7 @@ const sendViaWebhook = async (
         channel: delivery.channel,
         recipient: delivery.recipient,
         subject: delivery.subject,
+        body: delivery.body,
         metadata: delivery.payload,
       }),
     }),
@@ -606,6 +959,61 @@ const sendViaWebhook = async (
 
   return {
     responseCode: response.status,
+  };
+};
+
+const sendViaInApp = async (
+  delivery: NotificationDeliveryLike,
+): Promise<ProviderSendResult> => {
+  if (!delivery.userId || !delivery.notificationRecordId) {
+    throw new NotificationDeliveryError(
+      "In-app notifications require a user and notification record.",
+      {
+        retryable: false,
+      },
+    );
+  }
+
+  const [record] = await db
+    .select({
+      id: notificationRecords.id,
+      userId: notificationRecords.userId,
+      kind: notificationRecords.kind,
+      title: notificationRecords.title,
+      body: notificationRecords.body,
+      data: notificationRecords.data,
+      readAt: notificationRecords.readAt,
+      createdAt: notificationRecords.createdAt,
+      updatedAt: notificationRecords.updatedAt,
+    })
+    .from(notificationRecords)
+    .where(eq(notificationRecords.id, delivery.notificationRecordId))
+    .limit(1);
+
+  if (!record) {
+    throw new NotificationDeliveryError("Notification record not found.", {
+      retryable: false,
+    });
+  }
+
+  publishRealtimeToUser({
+    userId: delivery.userId,
+    event: "notification.created",
+      data: {
+        id: record.id,
+        userId: record.userId,
+        kind: record.kind,
+        title: record.title,
+        body: record.body,
+        data: ((record.data as DeliveryPayload | null) ?? null) as RealtimeJsonValue,
+        readAt: record.readAt?.toISOString() ?? null,
+        createdAt: record.createdAt.toISOString(),
+        updatedAt: record.updatedAt.toISOString(),
+      },
+  });
+
+  return {
+    providerMessageId: `in-app:${delivery.notificationRecordId}`,
   };
 };
 
@@ -630,6 +1038,10 @@ export const sendDelivery = async (delivery: NotificationDeliveryLike) => {
       return sendViaSmtp(delivery);
     case "twilio":
       return sendViaTwilio(delivery);
+    case "expo_push":
+      return sendViaExpoPush(delivery);
+    case "in_app":
+      return sendViaInApp(delivery);
     case "webhook":
       return sendViaWebhook(delivery);
     case "mock":
@@ -659,9 +1071,18 @@ export const getNotificationProviderStatus = (): NotificationProviderStatus => {
     }
   })();
 
+  const pushProvider = (() => {
+    try {
+      return resolveNotificationProvider("push");
+    } catch {
+      return "unavailable" as const;
+    }
+  })();
+
   return {
     emailProvider,
     smsProvider,
+    pushProvider,
   };
 };
 
@@ -672,12 +1093,15 @@ type DeliveryAttemptStatus = NotificationDeliveryAttemptStatus;
 
 type ClaimedDelivery = {
   id: number;
-  kind: AuthNotificationKind;
-  channel: AuthNotificationChannel;
+  userId: number | null;
+  notificationRecordId: number | null;
+  kind: NotificationKind;
+  channel: NotificationChannel;
   recipient: string;
   recipientKey: string;
   provider: NotificationProvider;
   subject: string;
+  body: string | null;
   payload: DeliveryPayload;
   status: DeliveryStatus;
   attempts: number;
@@ -690,6 +1114,24 @@ type ClaimedDelivery = {
   lastError: string | null;
   createdAt: Date;
   updatedAt: Date;
+};
+
+const coerceDateValue = (value: Date | string | null): Date | null => {
+  if (value == null) {
+    return null;
+  }
+  if (value instanceof Date) {
+    return value;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.valueOf())) {
+    throw new NotificationDeliveryError("Notification delivery contains an invalid timestamp.", {
+      retryable: false,
+    });
+  }
+
+  return parsed;
 };
 
 let enqueueHook: (() => void) | null = null;
@@ -817,12 +1259,15 @@ const claimPendingDeliveries = async (limit: number) => {
     where d.id = due.id
     returning
       d.id,
+      d.user_id as "userId",
+      d.notification_record_id as "notificationRecordId",
       d.kind,
       d.channel,
       d.recipient,
       d.recipient_key as "recipientKey",
       d.provider,
       d.subject,
+      d.body,
       d.payload,
       d.status,
       d.attempts,
@@ -837,7 +1282,15 @@ const claimPendingDeliveries = async (limit: number) => {
       d.updated_at as "updatedAt"
   `;
 
-  return rows;
+  return rows.map((row) => ({
+    ...row,
+    nextAttemptAt: coerceDateValue(row.nextAttemptAt)!,
+    lastAttemptAt: coerceDateValue(row.lastAttemptAt),
+    lockedAt: coerceDateValue(row.lockedAt),
+    deliveredAt: coerceDateValue(row.deliveredAt),
+    createdAt: coerceDateValue(row.createdAt)!,
+    updatedAt: coerceDateValue(row.updatedAt)!,
+  }));
 };
 
 export async function recoverStuckAuthNotifications() {
@@ -948,33 +1401,41 @@ export const registerAuthNotificationEnqueueHook = (
   enqueueHook = hook;
 };
 
-const queueAuthNotification = async (
+export const queueNotificationDelivery = async (
   payload: {
-    kind: AuthNotificationKind;
-    channel: AuthNotificationChannel;
+    kind: NotificationKind;
+    channel: NotificationChannel;
     recipient: string;
     subject: string;
+    body?: string | null;
     metadata: DeliveryPayload;
+    userId?: number | null;
+    notificationRecordId?: number | null;
   },
   database: NotificationDb = db,
 ) => {
   const provider = resolveNotificationProvider(payload.channel);
   const recipientKey = normalizeRecipient(payload.channel, payload.recipient);
 
-  await enforceRecipientThrottle({
-    kind: payload.kind,
-    recipientKey,
-  });
+  if (payload.channel !== "in_app") {
+    await enforceRecipientThrottle({
+      kind: payload.kind,
+      recipientKey,
+    });
+  }
 
   const [delivery] = await database
     .insert(notificationDeliveries)
     .values({
+      userId: payload.userId ?? null,
+      notificationRecordId: payload.notificationRecordId ?? null,
       kind: payload.kind,
       channel: payload.channel,
       recipient: payload.recipient,
       recipientKey,
       provider,
       subject: payload.subject,
+      body: payload.body ?? null,
       payload: payload.metadata,
       status: "pending",
       attempts: 0,
@@ -1005,7 +1466,7 @@ export async function sendPasswordResetNotification(
   },
   database?: NotificationDb,
 ) {
-  return queueAuthNotification(
+  return queueNotificationDelivery(
     {
       kind: "password_reset",
       channel: "email",
@@ -1028,7 +1489,7 @@ export async function sendEmailVerificationNotification(
   },
   database?: NotificationDb,
 ) {
-  return queueAuthNotification(
+  return queueNotificationDelivery(
     {
       kind: "email_verification",
       channel: "email",
@@ -1051,7 +1512,7 @@ export async function sendPhoneVerificationNotification(
   },
   database?: NotificationDb,
 ) {
-  return queueAuthNotification(
+  return queueNotificationDelivery(
     {
       kind: "phone_verification",
       channel: "sms",
@@ -1077,7 +1538,7 @@ export async function sendSaasTenantInviteNotification(
   },
   database?: NotificationDb,
 ) {
-  return queueAuthNotification(
+  return queueNotificationDelivery(
     {
       kind: "saas_tenant_invite",
       channel: "email",
@@ -1089,6 +1550,95 @@ export async function sendSaasTenantInviteNotification(
         role: payload.role,
         invitedBy: payload.invitedBy ?? null,
         expiresAt: payload.expiresAt.toISOString(),
+      },
+    },
+    database,
+  );
+}
+
+export async function sendSaasBillingBudgetAlertNotification(
+  payload: {
+    email: string;
+    tenantName: string;
+    eventType:
+      | "billing.threshold_exceeded"
+      | "billing.forecast_7d_exceeded"
+      | "billing.forecast_30d_exceeded"
+      | "billing.hard_cap_reached";
+    currency: string;
+    month: string;
+    currentTotalAmount: string;
+    currentUsageAmount: string;
+    monthlyBudget?: string | null;
+    budgetThresholdAmount?: string | null;
+    hardCap?: string | null;
+    projectedTotalAmount7d: string;
+    projectedTotalAmount30d: string;
+    dailyRunRate7d: string;
+    dailyRunRate30d: string;
+    hardCapReachedAt?: string | null;
+  },
+  database?: NotificationDb,
+) {
+  const subject =
+    payload.eventType === "billing.hard_cap_reached"
+      ? `Billing hard cap reached for ${payload.tenantName}`
+      : payload.eventType === "billing.threshold_exceeded"
+        ? `Billing threshold reached for ${payload.tenantName}`
+        : `Billing forecast alert for ${payload.tenantName}`;
+
+  return queueNotificationDelivery(
+    {
+      kind: "saas_billing_budget_alert",
+      channel: "email",
+      recipient: normalizeEmail(payload.email),
+      subject,
+      metadata: {
+        tenantName: payload.tenantName,
+        eventType: payload.eventType,
+        currency: payload.currency,
+        month: payload.month,
+        currentTotalAmount: payload.currentTotalAmount,
+        currentUsageAmount: payload.currentUsageAmount,
+        monthlyBudget: payload.monthlyBudget ?? null,
+        budgetThresholdAmount: payload.budgetThresholdAmount ?? null,
+        hardCap: payload.hardCap ?? null,
+        projectedTotalAmount7d: payload.projectedTotalAmount7d,
+        projectedTotalAmount30d: payload.projectedTotalAmount30d,
+        dailyRunRate7d: payload.dailyRunRate7d,
+        dailyRunRate30d: payload.dailyRunRate30d,
+        hardCapReachedAt: payload.hardCapReachedAt ?? null,
+      },
+    },
+    database,
+  );
+}
+
+export async function sendSaasOnboardingCompleteNotification(
+  payload: {
+    email: string;
+    tenantName: string;
+    projectName: string;
+    environment: string;
+    activityType: "reward" | "draw";
+    subjectId?: string | null;
+    completedAt: Date;
+  },
+  database?: NotificationDb,
+) {
+  return queueNotificationDelivery(
+    {
+      kind: "saas_onboarding_complete",
+      channel: "email",
+      recipient: normalizeEmail(payload.email),
+      subject: `${payload.tenantName} is now onboarded`,
+      metadata: {
+        tenantName: payload.tenantName,
+        projectName: payload.projectName,
+        environment: payload.environment,
+        activityType: payload.activityType,
+        subjectId: payload.subjectId ?? null,
+        completedAt: payload.completedAt.toISOString(),
       },
     },
     database,
@@ -1107,7 +1657,7 @@ export async function sendAnomalousLoginAlert(
   },
   database?: NotificationDb,
 ) {
-  return queueAuthNotification(
+  return queueNotificationDelivery(
     {
       kind: "security_alert",
       channel: "email",
@@ -1140,7 +1690,7 @@ export async function sendAmlReviewNotification(
   },
   database?: NotificationDb,
 ) {
-  return queueAuthNotification(
+  return queueNotificationDelivery(
     {
       kind: "aml_review",
       channel: "email",
@@ -1155,6 +1705,63 @@ export async function sendAmlReviewNotification(
         providerKey: payload.providerKey,
         summary: payload.summary ?? null,
         occurredAt: payload.occurredAt.toISOString(),
+      },
+    },
+    database,
+  );
+}
+
+export async function sendKycExpiryReminderNotification(
+  payload: {
+    email: string;
+    verificationUrl: string;
+    currentTier: string;
+    expiresAt: Date;
+  },
+  database?: NotificationDb,
+) {
+  return queueNotificationDelivery(
+    {
+      kind: "kyc_reverification",
+      channel: "email",
+      recipient: normalizeEmail(payload.email),
+      subject: "KYC document expires soon",
+      metadata: {
+        reverificationType: "document_expiring_soon",
+        verificationUrl: payload.verificationUrl,
+        currentTier: payload.currentTier,
+        expiresAt: payload.expiresAt.toISOString(),
+      },
+    },
+    database,
+  );
+}
+
+export async function sendKycReverificationRequiredNotification(
+  payload: {
+    email: string;
+    verificationUrl: string;
+    targetTier: string;
+    reverificationType: "document_expired" | "policy_update" | "admin_trigger";
+    occurredAt: Date;
+    operatorReason?: string | null;
+    expiresAt?: Date | null;
+  },
+  database?: NotificationDb,
+) {
+  return queueNotificationDelivery(
+    {
+      kind: "kyc_reverification",
+      channel: "email",
+      recipient: normalizeEmail(payload.email),
+      subject: "KYC re-verification required",
+      metadata: {
+        reverificationType: payload.reverificationType,
+        verificationUrl: payload.verificationUrl,
+        targetTier: payload.targetTier,
+        operatorReason: payload.operatorReason ?? null,
+        occurredAt: payload.occurredAt.toISOString(),
+        expiresAt: payload.expiresAt?.toISOString() ?? null,
       },
     },
     database,

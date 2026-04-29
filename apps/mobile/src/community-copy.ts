@@ -1,0 +1,138 @@
+import type { MobileFairnessLocale } from './fairness';
+
+const communityCopy = {
+  en: {
+    summaryThreadsLabel: 'Visible threads',
+    summarySelectedLabel: 'Selected thread',
+    summaryPostsLabel: 'Visible posts',
+    noneSelected: 'None',
+    refresh: 'Refresh',
+    refreshing: 'Refreshing...',
+    openWeb: 'Open web community',
+    webFallback:
+      'If captcha is enabled for your account tier, use the web community page on this device to complete the human check.',
+    createTitle: 'Start a thread',
+    createSubtitle:
+      'Threads publish immediately unless anti-spam policy pushes the submission into admin review.',
+    threadTitleLabel: 'Thread title',
+    threadTitlePlaceholder:
+      'Report an issue, ask a product question, or start a discussion',
+    threadBodyLabel: 'Opening post',
+    threadBodyPlaceholder:
+      'Write the first post here. Obvious spam signals or outbound contact bait can move the thread into review.',
+    submitThread: 'Publish thread',
+    submittingThread: 'Publishing...',
+    listTitle: 'Recent threads',
+    listSubtitle:
+      'This list only shows visible threads. Auto-hidden submissions stay out until an admin restores them.',
+    loadingThreads: 'Loading community threads...',
+    noThreads: 'No visible threads yet.',
+    detailTitle: 'Thread detail',
+    detailEmpty: 'Select a thread to load the visible posts.',
+    loadingThread: 'Loading thread detail...',
+    replyLabel: 'Reply',
+    replyPlaceholder: 'Add a useful follow-up or answer.',
+    replyLocked: 'This thread is locked and cannot accept replies.',
+    submitReply: 'Post reply',
+    submittingReply: 'Posting...',
+    authorLabel: (userId: number) => `User #${userId}`,
+    postCount: (count: number) => `${count} posts`,
+    startedAt: 'Started',
+    lastActive: 'Last active',
+    lockedBadge: 'Locked',
+    originalPostBadge: 'Opening post',
+    replyBadge: 'Reply',
+    titleRequired: 'Enter a thread title.',
+    bodyRequired: 'Enter thread content before publishing.',
+    replyRequired: 'Enter a reply before posting.',
+    createSuccess: 'Thread published.',
+    createQueued: 'Submitted and queued for admin review.',
+    createHidden: 'Submitted and hidden pending admin review.',
+    createFailed: 'Failed to publish the thread.',
+    replySuccess: 'Reply posted.',
+    replyQueued: 'Reply submitted and queued for admin review.',
+    replyHidden: 'Reply submitted and hidden pending admin review.',
+    replyFailed: 'Failed to post the reply.',
+    loadFailed: 'Failed to load community threads.',
+    loadThreadFailed: 'Failed to load the selected thread.',
+    captchaRequired:
+      'Captcha is required for this account tier. Open the web community page on this device to continue.',
+    captchaInvalid:
+      'Captcha verification failed. Open the web community page on this device and retry there.',
+    kycRequired: 'Complete tier 1 KYC before posting in community.',
+    threadMissing: 'This thread is no longer visible.',
+    threadLocked: 'This thread is locked.',
+    rateLimited: 'Posting is temporarily rate limited. Wait a bit and try again.',
+    openWebFailed: 'Unable to open the web community page on this device.',
+  },
+  'zh-CN': {
+    summaryThreadsLabel: '可见主题',
+    summarySelectedLabel: '当前主题',
+    summaryPostsLabel: '可见帖子',
+    noneSelected: '未选择',
+    refresh: '刷新',
+    refreshing: '刷新中...',
+    openWeb: '打开 Web 社区页',
+    webFallback:
+      '如果当前账号层级启用了 captcha，请直接在这台设备上打开 Web 社区页完成人机校验。',
+    createTitle: '发起主题',
+    createSubtitle:
+      '正常内容会即时发布；命中反垃圾策略时会自动进入管理员审核。',
+    threadTitleLabel: '主题标题',
+    threadTitlePlaceholder: '提一个问题、报一个功能问题，或者发起一场讨论',
+    threadBodyLabel: '首帖内容',
+    threadBodyPlaceholder:
+      '在这里写清楚首帖内容。明显 spam 信号或导流信息可能会让主题进入审核。',
+    submitThread: '发布主题',
+    submittingThread: '发布中...',
+    listTitle: '最新主题',
+    listSubtitle:
+      '这里只显示当前可见的主题。自动隐藏的内容需要等管理员恢复后才会重新出现。',
+    loadingThreads: '正在加载社区主题...',
+    noThreads: '当前还没有可见主题。',
+    detailTitle: '主题详情',
+    detailEmpty: '先选择一个主题，再加载它的可见帖子。',
+    loadingThread: '正在加载主题详情...',
+    replyLabel: '回复内容',
+    replyPlaceholder: '补充有用信息或直接回答主题。',
+    replyLocked: '这个主题已经锁定，暂时不能回复。',
+    submitReply: '发送回复',
+    submittingReply: '发送中...',
+    authorLabel: (userId: number) => `用户 #${userId}`,
+    postCount: (count: number) => `${count} 条帖子`,
+    startedAt: '创建时间',
+    lastActive: '最近活跃',
+    lockedBadge: '已锁定',
+    originalPostBadge: '首帖',
+    replyBadge: '回复',
+    titleRequired: '请先填写主题标题。',
+    bodyRequired: '请先填写主题正文。',
+    replyRequired: '请先填写回复内容。',
+    createSuccess: '主题已发布。',
+    createQueued: '内容已提交，并已进入管理员审核队列。',
+    createHidden: '内容已提交，但已先自动隐藏，等待管理员审核。',
+    createFailed: '发布主题失败。',
+    replySuccess: '回复已发送。',
+    replyQueued: '回复已提交，并已进入管理员审核队列。',
+    replyHidden: '回复已提交，但已先自动隐藏，等待管理员审核。',
+    replyFailed: '发送回复失败。',
+    loadFailed: '加载社区主题失败。',
+    loadThreadFailed: '加载当前主题失败。',
+    captchaRequired:
+      '当前账号层级需要 captcha。请在这台设备上打开 Web 社区页继续操作。',
+    captchaInvalid:
+      'Captcha 校验失败。请改用这台设备上的 Web 社区页重新提交。',
+    kycRequired: '需要先完成 tier 1 KYC，才能在社区发帖或回复。',
+    threadMissing: '这个主题当前已不可见。',
+    threadLocked: '这个主题已经被锁定。',
+    rateLimited: '当前发帖过于频繁，请稍后再试。',
+    openWebFailed: '当前设备无法打开 Web 社区页。',
+  },
+} as const;
+
+export type MobileCommunityCopy =
+  (typeof communityCopy)[keyof typeof communityCopy];
+
+export function getMobileCommunityCopy(locale: MobileFairnessLocale) {
+  return communityCopy[locale];
+}

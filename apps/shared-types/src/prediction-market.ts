@@ -20,6 +20,7 @@ export const predictionMarketStatusValues = [
 
 export const predictionPositionStatusValues = [
   "open",
+  "sold",
   "won",
   "lost",
   "refunded",
@@ -109,6 +110,11 @@ export type PredictionMarketInvalidPolicy = z.infer<
   typeof PredictionMarketInvalidPolicySchema
 >;
 
+export const PredictionMarketVigBpsSchema = z.number().int().min(0).max(10_000);
+export type PredictionMarketVigBps = z.infer<
+  typeof PredictionMarketVigBpsSchema
+>;
+
 export const PredictionMarketOutcomeSchema = z.object({
   key: z
     .string()
@@ -121,6 +127,9 @@ export const PredictionMarketOutcomeSchema = z.object({
 export type PredictionMarketOutcome = z.infer<
   typeof PredictionMarketOutcomeSchema
 >;
+
+const PredictionMarketOutcomeKeySchema =
+  PredictionMarketOutcomeSchema.shape.key;
 
 export const PredictionMarketTagSchema = z
   .string()
@@ -138,6 +147,261 @@ export const PredictionMarketTagsSchema = z
     message: "Tags must be unique.",
   });
 export type PredictionMarketTags = z.infer<typeof PredictionMarketTagsSchema>;
+
+export const predictionMarketOracleProviderValues = [
+  "uma_oracle",
+  "chainlink",
+  "manual_admin",
+  "api_pull",
+] as const;
+
+export const predictionMarketOracleBindingStatusValues = [
+  "active",
+  "pending",
+  "resolved",
+  "appealed",
+  "manual_only",
+  "cancelled",
+] as const;
+
+export const predictionMarketAppealStatusValues = [
+  "open",
+  "acknowledged",
+  "resolved",
+] as const;
+
+export const predictionMarketAppealReasonValues = [
+  "oracle_fetch_failed",
+  "oracle_response_invalid",
+  "oracle_value_unmapped",
+  "oracle_value_stale",
+  "oracle_resolution_failed",
+  "oracle_dispute_pending_too_long",
+  "manual_intervention_required",
+] as const;
+
+export const PredictionMarketOracleProviderSchema = z.enum(
+  predictionMarketOracleProviderValues,
+);
+export type PredictionMarketOracleProvider = z.infer<
+  typeof PredictionMarketOracleProviderSchema
+>;
+
+export const PredictionMarketOracleBindingStatusSchema = z.enum(
+  predictionMarketOracleBindingStatusValues,
+);
+export type PredictionMarketOracleBindingStatus = z.infer<
+  typeof PredictionMarketOracleBindingStatusSchema
+>;
+
+export const PredictionMarketAppealStatusSchema = z.enum(
+  predictionMarketAppealStatusValues,
+);
+export type PredictionMarketAppealStatus = z.infer<
+  typeof PredictionMarketAppealStatusSchema
+>;
+
+export const PredictionMarketAppealReasonSchema = z.enum(
+  predictionMarketAppealReasonValues,
+);
+export type PredictionMarketAppealReason = z.infer<
+  typeof PredictionMarketAppealReasonSchema
+>;
+
+const JsonRecordSchema = z.record(z.unknown());
+const OracleJsonPathSchema = z.string().trim().min(1).max(255);
+const OracleAddressSchema = z
+  .string()
+  .trim()
+  .regex(/^0x[a-fA-F0-9]{40}$/);
+const OracleBytes32Schema = z
+  .string()
+  .trim()
+  .regex(/^0x[a-fA-F0-9]{64}$/);
+
+export const PredictionMarketOracleNumericOperatorSchema = z.enum([
+  "gt",
+  "gte",
+  "lt",
+  "lte",
+  "eq",
+  "neq",
+]);
+export type PredictionMarketOracleNumericOperator = z.infer<
+  typeof PredictionMarketOracleNumericOperatorSchema
+>;
+
+export const PredictionMarketOracleNumericComparisonSchema = z.object({
+  operator: PredictionMarketOracleNumericOperatorSchema,
+  threshold: z.string().trim().min(1).max(64),
+  outcomeKeyIfTrue: PredictionMarketOutcomeKeySchema,
+  outcomeKeyIfFalse: PredictionMarketOutcomeKeySchema,
+});
+export type PredictionMarketOracleNumericComparison = z.infer<
+  typeof PredictionMarketOracleNumericComparisonSchema
+>;
+
+export const PredictionMarketApiPullOracleConfigSchema = z
+  .object({
+    url: z.string().url(),
+    method: z.enum(["GET", "POST"]).optional(),
+    headers: z.record(z.string().trim().min(1).max(500)).optional(),
+    body: JsonRecordSchema.nullable().optional(),
+    valuePath: OracleJsonPathSchema,
+    reportedAtPath: OracleJsonPathSchema.optional(),
+    payloadHashPath: OracleJsonPathSchema.optional(),
+    outcomeValueMap: z
+      .record(
+        z.string().trim().min(1).max(191),
+        PredictionMarketOutcomeKeySchema,
+      )
+      .optional(),
+    comparison: PredictionMarketOracleNumericComparisonSchema.optional(),
+  })
+  .superRefine((value, context) => {
+    const hasValueMap = !!value.outcomeValueMap;
+    const hasComparison = !!value.comparison;
+    if (hasValueMap === hasComparison) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "API pull oracle config must define exactly one of outcomeValueMap or comparison.",
+        path: ["outcomeValueMap"],
+      });
+    }
+  });
+export type PredictionMarketApiPullOracleConfig = z.infer<
+  typeof PredictionMarketApiPullOracleConfigSchema
+>;
+
+export const PredictionMarketChainlinkOracleConfigSchema = z.object({
+  rpcUrl: z.string().url(),
+  network: z.string().trim().min(1).max(64),
+  feedAddress: OracleAddressSchema,
+  decimals: z.number().int().min(0).max(36).optional(),
+  maxAgeSeconds: z.number().int().positive().max(31_536_000).optional(),
+  comparison: PredictionMarketOracleNumericComparisonSchema,
+});
+export type PredictionMarketChainlinkOracleConfig = z.infer<
+  typeof PredictionMarketChainlinkOracleConfigSchema
+>;
+
+export const PredictionMarketUmaOracleConfigSchema = z.object({
+  rpcUrl: z.string().url(),
+  network: z.string().trim().min(1).max(64),
+  oracleAddress: OracleAddressSchema,
+  assertionId: OracleBytes32Schema,
+  outcomeKeyIfTrue: PredictionMarketOutcomeKeySchema,
+  outcomeKeyIfFalse: PredictionMarketOutcomeKeySchema.optional(),
+  maxPendingSeconds: z.number().int().positive().max(31_536_000).optional(),
+});
+export type PredictionMarketUmaOracleConfig = z.infer<
+  typeof PredictionMarketUmaOracleConfigSchema
+>;
+
+export const PredictionMarketManualAdminOracleConfigSchema = z.object({
+  instructions: z.string().trim().min(1).max(500).optional(),
+});
+export type PredictionMarketManualAdminOracleConfig = z.infer<
+  typeof PredictionMarketManualAdminOracleConfigSchema
+>;
+
+export const PredictionMarketOracleBindingRequestSchema = z.discriminatedUnion(
+  "provider",
+  [
+    z.object({
+      provider: z.literal("manual_admin"),
+      name: z.string().trim().min(1).max(160).optional(),
+      config: PredictionMarketManualAdminOracleConfigSchema.optional(),
+      metadata: JsonRecordSchema.nullable().optional(),
+    }),
+    z.object({
+      provider: z.literal("api_pull"),
+      name: z.string().trim().min(1).max(160).optional(),
+      config: PredictionMarketApiPullOracleConfigSchema,
+      metadata: JsonRecordSchema.nullable().optional(),
+    }),
+    z.object({
+      provider: z.literal("chainlink"),
+      name: z.string().trim().min(1).max(160).optional(),
+      config: PredictionMarketChainlinkOracleConfigSchema,
+      metadata: JsonRecordSchema.nullable().optional(),
+    }),
+    z.object({
+      provider: z.literal("uma_oracle"),
+      name: z.string().trim().min(1).max(160).optional(),
+      config: PredictionMarketUmaOracleConfigSchema,
+      metadata: JsonRecordSchema.nullable().optional(),
+    }),
+  ],
+);
+export type PredictionMarketOracleBindingRequest = z.infer<
+  typeof PredictionMarketOracleBindingRequestSchema
+>;
+
+export const PredictionMarketOracleBindingSchema = z.object({
+  id: z.number().int(),
+  provider: PredictionMarketOracleProviderSchema,
+  name: z.string().nullable().optional(),
+  status: PredictionMarketOracleBindingStatusSchema,
+  lastCheckedAt: DateLikeSchema.nullable().optional(),
+  lastReportedAt: DateLikeSchema.nullable().optional(),
+  lastResolvedOutcomeKey: z.string().nullable().optional(),
+  createdAt: DateLikeSchema.nullable().optional(),
+  updatedAt: DateLikeSchema.nullable().optional(),
+});
+export type PredictionMarketOracleBinding = z.infer<
+  typeof PredictionMarketOracleBindingSchema
+>;
+
+export const PredictionMarketAppealRecordSchema = z.object({
+  id: z.number().int(),
+  marketId: z.number().int(),
+  oracleBindingId: z.number().int().nullable().optional(),
+  appealKey: z.string(),
+  reason: PredictionMarketAppealReasonSchema,
+  status: PredictionMarketAppealStatusSchema,
+  provider: PredictionMarketOracleProviderSchema.nullable().optional(),
+  title: z.string(),
+  description: z.string(),
+  metadata: JsonRecordSchema.nullable().optional(),
+  firstDetectedAt: DateLikeSchema,
+  lastDetectedAt: DateLikeSchema,
+  resolvedByAdminId: z.number().int().nullable().optional(),
+  resolvedAt: DateLikeSchema.nullable().optional(),
+  createdAt: DateLikeSchema,
+  updatedAt: DateLikeSchema,
+});
+export type PredictionMarketAppealRecord = z.infer<
+  typeof PredictionMarketAppealRecordSchema
+>;
+
+export const PredictionMarketAppealMarketSchema = z.object({
+  id: z.number().int(),
+  slug: z.string(),
+  roundKey: z.string(),
+  title: z.string(),
+  status: PredictionMarketStatusSchema,
+  oracleBinding: PredictionMarketOracleBindingSchema.nullable().optional(),
+});
+export type PredictionMarketAppealMarket = z.infer<
+  typeof PredictionMarketAppealMarketSchema
+>;
+
+export const PredictionMarketAppealQueueItemSchema =
+  PredictionMarketAppealRecordSchema.extend({
+    market: PredictionMarketAppealMarketSchema,
+  });
+export type PredictionMarketAppealQueueItem = z.infer<
+  typeof PredictionMarketAppealQueueItemSchema
+>;
+
+export const PredictionMarketAppealAcknowledgeRequestSchema = z.object({
+  note: z.string().trim().min(1).max(1000).optional(),
+});
+export type PredictionMarketAppealAcknowledgeRequest = z.infer<
+  typeof PredictionMarketAppealAcknowledgeRequestSchema
+>;
 
 export const PredictionMarketRulesSchema = z.object({
   resolutionRules: z.string().trim().min(20).max(4000),
@@ -186,6 +450,7 @@ export const PredictionMarketSummarySchema = z.object({
   tags: PredictionMarketRulesSchema.shape.tags,
   invalidPolicy: PredictionMarketRulesSchema.shape.invalidPolicy,
   mechanism: PredictionMarketMechanismSchema,
+  vigBps: PredictionMarketVigBpsSchema,
   status: PredictionMarketStatusSchema,
   outcomes: z.array(PredictionMarketOutcomeSchema).min(2),
   outcomePools: z.array(PredictionMarketPoolSchema),
@@ -193,6 +458,10 @@ export const PredictionMarketSummarySchema = z.object({
   winningOutcomeKey: z.string().nullable(),
   winningPoolAmount: z.string().nullable(),
   oracle: z.lazy(() => PredictionMarketOracleSchema).nullable(),
+  oracleBinding: z
+    .lazy(() => PredictionMarketOracleBindingSchema)
+    .nullable()
+    .optional(),
   opensAt: DateLikeSchema,
   locksAt: DateLikeSchema,
   resolvesAt: DateLikeSchema.nullable(),
@@ -225,11 +494,13 @@ export const PredictionMarketPortfolioMarketSchema =
     tags: true,
     invalidPolicy: true,
     mechanism: true,
+    vigBps: true,
     status: true,
     outcomes: true,
     totalPoolAmount: true,
     winningOutcomeKey: true,
     winningPoolAmount: true,
+    oracleBinding: true,
     opensAt: true,
     locksAt: true,
     resolvesAt: true,
@@ -338,6 +609,8 @@ export const CreatePredictionMarketRequestSchema = z
     category: PredictionMarketRulesSchema.shape.category,
     tags: PredictionMarketRulesSchema.shape.tags,
     invalidPolicy: PredictionMarketRulesSchema.shape.invalidPolicy,
+    vigBps: PredictionMarketVigBpsSchema,
+    oracleBinding: PredictionMarketOracleBindingRequestSchema.optional(),
     outcomes: z
       .array(PredictionMarketOutcomeSchema)
       .min(2)

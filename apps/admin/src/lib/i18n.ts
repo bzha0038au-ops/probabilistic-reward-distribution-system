@@ -167,6 +167,7 @@ export type Messages = {
       winRate: string
       poolBalance: string
       reconciliationAlerts: string
+      reconciliationStreak: string
     }
     create: {
       title: string
@@ -821,6 +822,9 @@ export type Messages = {
     description: string
     summary: {
       unresolved: string
+      overdue: string
+      zeroDriftStreak: string
+      slaTarget: string
       open: string
       acknowledged: string
       requireEngineering: string
@@ -846,6 +850,7 @@ export type Messages = {
         user: string
         status: string
         delta: string
+        sla: string
         ledgerSnapshot: string
         walletSnapshot: string
         lastDetectedAt: string
@@ -868,6 +873,13 @@ export type Messages = {
       capturedAt: string
       latestLedgerEntryId: string
       details: string
+    }
+    sla: {
+      dueAt: string
+      firstDetectedAt: string
+      breached: string
+      healthy: string
+      escalatedAt: string
     }
   }
   permissions: {
@@ -994,6 +1006,12 @@ export type Messages = {
       updatedAt: string
       emailStatus: string
       phoneStatus: string
+      age: string
+      birthDate: string
+      registrationCountry: string
+      countryTier: string
+      countryResolvedAt: string
+      jurisdiction: string
       userPoolBalance: string
       pityStreak: string
     }
@@ -1030,6 +1048,7 @@ export type Messages = {
       forceLogoutDescription: string
       resetPassword: string
       resetPasswordDescription: string
+      openKycProfile: string
       freezeSuccess: string
       unfreezeSuccess: string
       forceLogoutSuccess: string
@@ -1083,6 +1102,8 @@ export type Messages = {
       authFailure: string
       manualAdmin: string
       forumModeration: string
+      jurisdictionRestriction: string
+      underageRestriction: string
     }
     errors: {
       loadSearch: string
@@ -1107,6 +1128,8 @@ export type Messages = {
       releaseFreeze: string
       missingUserId: string
       freezeAccount: string
+      jurisdictionFields: string
+      saveJurisdictionRule: string
     }
     stepUp: {
       title: string
@@ -1147,6 +1170,36 @@ export type Messages = {
       empty: string
       signals: string
       previousIp: string
+    }
+    jurisdiction: {
+      title: string
+      description: string
+      countryCode: string
+      minimumAge: string
+      allowedFeatures: string
+      notes: string
+      notesPlaceholder: string
+      save: string
+      saveSuccess: string
+      empty: string
+      noFeatures: string
+      tiers: {
+        blocked: string
+        restricted: string
+        full: string
+      }
+      features: {
+        realMoneyGameplay: string
+        topup: string
+        withdrawal: string
+      }
+      headers: {
+        countryCode: string
+        countryTier: string
+        minimumAge: string
+        allowedFeatures: string
+        updatedAt: string
+      }
     }
     freeze: {
       title: string
@@ -1314,7 +1367,14 @@ export type Messages = {
       resolutionRules: string
       resolutionRulesPlaceholder: string
       sourceOfTruth: string
+      oracleProvider: string
+      oracleBindingName: string
+      oracleBindingConfig: string
+      oracleBindingConfigPlaceholder: string
+      oracleBindingConfigHint: string
       category: string
+      vigPercent: string
+      vigHint: string
       tags: string
       tagsPlaceholder: string
       invalidPolicy: string
@@ -1331,12 +1391,37 @@ export type Messages = {
       description: string
       empty: string
     }
+    appeals: {
+      title: string
+      description: string
+      open: string
+      acknowledged: string
+      totalActive: string
+      empty: string
+      activeBadge: string
+      marketStatus: string
+      firstDetectedAt: string
+      lastDetectedAt: string
+      details: string
+      metadata: string
+      binding: string
+      bindingStatus: string
+      lastResolvedOutcomeKey: string
+      noBinding: string
+      acknowledgeNote: string
+      acknowledgeNotePlaceholder: string
+      acknowledgedHint: string
+      actions: {
+        acknowledge: string
+      }
+    }
     labels: {
       none: string
       roundKey: string
       rules: string
       category: string
       tags: string
+      vig: string
       invalidPolicy: string
       sourceOfTruth: string
       resolutionRules: string
@@ -1363,6 +1448,7 @@ export type Messages = {
     actions: {
       settleTitle: string
       settleDescription: string
+      settleAppealUnlocked: string
       settleLockedOnly: string
       cancelTitle: string
       cancelDescription: string
@@ -1382,6 +1468,7 @@ export type Messages = {
       create: string
       settle: string
       cancel: string
+      acknowledgeAppeal: string
     }
     enums: {
       category: {
@@ -1397,21 +1484,50 @@ export type Messages = {
         refundAll: string
         manualReview: string
       }
+      appealStatus: {
+        open: string
+        acknowledged: string
+        resolved: string
+      }
+      appealReason: {
+        oracle_fetch_failed: string
+        oracle_response_invalid: string
+        oracle_value_unmapped: string
+        oracle_value_stale: string
+        oracle_resolution_failed: string
+        oracle_dispute_pending_too_long: string
+        manual_intervention_required: string
+      }
+      oracleBindingStatus: {
+        active: string
+        pending: string
+        resolved: string
+        appealed: string
+        manual_only: string
+        cancelled: string
+      }
     }
     errors: {
       loadData: string
+      loadAppeals: string
       unexpectedResponse: string
+      unexpectedAppealsResponse: string
       invalidOutcomes: string
       invalidTags: string
+      invalidVigPercent: string
       invalidJson: string
+      oracleProviderRequired: string
+      invalidOracleBinding: string
       missingTotp: string
       missingMarketId: string
+      missingAppealId: string
       winningOutcomeRequired: string
       oracleSourceRequired: string
       cancelReasonRequired: string
       createFailed: string
       settleFailed: string
       cancelFailed: string
+      acknowledgeAppealFailed: string
     }
   }
   forum: {
@@ -1436,12 +1552,14 @@ export type Messages = {
         bulkDelete: string
         muteAuthor: string
         muted: string
+        autoHidden: string
         headers: {
           select: string
           post: string
           author: string
           thread: string
           reports: string
+          source: string
           latestReason: string
           status: string
           reportedAt: string
@@ -1877,6 +1995,7 @@ const translations: Record<Locale, Messages> = {
         winRate: "Win Rate",
         poolBalance: "Pool Balance",
         reconciliationAlerts: "Reconciliation Alerts",
+        reconciliationStreak: "Zero-Drift Streak",
       },
       create: {
         title: "Create Prize",
@@ -1943,7 +2062,7 @@ const translations: Record<Locale, Messages> = {
           isActive: "Active",
           params: "Params JSON",
           paramsHint:
-            "Use a JSON object. `daily_checkin` expects title/description/sortOrder. `metric_threshold` expects title/description/metric/target/cadence/sortOrder.",
+            'Use a JSON object. `daily_checkin` expects title/description/sortOrder. `metric_threshold` expects title/description/metric/target/cadence, and optionally awardMode/bonusUnlockWagerRatio/sortOrder. Add `experiment: { "expKey": "your_key" }` to gray-roll params through the experiments module.',
         },
         types: {
           dailyCheckIn: "Daily Check-In",
@@ -2569,6 +2688,9 @@ const translations: Record<Locale, Messages> = {
         "Review wallet-vs-ledger reconciliation alerts emitted by the engine job and drive them through operational triage.",
       summary: {
         unresolved: "Unresolved",
+        overdue: "Over SLA",
+        zeroDriftStreak: "Zero-Drift Streak",
+        slaTarget: "SLA Target",
         open: "Open",
         acknowledged: "Acknowledged",
         requireEngineering: "Needs Engineering",
@@ -2596,6 +2718,7 @@ const translations: Record<Locale, Messages> = {
           user: "User",
           status: "Status",
           delta: "Delta",
+          sla: "SLA",
           ledgerSnapshot: "Ledger Snapshot",
           walletSnapshot: "Wallet Snapshot",
           lastDetectedAt: "Last Detected",
@@ -2618,6 +2741,13 @@ const translations: Record<Locale, Messages> = {
         capturedAt: "Captured",
         latestLedgerEntryId: "Latest Ledger Entry",
         details: "Details",
+      },
+      sla: {
+        dueAt: "Due",
+        firstDetectedAt: "First Detected",
+        breached: "Breached",
+        healthy: "Healthy",
+        escalatedAt: "Escalated",
       },
     },
     permissions: {
@@ -2753,6 +2883,12 @@ const translations: Record<Locale, Messages> = {
         updatedAt: "Updated At",
         emailStatus: "Email status",
         phoneStatus: "Phone status",
+        age: "Age",
+        birthDate: "Birth date",
+        registrationCountry: "Registration country",
+        countryTier: "Country tier",
+        countryResolvedAt: "Country resolved at",
+        jurisdiction: "Jurisdiction policy",
         userPoolBalance: "User pool balance",
         pityStreak: "Pity streak",
       },
@@ -2795,6 +2931,7 @@ const translations: Record<Locale, Messages> = {
         resetPassword: "Reset password",
         resetPasswordDescription:
           "Queue a password-reset email through the backend operator flow.",
+        openKycProfile: "Open KYC profile",
         freezeSuccess: "Scoped freeze applied.",
         unfreezeSuccess: "Scoped freeze released.",
         forceLogoutSuccess: "User sessions revoked.",
@@ -2848,6 +2985,8 @@ const translations: Record<Locale, Messages> = {
         authFailure: "Auth failure",
         manualAdmin: "Manual admin action",
         forumModeration: "Forum moderation",
+        jurisdictionRestriction: "Jurisdiction restriction",
+        underageRestriction: "Underage restriction",
       },
       errors: {
         loadSearch: "Failed to load user search results.",
@@ -2872,6 +3011,8 @@ const translations: Record<Locale, Messages> = {
         releaseFreeze: "Failed to release freeze.",
         missingUserId: "Missing user id.",
         freezeAccount: "Failed to freeze account.",
+        jurisdictionFields: "Country code and minimum age are required.",
+        saveJurisdictionRule: "Failed to save jurisdiction rule.",
       },
       stepUp: {
         title: "Risk Step-Up",
@@ -2913,6 +3054,37 @@ const translations: Record<Locale, Messages> = {
         empty: "No anomalous login alerts on this page.",
         signals: "Signals",
         previousIp: "Previous IP",
+      },
+      jurisdiction: {
+        title: "Jurisdiction Rules",
+        description:
+          "Configure country-level age and feature gates that map into scoped freezes.",
+        countryCode: "Country code",
+        minimumAge: "Minimum age",
+        allowedFeatures: "Allowed features",
+        notes: "Operator notes",
+        notesPlaceholder: "Optional context for this country rule",
+        save: "Save rule",
+        saveSuccess: "Jurisdiction rule saved.",
+        empty: "No country-specific jurisdiction rules have been configured yet.",
+        noFeatures: "No money features allowed",
+        tiers: {
+          blocked: "Blocked",
+          restricted: "Restricted",
+          full: "Full",
+        },
+        features: {
+          realMoneyGameplay: "Real-money gameplay",
+          topup: "Top-up",
+          withdrawal: "Withdrawal",
+        },
+        headers: {
+          countryCode: "Country",
+          countryTier: "Tier",
+          minimumAge: "Min age",
+          allowedFeatures: "Allowed features",
+          updatedAt: "Updated",
+        },
       },
       freeze: {
         title: "Frozen Accounts",
@@ -3088,7 +3260,17 @@ const translations: Record<Locale, Messages> = {
         resolutionRulesPlaceholder:
           "Describe the exact settlement rule, edge cases, and how invalidation is handled.",
         sourceOfTruth: "Source of Truth",
+        oracleProvider: "Oracle Provider",
+        oracleBindingName: "Oracle Binding Name",
+        oracleBindingConfig: "Oracle Config JSON",
+        oracleBindingConfigPlaceholder:
+          '{"url":"https://api.example.com/market","valuePath":"result","comparison":{"operator":"gte","threshold":"100000","outcomeKeyIfTrue":"yes","outcomeKeyIfFalse":"no"}}',
+        oracleBindingConfigHint:
+          "Provide provider-specific JSON. api_pull reads an HTTP API, chainlink reads an RPC feed, uma_oracle reads an assertion, and manual_admin keeps manual fallback only.",
         category: "Category",
+        vigPercent: "Vig (%)",
+        vigHint:
+          "Applied to the total pool on resolved markets before winner payouts are distributed.",
         tags: "Tags",
         tagsPlaceholder: "btc, macro, daily-close",
         invalidPolicy: "Invalid Policy",
@@ -3107,12 +3289,40 @@ const translations: Record<Locale, Messages> = {
           "Review pool state, rules, oracle evidence, and finalize markets from the same workspace.",
         empty: "No prediction markets have been created yet.",
       },
+      appeals: {
+        title: "Appeal Queue",
+        description:
+          "Review oracle exceptions that blocked automatic settlement, acknowledge operator ownership, and then settle or cancel from the market workbench.",
+        open: "Open appeals",
+        acknowledged: "Acknowledged",
+        totalActive: "Active queue",
+        empty: "No active prediction market appeals are waiting for review.",
+        activeBadge: "Appeals",
+        marketStatus: "Market status",
+        firstDetectedAt: "First detected",
+        lastDetectedAt: "Last detected",
+        details: "Appeal details",
+        metadata: "Appeal metadata",
+        binding: "Oracle binding snapshot",
+        bindingStatus: "Binding status",
+        lastResolvedOutcomeKey: "Last resolved outcome",
+        noBinding: "No oracle binding snapshot is available for this appeal.",
+        acknowledgeNote: "Acknowledge note",
+        acknowledgeNotePlaceholder:
+          "Optional operator note, for example who is taking ownership or what data source is being checked.",
+        acknowledgedHint:
+          "This appeal has been acknowledged. Complete settlement or cancellation on the market card to resolve it.",
+        actions: {
+          acknowledge: "Acknowledge appeal",
+        },
+      },
       labels: {
         none: "None",
         roundKey: "Round key",
         rules: "Rules",
         category: "Category",
         tags: "Tags",
+        vig: "Vig",
         invalidPolicy: "Invalid policy",
         sourceOfTruth: "Source of truth",
         resolutionRules: "Resolution rules",
@@ -3140,6 +3350,8 @@ const translations: Record<Locale, Messages> = {
         settleTitle: "Settle Market",
         settleDescription:
           "Provide the winning outcome and the oracle evidence used to finalize this market.",
+        settleAppealUnlocked:
+          "An active appeal is open for this market, so manual settlement is currently unlocked for operator fallback.",
         settleLockedOnly:
           "Settlement is only available once the market is locked.",
         cancelTitle: "Cancel Market",
@@ -3162,6 +3374,7 @@ const translations: Record<Locale, Messages> = {
         create: "Market created.",
         settle: "Market settled.",
         cancel: "Market cancelled.",
+        acknowledgeAppeal: "Appeal acknowledged.",
       },
       enums: {
         category: {
@@ -3177,17 +3390,48 @@ const translations: Record<Locale, Messages> = {
           refundAll: "Refund all",
           manualReview: "Manual review",
         },
+        appealStatus: {
+          open: "Open",
+          acknowledged: "Acknowledged",
+          resolved: "Resolved",
+        },
+        appealReason: {
+          oracle_fetch_failed: "Oracle fetch failed",
+          oracle_response_invalid: "Invalid oracle response",
+          oracle_value_unmapped: "Oracle value unmapped",
+          oracle_value_stale: "Oracle value stale",
+          oracle_resolution_failed: "Oracle resolution failed",
+          oracle_dispute_pending_too_long: "Oracle dispute pending too long",
+          manual_intervention_required: "Manual intervention required",
+        },
+        oracleBindingStatus: {
+          active: "Active",
+          pending: "Pending",
+          resolved: "Resolved",
+          appealed: "Appealed",
+          manual_only: "Manual only",
+          cancelled: "Cancelled",
+        },
       },
       errors: {
         loadData: "Failed to load prediction markets.",
+        loadAppeals: "Failed to load prediction market appeals.",
         unexpectedResponse:
           "Prediction market API returned an unexpected response.",
+        unexpectedAppealsResponse:
+          "Prediction market appeal API returned an unexpected response.",
         invalidOutcomes:
           "Enter at least two outcomes using one key|label pair per line.",
         invalidTags: "Enter at least one tag separated by commas.",
+        invalidVigPercent:
+          "Enter a vig percentage between 0.00 and 100.00.",
         invalidJson: "Enter valid JSON object data.",
+        oracleProviderRequired: "Oracle provider is required.",
+        invalidOracleBinding:
+          "Oracle binding is invalid. Check the provider and config JSON.",
         missingTotp: "Admin MFA code is required.",
         missingMarketId: "Missing market id.",
+        missingAppealId: "Missing appeal id.",
         winningOutcomeRequired: "Winning outcome is required.",
         oracleSourceRequired:
           "Oracle source is required when submitting oracle details.",
@@ -3195,6 +3439,8 @@ const translations: Record<Locale, Messages> = {
         createFailed: "Failed to create prediction market.",
         settleFailed: "Failed to settle prediction market.",
         cancelFailed: "Failed to cancel prediction market.",
+        acknowledgeAppealFailed:
+          "Failed to acknowledge prediction market appeal.",
       },
     },
     forum: {
@@ -3202,7 +3448,7 @@ const translations: Record<Locale, Messages> = {
         eyebrow: "Forum",
         title: "Moderation Queue",
         description:
-          "Review reported community posts, remove violating content in bulk, and apply gameplay-only mutes to repeat offenders.",
+          "Review reported or automatically flagged community posts, remove violating content in bulk, and apply gameplay-only mutes to repeat offenders.",
         notice:
           "Forum mutes create a community freeze with gameplay_lock scope. Wallet, top-up, and withdrawal flows remain available.",
         stepUp: {
@@ -3215,25 +3461,27 @@ const translations: Record<Locale, Messages> = {
             "Optional note recorded when a gameplay mute is released",
         },
         queue: {
-          title: "Reported Posts",
+          title: "Flagged Posts",
           description:
-            "Each row groups open reports by post so operators can clear violating content without leaving the forum workbench.",
-          empty: "No open reports in the moderation queue.",
+            "Each row groups open user reports and automated anti-spam signals by post so operators can clear violating content without leaving the forum workbench.",
+          empty: "No open moderation signals in the queue.",
           bulkReason: "Bulk delete reason",
           bulkReasonPlaceholder:
             "Explain why the selected posts are being removed",
           bulkDelete: "Delete selected posts",
           muteAuthor: "Mute author",
           muted: "Muted",
+          autoHidden: "Auto-hidden",
           headers: {
             select: "Select",
             post: "Post",
             author: "Author",
             thread: "Thread",
-            reports: "Reports",
-            latestReason: "Latest report",
+            reports: "Signals",
+            source: "Source",
+            latestReason: "Latest signal",
             status: "Status",
-            reportedAt: "Latest reported",
+            reportedAt: "Latest flagged",
             actions: "Actions",
           },
         },
@@ -3251,7 +3499,7 @@ const translations: Record<Locale, Messages> = {
           },
         },
         feedback: {
-          bulkDeleteSuccess: "Reported posts deleted and reports resolved.",
+          bulkDeleteSuccess: "Flagged posts deleted and moderation signals resolved.",
           muteSuccess: "Gameplay mute applied.",
           releaseSuccess: "Gameplay mute released.",
         },

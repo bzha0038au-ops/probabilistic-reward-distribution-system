@@ -1,0 +1,53 @@
+---
+title: API Overview
+description: Authentication, idempotency, and endpoint behavior for the Prize Engine.
+---
+
+# API Overview
+
+The Prize Engine surface is intentionally small. Most B-side tenants only need one
+write path, one catalog path, and fairness verification.
+
+## Base URL and auth
+
+- Base path: `/v1/engine/*`
+- Auth: either `Authorization: Bearer <api-key>` or `X-API-Key: <api-key>`
+- Required scopes depend on the route:
+  - `catalog:read` for overview
+  - `fairness:read` for fairness endpoints
+  - `reward:write` for `/rewards`
+  - `draw:write` for legacy `/draws`
+  - `ledger:read` for `/ledger` and observability
+
+## Idempotency
+
+`POST /v1/engine/rewards` requires an `idempotencyKey`. Replays return the original
+decision rather than issuing a second reward. The SDKs already expose helpers for
+this, and the API explorer shows the exact request body shape.
+
+## Agent signals
+
+The runtime accepts optional anti-exploit headers when you need stronger request
+provenance:
+
+- `X-Agent-Id`
+- `X-Prize-Engine-Idempotency-Key`
+- `X-Prize-Engine-Request-Signature`
+- `X-Prize-Engine-Fingerprint`
+- `X-Prize-Engine-Behavior-Template`
+- `X-Prize-Engine-Correlation-Group`
+- `X-Prize-Engine-Occurred-At`
+
+Keep these consistent with the event that produced the reward request. Do not generate
+them in browser code.
+
+## Legacy draw route
+
+`POST /v1/engine/draws` still exists as a compatibility route for the older gacha-style
+integration. It is explicitly deprecated and the backend returns:
+
+- `Deprecation: true`
+- `Sunset: Tue, 28 Oct 2026 00:00:00 GMT`
+- `Link: </v1/engine/rewards>; rel="successor-version"`
+
+New tenants should integrate against `/v1/engine/rewards`.

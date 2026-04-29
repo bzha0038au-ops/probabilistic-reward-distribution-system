@@ -6,6 +6,10 @@ export const USER_API_ROUTES = {
   auth: {
     session: "/auth/user/session",
   },
+  legal: {
+    current: "/legal/current",
+    acceptances: "/legal/acceptances",
+  },
 } as const;
 
 const fallbackError: ApiError = { message: "Request failed." };

@@ -11,6 +11,8 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 import {
+  deviceFingerprintEntrypointValues,
+  jurisdictionFeatureValues,
   userFreezeCategoryValues,
   userFreezeReasonValues,
   userFreezeScopeValues,
@@ -75,6 +77,59 @@ export const suspiciousAccounts = pgTable(
   (table) => ({
     userIdx: index('suspicious_accounts_user_idx').on(table.userId),
     statusIdx: index('suspicious_accounts_status_idx').on(table.status),
+  })
+);
+
+export const deviceFingerprints = pgTable(
+  'device_fingerprints',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    fingerprint: varchar('fingerprint', { length: 128 }).notNull(),
+    entrypoint: varchar('entrypoint', {
+      length: 32,
+      enum: deviceFingerprintEntrypointValues,
+    }).notNull(),
+    activityType: varchar('activity_type', { length: 64 }).notNull(),
+    sessionId: varchar('session_id', { length: 64 }),
+    ip: varchar('ip', { length: 64 }),
+    userAgent: varchar('user_agent', { length: 255 }),
+    eventCount: integer('event_count').notNull().default(1),
+    metadata: jsonb('metadata'),
+    firstSeenAt: timestamp('first_seen_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    userFingerprintActivityUnique: uniqueIndex(
+      'device_fingerprints_user_fp_activity_unique'
+    ).on(table.userId, table.fingerprint, table.activityType),
+    userLastSeenIdx: index('device_fingerprints_user_last_seen_idx').on(
+      table.userId,
+      table.lastSeenAt
+    ),
+    fingerprintLastSeenIdx: index('device_fingerprints_fingerprint_last_seen_idx').on(
+      table.fingerprint,
+      table.lastSeenAt
+    ),
+    ipLastSeenIdx: index('device_fingerprints_ip_last_seen_idx').on(
+      table.ip,
+      table.lastSeenAt
+    ),
+    entrypointLastSeenIdx: index(
+      'device_fingerprints_entrypoint_last_seen_idx'
+    ).on(table.entrypoint, table.lastSeenAt),
   })
 );
 
@@ -195,5 +250,29 @@ export const freezeRecords = pgTable(
     ),
     scopeIdx: index('freeze_records_scope_idx').on(table.scope),
     statusIdx: index('freeze_records_status_idx').on(table.status),
+  })
+);
+
+export const jurisdictionRules = pgTable(
+  'jurisdiction_rules',
+  {
+    id: serial('id').primaryKey(),
+    countryCode: varchar('country_code', { length: 2 }).notNull(),
+    minimumAge: integer('minimum_age').notNull().default(18),
+    allowedFeatures: jsonb('allowed_features')
+      .$type<(typeof jurisdictionFeatureValues)[number][]>()
+      .notNull(),
+    notes: text('notes'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    countryCodeUnique: uniqueIndex('jurisdiction_rules_country_code_unique').on(
+      table.countryCode
+    ),
   })
 );

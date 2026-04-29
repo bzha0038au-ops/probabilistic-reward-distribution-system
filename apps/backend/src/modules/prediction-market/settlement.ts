@@ -19,15 +19,27 @@ export type SettlementPositionResult = {
 
 export type PariMutuelSettlementResult = {
   mode: "payout" | "refund_no_winners";
+  vigBps: number;
   totalPoolAmount: string;
   winningPoolAmount: string;
+  feeAmount: string;
+  payoutPoolAmount: string;
   positionResults: SettlementPositionResult[];
 };
 
 export const resolvePariMutuelSettlement = (params: {
   positions: SettlementPosition[];
   winningOutcomeKey: string;
+  vigBps: number;
 }): PariMutuelSettlementResult => {
+  if (
+    !Number.isInteger(params.vigBps) ||
+    params.vigBps < 0 ||
+    params.vigBps > 10_000
+  ) {
+    throw internalInvariantError("Prediction market vig is invalid.");
+  }
+
   const totalPool = params.positions.reduce(
     (sum, position) => sum.plus(position.stakeAmount),
     toDecimal(0),
@@ -43,8 +55,11 @@ export const resolvePariMutuelSettlement = (params: {
   if (winningPositions.length === 0 || winningPool.lte(0)) {
     return {
       mode: "refund_no_winners",
+      vigBps: params.vigBps,
       totalPoolAmount: toMoneyString(totalPool),
       winningPoolAmount: "0.00",
+      feeAmount: "0.00",
+      payoutPoolAmount: toMoneyString(totalPool),
       positionResults: params.positions.map((position) => ({
         id: position.id,
         userId: position.userId,
@@ -54,8 +69,16 @@ export const resolvePariMutuelSettlement = (params: {
     };
   }
 
+  const feeAmount = totalPool
+    .mul(params.vigBps)
+    .div(10_000)
+    .toDecimalPlaces(2, Decimal.ROUND_DOWN);
+  const payoutPool = totalPool.minus(feeAmount);
+
   const exactPayouts = winningPositions.map((position) => {
-    const exact = toDecimal(position.stakeAmount).mul(totalPool).div(winningPool);
+    const exact = toDecimal(position.stakeAmount)
+      .mul(payoutPool)
+      .div(winningPool);
     const roundedDown = exact.toDecimalPlaces(2, Decimal.ROUND_DOWN);
     return {
       id: position.id,
@@ -70,7 +93,7 @@ export const resolvePariMutuelSettlement = (params: {
     (sum, position) => sum.plus(position.roundedDown),
     toDecimal(0),
   );
-  let centsRemaining = totalPool.minus(settledWinningPool).mul(100).toNumber();
+  let centsRemaining = payoutPool.minus(settledWinningPool).mul(100).toNumber();
 
   if (!Number.isInteger(centsRemaining) || centsRemaining < 0) {
     throw internalInvariantError("Prediction market payout rounding failed.");
@@ -133,8 +156,11 @@ export const resolvePariMutuelSettlement = (params: {
 
   return {
     mode: "payout",
+    vigBps: params.vigBps,
     totalPoolAmount: toMoneyString(totalPool),
     winningPoolAmount: toMoneyString(winningPool),
+    feeAmount: toMoneyString(feeAmount),
+    payoutPoolAmount: toMoneyString(payoutPool),
     positionResults,
   };
 };

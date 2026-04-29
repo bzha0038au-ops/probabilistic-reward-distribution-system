@@ -9,8 +9,10 @@ const {
   getWithdrawalRiskConfig,
   isUserMfaEnabled,
   isUserFrozen,
+  resolveRequestCountryCode,
   sendError,
   store,
+  syncUserJurisdictionState,
   verifyAdminMfaBreakGlassCode,
   verifyAdminMfaChallenge,
   verifyScopedAdminAccessToken,
@@ -30,6 +32,8 @@ const {
   verifyUserMfaChallenge: vi.fn(),
   isUserMfaEnabled: vi.fn(),
   isUserFrozen: vi.fn(),
+  resolveRequestCountryCode: vi.fn(),
+  syncUserJurisdictionState: vi.fn(),
   getSystemFlags: vi.fn(),
   getWithdrawalRiskConfig: vi.fn(),
   sendError: vi.fn(
@@ -69,6 +73,11 @@ vi.mock('../shared/admin-session', () => ({
 
 vi.mock('../modules/risk/service', () => ({
   isUserFrozen,
+}));
+
+vi.mock('../modules/risk/jurisdiction-service', () => ({
+  resolveRequestCountryCode,
+  syncUserJurisdictionState,
 }));
 
 vi.mock('../modules/system/service', () => ({
@@ -122,6 +131,19 @@ describe('auth guards', () => {
     delete store.role;
     getSystemFlags.mockResolvedValue({ maintenanceMode: false });
     isUserFrozen.mockResolvedValue(false);
+    resolveRequestCountryCode.mockResolvedValue(null);
+    syncUserJurisdictionState.mockResolvedValue({
+      registrationCountryCode: null,
+      birthDate: '1990-01-01',
+      countryTier: 'unknown',
+      minimumAge: 18,
+      userAge: 34,
+      isOfAge: true,
+      allowedFeatures: ['real_money_gameplay', 'topup', 'withdrawal'],
+      blockedScopes: [],
+      restrictionReasons: [],
+      countryResolvedAt: null,
+    });
     verifyAdminMfaBreakGlassCode.mockReturnValue(true);
     verifyScopedAdminAccessToken.mockResolvedValue(null);
     getUserById.mockResolvedValue({
@@ -234,6 +256,8 @@ describe('auth guards', () => {
   it('blocks scoped user actions when the matching freeze is active', async () => {
     const reply = {};
     const request = {
+      headers: { 'cf-ipcountry': 'US' },
+      ip: '203.0.113.9',
       user: {
         userId: 9,
         email: 'user@example.com',
@@ -242,10 +266,19 @@ describe('auth guards', () => {
       },
     };
     isUserFrozen.mockResolvedValue(true);
+    resolveRequestCountryCode.mockResolvedValueOnce('US');
 
     const guard = requireUserFreezeScope('withdrawal_lock');
     const result = await guard(request as never, reply as never);
 
+    expect(resolveRequestCountryCode).toHaveBeenCalledWith({
+      headers: request.headers,
+      ip: request.ip,
+    });
+    expect(syncUserJurisdictionState).toHaveBeenCalledWith({
+      userId: 9,
+      countryCodeOverride: 'US',
+    });
     expect(isUserFrozen).toHaveBeenCalledWith(9, { scope: 'withdrawal_lock' });
     expect(sendError).toHaveBeenCalledWith(reply, 423, 'Withdrawals locked.');
     expect(result).toEqual({

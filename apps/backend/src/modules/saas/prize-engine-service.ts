@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import Decimal from "decimal.js";
 import { API_ERROR_CODES } from "@reward/shared-types/api";
 import {
+  admins,
   agentBlocklist,
   agentRiskState,
   saasAgentGroupCorrelations,
@@ -15,7 +16,9 @@ import {
   saasProjectPrizes,
   saasProjects,
   saasTenants,
+  saasTenantMemberships,
   saasUsageEvents,
+  users,
 } from "@reward/database";
 import {
   and,
@@ -43,6 +46,11 @@ import type {
 } from "@reward/shared-types/saas";
 
 import { db, type DbTransaction } from "../../db";
+import { sendSaasOnboardingCompleteNotification } from "../auth/notification-service";
+import {
+  buildSaasProjectPlayerExperimentSubject,
+  resolveExperimentConfig,
+} from "../experiments/service";
 import {
   badRequestError,
   conflictError,
@@ -50,12 +58,19 @@ import {
   notFoundError,
   unauthorizedError,
 } from "../../shared/errors";
+import { logger } from "../../shared/logger";
 import { toDecimal, toMoneyString } from "../../shared/money";
 import { readSqlRows } from "../../shared/sql-result";
 import {
   buildLegacyDecisionPricing,
   resolveBillingDecisionPricing,
 } from "./billing";
+import {
+  isSaasBillingHardCapActive,
+  markSaasBillingHardCapReached,
+  readSaasBillingBudgetPolicy,
+  resolveBillingBudgetMonthKey,
+} from "./billing-budget";
 import {
   DEFAULT_FAIRNESS_EPOCH_SECONDS,
   buildPrizePresentations,
@@ -92,11 +107,14 @@ import {
 } from "./prize-engine-selection";
 import { enqueueRewardCompletedWebhookDeliveries } from "./outbound-webhook-service";
 import {
+  getCachedSaasProjectConfig,
+  loadSaasProjectConfigFromDb,
+} from "./project-config-cache";
+import {
   assertRewardEnvelopeNotRejected,
   consumeRewardEnvelopeStates,
   evaluateRewardEnvelopeDecision,
   loadLockedRewardEnvelopeStates,
-  syncRewardEnvelopeCache,
 } from "./reward-envelope";
 import {
   normalizeMetadata,
@@ -126,6 +144,17 @@ type LockedTenantRiskEnvelopeRow = {
   riskEnvelopeVarianceCap: string | null;
   riskEnvelopeEmergencyStop: boolean;
 };
+
+type LockedBillingAccountBudgetRow = {
+  id: number;
+  baseMonthlyFee: string;
+  metadata: Record<string, unknown> | null;
+};
+
+type LockedProjectStateRow = Pick<
+  LockedProjectRow,
+  "id" | "tenantId" | "status" | "prizePoolBalance"
+>;
 
 type LockedRewardRiskStateRow = {
   id: number;
@@ -277,7 +306,7 @@ type PrizeEngineAgentUpsertInput = {
   status?: "active" | "suspended" | "archived";
 };
 
-const loadLockedProject = async (
+const loadProjectState = async (
   tx: DbTransaction,
   projectId: number,
   environment: SaaSEnvironment,
@@ -286,33 +315,60 @@ const loadLockedProject = async (
     SELECT
       id,
       tenant_id AS "tenantId",
-      slug,
-      name,
-      environment,
       status,
-      currency,
-      draw_cost AS "drawCost",
-      prize_pool_balance AS "prizePoolBalance",
-      strategy,
-      strategy_params AS "strategyParams",
-      fairness_epoch_seconds AS "fairnessEpochSeconds",
-      max_draw_count AS "maxDrawCount",
-      miss_weight AS "missWeight",
-      metadata
+      prize_pool_balance AS "prizePoolBalance"
+    FROM ${saasProjects}
+    WHERE ${saasProjects.id} = ${projectId}
+      AND ${saasProjects.environment} = ${environment}
+  `);
+
+  return readSqlRows<LockedProjectStateRow>(result)[0] ?? null;
+};
+
+const lockProjectStateForSettlement = async (
+  tx: DbTransaction,
+  projectId: number,
+  environment: SaaSEnvironment,
+) => {
+  const result = await tx.execute(sql`
+    SELECT
+      id,
+      tenant_id AS "tenantId",
+      status,
+      prize_pool_balance AS "prizePoolBalance"
     FROM ${saasProjects}
     WHERE ${saasProjects.id} = ${projectId}
       AND ${saasProjects.environment} = ${environment}
     FOR UPDATE
   `);
 
-  const row = readSqlRows<LockedProjectRow>(result)[0];
-  if (!row) {
+  return readSqlRows<LockedProjectStateRow>(result)[0] ?? null;
+};
+
+const loadProject = async (
+  tx: DbTransaction,
+  projectId: number,
+  environment: SaaSEnvironment,
+) => {
+  const [stateRow, cachedConfig] = await Promise.all([
+    loadProjectState(tx, projectId, environment),
+    getCachedSaasProjectConfig(projectId, environment),
+  ]);
+
+  if (!stateRow) {
+    return null;
+  }
+
+  const configRow =
+    cachedConfig ?? (await loadSaasProjectConfigFromDb(tx, projectId, environment));
+  if (!configRow) {
     return null;
   }
 
   return {
-    ...row,
-    metadata: normalizeMetadata(row.metadata),
+    ...stateRow,
+    ...configRow,
+    metadata: normalizeMetadata(configRow.metadata),
   };
 };
 
@@ -431,12 +487,40 @@ const loadLockedTenantRiskEnvelope = async (
   return readSqlRows<LockedTenantRiskEnvelopeRow>(result)[0] ?? null;
 };
 
+const loadLockedBillingAccountBudget = async (
+  tx: DbTransaction,
+  tenantId: number,
+) => {
+  const result = await tx.execute(sql`
+    SELECT
+      id,
+      base_monthly_fee AS "baseMonthlyFee",
+      metadata
+    FROM ${saasBillingAccounts}
+    WHERE ${saasBillingAccounts.tenantId} = ${tenantId}
+    FOR UPDATE
+  `);
+
+  const row = readSqlRows<LockedBillingAccountBudgetRow>(result)[0];
+  if (!row) {
+    return null;
+  }
+
+  return {
+    ...row,
+    metadata: normalizeMetadata(row.metadata),
+  };
+};
+
 const startOfCurrentUtcDay = () => {
   const now = new Date();
   return new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
   );
 };
+
+const startOfCurrentUtcMonth = (value = new Date()) =>
+  new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), 1));
 
 const normalizeOptionalString = (value: string | null | undefined) => {
   if (value === undefined) {
@@ -468,6 +552,32 @@ const loadTenantDailyRewardPayout = async (
   return {
     amount: toDecimal(row?.total ?? 0),
     startOfDay,
+  };
+};
+
+const loadTenantCurrentMonthBillableUsageAmount = async (
+  tx: DbTransaction,
+  tenantId: number,
+  now = new Date(),
+) => {
+  const monthStart = startOfCurrentUtcMonth(now);
+  const [row] = await tx
+    .select({
+      total: sql<string>`coalesce(sum(${saasUsageEvents.amount}), '0')`,
+    })
+    .from(saasUsageEvents)
+    .where(
+      and(
+        eq(saasUsageEvents.tenantId, tenantId),
+        eq(saasUsageEvents.environment, "live"),
+        gte(saasUsageEvents.createdAt, monthStart),
+        sql`coalesce(${saasUsageEvents.metadata} ->> 'billable', 'true') <> 'false'`,
+      ),
+    );
+
+  return {
+    amount: toDecimal(row?.total ?? 0),
+    monthStart,
   };
 };
 
@@ -1258,13 +1368,91 @@ const buildAgentUsageMetadata = (
   auth: ProjectApiAuth,
   metadata: Record<string, unknown>,
 ) => ({
+  billable: auth.environment === "live",
+  billingMode: auth.environment === "live" ? "live" : "sandbox",
   ...metadata,
   agentId: auth.agentId,
   agentMode: auth.agentPolicy?.mode ?? null,
   agentBudgetMultiplier: auth.agentPolicy?.budgetMultiplier ?? null,
-  billable: auth.environment === "live",
-  billingMode: auth.environment === "live" ? "live" : "sandbox",
 });
+
+const markTenantOnboardedAfterSuccess = async (params: {
+  auth: ProjectApiAuth;
+  environment: SaaSEnvironment;
+  activityType: "reward" | "draw";
+  subjectId?: string | null;
+}) => {
+  try {
+    await db.transaction(async (tx) => {
+      const completedAt = new Date();
+      const [tenant] = await tx
+        .update(saasTenants)
+        .set({
+          onboardedAt: completedAt,
+          updatedAt: completedAt,
+        })
+        .where(
+          and(
+            eq(saasTenants.id, params.auth.tenantId),
+            isNull(saasTenants.onboardedAt),
+          ),
+        )
+        .returning({
+          id: saasTenants.id,
+          name: saasTenants.name,
+          billingEmail: saasTenants.billingEmail,
+        });
+
+      if (!tenant) {
+        return;
+      }
+
+      let recipient = tenant.billingEmail?.trim() || null;
+      if (!recipient) {
+        const [owner] = await tx
+          .select({
+            email: users.email,
+          })
+          .from(saasTenantMemberships)
+          .innerJoin(admins, eq(saasTenantMemberships.adminId, admins.id))
+          .innerJoin(users, eq(admins.userId, users.id))
+          .where(
+            and(
+              eq(saasTenantMemberships.tenantId, params.auth.tenantId),
+              eq(saasTenantMemberships.role, "tenant_owner"),
+            ),
+          )
+          .limit(1);
+
+        recipient = owner?.email?.trim() || null;
+      }
+
+      if (!recipient) {
+        return;
+      }
+
+      await sendSaasOnboardingCompleteNotification(
+        {
+          email: recipient,
+          tenantName: tenant.name,
+          projectName: params.auth.projectName,
+          environment: params.environment,
+          activityType: params.activityType,
+          subjectId: params.subjectId ?? null,
+          completedAt,
+        },
+        tx,
+      );
+    });
+  } catch (error) {
+    logger.warning("failed to finalize saas tenant onboarding", {
+      tenantId: params.auth.tenantId,
+      projectId: params.auth.projectId,
+      environment: params.environment,
+      err: error,
+    });
+  }
+};
 
 const resolveAgentRewardMultiplier = (auth: ProjectApiAuth) =>
   auth.agentPolicy?.mode === "throttled"
@@ -1789,6 +1977,7 @@ export async function authenticateProjectApiKey(apiKey: string) {
       environment: saasProjects.environment,
       currency: saasProjects.currency,
       scopes: saasApiKeys.scopes,
+      baseMonthlyFee: saasBillingAccounts.baseMonthlyFee,
       drawFee: saasBillingAccounts.drawFee,
       billingMetadata: saasBillingAccounts.metadata,
       billingCurrency: saasBillingAccounts.currency,
@@ -1853,7 +2042,12 @@ export async function authenticateProjectApiKey(apiKey: string) {
     apiKeyId: auth.apiKeyId,
     scopes: normalizeScopes(auth.scopes),
     drawFee,
+    baseMonthlyFee:
+      auth.environment === "sandbox"
+        ? "0.00"
+        : toMoneyString(auth.baseMonthlyFee ?? 0),
     decisionPricing,
+    billingBudgetPolicy: readSaasBillingBudgetPolicy(auth.billingMetadata),
     billingCurrency:
       auth.environment === "sandbox"
         ? auth.currency
@@ -1947,16 +2141,7 @@ async function getProjectFairnessCommit(
   projectId: number,
   environment: SaaSEnvironment,
 ) {
-  const [project] = await db
-    .select()
-    .from(saasProjects)
-    .where(
-      and(
-        eq(saasProjects.id, projectId),
-        eq(saasProjects.environment, environment),
-      ),
-    )
-    .limit(1);
+  const project = await getCachedSaasProjectConfig(projectId, environment);
 
   if (!project) {
     throw notFoundError("Project not found.", {
@@ -1980,16 +2165,7 @@ async function revealProjectFairnessSeed(
   environment: SaaSEnvironment,
   epoch: number,
 ) {
-  const [project] = await db
-    .select()
-    .from(saasProjects)
-    .where(
-      and(
-        eq(saasProjects.id, projectId),
-        eq(saasProjects.environment, environment),
-      ),
-    )
-    .limit(1);
+  const project = await getCachedSaasProjectConfig(projectId, environment);
 
   if (!project) {
     throw notFoundError("Project not found.", {
@@ -2054,9 +2230,14 @@ export async function getPrizeEngineOverview(params: {
   assertProjectScope(auth, "catalog:read");
   assertProjectEnvironment(auth, environment);
 
-  const [projectRows, prizes, fairness] = await Promise.all([
+  const [projectStateRows, projectConfig, prizes, fairness] = await Promise.all([
     db
-      .select()
+      .select({
+        id: saasProjects.id,
+        tenantId: saasProjects.tenantId,
+        status: saasProjects.status,
+        prizePoolBalance: saasProjects.prizePoolBalance,
+      })
       .from(saasProjects)
       .where(
         and(
@@ -2066,12 +2247,13 @@ export async function getPrizeEngineOverview(params: {
         ),
       )
       .limit(1),
+    getCachedSaasProjectConfig(auth.projectId, environment),
     loadProjectPrizeRows(auth.projectId),
     getProjectFairnessCommit(auth.projectId, environment),
   ]);
 
-  const project = projectRows[0];
-  if (!project) {
+  const projectState = projectStateRows[0];
+  if (!projectState || !projectConfig) {
     throw notFoundError("Project not found.", {
       code: API_ERROR_CODES.PROJECT_NOT_FOUND,
     });
@@ -2100,20 +2282,20 @@ export async function getPrizeEngineOverview(params: {
 
   return {
     project: {
-      id: project.id,
-      tenantId: project.tenantId,
-      slug: project.slug,
-      name: project.name,
-      environment: project.environment,
-      status: project.status,
-      currency: project.currency,
-      drawCost: toMoneyString(project.drawCost),
-      prizePoolBalance: toMoneyString(project.prizePoolBalance),
-      strategy: resolveProjectSelectionStrategy(project.strategy),
-      strategyParams: normalizeProjectStrategyParams(project.strategyParams),
-      fairnessEpochSeconds: Number(project.fairnessEpochSeconds),
-      maxDrawCount: Number(project.maxDrawCount),
-      missWeight: Number(project.missWeight),
+      id: projectState.id,
+      tenantId: projectState.tenantId,
+      slug: projectConfig.slug,
+      name: projectConfig.name,
+      environment: projectConfig.environment,
+      status: projectState.status,
+      currency: projectConfig.currency,
+      drawCost: toMoneyString(projectConfig.drawCost),
+      prizePoolBalance: toMoneyString(projectState.prizePoolBalance),
+      strategy: resolveProjectSelectionStrategy(projectConfig.strategy),
+      strategyParams: normalizeProjectStrategyParams(projectConfig.strategyParams),
+      fairnessEpochSeconds: Number(projectConfig.fairnessEpochSeconds),
+      maxDrawCount: Number(projectConfig.maxDrawCount),
+      missWeight: Number(projectConfig.missWeight),
     },
     fairness,
     prizes: presentations,
@@ -2251,9 +2433,9 @@ const executePrizeEngineReward = async (
   assertProjectEnvironment(auth, environment);
   const rewardMultiplier = resolveAgentRewardMultiplier(auth);
 
-  const { response, replayed, rewardEnvelopeStates } = await db.transaction(
+  const { response, replayed } = await db.transaction(
     async (tx) => {
-      const project = await loadLockedProject(tx, auth.projectId, environment);
+      const project = await loadProject(tx, auth.projectId, environment);
       if (!project || project.status !== "active") {
         throw notFoundError("Project not found.", {
           code: API_ERROR_CODES.PROJECT_NOT_FOUND,
@@ -2293,19 +2475,57 @@ const executePrizeEngineReward = async (
       const drawCost = toDecimal(project.drawCost);
       const { amount: tenantDailyRewardPayout, startOfDay } =
         await loadTenantDailyRewardPayout(tx, project.tenantId);
+      const billingObservedAt = new Date();
+      const currentBillingMonthKey = resolveBillingBudgetMonthKey(
+        billingObservedAt,
+      );
+      const shouldCheckBillingHardCap =
+        environment === "live" &&
+        (Boolean(auth.billingBudgetPolicy.hardCap) ||
+          (auth.billingBudgetPolicy.state.month === currentBillingMonthKey &&
+            Boolean(auth.billingBudgetPolicy.state.hardCapReachedAt)));
+      const billingBudgetAccount = shouldCheckBillingHardCap
+        ? await loadLockedBillingAccountBudget(tx, project.tenantId)
+        : null;
+      const liveBillingBudgetPolicy = billingBudgetAccount
+        ? readSaasBillingBudgetPolicy(billingBudgetAccount.metadata)
+        : auth.billingBudgetPolicy;
+      const liveBillingHardCapActive = billingBudgetAccount
+        ? isSaasBillingHardCapActive(
+            billingBudgetAccount.metadata,
+            billingObservedAt,
+          )
+        : auth.billingBudgetPolicy.state.month === currentBillingMonthKey &&
+          Boolean(auth.billingBudgetPolicy.state.hardCapReachedAt);
+      const { amount: currentMonthBillableUsageAmount } = billingBudgetAccount
+        ? await loadTenantCurrentMonthBillableUsageAmount(
+            tx,
+            project.tenantId,
+            billingObservedAt,
+          )
+        : { amount: new Decimal(0) };
+      const currentMonthBillableTotalAmount = toDecimal(
+        billingBudgetAccount?.baseMonthlyFee ?? auth.baseMonthlyFee,
+      ).plus(currentMonthBillableUsageAmount);
+      const shouldLockGroupScope =
+        Boolean(groupId) && hasPrizeEngineConstraintLimit(constraintConfig.group);
+      const shouldLockAgentScope =
+        hasPrizeEngineConstraintLimit(constraintConfig.agent);
 
-      if (groupId) {
+      if (groupId && shouldLockGroupScope) {
         await lockPrizeEngineScope(
           tx,
           project.id,
           `reward-group:${environment}:${groupId}`,
         );
       }
-      await lockPrizeEngineScope(
-        tx,
-        project.id,
-        `reward-agent:${environment}:${agentScopeId}`,
-      );
+      if (shouldLockAgentScope) {
+        await lockPrizeEngineScope(
+          tx,
+          project.id,
+          `reward-agent:${environment}:${agentScopeId}`,
+        );
+      }
 
       const trackedAgent = await ensureProjectAgent(tx, project.id, {
         agentId: agentScopeId,
@@ -2471,9 +2691,16 @@ const executePrizeEngineReward = async (
               mode: "normal" as const,
             };
       const projectStrategy = resolveProjectSelectionStrategy(project.strategy);
-      const projectStrategyParams = normalizeProjectStrategyParams(
-        project.strategyParams,
-      );
+      const projectStrategyParams = (
+        await resolveExperimentConfig({
+          subject: buildSaasProjectPlayerExperimentSubject(
+            project.id,
+            player.externalPlayerId,
+          ),
+          config: normalizeProjectStrategyParams(project.strategyParams),
+          executor: tx,
+        })
+      ).config;
       const selectionStats =
         projectStrategy === "epsilon_greedy"
           ? await loadProjectSelectionStats(tx, project.id, environment)
@@ -2575,7 +2802,7 @@ const executePrizeEngineReward = async (
         rewardAmount = new Decimal(0);
       }
 
-      const rewardEnvelopeOutcome: PrizeEngineRewardEnvelopeOutcome = {
+      let rewardEnvelopeOutcome: PrizeEngineRewardEnvelopeOutcome = {
         mode:
           rewardEnvelopeDecision.mode === "mute" ||
           scopeEnvelopeOutcome.mode === "mute"
@@ -2586,6 +2813,63 @@ const executePrizeEngineReward = async (
           ...scopeEnvelopeOutcome.triggered,
         ],
       };
+      let billingThrottleReason: "monthly_hard_cap" | null = null;
+      if (environment === "live" && liveBillingBudgetPolicy.hardCap) {
+        const hardCapAmount = toDecimal(liveBillingBudgetPolicy.hardCap);
+        const preThrottleDecisionType = rewardAmount.gt(0) ? "payout" : "mute";
+        const decisionFee = toDecimal(auth.decisionPricing[preThrottleDecisionType]);
+        if (
+          liveBillingHardCapActive ||
+          currentMonthBillableTotalAmount.plus(decisionFee).gt(hardCapAmount)
+        ) {
+          selectedPrize = null;
+          rewardAmount = new Decimal(0);
+          billingThrottleReason = "monthly_hard_cap";
+          rewardEnvelopeOutcome = {
+            ...rewardEnvelopeOutcome,
+            mode: "mute",
+          };
+
+          if (billingBudgetAccount && !liveBillingHardCapActive) {
+            const nextMetadata = normalizeMetadata(
+              markSaasBillingHardCapReached(
+                billingBudgetAccount.metadata,
+                billingObservedAt,
+              ),
+            );
+            billingBudgetAccount.metadata = nextMetadata;
+            await tx
+              .update(saasBillingAccounts)
+              .set({
+                metadata: nextMetadata,
+                updatedAt: billingObservedAt,
+              })
+              .where(eq(saasBillingAccounts.id, billingBudgetAccount.id));
+          }
+        }
+      }
+      const lockedProjectState = await lockProjectStateForSettlement(
+        tx,
+        project.id,
+        environment,
+      );
+      if (!lockedProjectState || lockedProjectState.status !== "active") {
+        throw notFoundError("Project not found.", {
+          code: API_ERROR_CODES.PROJECT_NOT_FOUND,
+        });
+      }
+
+      if (selectedPrize) {
+        const scaledSelectedRewardAmount = scaleRewardAmount(
+          selectedPrize.rewardAmount,
+          rewardMultiplier,
+        );
+        if (scaledSelectedRewardAmount.gt(lockedProjectState.prizePoolBalance)) {
+          selectedPrize = null;
+          rewardAmount = new Decimal(0);
+        }
+      }
+
       const expectedRewardAmount = computeExpectedRewardAmount({
         prizeRows: agentScopedPrizeRows.prizeRows,
         missWeight: Number(project.missWeight ?? 0),
@@ -2604,8 +2888,9 @@ const executePrizeEngineReward = async (
       });
       const startingBalance = toDecimal(player.balance);
       const endingBalance = startingBalance.minus(drawCost).plus(rewardAmount);
+      const startingPoolBalance = toDecimal(lockedProjectState.prizePoolBalance);
       const endingPoolBalance = Decimal.max(
-        toDecimal(project.prizePoolBalance).plus(drawCost).minus(rewardAmount),
+        startingPoolBalance.plus(drawCost).minus(rewardAmount),
         0,
       );
       const won = rewardAmount.gt(0);
@@ -2720,6 +3005,7 @@ const executePrizeEngineReward = async (
             agentId: agentScopeId,
             agentRecordId: trackedAgent.id,
             groupId,
+            billingThrottleReason,
             agentMode: auth.agentPolicy?.mode ?? null,
             agentBudgetMultiplier: auth.agentPolicy?.budgetMultiplier ?? null,
             riskEnvelope: {
@@ -2782,7 +3068,7 @@ const executePrizeEngineReward = async (
               : null,
             playerBalanceBefore: startingBalance.toFixed(2),
             playerBalanceAfter: endingBalance.toFixed(2),
-            prizePoolBalanceBefore: toMoneyString(project.prizePoolBalance),
+            prizePoolBalanceBefore: startingPoolBalance.toFixed(2),
             prizePoolBalanceAfter: endingPoolBalance.toFixed(2),
             legacy: legacy ?? null,
           },
@@ -2877,7 +3163,9 @@ const executePrizeEngineReward = async (
           referenceType: usageReferenceType,
           referenceId: record.id,
           amount:
-            environment === "live" ? auth.decisionPricing[decisionType] : "0",
+            environment === "live" && !billingThrottleReason
+              ? auth.decisionPricing[decisionType]
+              : "0",
           currency: auth.billingCurrency,
           metadata: buildAgentUsageMetadata(auth, {
             decisionType,
@@ -2885,7 +3173,8 @@ const executePrizeEngineReward = async (
             groupId,
             status: record.status,
             prizeId: record.prizeId,
-            billable: environment === "live",
+            billable: environment === "live" && !billingThrottleReason,
+            billingThrottleReason,
             rewardEnvelopeMode: rewardEnvelopeOutcome.mode,
             rewardEnvelopeTriggered: rewardEnvelopeOutcome.triggered,
           }),
@@ -2984,8 +3273,6 @@ const executePrizeEngineReward = async (
       };
     },
   );
-
-  await syncRewardEnvelopeCache(rewardEnvelopeStates);
   return {
     response,
     replayed,
@@ -3017,6 +3304,13 @@ export async function createPrizeEngineReward(params: {
     usageEventType: PRIZE_ENGINE_REWARD_WRITE_SCOPE,
     usageReferenceType: "reward",
     antiExploitTrace,
+  });
+
+  await markTenantOnboardedAfterSuccess({
+    auth,
+    environment,
+    activityType: "reward",
+    subjectId: payload.agent.agentId,
   });
 
   return result.response;
@@ -3077,6 +3371,13 @@ export async function createPrizeEngineDraw(params: {
     usageReferenceType: rewardContext ? "reward" : "draw",
     legacy: LEGACY_DRAW_ROUTE_METADATA,
     antiExploitTrace,
+  });
+
+  await markTenantOnboardedAfterSuccess({
+    auth,
+    environment,
+    activityType: rewardContext ? "reward" : "draw",
+    subjectId: rewardContext?.agent.agentId ?? payload.player.playerId,
   });
 
   if (rewardContext) {

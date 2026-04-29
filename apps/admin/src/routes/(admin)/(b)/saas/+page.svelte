@@ -954,7 +954,12 @@
     </form>
 
     <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-      <h2 class="text-lg font-semibold">{t("saas.billingOps.title")}</h2>
+      <div class="flex items-center justify-between gap-3">
+        <h2 class="text-lg font-semibold">{t("saas.billingOps.title")}</h2>
+        <a href="/saas/disputes" class="btn btn-outline btn-sm">
+          Billing disputes
+        </a>
+      </div>
       <form method="post" action="?/createBillingRun" class="mt-4 space-y-3">
         <input type="hidden" name="totpCode" value={stepUpCode} />
         <select class="select select-bordered w-full" name="tenantId">

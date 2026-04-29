@@ -1,7 +1,9 @@
 import '@fastify/cookie';
+import '@fastify/websocket';
 import 'fastify';
 
 import type { ProjectApiAuth } from '../modules/saas/service';
+import type { KycTier } from '@reward/shared-types/kyc';
 import type { RealtimeService } from '../realtime/service';
 import type { AuthenticatedAdmin } from '../shared/admin-session';
 import type { UserSessionPayload } from '../shared/user-session';
@@ -13,6 +15,7 @@ declare module 'fastify' {
 
   interface FastifyRequest {
     user?: UserSessionPayload;
+    userKycTier?: KycTier;
     admin?: AuthenticatedAdmin;
     userStepUp?: {
       verified: true;

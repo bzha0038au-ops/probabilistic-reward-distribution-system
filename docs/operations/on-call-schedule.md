@@ -16,9 +16,10 @@
 ## Weekly Handoff Checklist
 
 1. Confirm the last daily backup succeeded in `Operations Backups`.
-2. Confirm the last monthly restore drill report is newer than 90 days.
-3. Confirm `BACKUP_ALERT_WEBHOOK_URL` is still valid.
-4. Confirm the current primary and secondary responders match the GitHub environment variables.
+2. Confirm the last monthly staging restore drill report is newer than 45 days.
+3. Confirm [`dr-drills.md`](./dr-drills.md) has the latest successful drill row.
+4. Confirm `BACKUP_ALERT_WEBHOOK_URL` is still valid.
+5. Confirm the current primary and secondary responders match the GitHub environment variables.
 
 ## Roster Template
 

@@ -4,6 +4,9 @@
 - UTC start: 2026-04-26T17:00:11Z
 - UTC finish: 2026-04-26T17:00:12Z
 - Drill ID: `local-restore-drill-2026-04-27`
+- Drill environment: `staging`
+- Restore scope: `full-database`
+- Restore target: `local-postgres-staging-clone`
 - Operator: `codex-local`
 - Restore approver placeholder: `restore-approver-to-wire-in-github-vars`
 - Change / ticket: `local-proof-2026-04-27`
@@ -11,20 +14,26 @@
 ## Backup Artifact
 
 - Logical encrypted bundle: `reward-system-logical-20260426T165731Z.tar.gz.enc`
+- Backup created (UTC): `2026-04-26T16:57:31Z`
 - Volume encrypted bundle: `reward-system-volume-20260426T165731Z.tar.gz.enc`
 - Source volume: `reward_ops_src_pgdata`
 - Offsite copy target used for the proof run: `.tmp/ops-drill/offsite/`
 
 ## Result
 
+- Overall status: passed
 - Restore status: passed
 - `deploy/sql/post-restore-checks.sql`: passed
 - `deploy/sql/finance-sanity.sql`: passed
 - Write probe: passed
+- Estimated RPO: 160 seconds (2m 40s)
+- Actual RTO: 1 second
 - End-to-end restore + validation time: 1 second
 
 ## Notes
 
 - The drill restored the encrypted logical bundle into an isolated PostgreSQL target on a different container/port than the source.
+- Estimated RPO is measured as backup age at restore start.
+- Actual RTO is measured as restore plus validation wall-clock time.
 - The write probe used a temporary table and rolled back, which proved the restored target was writable without mutating persistent business data.
 - Backend smoke was intentionally skipped in the final proof record because the current backend baseline has unrelated build/import issues; the scheduled drill workflow therefore uses SQL validation plus the write probe as the automated restore acceptance gate.

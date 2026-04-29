@@ -1,6 +1,7 @@
 import {
   communityModerationActions,
   communityPosts,
+  communityReports,
   communityThreads,
 } from '@reward/database';
 import { and, asc, desc, eq, sql } from '@reward/database/orm';
@@ -18,6 +19,7 @@ import { API_ERROR_CODES } from '@reward/shared-types/api';
 import { db, type DbTransaction } from '../../db';
 import { conflictError, notFoundError } from '../../shared/errors';
 import { readSqlRows } from '../../shared/sql-result';
+import type { CommunityAutomatedModerationReport } from './anti-spam-service';
 
 const VISIBLE_THREAD_STATUS = 'visible';
 const HIDDEN_THREAD_STATUS = 'hidden';
@@ -180,18 +182,27 @@ export async function createCommunityThread(params: {
   userId: number;
   title: string;
   body: string;
+  initialThreadStatus?: CommunityThreadStatus;
+  initialPostStatus?: CommunityPostStatus;
+  queuedReport?: CommunityAutomatedModerationReport | null;
 }) {
   return db.transaction(async (tx) => {
     const now = new Date();
+    const threadStatus = params.initialThreadStatus ?? VISIBLE_THREAD_STATUS;
+    const postStatus = params.initialPostStatus ?? VISIBLE_POST_STATUS;
+    const threadHidden = threadStatus === HIDDEN_THREAD_STATUS;
+    const postHidden = postStatus === HIDDEN_POST_STATUS;
+
     const [thread] = await tx
       .insert(communityThreads)
       .values({
         authorUserId: params.userId,
         title: params.title,
-        status: VISIBLE_THREAD_STATUS,
+        status: threadStatus,
         isLocked: false,
-        postCount: 1,
+        postCount: postStatus === VISIBLE_POST_STATUS ? 1 : 0,
         lastPostAt: now,
+        hiddenAt: threadHidden ? now : null,
         createdAt: now,
         updatedAt: now,
       })
@@ -203,11 +214,53 @@ export async function createCommunityThread(params: {
         threadId: thread.id,
         authorUserId: params.userId,
         body: params.body,
-        status: VISIBLE_POST_STATUS,
+        status: postStatus,
+        hiddenAt: postHidden ? now : null,
         createdAt: now,
         updatedAt: now,
       })
       .returning();
+
+    if (params.queuedReport) {
+      await tx.insert(communityReports).values({
+        postId: post.id,
+        reporterUserId: null,
+        reason: params.queuedReport.reason,
+        detail: params.queuedReport.detail,
+        source: params.queuedReport.source,
+        metadata: params.queuedReport.metadata,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    if (threadHidden) {
+      await tx.insert(communityModerationActions).values({
+        adminId: null,
+        targetType: 'thread',
+        targetId: thread.id,
+        threadId: thread.id,
+        postId: null,
+        action: 'hide_thread',
+        reason: params.queuedReport?.reason ?? 'automatic_moderation',
+        metadata: params.queuedReport?.metadata ?? null,
+        createdAt: now,
+      });
+    }
+
+    if (postHidden) {
+      await tx.insert(communityModerationActions).values({
+        adminId: null,
+        targetType: 'post',
+        targetId: post.id,
+        threadId: thread.id,
+        postId: post.id,
+        action: 'hide_post',
+        reason: params.queuedReport?.reason ?? 'automatic_moderation',
+        metadata: params.queuedReport?.metadata ?? null,
+        createdAt: now,
+      });
+    }
 
     return { thread, post };
   });
@@ -217,24 +270,41 @@ export async function createCommunityPost(params: {
   userId: number;
   threadId: number;
   body: string;
+  initialPostStatus?: CommunityPostStatus;
+  queuedReport?: CommunityAutomatedModerationReport | null;
 }) {
   return db.transaction(async (tx) => {
     const now = new Date();
-    const [thread] = await tx
-      .update(communityThreads)
-      .set({
-        postCount: sql`${communityThreads.postCount} + 1`,
-        lastPostAt: now,
-        updatedAt: now,
-      })
-      .where(
-        and(
-          eq(communityThreads.id, params.threadId),
-          eq(communityThreads.status, VISIBLE_THREAD_STATUS),
-          eq(communityThreads.isLocked, false)
-        )
-      )
-      .returning();
+    const postStatus = params.initialPostStatus ?? VISIBLE_POST_STATUS;
+    const postHidden = postStatus === HIDDEN_POST_STATUS;
+    const [thread] =
+      postStatus === VISIBLE_POST_STATUS
+        ? await tx
+            .update(communityThreads)
+            .set({
+              postCount: sql`${communityThreads.postCount} + 1`,
+              lastPostAt: now,
+              updatedAt: now,
+            })
+            .where(
+              and(
+                eq(communityThreads.id, params.threadId),
+                eq(communityThreads.status, VISIBLE_THREAD_STATUS),
+                eq(communityThreads.isLocked, false)
+              )
+            )
+            .returning()
+        : await tx
+            .select()
+            .from(communityThreads)
+            .where(
+              and(
+                eq(communityThreads.id, params.threadId),
+                eq(communityThreads.status, VISIBLE_THREAD_STATUS),
+                eq(communityThreads.isLocked, false)
+              )
+            )
+            .limit(1);
 
     if (!thread) {
       const [existingThread] = await tx
@@ -269,11 +339,39 @@ export async function createCommunityPost(params: {
         threadId: params.threadId,
         authorUserId: params.userId,
         body: params.body,
-        status: VISIBLE_POST_STATUS,
+        status: postStatus,
+        hiddenAt: postHidden ? now : null,
         createdAt: now,
         updatedAt: now,
       })
       .returning();
+
+    if (params.queuedReport) {
+      await tx.insert(communityReports).values({
+        postId: post.id,
+        reporterUserId: null,
+        reason: params.queuedReport.reason,
+        detail: params.queuedReport.detail,
+        source: params.queuedReport.source,
+        metadata: params.queuedReport.metadata,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    if (postHidden) {
+      await tx.insert(communityModerationActions).values({
+        adminId: null,
+        targetType: 'post',
+        targetId: post.id,
+        threadId: params.threadId,
+        postId: post.id,
+        action: 'hide_post',
+        reason: params.queuedReport?.reason ?? 'automatic_moderation',
+        metadata: params.queuedReport?.metadata ?? null,
+        createdAt: now,
+      });
+    }
 
     return { thread, post };
   });

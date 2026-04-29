@@ -5,7 +5,9 @@ export type MobileRouteKey =
   | 'account'
   | 'wallet'
   | 'rewards'
+  | 'community'
   | 'security'
+  | 'notifications'
   | 'gacha'
   | 'quickEight'
   | 'predictionMarket'
@@ -28,6 +30,7 @@ export const homeMenuRouteOrder = [
   'account',
   'wallet',
   'rewards',
+  'community',
   'security',
   'gacha',
   'quickEight',
@@ -44,7 +47,9 @@ const routeCopy = {
       account: 'Account',
       wallet: 'Wallet',
       rewards: 'Rewards',
+      community: 'Community',
       security: 'Security',
+      notifications: 'Notifications',
       gacha: 'Slot',
       quickEight: 'Quick Eight',
       predictionMarket: 'Markets',
@@ -79,11 +84,23 @@ const routeCopy = {
           'Daily missions, bonus balance, and claim actions now sit on their own rewards page.',
         open: 'Open rewards',
       },
+      community: {
+        title: 'Community',
+        body:
+          'Browse visible threads, open a discussion, and reply from a dedicated mobile community route.',
+        open: 'Open community',
+      },
       security: {
         title: 'Security',
         body:
           'Password reset, active session review, and device revocation are split into a dedicated security page.',
         open: 'Open security',
+      },
+      notifications: {
+        title: 'Notifications',
+        body:
+          'KYC reviews, withdrawal progress, and settled market updates now land in a dedicated inbox route.',
+        open: 'Open notifications',
       },
       gacha: {
         title: 'Slot machine',
@@ -106,7 +123,7 @@ const routeCopy = {
       holdem: {
         title: "Texas Hold'em",
         body:
-          'Create or join a multiplayer cash table, buy in from the wallet, and play each street on its own mobile route.',
+          'Create or join multiplayer casual or cash tables, choose the seat count, and play each street on its own mobile route.',
         open: "Open Hold'em",
       },
       blackjack: {
@@ -141,11 +158,23 @@ const routeCopy = {
         subtitle:
           'Mobile keeps check-ins, mission progress, and reward claims on a standalone rewards screen.',
       },
+      community: {
+        kicker: 'Community',
+        title: 'Dedicated route for public discussion and replies.',
+        subtitle:
+          'Mobile keeps visible threads, posting, and moderation-aware reply flow on a standalone community screen.',
+      },
       security: {
         kicker: 'Security',
         title: 'Dedicated security route for device and password controls.',
         subtitle:
           'Mobile keeps active-session review, password reset, and revoke flows on a dedicated security screen.',
+      },
+      notifications: {
+        kicker: 'Notifications',
+        title: 'Dedicated inbox route for account and market alerts.',
+        subtitle:
+          'Mobile keeps KYC reviews, withdrawal progress, and settled prediction market updates in one read-tracked feed.',
       },
       gacha: {
         kicker: 'Slot',
@@ -167,9 +196,9 @@ const routeCopy = {
       },
       holdem: {
         kicker: "Hold'em",
-        title: 'Dedicated route for multiplayer cash-table hands.',
+        title: 'Dedicated route for multiplayer casual and cash-table hands.',
         subtitle:
-          'Mobile keeps the lobby, buy-in, and street-by-street table actions on a standalone route that polls the same backend table state as web.',
+          'Mobile keeps the lobby, table mode, seat count, buy-in, and street-by-street table actions on a standalone route that polls the same backend table state as web.',
       },
       blackjack: {
         kicker: 'Blackjack',
@@ -278,7 +307,7 @@ const routeCopy = {
           'Grouped market history shows open exposure, settled payouts, and refunds without opening each market one by one.',
         exposureOnlyTitle: 'Exposure only',
         exposureOnlyDescription:
-          'The current pari-mutuel release shows stake exposure, settled payouts, and refunds. It does not calculate live PnL while markets are still open.',
+          'The current pari-mutuel release shows stake exposure, net-of-vig settled payouts, and refunds. It does not calculate live PnL while markets are still open.',
         refreshHistory: 'Refresh history',
         loadingHistory: 'Loading history...',
         noMarkets: 'No prediction markets are configured yet.',
@@ -304,7 +333,7 @@ const routeCopy = {
         chooseOutcome: 'Choose an outcome first.',
         stakeAmount: 'Stake amount',
         stakeHint:
-          'Enter a positive amount. Payout is pari-mutuel and finalizes only after market resolution.',
+          'Enter a positive amount. Payout is pari-mutuel, net of vig, and finalizes only after market resolution.',
         placeBet: 'Place position',
         placingBet: 'Placing...',
         marketClosed: 'This market is not accepting new positions.',
@@ -352,6 +381,7 @@ const routeCopy = {
           open: 'Open',
           won: 'Won',
           lost: 'Lost',
+          sold: 'Sold',
           refunded: 'Refunded',
         },
         settlementPending: 'Pending resolution',
@@ -364,16 +394,27 @@ const routeCopy = {
       holdem: {
         routeTitle: "Texas Hold'em route",
         routeSubtitle:
-          'Dedicated mobile screen for multiplayer cash-table play and per-street actions.',
+          'Dedicated mobile screen for multiplayer casual and cash-table play, seat-count selection, and per-street actions.',
         summaryBalance: 'Balance',
         summaryStatus: 'Table status',
         summaryLoading: 'Loading',
         sectionTitle: "Texas Hold'em",
         sectionSubtitle:
           'Same `GET /holdem/tables`, `POST /holdem/tables`, join, leave, start, and action endpoints as web.',
+        tableMode: 'Table mode',
         tableName: 'Table name',
+        seatCount: 'Seats',
         buyInAmount: 'Buy-in amount',
+        tournamentStartingStack: 'Starting stack',
+        tournamentPayoutPlaces: 'Payout places',
         buyInRange: (min: string, max: string) => `Min ${min} / Max ${max}`,
+        casualTableHint:
+          'Casual tables use bonus balance, do not charge rake, and do not require KYC.',
+        cashTableHint: 'Cash tables use withdrawable balance and the live rake policy.',
+        tournamentTableHint:
+          'Tournament tables freeze buy-ins into a pooled prize pool, seat every entry with the same starting stack, and only settle prizes after elimination order is final.',
+        tournamentPayoutPlacesHint:
+          'Final payout slots are capped to the actual registration count, up to three places.',
         createTable: 'Create table',
         creatingTable: 'Opening...',
         joinTable: 'Join table',
@@ -388,7 +429,7 @@ const routeCopy = {
         startingHand: 'Shuffling...',
         refreshTable: 'Refresh table',
         refreshingTable: 'Refreshing...',
-        noTables: 'No cash tables are open yet.',
+        noTables: 'No tables are open yet.',
         noSelection: 'Choose a table from the lobby to view the current hand.',
         board: 'Board',
         actionClock: 'Action clock',
@@ -397,6 +438,14 @@ const routeCopy = {
         minRaiseTo: 'Min raise to',
         actionAmount: 'Action amount',
         blinds: 'Blinds',
+        tableType: 'Table type',
+        cashTable: 'Cash',
+        casualTable: 'Casual',
+        tournamentTable: 'Tournament',
+        rakePolicy: 'Rake',
+        rakeCap: 'cap',
+        rakeNone: 'No rake',
+        rakeNoFlopNoDrop: 'No flop, no drop',
         fairness: 'Fairness',
         timeBank: 'Time bank',
         stack: 'Stack',
@@ -551,7 +600,9 @@ const routeCopy = {
       account: '账户',
       wallet: '钱包',
       rewards: '奖励',
+      community: '社区',
       security: '安全',
+      notifications: '通知',
       gacha: '老虎机',
       quickEight: '快八',
       predictionMarket: '预测盘',
@@ -585,11 +636,23 @@ const routeCopy = {
           '每日任务、奖励余额和领奖动作都拆到独立奖励页。',
         open: '打开奖励页',
       },
+      community: {
+        title: '社区',
+        body:
+          '浏览可见主题、发起讨论，并在独立移动端社区页里完成公开回复。',
+        open: '打开社区页',
+      },
       security: {
         title: '安全',
         body:
           '重置密码、查看活跃会话和撤销设备会话都拆到独立安全页。',
         open: '打开安全页',
+      },
+      notifications: {
+        title: '通知中心',
+        body:
+          'KYC 审核、提现进度和预测市场结算统一进入专门的通知收件箱。',
+        open: '打开通知中心',
       },
       gacha: {
         title: '老虎机',
@@ -612,7 +675,7 @@ const routeCopy = {
       holdem: {
         title: '德州扑克',
         body:
-          '创建或加入多人现金桌，从钱包买入后按 preflop / flop / turn / river 依次推进。',
+          '创建或加入多人娱乐局或现金桌，选择人数后入桌，并按 preflop / flop / turn / river 依次推进。',
         open: '打开德州牌桌',
       },
       blackjack: {
@@ -647,11 +710,23 @@ const routeCopy = {
         subtitle:
           '移动端把签到、任务进度和领奖动作集中到单独奖励页中。',
       },
+      community: {
+        kicker: '社区',
+        title: '公开讨论与回帖的独立社区路由。',
+        subtitle:
+          '移动端把可见主题、发帖动作和带审核策略的回复流程集中到独立社区页面。',
+      },
       security: {
         kicker: '安全',
         title: '设备与密码操作的独立安全路由。',
         subtitle:
           '移动端把活跃会话审查、密码重置和会话撤销都放到专门的安全页里。',
+      },
+      notifications: {
+        kicker: '通知',
+        title: '账户与市场提醒的独立通知路由。',
+        subtitle:
+          '移动端把 KYC、提现和预测市场结算提醒集中到一个可读、可清空的通知页里。',
       },
       gacha: {
         kicker: '老虎机',
@@ -673,9 +748,9 @@ const routeCopy = {
       },
       holdem: {
         kicker: '德州',
-        title: '独立的多人现金桌路由。',
+        title: '独立的多人娱乐局与现金桌路由。',
         subtitle:
-          '移动端把牌桌大厅、买入和每条街的行动都放到独立页面里，继续轮询和 Web 相同的后端桌局状态。',
+          '移动端把牌桌大厅、桌型、人数、买入和每条街的行动都放到独立页面里，继续轮询和 Web 相同的后端桌局状态。',
       },
       blackjack: {
         kicker: '二十一点',
@@ -781,7 +856,7 @@ const routeCopy = {
           '按市场分组展示你的未结算敞口、已结算派奖和退款，不用逐个打开市场查看。',
         exposureOnlyTitle: '仅展示敞口与历史',
         exposureOnlyDescription:
-          '当前 pari-mutuel 版本只展示 stake 敞口、已结算 payout 和退款，不计算市场仍在开放时的实时盈亏。',
+          '当前 pari-mutuel 版本只展示 stake 敞口、扣除抽水后的已结算 payout 和退款，不计算市场仍在开放时的实时盈亏。',
         refreshHistory: '刷新历史',
         loadingHistory: '加载历史中...',
         noMarkets: '当前还没有配置预测盘市场。',
@@ -805,7 +880,7 @@ const routeCopy = {
         selectedOutcome: '当前选择',
         chooseOutcome: '请先选择一个下注结果。',
         stakeAmount: '下注金额',
-        stakeHint: '输入大于 0 的金额。预测盘采用奖池分配，最终派奖要等市场结算后才能确定。',
+        stakeHint: '输入大于 0 的金额。预测盘采用奖池分配并先扣抽水，最终派奖要等市场结算后才能确定。',
         placeBet: '下注',
         placingBet: '下注中...',
         marketClosed: '当前市场已停止接收新下注。',
@@ -853,6 +928,7 @@ const routeCopy = {
           open: '进行中',
           won: '已中奖',
           lost: '未命中',
+          sold: '已卖出',
           refunded: '已退款',
         },
         settlementPending: '待结算',
@@ -864,16 +940,26 @@ const routeCopy = {
       },
       holdem: {
         routeTitle: '德州路由',
-        routeSubtitle: '多人现金桌玩法拆成独立移动端页面。',
+        routeSubtitle: '多人娱乐局与现金桌玩法拆成独立移动端页面。',
         summaryBalance: '余额',
         summaryStatus: '桌面状态',
         summaryLoading: '加载中',
         sectionTitle: '德州扑克',
         sectionSubtitle:
           '直接复用 Web 同一套 `GET /holdem/tables`、创建、入座、离桌、开局和行动接口。',
+        tableMode: '桌型模式',
         tableName: '桌名',
+        seatCount: '人数',
         buyInAmount: '买入金额',
+        tournamentStartingStack: '起始筹码',
+        tournamentPayoutPlaces: '派奖名次',
         buyInRange: (min: string, max: string) => `最小 ${min} / 最大 ${max}`,
+        casualTableHint: '娱乐局使用奖励余额买入，不抽水，且不要求 KYC。',
+        cashTableHint: '现金桌使用可提现余额买入，并应用实时抽水策略。',
+        tournamentTableHint:
+          '锦标赛会把买入汇总进奖池，所有参赛者统一起始筹码，直到淘汰名次确定后才统一派奖。',
+        tournamentPayoutPlacesHint:
+          '最终派奖名次数会按实际报名人数收口，最多只发到前三名。',
         createTable: '创建牌桌',
         creatingTable: '正在开桌...',
         joinTable: '加入牌桌',
@@ -888,7 +974,7 @@ const routeCopy = {
         startingHand: '正在洗牌...',
         refreshTable: '刷新牌桌',
         refreshingTable: '刷新中...',
-        noTables: '当前还没有开放的现金桌。',
+        noTables: '当前还没有开放的牌桌。',
         noSelection: '先从大厅选择一张牌桌，再查看当前牌局。',
         board: '公共牌',
         actionClock: '行动时限',
@@ -897,6 +983,14 @@ const routeCopy = {
         minRaiseTo: '最小加到',
         actionAmount: '行动金额',
         blinds: '盲注',
+        tableType: '桌型',
+        cashTable: '现金桌',
+        casualTable: '娱乐局',
+        tournamentTable: '锦标赛',
+        rakePolicy: '抽水',
+        rakeCap: '封顶',
+        rakeNone: '不抽水',
+        rakeNoFlopNoDrop: '未发翻牌不抽水',
         fairness: '公平性',
         timeBank: '时间银行',
         stack: '筹码',

@@ -25,6 +25,7 @@ import {
   recordPrizeEngineUsageEvent,
   revealPrizeEngineFairnessSeed,
 } from "../../modules/saas/service";
+import { recordSaasStatusApiRequest } from "../../modules/saas-status/service";
 import {
   mergePrizeEngineAgentSignals,
   consumePrizeEngineApiRateLimit,
@@ -423,6 +424,28 @@ const applyLegacyDrawDeprecationHeaders = (reply: FastifyReply) => {
   );
 };
 
+const isRequestConnectionClosed = (
+  request: FastifyRequest,
+  reply: FastifyReply,
+) =>
+  request.raw.aborted ||
+  request.raw.destroyed ||
+  request.raw.socket.destroyed ||
+  reply.raw.destroyed;
+
+const sendPrizeEngineRouteError = (
+  request: FastifyRequest,
+  reply: FastifyReply,
+  error: unknown,
+  fallbackMessage: string,
+) => {
+  if (isRequestConnectionClosed(request, reply)) {
+    return reply;
+  }
+
+  return sendErrorForException(reply, error, fallbackMessage);
+};
+
 const buildPrizeEngineAgentSignals = (request: FastifyRequest) =>
   mergePrizeEngineAgentSignals({
     idempotencyKey:
@@ -487,6 +510,28 @@ export async function registerPrizeEngineRoutes(app: AppInstance) {
       }
       return payload;
     });
+    protectedRoutes.addHook("onResponse", async (request, reply) => {
+      const project = request.prizeEngineProject;
+      const eventType = resolvePrizeEngineScopeFromRoute(request);
+
+      if (!project || !eventType) {
+        return;
+      }
+
+      void recordSaasStatusApiRequest({
+        tenantId: project.tenantId,
+        projectId: project.projectId,
+        apiKeyId: project.apiKeyId,
+        environment: project.environment,
+        eventType,
+        route: resolvePrizeEngineRoutePath(request),
+        method: request.method,
+        statusCode: reply.statusCode,
+        latencyMs: reply.elapsedTime,
+      }).catch(() => {
+        // Status telemetry must not change the request outcome.
+      });
+    });
 
     protectedRoutes.get(
       "/v1/engine/overview",
@@ -514,7 +559,8 @@ export async function registerPrizeEngineRoutes(app: AppInstance) {
           });
           return sendSuccess(reply, overview);
         } catch (error) {
-          return sendErrorForException(
+          return sendPrizeEngineRouteError(
+            request,
             reply,
             error,
             "Failed to load engine overview.",
@@ -549,7 +595,8 @@ export async function registerPrizeEngineRoutes(app: AppInstance) {
           });
           return sendSuccess(reply, commit);
         } catch (error) {
-          return sendErrorForException(
+          return sendPrizeEngineRouteError(
+            request,
             reply,
             error,
             "Failed to load fairness commit.",
@@ -585,7 +632,8 @@ export async function registerPrizeEngineRoutes(app: AppInstance) {
           });
           return sendSuccess(reply, reveal);
         } catch (error) {
-          return sendErrorForException(
+          return sendPrizeEngineRouteError(
+            request,
             reply,
             error,
             "Failed to reveal fairness seed.",
@@ -634,7 +682,12 @@ export async function registerPrizeEngineRoutes(app: AppInstance) {
           });
           return sendSuccess(reply, result, result.replayed ? 200 : 201);
         } catch (error) {
-          return sendErrorForException(reply, error, "Reward creation failed.");
+          return sendPrizeEngineRouteError(
+            request,
+            reply,
+            error,
+            "Reward creation failed.",
+          );
         }
       },
     );
@@ -679,7 +732,12 @@ export async function registerPrizeEngineRoutes(app: AppInstance) {
           });
           return sendSuccess(reply, result);
         } catch (error) {
-          return sendErrorForException(reply, error, "Draw failed.");
+          return sendPrizeEngineRouteError(
+            request,
+            reply,
+            error,
+            "Draw failed.",
+          );
         }
       },
     );
@@ -711,7 +769,8 @@ export async function registerPrizeEngineRoutes(app: AppInstance) {
           });
           return sendSuccess(reply, observability);
         } catch (error) {
-          return sendErrorForException(
+          return sendPrizeEngineRouteError(
+            request,
             reply,
             error,
             "Failed to load distribution observability.",
@@ -748,7 +807,12 @@ export async function registerPrizeEngineRoutes(app: AppInstance) {
           });
           return sendSuccess(reply, ledger);
         } catch (error) {
-          return sendErrorForException(reply, error, "Failed to load ledger.");
+          return sendPrizeEngineRouteError(
+            request,
+            reply,
+            error,
+            "Failed to load ledger.",
+          );
         }
       },
     );

@@ -21,7 +21,7 @@ control, not as an ad hoc DBA task.
 - Keep a readable logical dump copy in `BACKUP_ARCHIVE_S3_URI` for automated
   validation, and mirror it to `BACKUP_ARCHIVE_CROSS_REGION_S3_URI` when your
   cloud provider does not already replicate that bucket or prefix.
-- Run a restore drill at least once every 90 days using
+- Run a full-database restore drill every month in staging using
   `deploy/scripts/restore-drill.sh` against an isolated target database.
 - Record and review actual RPO/RTO after every drill and every real incident.
 
@@ -43,14 +43,16 @@ The repo-owned scheduler is
 
 - Daily schedule: logical backup only
 - Weekly schedule: logical backup plus PostgreSQL volume backup
-- Monthly schedule: logical backup, volume backup, and a full restore drill
+- Monthly schedule: production backup plus a staging full-database restore drill
 - Daily verification schedule:
   [`.github/workflows/backup-verify.yml`](../../.github/workflows/backup-verify.yml)
 - Daily restore-drill freshness check: page on-call if the newest committed
-  evidence in `docs/operations/evidence/` is older than 90 days
+  evidence in `docs/operations/evidence/` is older than 45 days
 
 Successful monthly drills copy their report into `docs/operations/evidence/`
-as `restore-drill-YYYY-MM.*` and open an automated pull request for review.
+as `restore-drill-YYYY-MM.*`, rebuild
+[`dr-drills.md`](./dr-drills.md), and open an automated pull request for
+review.
 
 For local cron or another scheduler, use `deploy/env/ops.env.example` as the
 configuration contract for `deploy/scripts/backup-runner.sh`.
@@ -151,6 +153,14 @@ psql "$RESTORED_DATABASE_URL" -v ON_ERROR_STOP=1 -f deploy/sql/finance-sanity.sq
    - pending withdrawal/deposit workload matches expectations
 6. Reopen traffic only after sign-off from the incident commander and service
    owner / `RESTORE_APPROVER`.
+
+For the monthly staging drill, also confirm the generated report and summary
+show:
+
+- `estimated_rpo_seconds`
+- `actual_rto_seconds`
+- `drill_environment=staging`
+- a new row in [`dr-drills.md`](./dr-drills.md)
 
 ## What The Post-Restore Checks Validate
 

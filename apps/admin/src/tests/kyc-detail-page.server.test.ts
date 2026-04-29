@@ -169,4 +169,41 @@ describe("kyc detail page server", () => {
       message: "KYC profile moved to more-info-required.",
     })
   })
+
+  it("calls the request-reverification endpoint from the detail action", async () => {
+    apiRequest.mockResolvedValue({
+      ok: true,
+      data: { id: 12, status: "more_info_required", currentTier: "tier_0" },
+    })
+
+    const result = await actions.requestReverification({
+      request: makeRequest({
+        reason: "Policy updated for expired identity documents.",
+        totpCode: "123456",
+      }),
+      fetch: vi.fn(),
+      cookies: {},
+      params: { profileId: "12" },
+      locals: { locale: "en" },
+    } as never)
+
+    expect(apiRequest).toHaveBeenCalledWith(
+      expect.any(Function),
+      {},
+      "/admin/kyc-profiles/12/request-reverification",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reason: "Policy updated for expired identity documents.",
+          totpCode: "123456",
+        }),
+      },
+    )
+    expect(result).toEqual({
+      success: true,
+      action: "requestReverification",
+      message: "KYC reverification requested.",
+    })
+  })
 })

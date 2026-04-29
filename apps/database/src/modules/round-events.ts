@@ -5,7 +5,6 @@ import {
   pgTable,
   serial,
   timestamp,
-  uniqueIndex,
   varchar,
 } from 'drizzle-orm/pg-core';
 import {
@@ -24,7 +23,7 @@ const roundEventRoundTypeValues = [
 export const roundEvents = pgTable(
   'round_events',
   {
-    id: serial('id').primaryKey(),
+    id: serial('id').notNull(),
     roundType: varchar('round_type', {
       length: 32,
       enum: roundEventRoundTypeValues,
@@ -55,11 +54,7 @@ export const roundEvents = pgTable(
       .defaultNow(),
   },
   (table) => ({
-    roundEventUniqueIdx: uniqueIndex('round_events_round_event_unique_idx').on(
-      table.roundType,
-      table.roundEntityId,
-      table.eventIndex,
-    ),
+    idIdx: index('round_events_id_idx').on(table.id),
     roundLookupIdx: index('round_events_round_lookup_idx').on(
       table.roundType,
       table.roundEntityId,
@@ -68,10 +63,8 @@ export const roundEvents = pgTable(
     userCreatedIdx: index('round_events_user_created_idx').on(
       table.userId,
       table.createdAt,
+      table.id,
     ),
-    tableRoundEventUniqueIdx: uniqueIndex(
-      'round_events_table_round_event_unique_idx',
-    ).on(table.tableRoundId, table.eventIndex),
     tableRoundLookupIdx: index('round_events_table_round_lookup_idx').on(
       table.tableRoundId,
       table.eventIndex,

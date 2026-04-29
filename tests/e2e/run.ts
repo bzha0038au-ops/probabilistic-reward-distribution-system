@@ -1,4 +1,5 @@
 import { readFile, rm, writeFile } from 'node:fs/promises';
+import { setTimeout as delay } from 'node:timers/promises';
 
 import {
   createAdminEnv,
@@ -10,6 +11,7 @@ import {
   startBackgroundProcess,
   startService,
   startTestDatabase,
+  waitForHttp,
 } from '../support/test-harness';
 
 const criticalE2eSpecs = [
@@ -20,6 +22,86 @@ const criticalE2eSpecs = [
 
 const saasWebhookSpec = 'tests/e2e/saas-webhook.spec.ts';
 const fullBackendE2eSpecs = [saasWebhookSpec];
+
+const warmUpHttp = async (
+  url: string,
+  options: {
+    method?: 'GET' | 'POST';
+    body?: BodyInit;
+    headers?: HeadersInit;
+    allowedStatuses?: readonly number[];
+    timeoutMs?: number;
+  } = {},
+) => {
+  const deadline = Date.now() + (options.timeoutMs ?? 120_000);
+  let lastError: unknown = null;
+
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(url, {
+        method: options.method ?? 'GET',
+        body: options.body,
+        headers: options.headers,
+        redirect: 'manual',
+        signal: AbortSignal.timeout(15_000),
+      });
+
+      if (
+        response.ok ||
+        (response.status >= 300 && response.status < 400) ||
+        options.allowedStatuses?.includes(response.status)
+      ) {
+        return;
+      }
+
+      lastError = new Error(`Received ${response.status} from ${url}.`);
+    } catch (error) {
+      lastError = error;
+    }
+
+    await delay(500);
+  }
+
+  throw new Error(
+    `Timed out warming ${url}${lastError ? `: ${String(lastError)}` : '.'}`,
+  );
+};
+
+const warmUpFrontend = async (baseUrl: string) => {
+  await waitForHttp(`${baseUrl}/login`, {
+    timeoutMs: 120_000,
+    requestTimeoutMs: 15_000,
+  });
+
+  for (const path of [
+    '/register',
+    '/verify-email?token=warmup',
+    '/app',
+    '/app/wallet',
+    '/app/payments',
+    '/app/security',
+    '/app/slot',
+    '/app/holdem',
+    '/app/markets',
+  ]) {
+    await warmUpHttp(`${baseUrl}${path}`);
+  }
+
+  await warmUpHttp(`${baseUrl}/api/backend/auth/user/session`, {
+    allowedStatuses: [401],
+  });
+  await warmUpHttp(`${baseUrl}/api/auth/login`, {
+    method: 'POST',
+    body: new URLSearchParams({
+      email: '',
+      password: '',
+    }),
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+    },
+    allowedStatuses: [400],
+  });
+};
 
 async function main() {
   const cliArgs = process.argv.slice(2);
@@ -49,14 +131,17 @@ async function main() {
   const frontendDistDir = `.next-e2e-${frontendPort}`;
   const frontendTsconfigPath = `${repoRoot}/apps/frontend/tsconfig.json`;
 
-  const backendBaseUrl = `http://localhost:${backendPort}`;
-  const frontendBaseUrl = `http://localhost:${frontendPort}`;
-  const adminBaseUrl = `http://localhost:${adminPort}`;
+  const backendBaseUrl = `http://127.0.0.1:${backendPort}`;
+  const frontendBaseUrl = `http://127.0.0.1:${frontendPort}`;
+  const adminBaseUrl = `http://127.0.0.1:${adminPort}`;
 
   let backend: Awaited<ReturnType<typeof startService>> | null = null;
   let frontend: Awaited<ReturnType<typeof startService>> | null = null;
   let admin: Awaited<ReturnType<typeof startService>> | null = null;
   let saasBillingWorker:
+    | Awaited<ReturnType<typeof startBackgroundProcess>>
+    | null = null;
+  let holdemTimeoutWorker:
     | Awaited<ReturnType<typeof startBackgroundProcess>>
     | null = null;
   let originalFrontendTsconfig: string | null = null;
@@ -90,7 +175,7 @@ async function main() {
           RATE_LIMIT_ADMIN_WINDOW_MS: '60000',
         },
         healthUrl: `${backendBaseUrl}/health`,
-        startupTimeoutMs: 90_000,
+        startupTimeoutMs: 180_000,
       },
     );
 
@@ -109,6 +194,25 @@ async function main() {
           SAAS_BILLING_WORKER_INTERVAL_MS: '250',
           SAAS_BILLING_AUTOMATION_ENABLED: 'false',
           SAAS_OUTBOUND_WEBHOOK_REQUEST_TIMEOUT_MS: '2000',
+        },
+      },
+    );
+
+    holdemTimeoutWorker = await startBackgroundProcess(
+      'pnpm',
+      ['--dir', 'apps/backend', 'exec', 'tsx', 'src/workers/holdem-timeout-worker.ts'],
+      {
+        env: {
+          ...createBackendEnv({
+            databaseUrl: database.databaseUrl,
+            port: backendPort,
+            webBaseUrl: frontendBaseUrl,
+            adminBaseUrl,
+          }),
+          LOG_LEVEL: 'error',
+          HOLDEM_TIMEOUT_WORKER_ENABLED: 'true',
+          HOLDEM_TIMEOUT_WORKER_INTERVAL_MS: '100',
+          HOLDEM_TIMEOUT_WORKER_BATCH_SIZE: '25',
         },
       },
     );
@@ -142,7 +246,7 @@ async function main() {
           'next',
           'dev',
           '--hostname',
-          'localhost',
+          '127.0.0.1',
           '--port',
           String(frontendPort),
         ],
@@ -154,9 +258,11 @@ async function main() {
             nextDistDir: frontendDistDir,
           }),
           healthUrl: `${frontendBaseUrl}/login`,
-          startupTimeoutMs: 120_000,
+          startupTimeoutMs: 240_000,
         },
       );
+
+      await warmUpFrontend(frontendBaseUrl);
     }
 
     admin = await startService(
@@ -168,7 +274,7 @@ async function main() {
         'vite',
         'dev',
         '--host',
-        'localhost',
+        '127.0.0.1',
         '--port',
         String(adminPort),
       ],
@@ -178,7 +284,7 @@ async function main() {
           adminBaseUrl,
         }),
         healthUrl: `${adminBaseUrl}/login`,
-        startupTimeoutMs: 60_000,
+        startupTimeoutMs: 90_000,
       },
     );
 
@@ -205,6 +311,7 @@ async function main() {
   } finally {
     await admin?.stop().catch(() => undefined);
     await frontend?.stop().catch(() => undefined);
+    await holdemTimeoutWorker?.stop().catch(() => undefined);
     await saasBillingWorker?.stop().catch(() => undefined);
     await backend?.stop().catch(() => undefined);
     if (originalFrontendTsconfig !== null) {

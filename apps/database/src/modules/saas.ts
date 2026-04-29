@@ -1,6 +1,7 @@
 import {
   type AnyPgColumn,
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -17,6 +18,12 @@ import { drawStatusValues } from "@reward/shared-types/draw";
 import {
   saasAgentControlModeValues,
   saasBillingCollectionMethodValues,
+  saasBillingDisputeReasonValues,
+  saasBillingDisputeResolutionValues,
+  saasBillingDisputeStatusValues,
+  saasBillingRunExternalSyncActionValues,
+  saasBillingRunExternalSyncStageValues,
+  saasBillingRunExternalSyncStatusValues,
   prizeEngineApiKeyScopeValues,
   saasDecisionTypeValues,
   saasBillingPlanValues,
@@ -25,6 +32,9 @@ import {
   saasEnvironmentValues,
   saasOutboundWebhookDeliveryStatusValues,
   saasOutboundWebhookEventValues,
+  saasReportExportFormatValues,
+  saasReportExportResourceValues,
+  saasReportExportStatusValues,
   saasRewardEnvelopeCapHitStrategyValues,
   saasRewardEnvelopeWindowValues,
   saasProjectStrategyValues,
@@ -94,6 +104,7 @@ export const saasTenants = pgTable(
       .notNull()
       .default("active"),
     metadata: jsonb("metadata"),
+    onboardedAt: timestamp("onboarded_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -893,6 +904,40 @@ export const saasBillingRuns = pgTable(
     finalizedAt: timestamp("finalized_at", { withTimezone: true }),
     sentAt: timestamp("sent_at", { withTimezone: true }),
     paidAt: timestamp("paid_at", { withTimezone: true }),
+    externalSyncStatus: varchar("external_sync_status", {
+      length: 32,
+      enum: saasBillingRunExternalSyncStatusValues,
+    })
+      .notNull()
+      .default("idle"),
+    externalSyncAction: varchar("external_sync_action", {
+      length: 64,
+      enum: saasBillingRunExternalSyncActionValues,
+    }),
+    externalSyncStage: varchar("external_sync_stage", {
+      length: 64,
+      enum: saasBillingRunExternalSyncStageValues,
+    }),
+    externalSyncError: text("external_sync_error"),
+    externalSyncRecoveryPath: varchar("external_sync_recovery_path", {
+      length: 128,
+    }),
+    externalSyncObservedInvoiceStatus: varchar(
+      "external_sync_observed_invoice_status",
+      {
+        length: 64,
+      },
+    ),
+    externalSyncEventType: varchar("external_sync_event_type", { length: 128 }),
+    externalSyncRevision: integer("external_sync_revision")
+      .notNull()
+      .default(0),
+    externalSyncAttemptedAt: timestamp("external_sync_attempted_at", {
+      withTimezone: true,
+    }),
+    externalSyncCompletedAt: timestamp("external_sync_completed_at", {
+      withTimezone: true,
+    }),
     metadata: jsonb("metadata"),
     createdByAdminId: integer("created_by_admin_id").references(
       () => admins.id,
@@ -918,6 +963,53 @@ export const saasBillingRuns = pgTable(
       table.tenantId,
       table.status,
       table.periodEnd,
+    ),
+    externalSyncStatusUpdatedIdx: index(
+      "saas_billing_runs_external_sync_status_updated_idx",
+    ).on(table.externalSyncStatus, table.updatedAt),
+    externalSyncStateCheck: check(
+      "saas_billing_runs_external_sync_state_check",
+      sql`(
+        (${table.externalSyncStatus} = 'idle'
+          AND ${table.externalSyncAction} IS NULL
+          AND ${table.externalSyncStage} IS NULL
+          AND ${table.externalSyncError} IS NULL
+          AND ${table.externalSyncRecoveryPath} IS NULL
+          AND ${table.externalSyncAttemptedAt} IS NULL
+          AND ${table.externalSyncCompletedAt} IS NULL)
+        OR
+        (${table.externalSyncStatus} = 'processing'
+          AND ${table.externalSyncAction} IS NOT NULL
+          AND ${table.externalSyncStage} IS NOT NULL
+          AND ${table.externalSyncError} IS NULL
+          AND ${table.externalSyncRecoveryPath} IS NULL
+          AND ${table.externalSyncAttemptedAt} IS NOT NULL
+          AND ${table.externalSyncCompletedAt} IS NULL)
+        OR
+        (${table.externalSyncStatus} = 'succeeded'
+          AND ${table.externalSyncAction} IS NOT NULL
+          AND ${table.externalSyncStage} IS NOT NULL
+          AND ${table.externalSyncError} IS NULL
+          AND ${table.externalSyncRecoveryPath} IS NULL
+          AND ${table.externalSyncAttemptedAt} IS NOT NULL
+          AND ${table.externalSyncCompletedAt} IS NOT NULL)
+        OR
+        (${table.externalSyncStatus} = 'failed'
+          AND ${table.externalSyncAction} IS NOT NULL
+          AND ${table.externalSyncStage} IS NOT NULL
+          AND ${table.externalSyncError} IS NOT NULL
+          AND ${table.externalSyncRecoveryPath} IS NOT NULL
+          AND ${table.externalSyncAttemptedAt} IS NOT NULL
+          AND ${table.externalSyncCompletedAt} IS NOT NULL)
+      )`,
+    ),
+    externalSyncCompletedOrderCheck: check(
+      "saas_billing_runs_external_sync_completed_order_check",
+      sql`${table.externalSyncCompletedAt} IS NULL
+        OR (
+          ${table.externalSyncAttemptedAt} IS NOT NULL
+          AND ${table.externalSyncCompletedAt} >= ${table.externalSyncAttemptedAt}
+        )`,
     ),
   }),
 );
@@ -969,6 +1061,144 @@ export const saasBillingTopUps = pgTable(
     stripeBalanceUnique: uniqueIndex(
       "saas_billing_top_ups_stripe_balance_transaction_unique",
     ).on(table.stripeBalanceTransactionId),
+  }),
+);
+
+export const saasBillingDisputes = pgTable(
+  "saas_billing_disputes",
+  {
+    id: serial("id").primaryKey(),
+    tenantId: integer("tenant_id")
+      .notNull()
+      .references(() => saasTenants.id, { onDelete: "cascade" }),
+    billingRunId: integer("billing_run_id")
+      .notNull()
+      .references(() => saasBillingRuns.id, { onDelete: "cascade" }),
+    billingAccountId: integer("billing_account_id").references(
+      () => saasBillingAccounts.id,
+      { onDelete: "set null" },
+    ),
+    status: varchar("status", {
+      length: 32,
+      enum: saasBillingDisputeStatusValues,
+    })
+      .notNull()
+      .default("submitted"),
+    reason: varchar("reason", {
+      length: 32,
+      enum: saasBillingDisputeReasonValues,
+    }).notNull(),
+    summary: varchar("summary", { length: 160 }).notNull(),
+    description: text("description").notNull(),
+    requestedRefundAmount: numeric("requested_refund_amount", {
+      precision: 14,
+      scale: 2,
+    })
+      .notNull()
+      .default("0"),
+    approvedRefundAmount: numeric("approved_refund_amount", {
+      precision: 14,
+      scale: 2,
+    }),
+    currency: varchar("currency", { length: 16 }).notNull().default("USD"),
+    resolutionType: varchar("resolution_type", {
+      length: 32,
+      enum: saasBillingDisputeResolutionValues,
+    }),
+    resolutionNotes: text("resolution_notes"),
+    stripeCreditNoteId: varchar("stripe_credit_note_id", { length: 128 }),
+    stripeCreditNoteStatus: varchar("stripe_credit_note_status", {
+      length: 64,
+    }),
+    stripeCreditNotePdf: text("stripe_credit_note_pdf"),
+    metadata: jsonb("metadata"),
+    createdByAdminId: integer("created_by_admin_id").references(
+      () => admins.id,
+      {
+        onDelete: "set null",
+      },
+    ),
+    resolvedByAdminId: integer("resolved_by_admin_id").references(
+      () => admins.id,
+      {
+        onDelete: "set null",
+      },
+    ),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    tenantCreatedIdx: index("saas_billing_disputes_tenant_created_idx").on(
+      table.tenantId,
+      table.createdAt,
+    ),
+    billingRunIdx: index("saas_billing_disputes_billing_run_idx").on(
+      table.billingRunId,
+      table.createdAt,
+    ),
+    statusCreatedIdx: index("saas_billing_disputes_status_created_idx").on(
+      table.status,
+      table.createdAt,
+    ),
+    stripeCreditNoteUnique: uniqueIndex(
+      "saas_billing_disputes_stripe_credit_note_unique",
+    ).on(table.stripeCreditNoteId),
+  }),
+);
+
+export const saasBillingLedgerEntries = pgTable(
+  "saas_billing_ledger_entries",
+  {
+    id: serial("id").primaryKey(),
+    tenantId: integer("tenant_id")
+      .notNull()
+      .references(() => saasTenants.id, { onDelete: "cascade" }),
+    billingRunId: integer("billing_run_id").references(
+      () => saasBillingRuns.id,
+      { onDelete: "set null" },
+    ),
+    disputeId: integer("dispute_id").references(() => saasBillingDisputes.id, {
+      onDelete: "set null",
+    }),
+    entryType: varchar("entry_type", { length: 64 }).notNull(),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    balanceBefore: numeric("balance_before", {
+      precision: 14,
+      scale: 2,
+    }).notNull(),
+    balanceAfter: numeric("balance_after", {
+      precision: 14,
+      scale: 2,
+    }).notNull(),
+    currency: varchar("currency", { length: 16 }).notNull().default("USD"),
+    referenceType: varchar("reference_type", { length: 64 }),
+    referenceId: integer("reference_id"),
+    metadata: jsonb("metadata"),
+    createdByAdminId: integer("created_by_admin_id").references(
+      () => admins.id,
+      {
+        onDelete: "set null",
+      },
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    tenantCreatedIdx: index(
+      "saas_billing_ledger_entries_tenant_created_idx",
+    ).on(table.tenantId, table.createdAt),
+    billingRunCreatedIdx: index(
+      "saas_billing_ledger_entries_billing_run_created_idx",
+    ).on(table.billingRunId, table.createdAt),
+    disputeCreatedIdx: index(
+      "saas_billing_ledger_entries_dispute_created_idx",
+    ).on(table.disputeId, table.createdAt),
   }),
 );
 
@@ -1391,7 +1621,7 @@ export const saasStripeWebhookEvents = pgTable(
 export const saasUsageEvents = pgTable(
   "saas_usage_events",
   {
-    id: serial("id").primaryKey(),
+    id: serial("id").notNull(),
     tenantId: integer("tenant_id")
       .notNull()
       .references(() => saasTenants.id, { onDelete: "cascade" }),
@@ -1435,13 +1665,16 @@ export const saasUsageEvents = pgTable(
       .defaultNow(),
   },
   (table) => ({
+    idIdx: index("saas_usage_events_id_idx").on(table.id),
     tenantCreatedIdx: index("saas_usage_events_tenant_created_idx").on(
       table.tenantId,
       table.createdAt,
+      table.id,
     ),
     projectCreatedIdx: index("saas_usage_events_project_created_idx").on(
       table.projectId,
       table.createdAt,
+      table.id,
     ),
     billingRunIdx: index("saas_usage_events_billing_run_idx").on(
       table.billingRunId,
@@ -1449,16 +1682,87 @@ export const saasUsageEvents = pgTable(
     billingRunDecisionIdx: index(
       "saas_usage_events_billing_run_decision_idx",
     ).on(table.billingRunId, table.decisionType),
-    eventReferenceUnique: uniqueIndex(
-      "saas_usage_events_event_reference_unique",
-    ).on(table.eventType, table.referenceType, table.referenceId),
+    eventReferenceIdx: index("saas_usage_events_event_reference_idx").on(
+      table.eventType,
+      table.referenceType,
+      table.referenceId,
+    ),
     apiKeyCreatedIdx: index("saas_usage_events_api_key_created_idx").on(
       table.apiKeyId,
       table.createdAt,
+      table.id,
     ),
     playerCreatedIdx: index("saas_usage_events_player_created_idx").on(
       table.playerId,
       table.createdAt,
+      table.id,
+    ),
+  }),
+);
+
+export const saasReportExports = pgTable(
+  "saas_report_exports",
+  {
+    id: serial("id").primaryKey(),
+    tenantId: integer("tenant_id")
+      .notNull()
+      .references(() => saasTenants.id, { onDelete: "cascade" }),
+    projectId: integer("project_id").references(() => saasProjects.id, {
+      onDelete: "set null",
+    }),
+    createdByAdminId: integer("created_by_admin_id").references(
+      () => admins.id,
+      {
+        onDelete: "set null",
+      },
+    ),
+    resource: varchar("resource", {
+      length: 64,
+      enum: saasReportExportResourceValues,
+    }).notNull(),
+    format: varchar("format", {
+      length: 16,
+      enum: saasReportExportFormatValues,
+    }).notNull(),
+    status: varchar("status", {
+      length: 32,
+      enum: saasReportExportStatusValues,
+    })
+      .notNull()
+      .default("pending"),
+    rowCount: integer("row_count"),
+    contentType: varchar("content_type", { length: 128 }),
+    fileName: varchar("file_name", { length: 255 }),
+    content: text("content"),
+    fromAt: timestamp("from_at", { withTimezone: true }).notNull(),
+    toAt: timestamp("to_at", { withTimezone: true }).notNull(),
+    lastError: text("last_error"),
+    attempts: integer("attempts").notNull().default(0),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    tenantCreatedIdx: index("saas_report_exports_tenant_created_idx").on(
+      table.tenantId,
+      table.createdAt,
+    ),
+    tenantStatusCreatedIdx: index(
+      "saas_report_exports_tenant_status_created_idx",
+    ).on(table.tenantId, table.status, table.createdAt),
+    statusCreatedIdx: index("saas_report_exports_status_created_idx").on(
+      table.status,
+      table.createdAt,
+    ),
+    statusLockedIdx: index("saas_report_exports_status_locked_idx").on(
+      table.status,
+      table.lockedAt,
     ),
   }),
 );

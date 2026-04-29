@@ -4,6 +4,7 @@ import {
   CursorAuthEventPageSchema,
   FreezeRecordPageSchema,
 } from "@reward/shared-types/admin"
+import { JurisdictionRuleSchema } from "@reward/shared-types/risk"
 
 import { createTranslator, getMessages } from "$lib/i18n"
 import { captureAdminServerException } from "$lib/observability/server"
@@ -61,6 +62,10 @@ const fallbackFreezeRecords = {
   hasNext: false,
 }
 
+const fallbackJurisdictionRules: Array<
+  ReturnType<typeof JurisdictionRuleSchema.parse>
+> = []
+
 export const load: PageServerLoad = async ({ fetch, cookies, locals, url }) => {
   const t = createTranslator(getMessages(locals.locale))
   const params = new URLSearchParams()
@@ -93,20 +98,23 @@ export const load: PageServerLoad = async ({ fetch, cookies, locals, url }) => {
     if (freezeSort === "asc" || freezeSort === "desc") {
       freezeParams.set("sort", freezeSort)
     }
-    const [eventsRes, freezeRes] = await Promise.all([
+    const [eventsRes, freezeRes, jurisdictionRes] = await Promise.all([
       apiRequest(fetch, cookies, `/admin/auth-events?${params.toString()}`),
       apiRequest(
         fetch,
         cookies,
         `/admin/freeze-records?${freezeParams.toString()}`,
       ),
+      apiRequest(fetch, cookies, "/admin/jurisdiction-rules"),
     ])
 
-    if (!eventsRes.ok || !freezeRes.ok) {
+    if (!eventsRes.ok || !freezeRes.ok || !jurisdictionRes.ok) {
       const errorMessage = !eventsRes.ok
         ? eventsRes.error?.message
         : !freezeRes.ok
           ? freezeRes.error?.message
+          : !jurisdictionRes.ok
+            ? jurisdictionRes.error?.message
           : t("security.errors.loadData")
 
       captureAdminServerException(new Error(errorMessage), {
@@ -116,20 +124,25 @@ export const load: PageServerLoad = async ({ fetch, cookies, locals, url }) => {
         extra: {
           authEventsStatus: eventsRes.status,
           freezeRecordsStatus: freezeRes.status,
+          jurisdictionRulesStatus: jurisdictionRes.status,
         },
       })
 
       return {
         authEvents: fallbackAuthEvents,
         freezeRecords: fallbackFreezeRecords,
+        jurisdictionRules: fallbackJurisdictionRules,
         error: errorMessage ?? t("security.errors.loadData"),
       }
     }
 
     const authEvents = CursorAuthEventPageSchema.safeParse(eventsRes.data)
     const freezeRecords = FreezeRecordPageSchema.safeParse(freezeRes.data)
+    const jurisdictionRules = JurisdictionRuleSchema.array().safeParse(
+      jurisdictionRes.data,
+    )
 
-    if (!authEvents.success || !freezeRecords.success) {
+    if (!authEvents.success || !freezeRecords.success || !jurisdictionRules.success) {
       captureAdminServerException(
         new Error(t("security.errors.unexpectedResponse")),
         {
@@ -139,21 +152,25 @@ export const load: PageServerLoad = async ({ fetch, cookies, locals, url }) => {
           extra: {
             authEventsSchemaValid: authEvents.success,
             freezeRecordsSchemaValid: freezeRecords.success,
+            jurisdictionRulesSchemaValid: jurisdictionRules.success,
           },
         },
       )
     }
 
-    return {
-      authEvents: authEvents.success ? authEvents.data : fallbackAuthEvents,
-      freezeRecords: freezeRecords.success
-        ? freezeRecords.data
-        : fallbackFreezeRecords,
-      error:
-        authEvents.success && freezeRecords.success
+      return {
+        authEvents: authEvents.success ? authEvents.data : fallbackAuthEvents,
+        freezeRecords: freezeRecords.success
+          ? freezeRecords.data
+          : fallbackFreezeRecords,
+        jurisdictionRules: jurisdictionRules.success
+          ? jurisdictionRules.data
+          : fallbackJurisdictionRules,
+        error:
+        authEvents.success && freezeRecords.success && jurisdictionRules.success
           ? null
           : t("security.errors.unexpectedResponse"),
-    }
+      }
   } catch (error) {
     captureAdminServerException(error, {
       tags: {
@@ -164,6 +181,7 @@ export const load: PageServerLoad = async ({ fetch, cookies, locals, url }) => {
     return {
       authEvents: fallbackAuthEvents,
       freezeRecords: fallbackFreezeRecords,
+      jurisdictionRules: fallbackJurisdictionRules,
       error: t("security.errors.loadData"),
     }
   }
@@ -242,5 +260,53 @@ export const actions: Actions = {
     }
 
     return { success: true }
+  },
+  saveJurisdictionRule: async ({ request, fetch, cookies, locals }) => {
+    const t = getActionT(locals?.locale)
+    const formData = await request.formData()
+    const stepUpPayload = parseAdminStepUpPayload(formData)
+    const validationError = validateAdminStepUpPayload(stepUpPayload, {
+      messages: buildStepUpMessages(t),
+    })
+    if (validationError) {
+      return fail(400, { error: validationError })
+    }
+
+    const countryCode = formData.get("countryCode")?.toString().trim().toUpperCase()
+    const minimumAgeRaw = formData.get("minimumAge")?.toString().trim()
+    if (!countryCode || !minimumAgeRaw) {
+      return fail(400, {
+        error: t("security.errors.jurisdictionFields"),
+      })
+    }
+
+    const minimumAge = Number(minimumAgeRaw)
+    const allowedFeatures = formData
+      .getAll("allowedFeatures")
+      .map((value) => value.toString())
+
+    const response = await apiRequest(fetch, cookies, "/admin/jurisdiction-rules", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...stepUpPayload,
+        countryCode,
+        minimumAge,
+        allowedFeatures,
+        notes: formData.get("notes")?.toString().trim() || undefined,
+      }),
+    })
+
+    if (!response.ok) {
+      return fail(response.status, {
+        error:
+          response.error?.message ?? t("security.errors.saveJurisdictionRule"),
+      })
+    }
+
+    return {
+      success: true,
+      message: t("security.jurisdiction.saveSuccess"),
+    }
   },
 }

@@ -80,7 +80,7 @@ export const ledgerMutationEvents = pgTable(
 export const ledgerEntries = pgTable(
   'ledger_entries',
   {
-    id: serial('id').primaryKey(),
+    id: serial('id').notNull(),
     userId: integer('user_id').references(() => users.id, {
       onDelete: 'set null',
     }),
@@ -107,17 +107,21 @@ export const ledgerEntries = pgTable(
       .defaultNow(),
   },
   (table) => ({
+    idIdx: index('ledger_entries_id_idx').on(table.id),
     userCreatedIdx: index('ledger_entries_user_created_idx').on(
       table.userId,
-      table.createdAt
+      table.createdAt,
+      table.id
     ),
     houseCreatedIdx: index('ledger_entries_house_created_idx').on(
       table.houseAccountId,
-      table.createdAt
+      table.createdAt,
+      table.id
     ),
     typeCreatedIdx: index('ledger_entries_type_created_idx').on(
       table.entryType,
-      table.createdAt
+      table.createdAt,
+      table.id
     ),
     typeUserIdx: index('ledger_entries_type_user_idx').on(
       table.entryType,

@@ -30,18 +30,26 @@ import {
   adminPermissions,
   authSessions,
   blackjackGames,
+  deviceFingerprints,
+  fiatPayoutMethods,
   freezeRecords,
   kycDocuments,
   kycProfiles,
   kycReviewEvents,
   ledgerEntries,
   missions,
+  notificationDeliveries,
+  payoutMethods,
   predictionMarkets,
   reconciliationAlerts,
+  securityEvents,
   suspiciousAccounts,
   riskTableInteractionEvents,
   riskTableInteractionPairs,
+  userWallets,
+  walletReconciliationRuns,
 } from '@reward/database';
+import { runKycReverificationSweep } from '../modules/kyc/service';
 import { runWalletReconciliation } from '../modules/wallet/reconciliation-service';
 
 describeIntegrationSuite('backend admin integration', () => {
@@ -156,6 +164,285 @@ describeIntegrationSuite('backend admin integration', () => {
       });
     }
   );
+
+  it('requests KYC reverification from admin and downgrades the active tier', async () => {
+    const user = await seedUserWithWallet({
+      email: 'kyc-reverify-user@example.com',
+    });
+    const email = 'kyc-reverify-admin@example.com';
+    const { admin, password } = await seedAdminAccount({ email });
+    await grantAdminPermissions(admin.id, SECURITY_ADMIN_PERMISSION_KEYS);
+    const adminSession = await enrollAdminMfa({ email, password });
+
+    const [profile] = await getDb()
+      .insert(kycProfiles)
+      .values({
+        userId: user.id,
+        currentTier: 'tier_2',
+        requestedTier: null,
+        status: 'approved',
+        submissionVersion: 2,
+        activeSubmissionVersion: 2,
+        legalName: 'Reverify User',
+        documentType: 'passport',
+        documentNumberLast4: '2222',
+        countryCode: 'SG',
+        riskFlags: [],
+        submittedAt: new Date('2026-04-10T00:00:00.000Z'),
+        reviewedAt: new Date('2026-04-12T00:00:00.000Z'),
+      })
+      .returning();
+
+    const response = await getApp().inject({
+      method: 'POST',
+      url: `/admin/kyc-profiles/${profile.id}/request-reverification`,
+      headers: {
+        ...buildAdminCookieHeaders(adminSession.token),
+        'content-type': 'application/json',
+      },
+      payload: {
+        totpCode: adminSession.totpCode,
+        reason: 'Policy update requires a fresh identity document set.',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data).toMatchObject({
+      id: profile.id,
+      currentTier: 'tier_0',
+      requestedTier: 'tier_2',
+      status: 'more_info_required',
+    });
+
+    const [storedProfile] = await getDb()
+      .select({
+        currentTier: kycProfiles.currentTier,
+        requestedTier: kycProfiles.requestedTier,
+        activeSubmissionVersion: kycProfiles.activeSubmissionVersion,
+        status: kycProfiles.status,
+        freezeRecordId: kycProfiles.freezeRecordId,
+      })
+      .from(kycProfiles)
+      .where(eq(kycProfiles.id, profile.id))
+      .limit(1);
+
+    expect(storedProfile).toMatchObject({
+      currentTier: 'tier_0',
+      requestedTier: 'tier_2',
+      activeSubmissionVersion: null,
+      status: 'more_info_required',
+    });
+    expect(storedProfile?.freezeRecordId).toBeTruthy();
+
+    const [reviewEvent] = await getDb()
+      .select({
+        action: kycReviewEvents.action,
+        fromStatus: kycReviewEvents.fromStatus,
+        toStatus: kycReviewEvents.toStatus,
+        reason: kycReviewEvents.reason,
+        metadata: kycReviewEvents.metadata,
+      })
+      .from(kycReviewEvents)
+      .where(eq(kycReviewEvents.profileId, profile.id))
+      .orderBy(desc(kycReviewEvents.id))
+      .limit(1);
+
+    expect(reviewEvent).toMatchObject({
+      action: 'reverification_requested',
+      fromStatus: 'approved',
+      toStatus: 'more_info_required',
+      reason: 'Policy update requires a fresh identity document set.',
+    });
+    expect(reviewEvent?.metadata).toMatchObject({
+      trigger: 'policy_update',
+      previousTier: 'tier_2',
+    });
+
+    const [delivery] = await getDb()
+      .select({
+        kind: notificationDeliveries.kind,
+        payload: notificationDeliveries.payload,
+      })
+      .from(notificationDeliveries)
+      .where(eq(notificationDeliveries.recipient, 'kyc-reverify-user@example.com'))
+      .orderBy(desc(notificationDeliveries.id))
+      .limit(1);
+
+    expect(delivery?.kind).toBe('kyc_reverification');
+    expect(delivery?.payload).toMatchObject({
+      reverificationType: 'policy_update',
+      targetTier: 'tier_2',
+    });
+  });
+
+  it('sweeps expiring KYC documents, queues reminders, and forces reverification for expired documents', async () => {
+    const expiringUser = await seedUserWithWallet({
+      email: 'kyc-expiring-user@example.com',
+    });
+    const expiredUser = await seedUserWithWallet({
+      email: 'kyc-expired-user@example.com',
+    });
+
+    const [expiringProfile] = await getDb()
+      .insert(kycProfiles)
+      .values({
+        userId: expiringUser.id,
+        currentTier: 'tier_2',
+        requestedTier: null,
+        status: 'approved',
+        submissionVersion: 1,
+        activeSubmissionVersion: 1,
+        legalName: 'Expiring User',
+        documentType: 'passport',
+        documentNumberLast4: '1111',
+        countryCode: 'US',
+        riskFlags: [],
+        submittedAt: new Date('2026-04-01T00:00:00.000Z'),
+        reviewedAt: new Date('2026-04-02T00:00:00.000Z'),
+      })
+      .returning();
+
+    await getDb().insert(kycDocuments).values([
+      {
+        profileId: expiringProfile.id,
+        userId: expiringUser.id,
+        submissionVersion: 1,
+        kind: 'identity_front',
+        fileName: 'expiring-front.png',
+        mimeType: 'image/png',
+        sizeBytes: 1,
+        storagePath: 'data:image/png;base64,AA==',
+        expiresAt: new Date('2026-05-05T23:59:59.999Z'),
+      },
+      {
+        profileId: expiringProfile.id,
+        userId: expiringUser.id,
+        submissionVersion: 1,
+        kind: 'selfie',
+        fileName: 'expiring-selfie.png',
+        mimeType: 'image/png',
+        sizeBytes: 1,
+        storagePath: 'data:image/png;base64,AA==',
+        expiresAt: null,
+      },
+    ]);
+
+    const [expiredProfile] = await getDb()
+      .insert(kycProfiles)
+      .values({
+        userId: expiredUser.id,
+        currentTier: 'tier_1',
+        requestedTier: 'tier_2',
+        status: 'rejected',
+        submissionVersion: 4,
+        activeSubmissionVersion: 3,
+        legalName: 'Expired User',
+        documentType: 'national_id',
+        documentNumberLast4: '3333',
+        countryCode: 'CA',
+        riskFlags: [],
+        submittedAt: new Date('2026-03-01T00:00:00.000Z'),
+        reviewedAt: new Date('2026-03-03T00:00:00.000Z'),
+      })
+      .returning();
+
+    await getDb().insert(kycDocuments).values([
+      {
+        profileId: expiredProfile.id,
+        userId: expiredUser.id,
+        submissionVersion: 3,
+        kind: 'identity_front',
+        fileName: 'expired-front.png',
+        mimeType: 'image/png',
+        sizeBytes: 1,
+        storagePath: 'data:image/png;base64,AA==',
+        expiresAt: new Date('2026-04-15T23:59:59.999Z'),
+      },
+      {
+        profileId: expiredProfile.id,
+        userId: expiredUser.id,
+        submissionVersion: 4,
+        kind: 'identity_front',
+        fileName: 'newer-but-rejected-front.png',
+        mimeType: 'image/png',
+        sizeBytes: 1,
+        storagePath: 'data:image/png;base64,AA==',
+        expiresAt: new Date('2026-12-31T23:59:59.999Z'),
+      },
+    ]);
+
+    const result = await runKycReverificationSweep(
+      new Date('2026-04-29T00:00:00.000Z'),
+    );
+
+    expect(result).toMatchObject({
+      scannedProfiles: 2,
+      expiryRemindersQueued: 1,
+      reverificationRequested: 1,
+    });
+
+    const [expiringDocument] = await getDb()
+      .select({
+        metadata: kycDocuments.metadata,
+      })
+      .from(kycDocuments)
+      .where(
+        and(
+          eq(kycDocuments.profileId, expiringProfile.id),
+          eq(kycDocuments.submissionVersion, 1),
+          eq(kycDocuments.kind, 'identity_front'),
+        ),
+      )
+      .limit(1);
+
+    expect(expiringDocument?.metadata).toMatchObject({
+      expiryNoticeSentAt: expect.any(String),
+    });
+
+    const [expiredProfileAfterSweep] = await getDb()
+      .select({
+        currentTier: kycProfiles.currentTier,
+        requestedTier: kycProfiles.requestedTier,
+        activeSubmissionVersion: kycProfiles.activeSubmissionVersion,
+        status: kycProfiles.status,
+      })
+      .from(kycProfiles)
+      .where(eq(kycProfiles.id, expiredProfile.id))
+      .limit(1);
+
+    expect(expiredProfileAfterSweep).toMatchObject({
+      currentTier: 'tier_0',
+      requestedTier: 'tier_1',
+      activeSubmissionVersion: null,
+      status: 'more_info_required',
+    });
+
+    const deliveries = await getDb()
+      .select({
+        recipient: notificationDeliveries.recipient,
+        payload: notificationDeliveries.payload,
+      })
+      .from(notificationDeliveries)
+      .where(eq(notificationDeliveries.kind, 'kyc_reverification'))
+      .orderBy(asc(notificationDeliveries.id));
+
+    expect(deliveries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          recipient: 'kyc-expiring-user@example.com',
+          payload: expect.objectContaining({
+            reverificationType: 'document_expiring_soon',
+          }),
+        }),
+        expect.objectContaining({
+          recipient: 'kyc-expired-user@example.com',
+          payload: expect.objectContaining({
+            reverificationType: 'document_expired',
+          }),
+        }),
+      ]),
+    );
+  });
 
   it(
     'lists and updates engine reconciliation alerts with finance permissions',
@@ -288,9 +575,9 @@ describeIntegrationSuite('backend admin integration', () => {
         : {};
 
     expect(rerunAlert).toMatchObject({
-      status: 'require_engineering',
-      resolvedAt: null,
+      status: 'resolved',
     });
+    expect(rerunAlert?.resolvedAt).not.toBeNull();
     expect(rerunWorkflow).toMatchObject({
       operatorNote: 'needs ledger replay before wallet can be corrected',
       status: 'require_engineering',
@@ -305,11 +592,306 @@ describeIntegrationSuite('backend admin integration', () => {
     expect(summaryResponse.statusCode).toBe(200);
     expect(summaryResponse.json().data).toMatchObject({
       openCount: 0,
-      requireEngineeringCount: 1,
-      unresolvedCount: 1,
+      requireEngineeringCount: 0,
+      resolvedCount: 1,
+      unresolvedCount: 0,
     });
     }
   );
+
+  it(
+    'auto-escalates overdue wallet alerts, auto-resolves recovered alerts, and reports zero-drift streaks',
+    { timeout: 15000 },
+    async () => {
+      const overdueUser = await seedUserWithWallet({
+        email: 'reconciliation-overdue@example.com',
+      });
+      const recoveredUser = await seedUserWithWallet({
+        email: 'reconciliation-recovered@example.com',
+      });
+      const { admin, password } = await seedAdminAccount({
+        email: 'reconciliation-summary-admin@example.com',
+      });
+      await grantAdminPermissions(admin.id, FINANCE_ADMIN_PERMISSION_KEYS);
+      const adminSession = await enrollAdminMfa({
+        email: 'reconciliation-summary-admin@example.com',
+        password,
+      });
+
+      const now = new Date();
+      const overdueFirstDetectedAt = new Date(now.getTime() - 26 * 60 * 60 * 1000);
+      const previousDay = new Date(now);
+      previousDay.setUTCHours(12, 0, 0, 0);
+      previousDay.setUTCDate(previousDay.getUTCDate() - 1);
+      const twoDaysAgo = new Date(previousDay);
+      twoDaysAgo.setUTCDate(twoDaysAgo.getUTCDate() - 1);
+
+      await getDb()
+        .update(userWallets)
+        .set({
+          withdrawableBalance: '4.00',
+          updatedAt: now,
+        })
+        .where(eq(userWallets.userId, overdueUser.id));
+
+      await getDb().insert(walletReconciliationRuns).values([
+        {
+          trigger: 'scheduled',
+          status: 'completed',
+          scannedUsers: 10,
+          mismatchedUsers: 0,
+          summary: { scannedUsers: 10, mismatchedUsers: 0 },
+          startedAt: new Date(previousDay.getTime() - 60_000),
+          completedAt: previousDay,
+          createdAt: previousDay,
+          updatedAt: previousDay,
+        },
+        {
+          trigger: 'scheduled',
+          status: 'completed',
+          scannedUsers: 9,
+          mismatchedUsers: 0,
+          summary: { scannedUsers: 9, mismatchedUsers: 0 },
+          startedAt: new Date(twoDaysAgo.getTime() - 60_000),
+          completedAt: twoDaysAgo,
+          createdAt: twoDaysAgo,
+          updatedAt: twoDaysAgo,
+        },
+      ]);
+
+      const [overdueAlert] = await getDb()
+        .insert(reconciliationAlerts)
+        .values({
+          runId: null,
+          userId: overdueUser.id,
+          fingerprint: `wallet_balance_drift:user:${String(overdueUser.id)}`,
+          alertType: 'wallet_balance_drift',
+          severity: 'critical',
+          status: 'open',
+          expectedWithdrawableBalance: '0.00',
+          actualWithdrawableBalance: '4.00',
+          expectedBonusBalance: '0.00',
+          actualBonusBalance: '0.00',
+          expectedLockedBalance: '0.00',
+          actualLockedBalance: '0.00',
+          expectedWageredAmount: '0.00',
+          actualWageredAmount: '0.00',
+          expectedTotal: '0.00',
+          actualTotal: '4.00',
+          metadata: {
+            deltas: {
+              withdrawable: { expected: '0.00', actual: '4.00' },
+              bonus: { expected: '0.00', actual: '0.00' },
+              locked: { expected: '0.00', actual: '0.00' },
+              wagered: { expected: '0.00', actual: '0.00' },
+              total: { expected: '0.00', actual: '4.00' },
+            },
+            unknownEntryTypes: [],
+          },
+          firstDetectedAt: overdueFirstDetectedAt,
+          lastDetectedAt: overdueFirstDetectedAt,
+          createdAt: overdueFirstDetectedAt,
+          updatedAt: overdueFirstDetectedAt,
+        })
+        .returning();
+
+      const [recoveredAlert] = await getDb()
+        .insert(reconciliationAlerts)
+        .values({
+          runId: null,
+          userId: recoveredUser.id,
+          fingerprint: `wallet_balance_drift:user:${String(recoveredUser.id)}`,
+          alertType: 'wallet_balance_drift',
+          severity: 'critical',
+          status: 'acknowledged',
+          expectedWithdrawableBalance: '3.00',
+          actualWithdrawableBalance: '0.00',
+          expectedBonusBalance: '0.00',
+          actualBonusBalance: '0.00',
+          expectedLockedBalance: '0.00',
+          actualLockedBalance: '0.00',
+          expectedWageredAmount: '0.00',
+          actualWageredAmount: '0.00',
+          expectedTotal: '3.00',
+          actualTotal: '0.00',
+          metadata: {
+            workflow: {
+              status: 'acknowledged',
+              operatorNote: 'triaged by finance',
+              statusUpdatedByAdminId: admin.id,
+              statusUpdatedAt: now.toISOString(),
+            },
+          },
+          firstDetectedAt: overdueFirstDetectedAt,
+          lastDetectedAt: overdueFirstDetectedAt,
+          createdAt: overdueFirstDetectedAt,
+          updatedAt: overdueFirstDetectedAt,
+        })
+        .returning();
+
+      await runWalletReconciliation('manual');
+
+      const [storedOverdueAlert] = await getDb()
+        .select({
+          status: reconciliationAlerts.status,
+          metadata: reconciliationAlerts.metadata,
+        })
+        .from(reconciliationAlerts)
+        .where(eq(reconciliationAlerts.id, overdueAlert.id))
+        .limit(1);
+      const [storedRecoveredAlert] = await getDb()
+        .select({
+          status: reconciliationAlerts.status,
+          resolvedAt: reconciliationAlerts.resolvedAt,
+        })
+        .from(reconciliationAlerts)
+        .where(eq(reconciliationAlerts.id, recoveredAlert.id))
+        .limit(1);
+
+      const overdueMetadata =
+        typeof storedOverdueAlert?.metadata === 'object' &&
+        storedOverdueAlert.metadata !== null
+          ? (storedOverdueAlert.metadata as Record<string, unknown>)
+          : {};
+      const overdueWorkflow =
+        typeof overdueMetadata.workflow === 'object' &&
+        overdueMetadata.workflow !== null
+          ? (overdueMetadata.workflow as Record<string, unknown>)
+          : {};
+
+      expect(storedOverdueAlert?.status).toBe('require_engineering');
+      expect(overdueWorkflow).toMatchObject({
+        status: 'require_engineering',
+        systemEscalationReason: 'sla_breach_24h',
+      });
+      expect(storedRecoveredAlert?.status).toBe('resolved');
+      expect(storedRecoveredAlert?.resolvedAt).not.toBeNull();
+
+      const summaryResponse = await getApp().inject({
+        method: 'GET',
+        url: '/admin/engine/reconciliation-alerts/summary',
+        headers: buildAdminCookieHeaders(adminSession.token),
+      });
+      expect(summaryResponse.statusCode).toBe(200);
+      expect(summaryResponse.json().data).toMatchObject({
+        requireEngineeringCount: 1,
+        resolvedCount: 1,
+        unresolvedCount: 1,
+        overdueCount: 1,
+        slaHours: 24,
+        zeroDriftStreakDays: 0,
+      });
+    }
+  );
+
+  it(
+    'reports consecutive zero-drift days in reconciliation summary',
+    { timeout: 15000 },
+    async () => {
+      const { admin, password } = await seedAdminAccount({
+        email: 'reconciliation-streak-admin@example.com',
+      });
+      await grantAdminPermissions(admin.id, FINANCE_ADMIN_PERMISSION_KEYS);
+      const adminSession = await enrollAdminMfa({
+        email: 'reconciliation-streak-admin@example.com',
+        password,
+      });
+
+      const today = new Date();
+      today.setUTCHours(12, 0, 0, 0);
+      const yesterday = new Date(today);
+      yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+      const twoDaysAgo = new Date(today);
+      twoDaysAgo.setUTCDate(twoDaysAgo.getUTCDate() - 2);
+
+      await getDb().insert(walletReconciliationRuns).values([
+        {
+          trigger: 'scheduled',
+          status: 'completed',
+          scannedUsers: 8,
+          mismatchedUsers: 0,
+          summary: { scannedUsers: 8, mismatchedUsers: 0 },
+          startedAt: new Date(today.getTime() - 60_000),
+          completedAt: today,
+          createdAt: today,
+          updatedAt: today,
+        },
+        {
+          trigger: 'scheduled',
+          status: 'completed',
+          scannedUsers: 8,
+          mismatchedUsers: 0,
+          summary: { scannedUsers: 8, mismatchedUsers: 0 },
+          startedAt: new Date(yesterday.getTime() - 60_000),
+          completedAt: yesterday,
+          createdAt: yesterday,
+          updatedAt: yesterday,
+        },
+        {
+          trigger: 'scheduled',
+          status: 'completed',
+          scannedUsers: 8,
+          mismatchedUsers: 2,
+          summary: { scannedUsers: 8, mismatchedUsers: 2 },
+          startedAt: new Date(twoDaysAgo.getTime() - 60_000),
+          completedAt: twoDaysAgo,
+          createdAt: twoDaysAgo,
+          updatedAt: twoDaysAgo,
+        },
+      ]);
+
+      const summaryResponse = await getApp().inject({
+        method: 'GET',
+        url: '/admin/engine/reconciliation-alerts/summary',
+        headers: buildAdminCookieHeaders(adminSession.token),
+      });
+      expect(summaryResponse.statusCode).toBe(200);
+      expect(summaryResponse.json().data).toMatchObject({
+        zeroDriftStreakDays: 2,
+      });
+    }
+  );
+
+  it('emits wallet reconciliation findings into the unified security event stream', async () => {
+    const user = await seedUserWithWallet({
+      email: 'security-reconciliation-user@example.com',
+      withdrawableBalance: '6.75',
+    });
+
+    await getDb()
+      .update(userWallets)
+      .set({
+        withdrawableBalance: '0.00',
+      })
+      .where(eq(userWallets.userId, user.id));
+
+    await runWalletReconciliation('manual');
+
+    const [securityEvent] = await getDb()
+      .select({
+        category: securityEvents.category,
+        eventType: securityEvents.eventType,
+        metadata: securityEvents.metadata,
+      })
+      .from(securityEvents)
+      .where(
+        and(
+          eq(securityEvents.userId, user.id),
+          eq(securityEvents.eventType, 'wallet_reconciliation_alert_opened'),
+        ),
+      )
+      .orderBy(desc(securityEvents.id))
+      .limit(1);
+
+    expect(securityEvent).toMatchObject({
+      category: 'reconciliation_alert',
+      eventType: 'wallet_reconciliation_alert_opened',
+      metadata: expect.objectContaining({
+        alertType: 'wallet_balance_drift',
+        deltaAmount: '-6.75',
+      }),
+    });
+  });
 
   it('stores admin mission params as jsonb objects on create and update', async () => {
     const { admin, password } = await seedAdminAccount({
@@ -824,6 +1406,197 @@ describeIntegrationSuite('backend admin integration', () => {
         }),
       ]),
     });
+  });
+
+  it('returns device, IP, and payout associations for a suspicious user cluster', async () => {
+    const sharedIp = '198.51.100.77';
+    const sharedUserAgent = 'AssociationGraphDevice/1.0';
+    const sharedFingerprint = 'shared-browser-seed';
+    const sharedLast4 = '4242';
+    const sharedAccountName = 'Shared Device Ring';
+    const sharedBankName = 'Test Bank';
+    const sharedBrand = 'visa';
+
+    const focusUser = await registerUser('association-focus@example.com');
+    const relatedUser = await registerUser('association-related@example.com');
+
+    for (const email of [focusUser.email, relatedUser.email]) {
+      const response = await getApp().inject({
+        method: 'POST',
+        url: '/auth/user/session',
+        remoteAddress: sharedIp,
+        headers: {
+          'content-type': 'application/json',
+          'user-agent': sharedUserAgent,
+          'x-device-fingerprint': sharedFingerprint,
+        },
+        payload: {
+          email,
+          password: 'secret-123',
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+    }
+
+    const [focusPayoutMethod] = await getDb()
+      .insert(payoutMethods)
+      .values({
+        userId: focusUser.id,
+        methodType: 'bank_account',
+        channelType: 'fiat',
+        assetType: 'fiat',
+        displayName: 'Focus test card',
+        status: 'active',
+      })
+      .returning({ id: payoutMethods.id });
+    const [relatedPayoutMethod] = await getDb()
+      .insert(payoutMethods)
+      .values({
+        userId: relatedUser.id,
+        methodType: 'bank_account',
+        channelType: 'fiat',
+        assetType: 'fiat',
+        displayName: 'Related test card',
+        status: 'active',
+      })
+      .returning({ id: payoutMethods.id });
+
+    await getDb().insert(fiatPayoutMethods).values([
+      {
+        payoutMethodId: focusPayoutMethod.id,
+        accountName: sharedAccountName,
+        bankName: sharedBankName,
+        brand: sharedBrand,
+        accountLast4: sharedLast4,
+      },
+      {
+        payoutMethodId: relatedPayoutMethod.id,
+        accountName: sharedAccountName,
+        bankName: sharedBankName,
+        brand: sharedBrand,
+        accountLast4: sharedLast4,
+      },
+    ]);
+
+    const [latestSuspiciousRecord] = await getDb()
+      .select({
+        status: suspiciousAccounts.status,
+        metadata: suspiciousAccounts.metadata,
+      })
+      .from(suspiciousAccounts)
+      .where(eq(suspiciousAccounts.userId, relatedUser.id))
+      .orderBy(desc(suspiciousAccounts.id))
+      .limit(1);
+
+    expect(latestSuspiciousRecord).toMatchObject({
+      status: 'open',
+      metadata: expect.objectContaining({
+        associations: expect.objectContaining({
+          summary: expect.objectContaining({
+            relatedUserCount: 1,
+          }),
+        }),
+      }),
+    });
+
+    const [deviceRow] = await getDb()
+      .select({
+        fingerprint: deviceFingerprints.fingerprint,
+      })
+      .from(deviceFingerprints)
+      .where(eq(deviceFingerprints.userId, focusUser.id))
+      .orderBy(desc(deviceFingerprints.id))
+      .limit(1);
+
+    expect(deviceRow?.fingerprint).toBeTruthy();
+
+    const adminEmail = 'association-graph-admin@example.com';
+    const { admin, password } = await seedAdminAccount({
+      email: adminEmail,
+    });
+    await grantAdminPermissions(admin.id, SECURITY_ADMIN_PERMISSION_KEYS);
+    const adminSession = await loginAdmin(adminEmail, password);
+
+    const response = await getApp().inject({
+      method: 'GET',
+      url: `/admin/users/${focusUser.id}/associations?days=90&signalLimit=12`,
+      headers: buildAdminCookieHeaders(adminSession.token),
+    });
+
+    expect(response.statusCode).toBe(200);
+    const graph = response.json().data;
+
+    expect(graph.summary.relatedUserCount).toBe(1);
+    expect(graph.summary.payoutCount).toBe(1);
+
+    expect(graph.relatedUsers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          userId: relatedUser.id,
+          relationTypes: expect.arrayContaining(['device', 'ip', 'payout']),
+          sharedIps: expect.arrayContaining([sharedIp]),
+          sharedPayouts: expect.arrayContaining(['Card ****4242']),
+        }),
+      ]),
+    );
+
+    expect(graph.deviceSignals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          activityTypes: expect.arrayContaining(['user_login_success']),
+          userCount: 2,
+          relatedUsers: expect.arrayContaining([
+            expect.objectContaining({ userId: relatedUser.id }),
+          ]),
+        }),
+      ]),
+    );
+    expect(graph.ipSignals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: sharedIp,
+          userCount: 2,
+          relatedUsers: expect.arrayContaining([
+            expect.objectContaining({ userId: relatedUser.id }),
+          ]),
+        }),
+      ]),
+    );
+    expect(graph.payoutSignals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: 'Card ****4242',
+          userCount: 2,
+          relatedUsers: expect.arrayContaining([
+            expect.objectContaining({ userId: relatedUser.id }),
+          ]),
+        }),
+      ]),
+    );
+    expect(graph.graph.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: `user:${focusUser.id}`, type: 'focus_user' }),
+        expect.objectContaining({ id: `user:${relatedUser.id}`, type: 'user' }),
+      ]),
+    );
+    expect(graph.graph.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'focus_device' }),
+        expect.objectContaining({
+          type: 'shared_device',
+          target: `user:${relatedUser.id}`,
+        }),
+        expect.objectContaining({
+          type: 'shared_ip',
+          target: `user:${relatedUser.id}`,
+        }),
+        expect.objectContaining({
+          type: 'shared_payout',
+          target: `user:${relatedUser.id}`,
+        }),
+      ]),
+    );
   });
 
   it('creates and clears manual collusion flags in the risk service', async () => {
@@ -1978,6 +2751,7 @@ describeIntegrationSuite('backend admin integration', () => {
         expect.stringMatching(/^category /),
         expect.stringMatching(/^tags /),
         expect.stringMatching(/^invalidPolicy /),
+        expect.stringMatching(/^vigBps /),
       ])
     );
 
@@ -1995,6 +2769,7 @@ describeIntegrationSuite('backend admin integration', () => {
         category: 'news',
         tags: [],
         invalidPolicy: 'void',
+        vigBps: -1,
         outcomes: [
           { key: 'yes', label: 'Yes' },
           { key: 'no', label: 'No' },
@@ -2011,6 +2786,7 @@ describeIntegrationSuite('backend admin integration', () => {
         expect.stringMatching(/^category /),
         expect.stringMatching(/^tags /),
         expect.stringMatching(/^invalidPolicy /),
+        expect.stringMatching(/^vigBps /),
       ])
     );
 

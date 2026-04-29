@@ -308,6 +308,9 @@
                         · {document.sizeBytes} bytes
                       {/if}
                     </p>
+                    <p class="text-xs text-slate-500">
+                      {copy.detail.documentExpiresAt}: {formatDate(document.expiresAt)}
+                    </p>
                   </div>
                   <a
                     class="btn btn-sm btn-outline"
@@ -504,6 +507,36 @@
                 </div>
               </form>
             </div>
+          {/if}
+
+          {#if data.detail.currentTier !== "tier_0"}
+            <form
+              method="post"
+              action="?/requestReverification"
+              class="rounded-2xl border border-warning/30 p-4"
+            >
+              <div class="space-y-3">
+                <input type="hidden" name="totpCode" value={stepUpCode} />
+                <div>
+                  <h3 class="font-semibold">{copy.detail.requestReverification}</h3>
+                  <p class="text-sm text-slate-500">
+                    {copy.detail.requestReverificationDescription}
+                  </p>
+                </div>
+                <label class="form-control">
+                  <span class="label-text mb-2">{copy.detail.optionalReason}</span>
+                  <textarea
+                    class="textarea textarea-bordered min-h-24"
+                    name="reason"
+                  ></textarea>
+                </label>
+                <div class="flex justify-end">
+                  <button class="btn btn-warning" type="submit">
+                    {copy.detail.requestReverification}
+                  </button>
+                </div>
+              </div>
+            </form>
           {/if}
         </div>
       </article>

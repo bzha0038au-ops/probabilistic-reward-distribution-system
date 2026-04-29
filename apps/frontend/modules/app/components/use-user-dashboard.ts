@@ -125,6 +125,21 @@ export function useUserDashboard(options: UseUserDashboardOptions) {
     void loadDashboard();
   }, []);
 
+  const resolveDashboardLoadError = (
+    failures: Array<{ status?: number; error?: { message?: string } }>,
+  ) => {
+    const unauthorizedFailure = failures.find(
+      (failure) =>
+        failure.status === 401 && failure.error?.message?.trim().length,
+    );
+
+    if (unauthorizedFailure?.error?.message) {
+      return unauthorizedFailure.error.message;
+    }
+
+    return c.loadFailed;
+  };
+
   async function loadDashboard(showSpinner = true) {
     if (showSpinner) {
       setDashboardLoading(true);
@@ -216,7 +231,7 @@ export function useUserDashboard(options: UseUserDashboardOptions) {
       }
 
       if (failures.length > 0) {
-        setError(failures[0].error?.message ?? c.loadFailed);
+        setError(resolveDashboardLoadError(failures));
       }
     } catch {
       setError(c.loadFailed);

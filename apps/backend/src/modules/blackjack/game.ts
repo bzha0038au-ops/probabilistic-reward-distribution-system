@@ -15,6 +15,7 @@ import {
   type BlackjackFairness,
   type BlackjackTable,
 } from "@reward/shared-types/blackjack";
+import { DealerFeedSchema } from "@reward/shared-types/dealer";
 import {
   PlayModeSnapshotSchema,
   type PlayModeSnapshot,
@@ -85,6 +86,7 @@ export const BlackjackMetadataSchema = z.object({
   playMode: PlayModeSnapshotSchema.default(DEFAULT_PLAY_MODE_SNAPSHOT),
   playerHands: z.array(BlackjackStoredPlayerHandSchema).default([]),
   activeHandIndex: z.number().int().nonnegative().nullable().default(0),
+  dealerEvents: DealerFeedSchema.default([]),
 });
 
 const BlackjackGameRowSchema = z.object({

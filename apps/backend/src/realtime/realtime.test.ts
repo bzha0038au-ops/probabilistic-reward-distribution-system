@@ -17,6 +17,11 @@ import {
   HOLDEM_REALTIME_TABLE_MESSAGE_EVENT,
   buildHoldemRealtimeTableTopic,
 } from '@reward/shared-types/holdem';
+import {
+  ACTIVE_REALTIME_TEST_USER as ACTIVE_USER,
+  resetRealtimeTestEnvMocks,
+  realtimeTestEnvMocks as mocks,
+} from './test-support';
 import { RequestContextPlugin } from '../shared/request-context';
 import {
   publishHoldemRealtimeTableMessage,
@@ -28,36 +33,6 @@ import {
   publishRealtimeToUser,
   registerRealtime,
 } from './index';
-
-process.env.NODE_ENV = 'test';
-process.env.DATABASE_URL ||= 'postgres://postgres:postgres@127.0.0.1:5432/reward_test';
-process.env.USER_JWT_SECRET ||= 'realtime-user-secret-1234567890';
-
-const mocks = vi.hoisted(() => ({
-  verifyUserRealtimeToken: vi.fn(),
-  verifyUserSessionToken: vi.fn(),
-  validateAuthSession: vi.fn(),
-  getSystemFlags: vi.fn(),
-  isUserFrozen: vi.fn(),
-}));
-
-vi.mock('../shared/user-session', () => ({
-  USER_SESSION_COOKIE: 'reward_user_session',
-  verifyUserRealtimeToken: mocks.verifyUserRealtimeToken,
-  verifyUserSessionToken: mocks.verifyUserSessionToken,
-}));
-
-vi.mock('../modules/session/service', () => ({
-  validateAuthSession: mocks.validateAuthSession,
-}));
-
-vi.mock('../modules/system/service', () => ({
-  getSystemFlags: mocks.getSystemFlags,
-}));
-
-vi.mock('../modules/risk/service', () => ({
-  isUserFrozen: mocks.isUserFrozen,
-}));
 
 type TestAppBundle = {
   app: import('fastify').FastifyInstance;
@@ -73,13 +48,6 @@ type SocketHarness = {
   nextMessage<T extends RealtimeServerMessage>(): Promise<T>;
   waitForClose(): Promise<{ code: number; reason: string }>;
   close(code?: number, reason?: string): Promise<{ code: number; reason: string }>;
-};
-
-const ACTIVE_USER = {
-  userId: 42,
-  email: 'player@example.com',
-  role: 'user' as const,
-  sessionId: 'session-42',
 };
 
 const createSocketHarness = (url: string): SocketHarness => {
@@ -187,21 +155,7 @@ describe('realtime transport', () => {
   let activeApp: import('fastify').FastifyInstance | null = null;
 
   beforeEach(() => {
-    mocks.verifyUserRealtimeToken.mockReset();
-    mocks.verifyUserSessionToken.mockReset();
-    mocks.validateAuthSession.mockReset();
-    mocks.getSystemFlags.mockReset();
-    mocks.isUserFrozen.mockReset();
-
-    mocks.verifyUserRealtimeToken.mockResolvedValue(null);
-    mocks.verifyUserSessionToken.mockImplementation(async (token?: string | null) =>
-      token === 'valid-token' ? ACTIVE_USER : null
-    );
-    mocks.validateAuthSession.mockResolvedValue({
-      jti: ACTIVE_USER.sessionId,
-    });
-    mocks.getSystemFlags.mockResolvedValue({ maintenanceMode: false });
-    mocks.isUserFrozen.mockResolvedValue(false);
+    resetRealtimeTestEnvMocks();
   });
 
   afterEach(async () => {
@@ -363,6 +317,124 @@ describe('realtime transport', () => {
     await secondSocket.close();
   });
 
+  it('stores oversized realtime bus payloads in redis before notifying postgres', async () => {
+    const redisEntries = new Map<string, string>();
+    const redis = {
+      get: vi.fn(async (key: string) => redisEntries.get(key) ?? null),
+      set: vi.fn(
+        async (
+          key: string,
+          value: string,
+          mode: string,
+          ttlSeconds: number
+        ) => {
+          expect(mode).toBe('EX');
+          expect(ttlSeconds).toBeGreaterThan(0);
+          redisEntries.set(key, value);
+          return 'OK';
+        }
+      ),
+    };
+    mocks.getRedis.mockReturnValue(redis);
+
+    const { app, publishRealtimeToTopic } = await createRealtimeTestApp();
+    activeApp = app;
+
+    expect(
+      publishRealtimeToTopic({
+        topic: 'public:oversized',
+        event: 'turn.started',
+        data: {
+          body: 'x'.repeat(12_000),
+        },
+      })
+    ).toBe(0);
+
+    await waitForTimers();
+
+    expect(redis.set).toHaveBeenCalledTimes(1);
+    expect(mocks.dbNotify).toHaveBeenCalledTimes(1);
+    const [channel, rawPayload] = mocks.dbNotify.mock.calls[0] as [
+      string,
+      string,
+    ];
+    expect(channel).toBe('reward_realtime_bus');
+
+    const parsed = JSON.parse(rawPayload) as {
+      originId: string;
+      storage: string;
+      redisKey: string;
+    };
+    expect(parsed.storage).toBe('redis');
+    expect(parsed.redisKey).toContain('realtime:bus:payload:');
+
+    const storedPayload = redisEntries.get(parsed.redisKey);
+    expect(storedPayload).toBeTruthy();
+    expect(JSON.parse(storedPayload ?? 'null')).toMatchObject({
+      originId: parsed.originId,
+      scope: 'topic',
+      topic: 'public:oversized',
+      event: 'turn.started',
+    });
+  });
+
+  it('loads oversized realtime bus payload references from redis listeners', async () => {
+    const redisEntries = new Map<string, string>();
+    const redis = {
+      get: vi.fn(async (key: string) => redisEntries.get(key) ?? null),
+      set: vi.fn(async () => 'OK'),
+    };
+    mocks.getRedis.mockReturnValue(redis);
+
+    const { app, wsUrl } = await createRealtimeTestApp();
+    activeApp = app;
+
+    const listenHandler = mocks.dbListen.mock.calls[0]?.[1] as
+      | ((rawPayload: string) => void)
+      | undefined;
+    expect(listenHandler).toBeTypeOf('function');
+
+    const socket = createSocketHarness(`${wsUrl}?token=valid-token`);
+    await socket.waitForOpen();
+    await socket.nextMessage<RealtimeHelloMessage>();
+
+    socket.socket.send(
+      JSON.stringify({
+        type: 'transport.subscribe',
+        topics: ['public:oversized'],
+      })
+    );
+    await socket.nextMessage<RealtimeServerMessage>();
+
+    redisEntries.set(
+      'realtime:bus:payload:test',
+      JSON.stringify({
+        originId: 'other-process',
+        scope: 'topic',
+        topic: 'public:oversized',
+        event: 'turn.started',
+        data: {
+          body: 'y'.repeat(12_000),
+        },
+      })
+    );
+
+    listenHandler?.(
+      JSON.stringify({
+        originId: 'other-process',
+        storage: 'redis',
+        redisKey: 'realtime:bus:payload:test',
+      })
+    );
+
+    const topicEvent = await socket.nextMessage<RealtimeEventMessage>();
+    expect(topicEvent.topic).toBe('public:oversized');
+    expect(topicEvent.event).toBe('turn.started');
+    expect((topicEvent.data as { body: string }).body).toHaveLength(12_000);
+
+    await socket.close();
+  });
+
   it('fans out holdem lobby and table updates through the realtime transport', async () => {
     const { app, wsUrl } = await createRealtimeTestApp();
     activeApp = app;
@@ -394,7 +466,10 @@ describe('realtime transport', () => {
         table: {
           id: 7,
           name: 'Realtime Holdem',
+          tableType: 'cash',
           status: 'active',
+          rakePolicy: null,
+          tournament: null,
           handNumber: 4,
           stage: 'turn',
           smallBlind: '1.00',
@@ -498,7 +573,10 @@ describe('realtime transport', () => {
           table: {
             id: 7,
             name: 'Realtime Holdem',
+            tableType: 'cash',
             status: 'active',
+            rakePolicy: null,
+            tournament: null,
             handNumber: 4,
             stage: 'turn',
             smallBlind: '1.00',
@@ -587,6 +665,7 @@ describe('realtime transport', () => {
             pendingActorTimeoutAction: 'fold',
             availableActions: null,
             fairness: null,
+            dealerEvents: [],
             recentHands: [],
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),

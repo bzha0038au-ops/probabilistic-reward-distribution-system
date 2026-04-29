@@ -431,7 +431,11 @@ export const ReconciliationAlertRecordSchema = z.object({
   statusNote: z.string().nullable().optional(),
   statusUpdatedByAdminId: z.number().int().nullable().optional(),
   statusUpdatedAt: DateLikeSchema.nullable().optional(),
+  firstDetectedAt: DateLikeSchema.nullable().optional(),
   lastDetectedAt: DateLikeSchema.nullable().optional(),
+  slaDueAt: DateLikeSchema.nullable().optional(),
+  slaBreached: z.boolean().optional(),
+  escalatedAt: DateLikeSchema.nullable().optional(),
   resolvedAt: DateLikeSchema.nullable().optional(),
   createdAt: DateLikeSchema.nullable().optional(),
   updatedAt: DateLikeSchema.nullable().optional(),
@@ -446,6 +450,10 @@ export const ReconciliationAlertSummarySchema = z.object({
   requireEngineeringCount: z.number().int().nonnegative(),
   resolvedCount: z.number().int().nonnegative(),
   unresolvedCount: z.number().int().nonnegative(),
+  overdueCount: z.number().int().nonnegative(),
+  slaHours: z.number().int().positive(),
+  zeroDriftStreakDays: z.number().int().nonnegative(),
+  oldestOpenAt: DateLikeSchema.nullable().optional(),
 });
 export type ReconciliationAlertSummary = z.infer<
   typeof ReconciliationAlertSummarySchema

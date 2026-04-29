@@ -9,7 +9,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { auth } from "@/lib/auth";
+import { getCurrentUserSession } from "@/lib/current-user-session";
+import { buildLegalPath, sanitizeLocalPath } from "@/lib/navigation";
 
 export default async function Login({
   searchParams,
@@ -20,14 +21,19 @@ export default async function Login({
   }>;
 }) {
   const resolvedSearchParams = await searchParams;
-  const redirectTo =
-    resolvedSearchParams?.callbackUrl &&
-    resolvedSearchParams.callbackUrl.startsWith("/") &&
-    !resolvedSearchParams.callbackUrl.startsWith("//")
-      ? resolvedSearchParams.callbackUrl
-      : "/portal";
-  const session = await auth();
-  if (session?.user) {
+  const redirectTo = sanitizeLocalPath(
+    resolvedSearchParams?.callbackUrl,
+    "/portal",
+  );
+  const currentSession = await getCurrentUserSession();
+  if (currentSession.ok) {
+    if (currentSession.data.legal.requiresAcceptance) {
+      redirect(
+        redirectTo.startsWith("/legal")
+          ? redirectTo
+          : buildLegalPath(redirectTo),
+      );
+    }
     redirect(redirectTo);
   }
 

@@ -21,6 +21,10 @@
         email: string
         phone: string | null
         role: string
+        birthDate: string | null
+        registrationCountryCode: string | null
+        countryTier: string
+        countryResolvedAt?: string | null
         createdAt: string
         updatedAt: string
         emailVerifiedAt?: string | null
@@ -29,9 +33,22 @@
         pityStreak: number
         lastDrawAt?: string | null
         lastWinAt?: string | null
+        kycProfileId?: number | null
         kycTier: string
         kycTierSource: string
         activeScopes: string[]
+        jurisdiction: {
+          registrationCountryCode: string | null
+          birthDate: string | null
+          countryTier: string
+          minimumAge: number
+          userAge: number | null
+          isOfAge: boolean
+          allowedFeatures: string[]
+          blockedScopes: string[]
+          restrictionReasons: string[]
+          countryResolvedAt?: string | null
+        }
       }
       wallet: {
         withdrawableBalance: string
@@ -119,6 +136,8 @@
       auth_failure: t("users.reason.authFailure"),
       manual_admin: t("users.reason.manualAdmin"),
       forum_moderation: t("users.reason.forumModeration"),
+      jurisdiction_restriction: t("users.reason.jurisdictionRestriction"),
+      underage_restriction: t("users.reason.underageRestriction"),
     })[reason] ?? reason
 
   const formatKycTier = (tier: string) =>
@@ -127,6 +146,19 @@
       tier_1: t("users.kyc.tier1"),
       tier_2: t("users.kyc.tier2"),
     })[tier] ?? tier
+  const formatCountryTier = (tier: string) =>
+    ({
+      blocked: t("security.jurisdiction.tiers.blocked"),
+      restricted: t("security.jurisdiction.tiers.restricted"),
+      full: t("security.jurisdiction.tiers.full"),
+      unknown: "-",
+    })[tier] ?? tier
+  const formatJurisdictionFeature = (value: string) =>
+    ({
+      real_money_gameplay: t("security.jurisdiction.features.realMoneyGameplay"),
+      topup: t("security.jurisdiction.features.topup"),
+      withdrawal: t("security.jurisdiction.features.withdrawal"),
+    })[value] ?? value
 </script>
 
 <div class="space-y-6">
@@ -168,8 +200,22 @@
               <h2 class="card-title">#{data.detail.user.id}</h2>
               <p class="text-sm text-slate-700">{data.detail.user.email}</p>
               <p class="text-sm text-slate-500">{data.detail.user.phone ?? "-"}</p>
+              {#if data.detail.user.kycProfileId}
+                <a
+                  class="mt-3 inline-flex text-sm text-primary hover:underline"
+                  href={`/kyc/${data.detail.user.kycProfileId}`}
+                >
+                  {t("users.actions.openKycProfile")}
+                </a>
+              {/if}
             </div>
-            <div class="flex flex-wrap gap-2">
+            <div class="flex flex-wrap items-center gap-2">
+              <a
+                class="btn btn-outline btn-sm"
+                href={`/users/${data.detail.user.id}/associations`}
+              >
+                Association graph
+              </a>
               <span class="badge badge-outline">
                 {formatKycTier(data.detail.user.kycTier)}
               </span>
@@ -226,6 +272,38 @@
             </div>
             <div class="rounded-2xl bg-base-200 p-4">
               <p class="text-xs uppercase tracking-[0.2em] text-slate-500">
+                {t("users.profile.birthDate")}
+              </p>
+              <p class="mt-2 text-sm text-slate-800">
+                {data.detail.user.birthDate ?? "-"}
+              </p>
+            </div>
+            <div class="rounded-2xl bg-base-200 p-4">
+              <p class="text-xs uppercase tracking-[0.2em] text-slate-500">
+                {t("users.profile.registrationCountry")}
+              </p>
+              <p class="mt-2 text-sm text-slate-800">
+                {data.detail.user.registrationCountryCode ?? "-"}
+              </p>
+            </div>
+            <div class="rounded-2xl bg-base-200 p-4">
+              <p class="text-xs uppercase tracking-[0.2em] text-slate-500">
+                {t("users.profile.countryTier")}
+              </p>
+              <p class="mt-2 text-sm text-slate-800">
+                {formatCountryTier(data.detail.user.countryTier)}
+              </p>
+            </div>
+            <div class="rounded-2xl bg-base-200 p-4">
+              <p class="text-xs uppercase tracking-[0.2em] text-slate-500">
+                {t("users.profile.countryResolvedAt")}
+              </p>
+              <p class="mt-2 text-sm text-slate-800">
+                {formatDate(data.detail.user.countryResolvedAt)}
+              </p>
+            </div>
+            <div class="rounded-2xl bg-base-200 p-4">
+              <p class="text-xs uppercase tracking-[0.2em] text-slate-500">
                 {t("users.profile.userPoolBalance")}
               </p>
               <p class="mt-2 text-sm text-slate-800">
@@ -238,6 +316,25 @@
               </p>
               <p class="mt-2 text-sm text-slate-800">
                 {data.detail.user.pityStreak}
+              </p>
+            </div>
+          </div>
+
+          <div class="rounded-2xl border border-base-300 p-4">
+            <p class="text-xs uppercase tracking-[0.2em] text-slate-500">
+              {t("users.profile.jurisdiction")}
+            </p>
+            <div class="mt-3 grid gap-2 text-sm text-slate-700 md:grid-cols-2">
+              <p>
+                {t("security.jurisdiction.minimumAge")}: {data.detail.user.jurisdiction.minimumAge}
+              </p>
+              <p>{t("users.profile.age")}: {data.detail.user.jurisdiction.userAge ?? "-"}</p>
+              <p class="md:col-span-2">
+                {t("security.jurisdiction.allowedFeatures")}: {data.detail.user.jurisdiction.allowedFeatures.length === 0
+                  ? t("security.jurisdiction.noFeatures")
+                  : data.detail.user.jurisdiction.allowedFeatures
+                      .map((feature) => formatJurisdictionFeature(feature))
+                      .join(", ")}
               </p>
             </div>
           </div>

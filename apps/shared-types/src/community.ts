@@ -125,6 +125,10 @@ export type CommunityThreadDetailResponse = z.infer<
 export const CommunityThreadMutationResponseSchema = z.object({
   thread: CommunityThreadSchema,
   post: CommunityPostSchema,
+  reviewRequired: z.boolean().optional(),
+  autoHidden: z.boolean().optional(),
+  moderationReason: z.string().nullable().optional(),
+  moderationSource: z.literal('automated_signal').nullable().optional(),
 });
 export type CommunityThreadMutationResponse = z.infer<
   typeof CommunityThreadMutationResponseSchema
@@ -155,6 +159,7 @@ export type CommunityPostModerationResponse = z.infer<
 export const CreateCommunityThreadRequestSchema = z.object({
   title: z.string().trim().min(1).max(160),
   body: z.string().trim().min(1).max(5000),
+  captchaToken: z.string().trim().min(1).max(2048).optional(),
 });
 export type CreateCommunityThreadRequest = z.infer<
   typeof CreateCommunityThreadRequestSchema
@@ -162,6 +167,7 @@ export type CreateCommunityThreadRequest = z.infer<
 
 export const CreateCommunityPostRequestSchema = z.object({
   body: z.string().trim().min(1).max(5000),
+  captchaToken: z.string().trim().min(1).max(2048).optional(),
 });
 export type CreateCommunityPostRequest = z.infer<
   typeof CreateCommunityPostRequestSchema

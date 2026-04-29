@@ -6,6 +6,8 @@ import type {
   DrawPrizePresentation,
   DrawPrizeRarity,
 } from "@reward/shared-types/draw";
+import type { PlayModeCopy } from "../ui";
+import type { PlayModeType } from "@reward/shared-types/play-mode";
 
 import type { MobileRouteLabels, MobileRouteScreens } from "../route-copy";
 import {
@@ -19,7 +21,7 @@ import {
   mobileSurfaceTheme,
   mobileTypography,
 } from "../theme";
-import { ActionButton, SectionCard } from "../ui";
+import { ActionButton, PlayModeSelector, SectionCard } from "../ui";
 import { RouteSwitcher } from "./route-switcher";
 import type { MobileAppRoute, MobileStyles } from "./types";
 
@@ -38,6 +40,7 @@ type GachaRouteScreenProps = {
   screenCopy: MobileRouteScreens["gacha"];
   fairnessRefreshingLabel: string;
   balance: string;
+  playModeCopy: PlayModeCopy;
   drawCatalog: DrawCatalogResponse | null;
   featuredPrizes: readonly DrawPrizePresentation[];
   multiDrawCount: number;
@@ -46,6 +49,7 @@ type GachaRouteScreenProps = {
   playingDrawCount: number | null;
   playingQuickEight: boolean;
   loadingDrawCatalog: boolean;
+  updatingDrawPlayMode: boolean;
   submitting: boolean;
   emailVerified: boolean;
   gachaReels: [SlotReelWindow, SlotReelWindow, SlotReelWindow];
@@ -54,6 +58,7 @@ type GachaRouteScreenProps = {
   gachaTone: "idle" | SlotFinale["tone"];
   formatAmount: (value: string) => string;
   shortenCommitHash: (value: string) => string;
+  onChangeDrawPlayMode: (type: PlayModeType) => void;
   onPlayDraw: (count: number) => void;
   onRefreshDrawCatalog: () => void;
   drawRarityLabels: Record<DrawPrizeRarity, string>;
@@ -126,6 +131,17 @@ export function GachaRouteScreen(props: GachaRouteScreenProps) {
         title={props.screenCopy.sectionTitle}
         subtitle={props.screenCopy.sectionSubtitle}
       >
+        <PlayModeSelector
+          copy={props.playModeCopy}
+          snapshot={props.drawCatalog?.playMode ?? null}
+          disabled={
+            props.submitting ||
+            props.loadingDrawCatalog ||
+            props.updatingDrawPlayMode
+          }
+          onSelect={props.onChangeDrawPlayMode}
+        />
+
         {props.drawCatalog ? (
           <View style={props.styles.gachaMetaCard}>
             <View style={props.styles.gachaMetaRow}>

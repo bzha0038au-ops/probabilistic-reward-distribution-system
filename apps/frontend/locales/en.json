@@ -12,6 +12,7 @@
     "submit": "Submit form",
     "email": "Email Address",
     "password": "Password",
+    "birthDate": "Birth Date",
     "newPassword": "New Password",
     "emailPlaceholder": "user@acme.com",
     "admin": "Admin"
@@ -75,6 +76,16 @@
     "navPayments": "Payments",
     "navSecurity": "Security",
     "navMarkets": "Markets",
+    "navNotifications": "Notifications",
+    "navCommunity": "Community",
+    "notificationBellLabel": "Open notifications",
+    "notificationsTitle": "Notifications",
+    "notificationsDescription": "KYC reviews, withdrawal progress, and settled markets now land here in one shared activity feed.",
+    "notificationsEmpty": "No notifications yet.",
+    "notificationsUnreadCount": "{count} unread",
+    "notificationsMarkRead": "Mark read",
+    "notificationsReadAll": "Mark all read",
+    "notificationsRefresh": "Refresh notifications",
     "verificationGateTitle": "Verify your email to unlock the account",
     "verificationGateDescription": "This account can sign in, but high-risk actions stay blocked until email verification is complete.",
     "verificationGateBody": "Verify the inbox address on file to continue with draws and other protected actions. We can send a fresh verification link if needed.",
@@ -87,6 +98,63 @@
       "Draws run inside a single atomic transaction.",
       "Inventory is locked before stock deduction."
     ]
+  },
+  "community": {
+    "title": "Community Board",
+    "description": "Post a thread, reply in public, and let the backend anti-spam guard decide whether the content stays live or moves into the admin moderation queue.",
+    "antiSpamBadge": "KYC-tier rate limits",
+    "reviewBadge": "Auto moderation queue",
+    "createTitle": "Start a thread",
+    "createDescription": "New threads publish immediately unless spam signals or policy thresholds push them into review.",
+    "listTitle": "Recent threads",
+    "listDescription": "Visible threads only. Auto-hidden submissions stay out of this list until an admin restores them.",
+    "detailTitle": "Thread detail",
+    "detailDescription": "Read the visible replies and add a follow-up without leaving the dashboard.",
+    "refreshList": "Refresh threads",
+    "refreshThread": "Refresh thread",
+    "loadingThreads": "Loading community threads...",
+    "loadingThread": "Loading thread detail...",
+    "emptyTitle": "No threads yet.",
+    "emptyDescription": "Start the first conversation from the form above.",
+    "emptyDetailTitle": "Pick a thread",
+    "emptyDetailDescription": "Choose a thread from the left column to load the visible replies.",
+    "titleLabel": "Thread title",
+    "titlePlaceholder": "Report a feature issue, open a discussion, or ask a product question",
+    "bodyLabel": "Opening post",
+    "bodyPlaceholder": "Write the initial context here. External links and obvious spam signals may move the post into admin review.",
+    "replyLabel": "Reply",
+    "replyPlaceholder": "Add a useful follow-up or answer.",
+    "createSubmit": "Publish thread",
+    "replySubmit": "Post reply",
+    "submittingThread": "Publishing...",
+    "submittingReply": "Posting...",
+    "threadCreated": "Thread published.",
+    "replyCreated": "Reply posted.",
+    "submissionQueued": "Submitted and queued for admin review.",
+    "submissionHidden": "Submitted and hidden pending admin review.",
+    "createFailed": "Failed to publish the thread.",
+    "replyFailed": "Failed to post the reply.",
+    "loadFailed": "Failed to load community threads.",
+    "loadThreadFailed": "Failed to load the selected thread.",
+    "postCount": "{count} posts",
+    "authorLabel": "User #{id}",
+    "startedAt": "Started at",
+    "locked": "Locked",
+    "originalPost": "Opening post",
+    "replyBadge": "Reply",
+    "captchaLabel": "Human check",
+    "captchaPrompt": "Complete the challenge before submitting when captcha is enabled for your account tier.",
+    "captchaLoading": "Loading captcha challenge...",
+    "captchaRequired": "Complete the captcha challenge before submitting.",
+    "captchaInvalid": "Captcha verification failed. Try the challenge again.",
+    "kycRequired": "Complete tier 1 KYC before posting in community.",
+    "threadMissing": "This thread is no longer visible.",
+    "threadLocked": "This thread is locked.",
+    "rateLimited": "Posting is temporarily rate limited. Wait a bit and try again.",
+    "titleRequired": "Enter a thread title.",
+    "bodyRequired": "Enter some content before publishing.",
+    "replyRequired": "Enter a reply before posting.",
+    "replyLocked": "Replies are disabled because this thread is locked."
   },
   "draw": {
     "banner": "Live Banner",
@@ -206,7 +274,7 @@
     "portfolioTitle": "My Prediction Markets",
     "portfolioDescription": "Review your open exposure, resolved payouts, refunds, and grouped position history without opening each market one by one.",
     "portfolioExposureTitle": "Exposure only",
-    "portfolioExposureDescription": "The current pari-mutuel release shows stake exposure, settled payouts, and refunds. It does not calculate live PnL while markets are still open.",
+    "portfolioExposureDescription": "The current pari-mutuel release shows stake exposure, net-of-vig settled payouts, and refunds. It does not calculate live PnL while markets are still open.",
     "portfolioLoadFailed": "Failed to load your prediction market history.",
     "portfolioEmptyTitle": "No prediction market records yet.",
     "portfolioEmptyDescription": "Once you place a position, your grouped market history will show up here.",
@@ -250,19 +318,24 @@
     "poolDescription": "Each outcome shows the current amount staked and how much of the shared pool it represents.",
     "poolShareValue": "{share} of pool",
     "betTitle": "Place a position",
-    "betDescription": "Choose one outcome, enter your stake, and lock funds against this market until settlement or cancellation.",
+    "betDescription": "Choose one outcome, enter your stake, and lock funds against this market until settlement or cancellation. Winning payouts are distributed pari-mutuel after vig.",
     "marketLockedNotice": "This market is not accepting new positions.",
     "outcomeLabel": "Outcome",
     "stakeAmountLabel": "Stake amount",
     "stakePlaceholder": "e.g. 15.00",
     "placeBet": "Place position",
     "placingBet": "Placing position...",
+    "sellPosition": "Sell position",
+    "sellingPosition": "Selling position...",
     "placeFailed": "Failed to place the position.",
+    "sellFailed": "Failed to sell the position.",
     "positionPlaced": "Position placed. Market and balance refreshed.",
+    "positionSold": "Position sold. Market and balance refreshed.",
     "yourPositions": "Your positions",
     "positionsDescription": "Open and settled positions tied to your current account for this market.",
     "noPositions": "You have not placed a position on this market yet.",
     "positionCreatedAt": "Created",
+    "positionSoldAt": "Sold",
     "positionSettledAt": "Settled",
     "payoutAmount": "Payout",
     "previousPage": "Previous page",
@@ -292,6 +365,7 @@
     },
     "positionStatus": {
       "open": "Open",
+      "sold": "Sold",
       "won": "Won",
       "lost": "Lost",
       "refunded": "Refunded"
@@ -370,8 +444,14 @@
           "description": "Every draw uses atomic balance locks, immutable ledger entries, and clear audit trails for both debits and rewards.",
           "image": "/assets/landing/feature.svg",
           "bullets": [
-            { "label": "Atomic updates", "copy": "Balance and inventory are locked per draw." },
-            { "label": "Clear audit trail", "copy": "Transactions are immutable and traceable." }
+            {
+              "label": "Atomic updates",
+              "copy": "Balance and inventory are locked per draw."
+            },
+            {
+              "label": "Clear audit trail",
+              "copy": "Transactions are immutable and traceable."
+            }
           ]
         },
         {
@@ -380,8 +460,14 @@
           "image": "/assets/landing/feature2.svg",
           "reverse": true,
           "bullets": [
-            { "label": "Atomic updates", "copy": "Balance and inventory are locked per draw." },
-            { "label": "Clear audit trail", "copy": "Transactions are immutable and traceable." }
+            {
+              "label": "Atomic updates",
+              "copy": "Balance and inventory are locked per draw."
+            },
+            {
+              "label": "Clear audit trail",
+              "copy": "Transactions are immutable and traceable."
+            }
           ]
         },
         {
@@ -389,8 +475,14 @@
           "description": "Monitor draw volume, reward distribution, pool balance, and user spend ranking with real-time visibility.",
           "image": "/assets/landing/feature3.svg",
           "bullets": [
-            { "label": "Atomic updates", "copy": "Balance and inventory are locked per draw." },
-            { "label": "Clear audit trail", "copy": "Transactions are immutable and traceable." }
+            {
+              "label": "Atomic updates",
+              "copy": "Balance and inventory are locked per draw."
+            },
+            {
+              "label": "Clear audit trail",
+              "copy": "Transactions are immutable and traceable."
+            }
           ]
         }
       ]

@@ -8,9 +8,10 @@ real production launch.
 - PostgreSQL backup and restore procedure for application-owned data
 - Disaster recovery decision flow and cutover steps
 - On-call response guidance for database, finance, and notification incidents
-- Restore drill process and evidence capture
+- Monthly staging restore-drill process, ledger, and evidence capture
 - Host hardening and public-boundary expectations
 - Secret rotation and file-based secret injection workflow
+- Quarterly secret-rotation drill expectations
 
 ## Runbooks
 
@@ -23,10 +24,11 @@ real production launch.
 - [`on-call-runbook.md`](./on-call-runbook.md): first-response playbook for
   production incidents
 - [`on-call-schedule.md`](./on-call-schedule.md): weekly rotation and named owners
-- [`restore-drill.md`](./restore-drill.md): quarterly rehearsal checklist and
+- [`restore-drill.md`](./restore-drill.md): monthly rehearsal checklist and
   evidence template
 - [`restore-drill-template.md`](./restore-drill-template.md): copy/paste report
   skeleton for manual evidence capture
+- [`dr-drills.md`](./dr-drills.md): rolling ledger of successful restore drills
 - [`alert-routing.md`](./alert-routing.md): backup and restore-drill paging route
 - [`runbooks/`](./runbooks/): alert-specific runbooks linked from Prometheus
   alerts and notification payloads
@@ -34,6 +36,8 @@ real production launch.
   summaries produced by manual drills or the monthly automation PR
 - [`secret-rotation.md`](./secret-rotation.md): secret file inventory and
   rotation procedure
+- [`prize-engine-rewards-load-2026-04-29.md`](./prize-engine-rewards-load-2026-04-29.md):
+  measured `/v1/engine/rewards` latency, throughput, and overload failure modes
 
 ## Core Incident Runbooks
 
@@ -59,14 +63,17 @@ Adjacent AML queue handling remains separately documented here:
 
 ## Executable Assets
 
-- Root `pnpm ops:*` shortcuts:
-  - `pnpm ops:health`
-  - `pnpm ops:tail-errors`
-  - `pnpm ops:check-finance`
-  - `pnpm ops:freeze-deploys`
-  - `pnpm ops:rotate-jwt`
-  - `pnpm ops:ai-diagnose`
-  - `pnpm ops:postmortem`
+Root `pnpm ops:*` shortcuts:
+
+- `pnpm ops:health`
+- `pnpm ops:tail-errors`
+- `pnpm ops:check-finance`
+- `pnpm ops:freeze-deploys`
+- `pnpm ops:rotate-secret`
+- `pnpm ops:rotate-jwt`
+- `pnpm ops:ai-diagnose`
+- `pnpm ops:build-restore-drill-ledger`
+- `pnpm ops:postmortem`
 - [`deploy/scripts/postgres-backup.sh`](../../deploy/scripts/postgres-backup.sh)
 - [`deploy/scripts/backup-runner.sh`](../../deploy/scripts/backup-runner.sh)
 - [`deploy/scripts/verify-backup.sh`](../../deploy/scripts/verify-backup.sh)
@@ -93,10 +100,13 @@ package / directory was that command in?" during incidents.
 - `pnpm ops:freeze-deploys`: create or clear `.deploy-frozen`, which now
   causes [`.github/workflows/deploy.yml`](../../.github/workflows/deploy.yml) to
   reject deploys for that ref
+- `pnpm ops:rotate-secret`: unified JWT + SaaS API key rotation / drill helper
 - `pnpm ops:rotate-jwt`: guided dual-secret rotation over
   `*_JWT_SECRET_PREVIOUS`
 - `pnpm ops:ai-diagnose`: collect health, metrics, logs, and recent Sentry 5xx
   context for AI-assisted diagnosis
+- `pnpm ops:build-restore-drill-ledger`: rebuild
+  [`dr-drills.md`](./dr-drills.md) from committed evidence summaries
 - `pnpm ops:postmortem`: pull a bounded log window and have AI draft a Markdown
   postmortem
 
@@ -118,6 +128,10 @@ workflow:
 - alert routing for readiness failures, 5xx spikes, draw error rate, withdraw
   stuck, and queue backlog growth
 - a committed restore drill report under `docs/operations/evidence/` from the
-  last 90 days
+  last 45 days
+- an up-to-date [`dr-drills.md`](./dr-drills.md) ledger proving repeated
+  successful restores
+- a secret-rotation drill completed within the last 90 days, with command
+  transcript captured in the change record
 - CDN/WAF coverage in front of the reverse proxy
 - patch management plus disk/filesystem alerting on the deployment host

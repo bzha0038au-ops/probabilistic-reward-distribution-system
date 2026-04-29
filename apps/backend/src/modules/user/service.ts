@@ -1,4 +1,5 @@
 import { eq } from '@reward/database/orm';
+import type { CountryTier } from '@reward/shared-types/risk';
 
 import { db } from '../../db';
 import { userWallets, users } from '@reward/database';
@@ -8,6 +9,12 @@ import { revokeAuthSessions } from '../session/service';
 type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 type CreateUserWithWalletOptions = {
+  profile?: {
+    birthDate: string;
+    registrationCountryCode?: string | null;
+    countryTier?: CountryTier;
+    countryResolvedAt?: Date | null;
+  };
   afterCreate?: (tx: DbTransaction, user: typeof users.$inferSelect) => Promise<void>;
 };
 
@@ -55,6 +62,10 @@ export async function createUserWithWallet(
         email,
         passwordHash,
         role: 'user',
+        birthDate: options.profile?.birthDate ?? null,
+        registrationCountryCode: options.profile?.registrationCountryCode ?? null,
+        countryTier: options.profile?.countryTier ?? 'unknown',
+        countryResolvedAt: options.profile?.countryResolvedAt ?? null,
         userPoolBalance: '0',
       })
       .returning();

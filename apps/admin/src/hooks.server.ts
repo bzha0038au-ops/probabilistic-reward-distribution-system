@@ -4,9 +4,9 @@ import { redirect } from '@sveltejs/kit';
 import {
   ADMIN_CSRF_COOKIE,
   ADMIN_SESSION_COOKIE,
-  type AdminSessionPayload,
   verifyAdminSessionToken,
 } from '$lib/server/admin-session';
+import type { AdminSessionPayload } from '$lib/server/admin-session-core';
 import { apiRequest } from '$lib/server/api';
 import { resolveLocaleFromRequest } from '$lib/i18n';
 import {

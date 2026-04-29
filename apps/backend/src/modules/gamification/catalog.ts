@@ -11,6 +11,7 @@ import {
 } from "@reward/shared-types/gamification";
 
 import { db, type DbClient, type DbTransaction } from "../../db";
+import { resolveExperimentConfig } from "../experiments/service";
 import { badRequestError, conflictError } from "../../shared/errors";
 import { logger } from "../../shared/logger";
 import { toMoneyString } from "../../shared/money";
@@ -68,10 +69,18 @@ const coerceStoredMissionParams = (row: MissionRow) => {
   }
 };
 
-export const parseMissionParams = (
+export function parseMissionParams(
+  type: "daily_checkin",
+  params: unknown,
+): RewardMissionDailyCheckInParams;
+export function parseMissionParams(
+  type: "metric_threshold",
+  params: unknown,
+): RewardMissionMetricThresholdParams;
+export function parseMissionParams(
   type: RewardMissionDefinitionType,
   params: unknown,
-) => {
+) {
   if (type === "daily_checkin") {
     const parsed = RewardMissionDailyCheckInParamsSchema.safeParse(params);
     if (!parsed.success) {
@@ -161,6 +170,50 @@ export async function listMissionDefinitions(
       }
       return left.id.localeCompare(right.id);
     });
+}
+
+export async function resolveMissionDefinitionsForUser(
+  userId: number,
+  executor: DbExecutor = db,
+): Promise<RewardMissionDefinition[]> {
+  const definitions = await listMissionDefinitions(executor);
+
+  const resolvedDefinitions = await Promise.all(
+    definitions.map(async (definition) => {
+      if (definition.type === "daily_checkin") {
+        const { config } = await resolveExperimentConfig({
+          userId,
+          config: definition.params,
+          executor,
+        });
+        const params = parseMissionParams("daily_checkin", config);
+        return {
+          ...definition,
+          params,
+          sortOrder: missionSortOrder(params),
+        } satisfies DailyCheckInMissionDefinition;
+      }
+
+      const { config } = await resolveExperimentConfig({
+        userId,
+        config: definition.params,
+        executor,
+      });
+      const params = parseMissionParams("metric_threshold", config);
+      return {
+        ...definition,
+        params,
+        sortOrder: missionSortOrder(params),
+      } satisfies MetricThresholdMissionDefinition;
+    }),
+  );
+
+  return resolvedDefinitions.sort((left, right) => {
+    if (left.sortOrder !== right.sortOrder) {
+      return left.sortOrder - right.sortOrder;
+    }
+    return left.id.localeCompare(right.id);
+  });
 }
 
 export async function ensureSingleDailyCheckInMission(

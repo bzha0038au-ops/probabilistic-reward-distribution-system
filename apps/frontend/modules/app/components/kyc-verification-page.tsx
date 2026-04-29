@@ -38,6 +38,7 @@ const copy = {
     documentType: 'Document type',
     documentNumberLast4: 'Document number last 4',
     countryCode: 'Country code',
+    documentExpiresAt: 'Document expiry date',
     notes: 'Reviewer notes',
     targetTier: 'Target tier',
     tier0: 'Tier 0 demo',
@@ -57,6 +58,8 @@ const copy = {
     noHistory: 'No review events yet.',
     success: 'KYC submission created.',
     fileHint: 'Accepts JPG, PNG, WEBP, or PDF. Back side is optional.',
+    documentExpiryRequired: 'Document expiry date is required.',
+    documentExpiryLabel: 'Expires at',
   },
   'zh-CN': {
     title: 'KYC 实名认证',
@@ -73,6 +76,7 @@ const copy = {
     documentType: '证件类型',
     documentNumberLast4: '证件号后 4 位',
     countryCode: '国家代码',
+    documentExpiresAt: '证件到期日',
     notes: '补充说明',
     targetTier: '目标等级',
     tier0: 'Tier 0 试玩',
@@ -92,6 +96,8 @@ const copy = {
     noHistory: '还没有审核事件。',
     success: 'KYC 申请已提交。',
     fileHint: '支持 JPG、PNG、WEBP、PDF。证件反面可选。',
+    documentExpiryRequired: '必须填写证件到期日。',
+    documentExpiryLabel: '到期时间',
   },
 } as const;
 
@@ -141,6 +147,19 @@ const readFileAsBase64 = async (file: File): Promise<DraftDocument> =>
     reader.readAsDataURL(file);
   });
 
+const toDateInputValue = (value: string | Date | null | undefined) => {
+  if (!value) {
+    return '';
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.valueOf())) {
+    return '';
+  }
+
+  return parsed.toISOString().slice(0, 10);
+};
+
 export function KycVerificationPage() {
   const locale = useLocale() as keyof typeof copy;
   const c = copy[locale];
@@ -159,6 +178,7 @@ export function KycVerificationPage() {
     useState<KycDocumentType>('national_id');
   const [documentNumberLast4, setDocumentNumberLast4] = useState('');
   const [countryCode, setCountryCode] = useState('');
+  const [documentExpiresOn, setDocumentExpiresOn] = useState('');
   const [notes, setNotes] = useState('');
   const [frontDocument, setFrontDocument] = useState<DraftDocument | null>(null);
   const [backDocument, setBackDocument] = useState<DraftDocument | null>(null);
@@ -193,6 +213,12 @@ export function KycVerificationPage() {
     );
     setDocumentNumberLast4(nextProfile.documentNumberLast4 ?? '');
     setCountryCode(nextProfile.countryCode ?? '');
+    setDocumentExpiresOn(
+      toDateInputValue(
+        nextProfile.documents.find((document) => document.kind !== 'selfie')
+          ?.expiresAt ?? null,
+      ),
+    );
     setNotes(nextProfile.notes ?? '');
     setLoading(false);
   }
@@ -223,6 +249,10 @@ export function KycVerificationPage() {
       setError('Front document and selfie are required.');
       return;
     }
+    if (!documentExpiresOn) {
+      setError(c.documentExpiryRequired);
+      return;
+    }
 
     setSubmitting(true);
     setError(null);
@@ -240,6 +270,7 @@ export function KycVerificationPage() {
       documentType,
       documentNumberLast4: documentNumberLast4.trim().toUpperCase(),
       countryCode: countryCode.trim().toUpperCase() || undefined,
+      documentExpiresAt: `${documentExpiresOn}T23:59:59.999Z`,
       notes: notes.trim() || undefined,
       documents,
     });
@@ -399,6 +430,16 @@ export function KycVerificationPage() {
                   }
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="kyc-expiry">{c.documentExpiresAt}</Label>
+                <Input
+                  id="kyc-expiry"
+                  type="date"
+                  value={documentExpiresOn}
+                  disabled={!canSubmit || submitting}
+                  onChange={(event) => setDocumentExpiresOn(event.target.value)}
+                />
+              </div>
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="kyc-notes">{c.notes}</Label>
                 <textarea
@@ -484,6 +525,9 @@ export function KycVerificationPage() {
                     Open document
                   </a>
                 </div>
+                <p className="mt-2 text-xs text-slate-500">
+                  {c.documentExpiryLabel}: {toDateInputValue(document.expiresAt) || '-'}
+                </p>
               </div>
             ))
           ) : (

@@ -9,6 +9,10 @@ export interface ReconciliationAlertsSummary {
   requireEngineeringCount: number
   resolvedCount: number
   unresolvedCount: number
+  overdueCount: number
+  slaHours: number
+  zeroDriftStreakDays: number
+  oldestOpenAt?: string | Date | null
 }
 
 export interface PageData {

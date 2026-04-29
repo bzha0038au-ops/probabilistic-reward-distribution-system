@@ -11,10 +11,13 @@ import {
 import { db } from '../../db';
 import { logger } from '../../shared/logger';
 import { captureException } from '../../shared/telemetry';
+import { isBillingRunSyncConflictError } from './billing';
 import {
   config,
   findStripeBalanceTransactionForTopUp,
   findStripeInvoiceForBillingRun,
+  markBillingRunSyncProcessing,
+  recordBillingRunSyncFailure,
   syncBillingRunFromInvoice,
   syncBillingTopUpFromBalanceTransaction,
 } from './billing-service-support';
@@ -73,11 +76,15 @@ export async function runSaasStripeReconciliationCycle(params?: {
 
   let billingRunsReconciled = 0;
   let billingRunsMissing = 0;
+  let billingRunsContended = 0;
   let topUpsReconciled = 0;
   let topUpsMissing = 0;
   let failed = 0;
 
   for (const run of billingRunCandidates) {
+    const syncStage = 'invoice_reconcile' as const;
+    let observedInvoiceStatus: string | null = null;
+    let currentRun = run;
     try {
       const invoice = run.stripeInvoiceId
         ? await getSaasStripeClient().invoices.retrieve(run.stripeInvoiceId)
@@ -86,11 +93,39 @@ export async function runSaasStripeReconciliationCycle(params?: {
         billingRunsMissing += 1;
         continue;
       }
+      observedInvoiceStatus = invoice.status;
+      currentRun = await markBillingRunSyncProcessing(run, {
+        action: 'reconciliation',
+        stage: syncStage,
+        observedInvoiceStatus,
+      });
 
-      await syncBillingRunFromInvoice(run, invoice);
+      await syncBillingRunFromInvoice(currentRun, invoice, undefined, {
+        action: "reconciliation",
+        stage: "invoice_reconcile",
+      });
       billingRunsReconciled += 1;
     } catch (error) {
+      if (isBillingRunSyncConflictError(error)) {
+        billingRunsContended += 1;
+        logger.info('saas billing run reconciliation contention detected', {
+          saasBillingRunId: run.id,
+        });
+        continue;
+      }
+
       failed += 1;
+      try {
+        await recordBillingRunSyncFailure(currentRun, {
+          action: 'reconciliation',
+          stage: syncStage,
+          error,
+          recoveryPath: 'wait_for_next_reconciliation_attempt',
+          observedInvoiceStatus,
+        });
+      } catch {
+        // Preserve the original reconciliation error when failure bookkeeping cannot be written.
+      }
       captureException(error, {
         tags: {
           alert_priority: 'high',
@@ -147,6 +182,7 @@ export async function runSaasStripeReconciliationCycle(params?: {
     billingRunsChecked: billingRunCandidates.length,
     billingRunsReconciled,
     billingRunsMissing,
+    billingRunsContended,
     topUpsChecked: topUpCandidates.length,
     topUpsReconciled,
     topUpsMissing,

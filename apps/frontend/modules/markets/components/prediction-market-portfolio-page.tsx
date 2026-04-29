@@ -1,26 +1,26 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import type {
   PredictionMarketHistoryResponse,
   PredictionMarketPortfolioFilter,
   PredictionMarketPortfolioItem,
   PredictionPosition,
-} from '@reward/shared-types/prediction-market';
+} from "@reward/shared-types/prediction-market";
 
-import { useLocale, useTranslations } from '@/components/i18n-provider';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { useLocale, useTranslations } from "@/components/i18n-provider";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card';
-import { browserUserApiClient } from '@/lib/api/user-client';
-import { cn } from '@/lib/utils';
+} from "@/components/ui/card";
+import { browserUserApiClient } from "@/lib/api/user-client";
+import { cn } from "@/lib/utils";
 import {
   formatMarketAmount,
   formatMarketDateTime,
@@ -31,14 +31,14 @@ import {
   resolveMarketStatusClasses,
   resolvePortfolioStatusClasses,
   resolvePositionStatusClasses,
-} from '../lib/format';
+} from "../lib/format";
 
 const PAGE_SIZE = 10;
 const PORTFOLIO_FILTERS: readonly PredictionMarketPortfolioFilter[] = [
-  'all',
-  'open',
-  'resolved',
-  'refunded',
+  "all",
+  "open",
+  "resolved",
+  "refunded",
 ];
 
 const getOutcomeLabel = (
@@ -53,30 +53,37 @@ const renderPositionTimestamp = (
   t: (key: string) => string,
   position: PredictionPosition,
 ) => {
-  if (position.settledAt) {
-    return `${t('markets.positionSettledAt')}: ${formatMarketDateTime(
+  if (position.status === "sold" && position.settledAt) {
+    return `${t("markets.positionSoldAt")}: ${formatMarketDateTime(
       locale,
       position.settledAt,
-      t('markets.unknownTime'),
+      t("markets.unknownTime"),
     )}`;
   }
 
-  return `${t('markets.positionCreatedAt')}: ${formatMarketDateTime(
+  if (position.settledAt) {
+    return `${t("markets.positionSettledAt")}: ${formatMarketDateTime(
+      locale,
+      position.settledAt,
+      t("markets.unknownTime"),
+    )}`;
+  }
+
+  return `${t("markets.positionCreatedAt")}: ${formatMarketDateTime(
     locale,
     position.createdAt,
-    t('markets.unknownTime'),
+    t("markets.unknownTime"),
   )}`;
 };
 
 export function PredictionMarketPortfolioPage() {
   const locale = useLocale();
   const t = useTranslations();
-  const [status, setStatus] = useState<PredictionMarketPortfolioFilter>('all');
+  const [status, setStatus] = useState<PredictionMarketPortfolioFilter>("all");
   const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [history, setHistory] = useState<PredictionMarketHistoryResponse | null>(
-    null,
-  );
+  const [history, setHistory] =
+    useState<PredictionMarketHistoryResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -99,7 +106,7 @@ export function PredictionMarketPortfolioPage() {
         }
 
         if (!response.ok) {
-          setError(response.error?.message ?? t('markets.portfolioLoadFailed'));
+          setError(response.error?.message ?? t("markets.portfolioLoadFailed"));
           setLoading(false);
           return;
         }
@@ -107,7 +114,7 @@ export function PredictionMarketPortfolioPage() {
         setHistory(response.data);
       } catch {
         if (!cancelled) {
-          setError(t('markets.portfolioLoadFailed'));
+          setError(t("markets.portfolioLoadFailed"));
         }
       }
 
@@ -142,10 +149,10 @@ export function PredictionMarketPortfolioPage() {
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div className="space-y-2">
               <CardTitle className="text-3xl">
-                {t('markets.portfolioTitle')}
+                {t("markets.portfolioTitle")}
               </CardTitle>
               <CardDescription className="max-w-3xl text-sm leading-6 text-slate-300">
-                {t('markets.portfolioDescription')}
+                {t("markets.portfolioDescription")}
               </CardDescription>
             </div>
 
@@ -156,7 +163,7 @@ export function PredictionMarketPortfolioPage() {
                 variant="outline"
                 className="rounded-full border-white/15 bg-white/5 text-slate-100 hover:bg-white/10 hover:text-white"
               >
-                <Link href="/app/markets">{t('markets.browseMarkets')}</Link>
+                <Link href="/app/markets">{t("markets.browseMarkets")}</Link>
               </Button>
               <Button
                 type="button"
@@ -165,17 +172,17 @@ export function PredictionMarketPortfolioPage() {
                 onClick={() => setRefreshKey((value) => value + 1)}
                 className="rounded-full border-white/15 bg-white/5 text-slate-100 hover:bg-white/10 hover:text-white"
               >
-                {loading ? t('common.loading') : t('markets.refreshPortfolio')}
+                {loading ? t("common.loading") : t("markets.refreshPortfolio")}
               </Button>
             </div>
           </div>
 
           <div className="rounded-3xl border border-sky-300/20 bg-sky-400/10 p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-100/80">
-              {t('markets.portfolioExposureTitle')}
+              {t("markets.portfolioExposureTitle")}
             </p>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-sky-50/90">
-              {t('markets.portfolioExposureDescription')}
+              {t("markets.portfolioExposureDescription")}
             </p>
           </div>
 
@@ -190,10 +197,10 @@ export function PredictionMarketPortfolioPage() {
                   variant="outline"
                   onClick={() => handleFilterChange(filter)}
                   className={cn(
-                    'rounded-full border px-4 text-xs uppercase tracking-[0.22em]',
+                    "rounded-full border px-4 text-xs uppercase tracking-[0.22em]",
                     active
-                      ? 'border-cyan-300/40 bg-cyan-400/15 text-cyan-50'
-                      : 'border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.08] hover:text-white',
+                      ? "border-cyan-300/40 bg-cyan-400/15 text-cyan-50"
+                      : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.08] hover:text-white",
                   )}
                 >
                   {formatPortfolioFilter(filter, t)}
@@ -209,7 +216,7 @@ export function PredictionMarketPortfolioPage() {
           <Card className="border-white/10 bg-white/[0.04] text-slate-100">
             <CardContent className="pt-6">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                {t('markets.portfolioMarketCount')}
+                {t("markets.portfolioMarketCount")}
               </p>
               <p className="mt-2 text-3xl font-semibold text-white">
                 {history.summary.marketCount}
@@ -219,7 +226,7 @@ export function PredictionMarketPortfolioPage() {
           <Card className="border-white/10 bg-white/[0.04] text-slate-100">
             <CardContent className="pt-6">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                {t('markets.portfolioPositionCount')}
+                {t("markets.portfolioPositionCount")}
               </p>
               <p className="mt-2 text-3xl font-semibold text-white">
                 {history.summary.positionCount}
@@ -229,7 +236,7 @@ export function PredictionMarketPortfolioPage() {
           <Card className="border-white/10 bg-white/[0.04] text-slate-100">
             <CardContent className="pt-6">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                {t('markets.openExposure')}
+                {t("markets.openExposure")}
               </p>
               <p className="mt-2 text-3xl font-semibold text-white">
                 {formatMarketAmount(locale, history.summary.openStakeAmount)}
@@ -239,14 +246,20 @@ export function PredictionMarketPortfolioPage() {
           <Card className="border-white/10 bg-white/[0.04] text-slate-100">
             <CardContent className="pt-6">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                {t('markets.settledAndRefunded')}
+                {t("markets.settledAndRefunded")}
               </p>
               <p className="mt-2 text-2xl font-semibold text-white">
-                {formatMarketAmount(locale, history.summary.settledPayoutAmount)}
+                {formatMarketAmount(
+                  locale,
+                  history.summary.settledPayoutAmount,
+                )}
               </p>
               <p className="mt-2 text-sm text-slate-400">
-                {t('markets.refundedInlineValue', {
-                  amount: formatMarketAmount(locale, history.summary.refundedAmount),
+                {t("markets.refundedInlineValue", {
+                  amount: formatMarketAmount(
+                    locale,
+                    history.summary.refundedAmount,
+                  ),
                 })}
               </p>
             </CardContent>
@@ -269,7 +282,7 @@ export function PredictionMarketPortfolioPage() {
               variant="outline"
               onClick={() => setRefreshKey((value) => value + 1)}
             >
-              {t('markets.retry')}
+              {t("markets.retry")}
             </Button>
           </CardContent>
         </Card>
@@ -278,7 +291,7 @@ export function PredictionMarketPortfolioPage() {
       {!history && loading ? (
         <Card className="border-white/10 bg-white/[0.04] text-slate-100">
           <CardContent className="pt-6 text-sm text-slate-300">
-            {t('markets.loadingPortfolio')}
+            {t("markets.loadingPortfolio")}
           </CardContent>
         </Card>
       ) : null}
@@ -286,11 +299,11 @@ export function PredictionMarketPortfolioPage() {
       {history && !hasItems ? (
         <Card className="border-white/10 bg-white/[0.04] text-slate-100">
           <CardHeader>
-            <CardTitle>{t('markets.portfolioEmptyTitle')}</CardTitle>
+            <CardTitle>{t("markets.portfolioEmptyTitle")}</CardTitle>
             <CardDescription className="text-slate-300">
-              {status === 'all'
-                ? t('markets.portfolioEmptyDescription')
-                : t('markets.portfolioEmptyFilteredDescription')}
+              {status === "all"
+                ? t("markets.portfolioEmptyDescription")
+                : t("markets.portfolioEmptyFilteredDescription")}
             </CardDescription>
           </CardHeader>
         </Card>
@@ -311,7 +324,7 @@ export function PredictionMarketPortfolioPage() {
                       <Badge
                         variant="outline"
                         className={cn(
-                          'rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.22em]',
+                          "rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.22em]",
                           resolvePortfolioStatusClasses(item.portfolioStatus),
                         )}
                       >
@@ -320,7 +333,7 @@ export function PredictionMarketPortfolioPage() {
                       <Badge
                         variant="outline"
                         className={cn(
-                          'rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.22em]',
+                          "rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.22em]",
                           resolveMarketStatusClasses(item.market.status),
                         )}
                       >
@@ -331,10 +344,12 @@ export function PredictionMarketPortfolioPage() {
                       </span>
                     </div>
                     <div className="space-y-2">
-                      <CardTitle className="text-2xl">{item.market.title}</CardTitle>
+                      <CardTitle className="text-2xl">
+                        {item.market.title}
+                      </CardTitle>
                       <CardDescription className="text-sm leading-6 text-slate-300">
                         {item.market.description?.trim() ||
-                          t('markets.noDescription')}
+                          t("markets.noDescription")}
                       </CardDescription>
                     </div>
                   </div>
@@ -342,20 +357,20 @@ export function PredictionMarketPortfolioPage() {
                   <div className="flex flex-col items-start gap-3 xl:items-end">
                     <div className="rounded-2xl border border-white/10 bg-slate-950/45 px-4 py-3 xl:text-right">
                       <p className="text-xs uppercase tracking-[0.22em] text-slate-400">
-                        {t('markets.lastActivity')}
+                        {t("markets.lastActivity")}
                       </p>
                       <p className="mt-1 text-sm text-white">
                         {formatMarketDateTime(
                           locale,
                           item.lastActivityAt,
-                          t('markets.unknownTime'),
+                          t("markets.unknownTime"),
                         )}
                       </p>
                     </div>
 
                     <Button asChild className="rounded-full">
                       <Link href={`/app/markets/${item.market.id}`}>
-                        {t('markets.viewMarket')}
+                        {t("markets.viewMarket")}
                       </Link>
                     </Button>
                   </div>
@@ -366,7 +381,7 @@ export function PredictionMarketPortfolioPage() {
                 <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                   <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                     <dt className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                      {t('markets.portfolioPositionCount')}
+                      {t("markets.portfolioPositionCount")}
                     </dt>
                     <dd className="mt-2 text-sm text-slate-100">
                       {item.positionCount}
@@ -374,7 +389,7 @@ export function PredictionMarketPortfolioPage() {
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                     <dt className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                      {t('markets.totalStake')}
+                      {t("markets.totalStake")}
                     </dt>
                     <dd className="mt-2 text-sm text-slate-100">
                       {formatMarketAmount(locale, item.totalStakeAmount)}
@@ -382,7 +397,7 @@ export function PredictionMarketPortfolioPage() {
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                     <dt className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                      {t('markets.openExposure')}
+                      {t("markets.openExposure")}
                     </dt>
                     <dd className="mt-2 text-sm text-slate-100">
                       {formatMarketAmount(locale, item.openStakeAmount)}
@@ -390,7 +405,7 @@ export function PredictionMarketPortfolioPage() {
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                     <dt className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                      {t('markets.settledPayout')}
+                      {t("markets.settledPayout")}
                     </dt>
                     <dd className="mt-2 text-sm text-slate-100">
                       {formatMarketAmount(locale, item.settledPayoutAmount)}
@@ -398,7 +413,7 @@ export function PredictionMarketPortfolioPage() {
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                     <dt className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                      {t('markets.refundedAmount')}
+                      {t("markets.refundedAmount")}
                     </dt>
                     <dd className="mt-2 text-sm text-slate-100">
                       {formatMarketAmount(locale, item.refundedAmount)}
@@ -408,7 +423,7 @@ export function PredictionMarketPortfolioPage() {
 
                 <div className="space-y-3">
                   <h3 className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-300">
-                    {t('markets.yourPositions')}
+                    {t("markets.yourPositions")}
                   </h3>
 
                   <div className="grid gap-3">
@@ -426,7 +441,7 @@ export function PredictionMarketPortfolioPage() {
                               <Badge
                                 variant="outline"
                                 className={cn(
-                                  'border',
+                                  "border",
                                   resolvePositionStatusClasses(position.status),
                                 )}
                               >
@@ -441,18 +456,24 @@ export function PredictionMarketPortfolioPage() {
                           <dl className="grid gap-3 sm:grid-cols-2 lg:min-w-[16rem]">
                             <div>
                               <dt className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                                {t('markets.stakeAmountLabel')}
+                                {t("markets.stakeAmountLabel")}
                               </dt>
                               <dd className="mt-1 text-sm text-slate-100">
-                                {formatMarketAmount(locale, position.stakeAmount)}
+                                {formatMarketAmount(
+                                  locale,
+                                  position.stakeAmount,
+                                )}
                               </dd>
                             </div>
                             <div>
                               <dt className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                                {t('markets.payoutAmount')}
+                                {t("markets.payoutAmount")}
                               </dt>
                               <dd className="mt-1 text-sm text-slate-100">
-                                {formatMarketAmount(locale, position.payoutAmount)}
+                                {formatMarketAmount(
+                                  locale,
+                                  position.payoutAmount,
+                                )}
                               </dd>
                             </div>
                           </dl>
@@ -470,7 +491,7 @@ export function PredictionMarketPortfolioPage() {
       {history ? (
         <div className="flex flex-col gap-3 rounded-3xl border border-white/10 bg-white/[0.04] p-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-slate-300">
-            {t('markets.portfolioPageValue', { page })}
+            {t("markets.portfolioPageValue", { page })}
           </p>
           <div className="flex flex-wrap gap-3">
             <Button
@@ -480,7 +501,7 @@ export function PredictionMarketPortfolioPage() {
               onClick={() => setPage((value) => Math.max(1, value - 1))}
               className="rounded-full border-white/15 bg-white/5 text-slate-100 hover:bg-white/10 hover:text-white"
             >
-              {t('markets.previousPage')}
+              {t("markets.previousPage")}
             </Button>
             <Button
               type="button"
@@ -489,7 +510,7 @@ export function PredictionMarketPortfolioPage() {
               onClick={() => setPage((value) => value + 1)}
               className="rounded-full border-white/15 bg-white/5 text-slate-100 hover:bg-white/10 hover:text-white"
             >
-              {t('markets.nextPage')}
+              {t("markets.nextPage")}
             </Button>
           </div>
         </div>

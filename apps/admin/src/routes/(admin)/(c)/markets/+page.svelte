@@ -2,20 +2,24 @@
   import { page } from "$app/stores"
   import { getContext } from "svelte"
   import type {
+    PredictionMarketAppealQueueItem,
     PredictionMarketSummary,
+    PredictionMarketAppealStatus,
     PredictionMarketStatus,
   } from "@reward/shared-types/prediction-market"
 
   interface PageData {
     markets: PredictionMarketSummary[]
+    appeals: PredictionMarketAppealQueueItem[]
     error: string | null
   }
 
   interface ActionFeedback {
     success?: boolean
-    actionType?: "create" | "settle" | "cancel"
+    actionType?: "create" | "settle" | "cancel" | "acknowledgeAppeal"
     marketTitle?: string
     marketId?: string
+    appealId?: string
     error?: string
   }
 
@@ -26,6 +30,7 @@
   let stepUpCode = $state("")
 
   const markets = $derived(data.markets ?? [])
+  const appeals = $derived(data.appeals ?? [])
   const actionError = $derived($page.form?.error as string | undefined)
   const actionFeedback = $derived(
     ($page.form as ActionFeedback | undefined)?.success
@@ -47,6 +52,28 @@
 
     return counts
   })
+  const appealSummary = $derived.by(() => {
+    const counts: Record<PredictionMarketAppealStatus, number> = {
+      open: 0,
+      acknowledged: 0,
+      resolved: 0,
+    }
+
+    for (const appeal of appeals) {
+      counts[appeal.status] += 1
+    }
+
+    return counts
+  })
+  const activeAppealsByMarketId = $derived.by(() => {
+    const next = new Map<number, PredictionMarketAppealQueueItem[]>()
+    for (const appeal of appeals) {
+      const items = next.get(appeal.market.id) ?? []
+      items.push(appeal)
+      next.set(appeal.market.id, items)
+    }
+    return next
+  })
 
   const statusClass = (status: PredictionMarketStatus) => {
     if (status === "resolved") return "badge-success"
@@ -54,6 +81,11 @@
     if (status === "locked") return "badge-warning"
     if (status === "open") return "badge-info"
     return "badge-ghost"
+  }
+  const appealStatusClass = (status: PredictionMarketAppealStatus) => {
+    if (status === "acknowledged") return "badge-info"
+    if (status === "resolved") return "badge-success"
+    return "badge-warning"
   }
 
   const formatDateTime = (value?: string | Date | null) => {
@@ -71,6 +103,8 @@
       ? t("markets.labels.none")
       : JSON.stringify(value, null, 2)
 
+  const formatBps = (value: number) => `${(value / 100).toFixed(2)}%`
+
   const categoryLabel = (category: PredictionMarketSummary["category"]) =>
     t(`markets.enums.category.${category}`)
 
@@ -80,6 +114,14 @@
     invalidPolicy === "refund_all"
       ? t("markets.enums.invalidPolicy.refundAll")
       : t("markets.enums.invalidPolicy.manualReview")
+  const appealReasonLabel = (reason: PredictionMarketAppealQueueItem["reason"]) =>
+    t(`markets.enums.appealReason.${reason}`)
+  const appealStatusLabel = (status: PredictionMarketAppealStatus) =>
+    t(`markets.enums.appealStatus.${status}`)
+  const oracleBindingStatusLabel = (status: string) =>
+    t(`markets.enums.oracleBindingStatus.${status}`)
+  const getActiveAppealsForMarket = (marketId: number) =>
+    activeAppealsByMarketId.get(marketId) ?? []
 </script>
 
 <div class="space-y-6">
@@ -223,6 +265,44 @@
           />
         </label>
         <label class="form-control">
+          <span class="label-text mb-2"
+            >{t("markets.create.oracleProvider")}</span
+          >
+          <select
+            name="oracleProvider"
+            class="select select-bordered"
+            value="api_pull"
+          >
+            <option value="api_pull">api_pull</option>
+            <option value="chainlink">chainlink</option>
+            <option value="uma_oracle">uma_oracle</option>
+            <option value="manual_admin">manual_admin</option>
+          </select>
+        </label>
+        <label class="form-control">
+          <span class="label-text mb-2"
+            >{t("markets.create.oracleBindingName")}</span
+          >
+          <input
+            name="oracleBindingName"
+            class="input input-bordered"
+            placeholder="BTC daily close feed"
+          />
+        </label>
+        <label class="form-control lg:col-span-2">
+          <span class="label-text mb-2"
+            >{t("markets.create.oracleBindingConfig")}</span
+          >
+          <textarea
+            name="oracleBindingConfig"
+            class="textarea textarea-bordered min-h-32 font-mono text-sm"
+            placeholder={t("markets.create.oracleBindingConfigPlaceholder")}
+          >{"{\"url\":\"https://api.example.com/btc-close\",\"valuePath\":\"close\",\"comparison\":{\"operator\":\"gte\",\"threshold\":\"100000\",\"outcomeKeyIfTrue\":\"yes\",\"outcomeKeyIfFalse\":\"no\"}}"}</textarea>
+          <span class="mt-2 text-xs text-slate-500">
+            {t("markets.create.oracleBindingConfigHint")}
+          </span>
+        </label>
+        <label class="form-control">
           <span class="label-text mb-2">{t("markets.create.category")}</span>
           <select name="category" class="select select-bordered">
             <option value="crypto">{categoryLabel("crypto")}</option>
@@ -246,6 +326,21 @@
               >{invalidPolicyLabel("manual_review")}</option
             >
           </select>
+        </label>
+        <label class="form-control">
+          <span class="label-text mb-2">{t("markets.create.vigPercent")}</span>
+          <input
+            name="vigPercent"
+            type="number"
+            min="0"
+            max="100"
+            step="0.01"
+            class="input input-bordered"
+            placeholder="5.00"
+          />
+          <span class="mt-2 text-xs text-slate-500">
+            {t("markets.create.vigHint")}
+          </span>
         </label>
         <label class="form-control lg:col-span-2">
           <span class="label-text mb-2">{t("markets.create.tags")}</span>
@@ -299,6 +394,187 @@
     </form>
   </section>
 
+  <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+    <div class="space-y-2">
+      <h2 class="text-xl font-semibold">{t("markets.appeals.title")}</h2>
+      <p class="text-sm text-slate-500">{t("markets.appeals.description")}</p>
+    </div>
+
+    <div class="mt-6 grid gap-4 md:grid-cols-3">
+      <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <p class="text-sm text-slate-500">{t("markets.appeals.open")}</p>
+        <p class="mt-3 text-3xl font-semibold">{appealSummary.open}</p>
+      </article>
+      <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <p class="text-sm text-slate-500">
+          {t("markets.appeals.acknowledged")}
+        </p>
+        <p class="mt-3 text-3xl font-semibold">
+          {appealSummary.acknowledged}
+        </p>
+      </article>
+      <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <p class="text-sm text-slate-500">{t("markets.appeals.totalActive")}</p>
+        <p class="mt-3 text-3xl font-semibold">{appeals.length}</p>
+      </article>
+    </div>
+
+    {#if appeals.length === 0}
+      <div
+        class="mt-6 rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-10 text-sm text-slate-500"
+      >
+        {t("markets.appeals.empty")}
+      </div>
+    {:else}
+      <div class="mt-6 space-y-4">
+        {#each appeals as appeal}
+          <article class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+            <div
+              class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between"
+            >
+              <div class="space-y-2">
+                <div class="flex flex-wrap items-center gap-2">
+                  <h3 class="text-lg font-semibold text-slate-900">
+                    {appeal.market.title}
+                  </h3>
+                  <span class={`badge ${appealStatusClass(appeal.status)}`}>
+                    {appealStatusLabel(appeal.status)}
+                  </span>
+                  <span class="badge badge-outline">
+                    {appeal.provider ?? t("markets.labels.none")}
+                  </span>
+                  <span class="badge badge-outline">
+                    {appealReasonLabel(appeal.reason)}
+                  </span>
+                </div>
+                <p class="text-sm text-slate-500">
+                  <span class="font-medium">{appeal.market.slug}</span>
+                  · {t("markets.labels.roundKey")}: {appeal.market.roundKey}
+                </p>
+              </div>
+
+              <div class="grid gap-2 text-sm text-slate-500 sm:grid-cols-3">
+                <p>
+                  {t("markets.appeals.marketStatus")}: {t(
+                    `markets.status.${appeal.market.status}`,
+                  )}
+                </p>
+                <p>
+                  {t("markets.appeals.firstDetectedAt")}: {formatDateTime(
+                    appeal.firstDetectedAt,
+                  )}
+                </p>
+                <p>
+                  {t("markets.appeals.lastDetectedAt")}: {formatDateTime(
+                    appeal.lastDetectedAt,
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div class="mt-4 grid gap-4 xl:grid-cols-2">
+              <section class="rounded-2xl border border-slate-200 bg-white p-4">
+                <h4 class="font-semibold text-slate-900">
+                  {t("markets.appeals.details")}
+                </h4>
+                <p class="mt-3 whitespace-pre-wrap text-sm text-slate-700">
+                  {appeal.description}
+                </p>
+                <div class="mt-4 text-sm">
+                  <p class="font-medium text-slate-900">
+                    {t("markets.appeals.metadata")}
+                  </p>
+                  <pre
+                    class="mt-2 overflow-x-auto rounded-xl bg-slate-900 p-3 text-xs text-slate-100">{formatJson(
+                      appeal.metadata,
+                    )}</pre>
+                </div>
+              </section>
+
+              <section class="rounded-2xl border border-slate-200 bg-white p-4">
+                <h4 class="font-semibold text-slate-900">
+                  {t("markets.appeals.binding")}
+                </h4>
+                {#if appeal.market.oracleBinding}
+                  <dl class="mt-4 space-y-3 text-sm">
+                    <div>
+                      <dt class="text-slate-500">
+                        {t("markets.create.oracleProvider")}
+                      </dt>
+                      <dd>{appeal.market.oracleBinding.provider}</dd>
+                    </div>
+                    <div>
+                      <dt class="text-slate-500">
+                        {t("markets.appeals.bindingStatus")}
+                      </dt>
+                      <dd>
+                        {oracleBindingStatusLabel(
+                          appeal.market.oracleBinding.status,
+                        )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt class="text-slate-500">
+                        {t("markets.actions.oracleReportedAt")}
+                      </dt>
+                      <dd>
+                        {formatDateTime(
+                          appeal.market.oracleBinding.lastReportedAt,
+                        )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt class="text-slate-500">
+                        {t("markets.appeals.lastResolvedOutcomeKey")}
+                      </dt>
+                      <dd>
+                        {appeal.market.oracleBinding.lastResolvedOutcomeKey ??
+                          t("markets.labels.none")}
+                      </dd>
+                    </div>
+                  </dl>
+                {:else}
+                  <p class="mt-4 text-sm text-slate-500">
+                    {t("markets.appeals.noBinding")}
+                  </p>
+                {/if}
+              </section>
+            </div>
+
+            {#if appeal.status === "open"}
+              <form
+                method="post"
+                action="?/acknowledgeAppeal"
+                class="mt-4 rounded-2xl border border-slate-200 bg-white p-4"
+              >
+                <input type="hidden" name="appealId" value={appeal.id} />
+                <label class="form-control">
+                  <span class="label-text mb-2">
+                    {t("markets.appeals.acknowledgeNote")}
+                  </span>
+                  <textarea
+                    name="acknowledgeNote"
+                    class="textarea textarea-bordered min-h-24"
+                    placeholder={t("markets.appeals.acknowledgeNotePlaceholder")}
+                  ></textarea>
+                </label>
+                <div class="mt-4">
+                  <button class="btn btn-primary">
+                    {t("markets.appeals.actions.acknowledge")}
+                  </button>
+                </div>
+              </form>
+            {:else}
+              <p class="mt-4 text-sm text-slate-500">
+                {t("markets.appeals.acknowledgedHint")}
+              </p>
+            {/if}
+          </article>
+        {/each}
+      </div>
+    {/if}
+  </section>
+
   <section class="space-y-4">
     <div class="space-y-2">
       <h2 class="text-xl font-semibold">{t("markets.list.title")}</h2>
@@ -313,6 +589,7 @@
       </div>
     {:else}
       {#each markets as market}
+        {@const activeAppeals = getActiveAppealsForMarket(market.id)}
         <article
           class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
         >
@@ -327,6 +604,11 @@
                 <span class={`badge ${statusClass(market.status)}`}>
                   {t(`markets.status.${market.status}`)}
                 </span>
+                {#if activeAppeals.length > 0}
+                  <span class="badge badge-warning">
+                    {t("markets.appeals.activeBadge")} {activeAppeals.length}
+                  </span>
+                {/if}
               </div>
               <p class="text-sm text-slate-500">
                 <span class="font-medium">{market.slug}</span>
@@ -388,6 +670,10 @@
                     {t("markets.labels.invalidPolicy")}
                   </dt>
                   <dd>{invalidPolicyLabel(market.invalidPolicy)}</dd>
+                </div>
+                <div>
+                  <dt class="text-slate-500">{t("markets.labels.vig")}</dt>
+                  <dd>{formatBps(market.vigBps)}</dd>
                 </div>
                 <div>
                   <dt class="text-slate-500">{t("markets.labels.tags")}</dt>
@@ -512,7 +798,9 @@
                   {t("markets.actions.settleTitle")}
                 </h4>
                 <p class="mt-1 text-sm text-slate-500">
-                  {market.status === "locked"
+                  {activeAppeals.length > 0
+                    ? t("markets.actions.settleAppealUnlocked")
+                    : market.status === "locked"
                     ? t("markets.actions.settleDescription")
                     : t("markets.actions.settleLockedOnly")}
                 </p>

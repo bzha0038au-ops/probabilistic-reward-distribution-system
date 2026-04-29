@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DealerFeedSchema } from "./dealer";
 
 export const holdemCardSuitValues = [
   "spades",
@@ -47,6 +48,12 @@ export const holdemSeatPresenceStateValues = [
 ] as const;
 
 export const holdemTableStatusValues = ["waiting", "active"] as const;
+export const holdemTableTypeValues = ["cash", "casual", "tournament"] as const;
+export const holdemTournamentStatusValues = [
+  "registering",
+  "running",
+  "completed",
+] as const;
 
 export const holdemStreetValues = [
   "preflop",
@@ -83,6 +90,8 @@ export const HOLDEM_DEFAULT_BIG_BLIND = "2.00";
 export const HOLDEM_DEFAULT_MIN_BUY_IN = "40.00";
 export const HOLDEM_DEFAULT_MAX_BUY_IN = "200.00";
 export const HOLDEM_DEFAULT_MAX_SEATS = 6;
+export const HOLDEM_DEFAULT_CASUAL_MAX_SEATS = 2;
+export const HOLD_EM_CREATE_MAX_SEAT_OPTIONS = [2, 4, 6, 9] as const;
 export const HOLDEM_DEFAULT_PRESENCE_HEARTBEAT_MS = 10_000;
 export const HOLDEM_TABLE_MESSAGE_MAX_LENGTH = 180;
 export const HOLDEM_TABLE_MESSAGE_LIMIT = 40;
@@ -117,6 +126,16 @@ export type HoldemSeatPresenceState = z.infer<
 
 export const HoldemTableStatusSchema = z.enum(holdemTableStatusValues);
 export type HoldemTableStatus = z.infer<typeof HoldemTableStatusSchema>;
+
+export const HoldemTableTypeSchema = z.enum(holdemTableTypeValues);
+export type HoldemTableType = z.infer<typeof HoldemTableTypeSchema>;
+
+export const HoldemTournamentStatusSchema = z.enum(
+  holdemTournamentStatusValues,
+);
+export type HoldemTournamentStatus = z.infer<
+  typeof HoldemTournamentStatusSchema
+>;
 
 export const HoldemStreetSchema = z.enum(holdemStreetValues);
 export type HoldemStreet = z.infer<typeof HoldemStreetSchema>;
@@ -221,6 +240,65 @@ export const HoldemPotSchema = z.object({
 });
 export type HoldemPot = z.infer<typeof HoldemPotSchema>;
 
+export const HoldemTableRakePolicySchema = z.object({
+  rakeBps: z.number().int().nonnegative(),
+  capAmount: z.string(),
+  noFlopNoDrop: z.boolean(),
+});
+export type HoldemTableRakePolicy = z.infer<
+  typeof HoldemTableRakePolicySchema
+>;
+
+export const HoldemTournamentStandingSchema = z.object({
+  userId: z.number().int().positive().nullable(),
+  displayName: z.string().nullable(),
+  seatIndex: z.number().int().nonnegative().nullable(),
+  stackAmount: z.string(),
+  active: z.boolean(),
+  finishingPlace: z.number().int().positive().nullable().default(null),
+  eliminatedAt: DateLikeSchema.nullable().default(null),
+  prizeAmount: z.string().nullable().default(null),
+});
+export type HoldemTournamentStanding = z.infer<
+  typeof HoldemTournamentStandingSchema
+>;
+
+export const HoldemTournamentPayoutSchema = z.object({
+  place: z.number().int().positive(),
+  userId: z.number().int().positive().nullable(),
+  displayName: z.string().nullable(),
+  amount: z.string(),
+  awardedAt: DateLikeSchema.nullable().default(null),
+});
+export type HoldemTournamentPayout = z.infer<
+  typeof HoldemTournamentPayoutSchema
+>;
+
+export const HoldemTournamentStateSchema = z.object({
+  status: HoldemTournamentStatusSchema,
+  buyInAmount: z.string(),
+  startingStackAmount: z.string(),
+  prizePoolAmount: z.string(),
+  registeredCount: z.number().int().nonnegative(),
+  payoutPlaces: z.number().int().positive(),
+  allowRebuy: z.boolean().default(false),
+  allowCashOut: z.boolean().default(false),
+  completedAt: DateLikeSchema.nullable().default(null),
+  standings: z.array(HoldemTournamentStandingSchema).default([]),
+  payouts: z.array(HoldemTournamentPayoutSchema).default([]),
+});
+export type HoldemTournamentState = z.infer<
+  typeof HoldemTournamentStateSchema
+>;
+
+export const HoldemTournamentCreateConfigSchema = z.object({
+  startingStackAmount: z.string().min(1).max(32).optional(),
+  payoutPlaces: z.number().int().min(1).max(9).optional(),
+});
+export type HoldemTournamentCreateConfig = z.infer<
+  typeof HoldemTournamentCreateConfigSchema
+>;
+
 export const HoldemActionAvailabilitySchema = z.object({
   actions: z.array(HoldemActionSchema),
   toCall: z.string(),
@@ -293,7 +371,10 @@ export type HoldemRealtimePublicSeat = z.infer<
 export const HoldemRealtimePublicTableSchema = z.object({
   id: z.number().int().positive(),
   name: z.string(),
+  tableType: HoldemTableTypeSchema,
   status: HoldemTableStatusSchema,
+  rakePolicy: HoldemTableRakePolicySchema.nullable(),
+  tournament: HoldemTournamentStateSchema.nullable().default(null),
   handNumber: z.number().int().nonnegative(),
   stage: HoldemStreetSchema.nullable(),
   smallBlind: z.string(),
@@ -365,7 +446,10 @@ export type HoldemRealtimeTableMessage = z.infer<
 export const HoldemTableSummarySchema = z.object({
   id: z.number().int().positive(),
   name: z.string(),
+  tableType: HoldemTableTypeSchema,
   status: HoldemTableStatusSchema,
+  rakePolicy: HoldemTableRakePolicySchema.nullable(),
+  tournament: HoldemTournamentStateSchema.nullable().default(null),
   smallBlind: z.string(),
   bigBlind: z.string(),
   minimumBuyIn: z.string(),
@@ -381,7 +465,10 @@ export type HoldemTableSummary = z.infer<typeof HoldemTableSummarySchema>;
 export const HoldemTableSchema = z.object({
   id: z.number().int().positive(),
   name: z.string(),
+  tableType: HoldemTableTypeSchema,
   status: HoldemTableStatusSchema,
+  rakePolicy: HoldemTableRakePolicySchema.nullable(),
+  tournament: HoldemTournamentStateSchema.nullable().default(null),
   handNumber: z.number().int().nonnegative(),
   stage: HoldemStreetSchema.nullable(),
   smallBlind: z.string(),
@@ -400,6 +487,7 @@ export const HoldemTableSchema = z.object({
   availableActions: HoldemActionAvailabilitySchema.nullable(),
   fairness: HoldemFairnessSchema.nullable(),
   recentHands: z.array(HoldemRecentHandSchema),
+  dealerEvents: DealerFeedSchema.default([]),
   createdAt: DateLikeSchema,
   updatedAt: DateLikeSchema,
 });
@@ -450,9 +538,53 @@ export type HoldemTableMessagesResponse = z.infer<
   typeof HoldemTableMessagesResponseSchema
 >;
 
+export const holdemRealtimeObservationSurfaceValues = [
+  "web",
+  "ios",
+  "android",
+] as const;
+
+export const HoldemRealtimeObservationSurfaceSchema = z.enum(
+  holdemRealtimeObservationSurfaceValues,
+);
+export type HoldemRealtimeObservationSurface = z.infer<
+  typeof HoldemRealtimeObservationSurfaceSchema
+>;
+
+export const HoldemRealtimeObservationSchema = z.object({
+  topic: z.string().min(1).max(160),
+  event: z.string().min(1).max(120),
+  sentAt: z.string().datetime(),
+  receivedAt: z.string().datetime(),
+  deliveryLatencyMs: z.number().finite().min(0).max(60_000),
+  tableId: z.number().int().positive().nullable().default(null),
+  roundId: z.string().min(1).max(128).nullable().default(null),
+});
+export type HoldemRealtimeObservation = z.infer<
+  typeof HoldemRealtimeObservationSchema
+>;
+
+export const HoldemRealtimeObservationsRequestSchema = z.object({
+  surface: HoldemRealtimeObservationSurfaceSchema,
+  observations: z.array(HoldemRealtimeObservationSchema).min(1).max(100),
+});
+export type HoldemRealtimeObservationsRequest = z.infer<
+  typeof HoldemRealtimeObservationsRequestSchema
+>;
+
+export const HoldemRealtimeObservationsResponseSchema = z.object({
+  accepted: z.number().int().nonnegative(),
+});
+export type HoldemRealtimeObservationsResponse = z.infer<
+  typeof HoldemRealtimeObservationsResponseSchema
+>;
+
 export const HoldemCreateTableRequestSchema = z.object({
   tableName: z.string().trim().min(1).max(64).optional(),
   buyInAmount: z.string().min(1).max(32),
+  tableType: HoldemTableTypeSchema.optional(),
+  maxSeats: z.number().int().min(HOLDEM_MIN_PLAYERS).max(9).optional(),
+  tournament: HoldemTournamentCreateConfigSchema.optional(),
 });
 export type HoldemCreateTableRequest = z.infer<
   typeof HoldemCreateTableRequestSchema

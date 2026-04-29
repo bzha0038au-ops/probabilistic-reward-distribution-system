@@ -16,3 +16,4 @@ export { applyAuthFailureDelay } from './auth-delay';
 export { getRuntimeMetadata } from './runtime-metadata';
 export * from './telemetry';
 export * from './notify-telegram';
+export * from './ops-notify';

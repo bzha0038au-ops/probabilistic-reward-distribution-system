@@ -14,14 +14,16 @@ import type {
   BlackjackGameStatus,
   BlackjackOverviewResponse,
 } from "@reward/shared-types/blackjack";
+import type { PlayModeType } from "@reward/shared-types/play-mode";
 
 import {
   MobileFairnessCompactSummary,
   type MobileFairnessLocale,
 } from "../fairness";
+import type { PlayModeCopy } from "../ui";
 import type { MobileRouteLabels, MobileRouteScreens } from "../route-copy";
 import { mobileGameTheme, mobilePalette as palette } from "../theme";
-import { ActionButton, SectionCard } from "../ui";
+import { ActionButton, PlayModeSelector, SectionCard } from "../ui";
 import { RouteSwitcher } from "./route-switcher";
 import type { MobileAppRoute, MobileStyles } from "./types";
 
@@ -158,8 +160,10 @@ type BlackjackRouteScreenProps = {
   verificationCallout: ReactNode;
   screenCopy: MobileRouteScreens["blackjack"];
   balance: string;
+  playModeCopy: PlayModeCopy;
   formatAmount: (value: string) => string;
   loadingBlackjack: boolean;
+  updatingBlackjackPlayMode: boolean;
   actingBlackjack: BlackjackAction | "start" | null;
   emailVerified: boolean;
   fairnessLocale: MobileFairnessLocale;
@@ -167,6 +171,7 @@ type BlackjackRouteScreenProps = {
   blackjackOverview: BlackjackOverviewResponse | null;
   blackjackStakeAmount: string;
   onChangeStakeAmount: (value: string) => void;
+  onChangeBlackjackPlayMode: (type: PlayModeType) => void;
   onStartBlackjack: () => void;
   onRefreshBlackjackOverview: () => void;
   onBlackjackAction: (action: BlackjackAction) => void;
@@ -365,6 +370,17 @@ export function BlackjackRouteScreen(props: BlackjackRouteScreenProps) {
         </View>
         {props.verificationCallout}
       </SectionCard>
+
+      <PlayModeSelector
+        copy={props.playModeCopy}
+        snapshot={props.blackjackOverview?.playMode ?? null}
+        disabled={
+          props.loadingBlackjack ||
+          props.updatingBlackjackPlayMode ||
+          Boolean(props.blackjackOverview?.activeGame)
+        }
+        onSelect={props.onChangeBlackjackPlayMode}
+      />
 
       <SectionCard
         title={props.screenCopy.sectionTitle}

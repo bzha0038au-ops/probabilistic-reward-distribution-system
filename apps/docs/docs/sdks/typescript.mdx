@@ -1,0 +1,66 @@
+---
+title: TypeScript SDK
+description: Use @reward/prize-engine-sdk from a trusted server runtime.
+---
+
+# TypeScript SDK
+
+Install the workspace package or publish it into your external integration runtime.
+
+```bash
+pnpm add @reward/prize-engine-sdk
+```
+
+## Create a client
+
+```ts
+import {
+  createPrizeEngineClient,
+  createPrizeEngineIdempotencyKey,
+} from "@reward/prize-engine-sdk";
+
+const client = createPrizeEngineClient({
+  baseUrl: "https://api.reward.system",
+  environment: "sandbox",
+  getApiKey: () => process.env.PRIZE_ENGINE_API_KEY ?? null,
+});
+
+const reward = await client.reward({
+  agent: {
+    agentId: "agent-checkout-bot",
+    groupId: "cohort-a",
+  },
+  behavior: {
+    actionType: "checkout.completed",
+    score: 0.82,
+    risk: 0.18,
+  },
+  budget: {
+    amount: "3.00",
+    currency: "USD",
+    window: "day",
+  },
+  idempotencyKey: createPrizeEngineIdempotencyKey(),
+});
+```
+
+## Common calls
+
+```ts
+const overview = await client.getOverview();
+const fairness = await client.getFairnessCommit();
+
+const distribution = await client.observability.getDistribution({ days: 30 });
+
+const ledger = await client.getLedger({
+  playerId: "player-42",
+  limit: 20,
+});
+```
+
+## Operational notes
+
+- The SDK retries safe or idempotent requests on `429` and `5xx`.
+- `reward()` is the primary write API.
+- `draw()` is available only as a deprecated compatibility alias.
+- Keep API keys in a worker, backend, or another trusted runtime.

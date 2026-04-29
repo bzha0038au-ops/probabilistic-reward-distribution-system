@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import {
+  HOLD_EM_CREATE_MAX_SEAT_OPTIONS,
   HOLDEM_CONFIG,
   holdemTableEmojiValues,
 } from "@reward/shared-types/holdem";
@@ -17,9 +18,14 @@ import type {
   HoldemCardView,
   HoldemTableMessage,
   HoldemTable,
+  HoldemTableType,
   HoldemTableResponse,
   HoldemTablesResponse,
 } from "@reward/shared-types/holdem";
+import type {
+  PlayModeSnapshot,
+  PlayModeType,
+} from "@reward/shared-types/play-mode";
 import type {
   HandHistory,
   HoldemSignedEvidenceBundle,
@@ -33,8 +39,10 @@ import {
 } from "@reward/user-core";
 
 import type { MobileRouteLabels, MobileRouteScreens } from "../route-copy";
+import { buildTestId } from "../testing";
 import { mobileFeedbackTheme, mobilePalette as palette } from "../theme";
-import { ActionButton, SectionCard } from "../ui";
+import type { PlayModeCopy } from "../ui";
+import { ActionButton, PlayModeSelector, SectionCard } from "../ui";
 import { HoldemReplayDetail } from "./holdem-replay-detail";
 import { RouteSwitcher } from "./route-switcher";
 import type { MobileAppRoute, MobileStyles } from "./types";
@@ -55,8 +63,11 @@ type HoldemRouteScreenProps = {
   verificationCallout: ReactNode;
   screenCopy: MobileRouteScreens["holdem"];
   balance: string;
+  playModeCopy: PlayModeCopy;
   formatAmount: (value: string) => string;
   emailVerified: boolean;
+  holdemPlayMode: PlayModeSnapshot | null;
+  updatingHoldemPlayMode: boolean;
   holdemTables: HoldemTablesResponse | null;
   selectedHoldemTable: HoldemTableResponse | null;
   selectedHoldemReplayRoundId: string | null;
@@ -77,13 +88,24 @@ type HoldemRouteScreenProps = {
     | null;
   holdemTableName: string;
   holdemBuyInAmount: string;
+  holdemCreateTableType: HoldemTableType;
+  holdemCreateMaxSeats: number;
+  holdemTournamentStartingStackAmount: string;
+  holdemTournamentPayoutPlaces: string;
   holdemActionAmount: string;
   holdemTableMessages: HoldemTableMessage[];
   loadingHoldemMessages: boolean;
   sendingHoldemMessage: boolean;
   onChangeHoldemTableName: (value: string) => void;
   onChangeHoldemBuyInAmount: (value: string) => void;
+  onChangeHoldemCreateTableType: (
+    value: HoldemTableType,
+  ) => void;
+  onChangeHoldemCreateMaxSeats: (value: number) => void;
+  onChangeHoldemTournamentStartingStackAmount: (value: string) => void;
+  onChangeHoldemTournamentPayoutPlaces: (value: string) => void;
   onChangeHoldemActionAmount: (value: string) => void;
+  onChangeHoldemPlayMode: (type: PlayModeType) => void;
   onSelectHoldemTable: (tableId: number) => void;
   onCreateHoldemTable: () => void;
   onJoinHoldemTable: (tableId: number) => void;
@@ -104,6 +126,8 @@ type HoldemRouteScreenProps = {
     roundId: string,
   ) => Promise<HoldemSignedEvidenceBundle | null>;
 };
+
+const createTableTypeOptions = ["casual", "cash", "tournament"] as const;
 
 function isRedSuit(card: HoldemCardView) {
   return card.suit === "hearts" || card.suit === "diamonds";
@@ -164,6 +188,81 @@ function StatusChip(props: { active?: boolean; children: string }) {
       </Text>
     </View>
   );
+}
+
+function SelectionChip(props: {
+  label: string;
+  active: boolean;
+  disabled?: boolean;
+  onPress: () => void;
+  testID?: string;
+}) {
+  return (
+    <Pressable
+      onPress={props.onPress}
+      disabled={props.disabled}
+      accessibilityRole="button"
+      accessibilityLabel={props.label}
+      accessibilityState={{
+        disabled: props.disabled ?? false,
+        selected: props.active,
+      }}
+      testID={props.testID}
+      style={[
+        styles.choiceChip,
+        props.active ? styles.choiceChipActive : null,
+        props.disabled ? styles.choiceChipDisabled : null,
+      ]}
+    >
+      <Text
+        style={[
+          styles.choiceChipLabel,
+          props.active ? styles.choiceChipLabelActive : null,
+        ]}
+      >
+        {props.label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function formatPercent(value: number) {
+  if (!Number.isFinite(value)) {
+    return String(value);
+  }
+
+  return new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: value % 1 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function formatTableTypeLabel(
+  copy: MobileRouteScreens["holdem"],
+  tableType: HoldemTable["tableType"],
+) {
+  if (tableType === "tournament") {
+    return copy.tournamentTable;
+  }
+
+  return tableType === "casual" ? copy.casualTable : copy.cashTable;
+}
+
+function formatRakePolicyLabel(params: {
+  copy: MobileRouteScreens["holdem"];
+  formatAmount: (value: string) => string;
+  table: Pick<HoldemTable, "tableType" | "rakePolicy">;
+}) {
+  const { copy, formatAmount, table } = params;
+  const policy = table.rakePolicy;
+  if (table.tableType !== "cash" || !policy || policy.rakeBps <= 0) {
+    return copy.rakeNone;
+  }
+
+  const base = `${formatPercent(policy.rakeBps / 100)}% ${copy.rakeCap} ${formatAmount(
+    policy.capAmount,
+  )}`;
+  return policy.noFlopNoDrop ? `${base} · ${copy.rakeNoFlopNoDrop}` : base;
 }
 
 function getSeatStatusLabel(
@@ -785,11 +884,67 @@ export function HoldemRouteScreen(props: HoldemRouteScreenProps) {
         {props.verificationCallout}
       </SectionCard>
 
+      <PlayModeSelector
+        copy={props.playModeCopy}
+        snapshot={props.holdemPlayMode}
+        disabled={props.updatingHoldemPlayMode || props.actingHoldem !== null}
+        onSelect={props.onChangeHoldemPlayMode}
+      />
+
       <SectionCard
         title={props.screenCopy.sectionTitle}
         subtitle={props.screenCopy.sectionSubtitle}
       >
         <View style={styles.fieldStack}>
+          <View style={props.styles.field}>
+            <Text style={props.styles.fieldLabel}>
+              {props.screenCopy.tableMode}
+            </Text>
+            <View style={styles.choiceRow}>
+              {createTableTypeOptions.map((tableType) => (
+                <SelectionChip
+                  key={tableType}
+                  label={
+                    tableType === "casual"
+                      ? props.screenCopy.casualTable
+                      : tableType === "tournament"
+                        ? props.screenCopy.tournamentTable
+                      : props.screenCopy.cashTable
+                  }
+                  active={props.holdemCreateTableType === tableType}
+                  disabled={props.actingHoldem !== null}
+                  onPress={() => props.onChangeHoldemCreateTableType(tableType)}
+                  testID={`holdem-create-table-type-${tableType}-button`}
+                />
+              ))}
+            </View>
+            <Text style={props.styles.gachaHint}>
+              {props.holdemCreateTableType === "casual"
+                ? props.screenCopy.casualTableHint
+                : props.holdemCreateTableType === "tournament"
+                  ? props.screenCopy.tournamentTableHint
+                  : props.screenCopy.cashTableHint}
+            </Text>
+          </View>
+
+          <View style={props.styles.field}>
+            <Text style={props.styles.fieldLabel}>
+              {props.screenCopy.seatCount}
+            </Text>
+            <View style={styles.choiceRow}>
+              {HOLD_EM_CREATE_MAX_SEAT_OPTIONS.map((seatCount) => (
+                <SelectionChip
+                  key={seatCount}
+                  label={String(seatCount)}
+                  active={props.holdemCreateMaxSeats === seatCount}
+                  disabled={props.actingHoldem !== null}
+                  onPress={() => props.onChangeHoldemCreateMaxSeats(seatCount)}
+                  testID={`holdem-create-max-seats-${seatCount}-button`}
+                />
+              ))}
+            </View>
+          </View>
+
           <View style={props.styles.field}>
             <Text style={props.styles.fieldLabel}>
               {props.screenCopy.tableName}
@@ -802,6 +957,7 @@ export function HoldemRouteScreen(props: HoldemRouteScreenProps) {
               autoCapitalize="words"
               placeholder={props.screenCopy.tableName}
               placeholderTextColor={palette.textMuted}
+              testID="holdem-table-name-input"
             />
           </View>
 
@@ -816,14 +972,56 @@ export function HoldemRouteScreen(props: HoldemRouteScreenProps) {
               keyboardType="decimal-pad"
               autoCorrect={false}
               placeholderTextColor={palette.textMuted}
+              testID="holdem-buy-in-input"
             />
             <Text style={props.styles.gachaHint}>
-              {props.screenCopy.buyInRange(
-                HOLDEM_CONFIG.minimumBuyIn,
-                HOLDEM_CONFIG.maximumBuyIn,
-              )}
+              {props.holdemCreateTableType === "tournament"
+                ? props.screenCopy.tournamentTableHint
+                : props.screenCopy.buyInRange(
+                    HOLDEM_CONFIG.minimumBuyIn,
+                    HOLDEM_CONFIG.maximumBuyIn,
+                  )}
             </Text>
           </View>
+
+          {props.holdemCreateTableType === "tournament" ? (
+            <>
+              <View style={props.styles.field}>
+                <Text style={props.styles.fieldLabel}>
+                  {props.screenCopy.tournamentStartingStack}
+                </Text>
+                <TextInput
+                  value={props.holdemTournamentStartingStackAmount}
+                  onChangeText={props.onChangeHoldemTournamentStartingStackAmount}
+                  style={props.styles.input}
+                  keyboardType="decimal-pad"
+                  autoCorrect={false}
+                  placeholder={props.screenCopy.tournamentStartingStack}
+                  placeholderTextColor={palette.textMuted}
+                  testID="holdem-tournament-starting-stack-input"
+                />
+              </View>
+
+              <View style={props.styles.field}>
+                <Text style={props.styles.fieldLabel}>
+                  {props.screenCopy.tournamentPayoutPlaces}
+                </Text>
+                <TextInput
+                  value={props.holdemTournamentPayoutPlaces}
+                  onChangeText={props.onChangeHoldemTournamentPayoutPlaces}
+                  style={props.styles.input}
+                  keyboardType="number-pad"
+                  autoCorrect={false}
+                  placeholder={props.screenCopy.tournamentPayoutPlaces}
+                  placeholderTextColor={palette.textMuted}
+                  testID="holdem-tournament-payout-places-input"
+                />
+                <Text style={props.styles.gachaHint}>
+                  {props.screenCopy.tournamentPayoutPlacesHint}
+                </Text>
+              </View>
+            </>
+          ) : null}
 
           <View style={props.styles.inlineActions}>
             <ActionButton
@@ -834,6 +1032,7 @@ export function HoldemRouteScreen(props: HoldemRouteScreenProps) {
               }
               onPress={props.onCreateHoldemTable}
               disabled={props.actingHoldem !== null || !props.emailVerified}
+              testID="holdem-create-table-button"
             />
             <ActionButton
               label={
@@ -844,6 +1043,7 @@ export function HoldemRouteScreen(props: HoldemRouteScreenProps) {
               onPress={props.onRefreshHoldemLobby}
               variant="secondary"
               compact
+              testID="holdem-refresh-lobby-button"
             />
           </View>
         </View>
@@ -863,6 +1063,7 @@ export function HoldemRouteScreen(props: HoldemRouteScreenProps) {
                 onPress={() => props.onSelectHoldemTable(table.id)}
                 accessibilityRole="button"
                 accessibilityLabel={`${table.name} ${table.id}`}
+                testID={buildTestId("holdem-lobby-card", table.name)}
                 style={[
                   styles.lobbyCard,
                   activeTable?.id === table.id ? styles.lobbyCardActive : null,
@@ -885,6 +1086,18 @@ export function HoldemRouteScreen(props: HoldemRouteScreenProps) {
                 <Text style={styles.lobbyCardMeta}>
                   {props.screenCopy.blinds} {props.formatAmount(table.smallBlind)} /{" "}
                   {props.formatAmount(table.bigBlind)}
+                </Text>
+                <Text style={styles.lobbyCardMeta}>
+                  {props.screenCopy.tableType}:{" "}
+                  {formatTableTypeLabel(props.screenCopy, table.tableType)}
+                </Text>
+                <Text style={styles.lobbyCardMeta}>
+                  {props.screenCopy.rakePolicy}:{" "}
+                  {formatRakePolicyLabel({
+                    copy: props.screenCopy,
+                    formatAmount: props.formatAmount,
+                    table,
+                  })}
                 </Text>
               </Pressable>
             ))
@@ -914,6 +1127,7 @@ export function HoldemRouteScreen(props: HoldemRouteScreenProps) {
                   onPress={() => props.onRefreshHoldemTable(activeTable.id)}
                   variant="secondary"
                   compact
+                  testID="holdem-refresh-table-button"
                 />
               </View>
 
@@ -935,6 +1149,29 @@ export function HoldemRouteScreen(props: HoldemRouteScreenProps) {
                   <Text style={styles.tableMetaValue}>
                     {props.formatAmount(activeTable.smallBlind)} /{" "}
                     {props.formatAmount(activeTable.bigBlind)}
+                  </Text>
+                </View>
+                <View style={styles.tableMetaCard}>
+                  <Text style={styles.tableMetaLabel}>
+                    {props.screenCopy.tableType}
+                  </Text>
+                  <Text style={styles.tableMetaValue}>
+                    {formatTableTypeLabel(
+                      props.screenCopy,
+                      activeTable.tableType,
+                    )}
+                  </Text>
+                </View>
+                <View style={styles.tableMetaCard}>
+                  <Text style={styles.tableMetaLabel}>
+                    {props.screenCopy.rakePolicy}
+                  </Text>
+                  <Text style={styles.tableMetaValue}>
+                    {formatRakePolicyLabel({
+                      copy: props.screenCopy,
+                      formatAmount: props.formatAmount,
+                      table: activeTable,
+                    })}
                   </Text>
                 </View>
                 <View style={styles.tableMetaCard}>
@@ -1027,6 +1264,7 @@ export function HoldemRouteScreen(props: HoldemRouteScreenProps) {
                   }
                   onPress={() => props.onJoinHoldemTable(activeTable.id)}
                   disabled={props.actingHoldem !== null || !props.emailVerified}
+                  testID="holdem-join-table-button"
                 />
               ) : (
                 <View style={props.styles.inlineActions}>
@@ -1039,6 +1277,7 @@ export function HoldemRouteScreen(props: HoldemRouteScreenProps) {
                     onPress={() => props.onLeaveHoldemTable(activeTable.id)}
                     disabled={props.actingHoldem !== null}
                     variant="secondary"
+                    testID="holdem-leave-table-button"
                   />
                   {heroSeat ? (
                     <ActionButton
@@ -1059,6 +1298,7 @@ export function HoldemRouteScreen(props: HoldemRouteScreenProps) {
                       }
                       disabled={props.actingHoldem !== null}
                       variant="secondary"
+                      testID="holdem-toggle-seat-mode-button"
                     />
                   ) : null}
                   {activeTable.status === "waiting" && activeSummary?.canStart ? (
@@ -1070,6 +1310,7 @@ export function HoldemRouteScreen(props: HoldemRouteScreenProps) {
                       }
                       onPress={() => props.onStartHoldemTable(activeTable.id)}
                       disabled={props.actingHoldem !== null}
+                      testID="holdem-start-hand-button"
                     />
                   ) : null}
                 </View>
@@ -1099,6 +1340,7 @@ export function HoldemRouteScreen(props: HoldemRouteScreenProps) {
                   keyboardType="decimal-pad"
                   autoCorrect={false}
                   placeholderTextColor={palette.textMuted}
+                  testID="holdem-action-amount-input"
                 />
                 <Text style={props.styles.gachaHint}>
                   {props.screenCopy.amountHint}
@@ -1141,6 +1383,7 @@ export function HoldemRouteScreen(props: HoldemRouteScreenProps) {
                         disabled={props.actingHoldem !== null}
                         variant={action === "fold" ? "secondary" : "primary"}
                         compact
+                        testID={buildTestId("holdem-action-button", action)}
                       />
                     ))}
                   </View>
@@ -1644,6 +1887,34 @@ const styles = StyleSheet.create({
   },
   fieldStack: {
     gap: 14,
+  },
+  choiceRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  choiceChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.input,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  choiceChipActive: {
+    borderColor: palette.accent,
+    backgroundColor: "#103246",
+  },
+  choiceChipDisabled: {
+    opacity: 0.55,
+  },
+  choiceChipLabel: {
+    color: palette.textMuted,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  choiceChipLabelActive: {
+    color: palette.text,
   },
   realtimeBanner: {
     borderRadius: 16,

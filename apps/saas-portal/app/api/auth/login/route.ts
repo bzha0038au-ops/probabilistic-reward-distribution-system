@@ -12,17 +12,15 @@ import {
   getBackendTokenCookieName,
   getBackendTokenCookieOptions,
 } from "@/lib/auth/backend-token-cookie";
+import { buildLegalPath, sanitizeLocalPath } from "@/lib/navigation";
 
 const APP_PATH = "/portal";
 
 const sanitizeRedirectPath = (value: FormDataEntryValue | null) => {
-  const redirectTo = typeof value === "string" ? value.trim() : "";
-
-  if (!redirectTo.startsWith("/") || redirectTo.startsWith("//")) {
-    return APP_PATH;
-  }
-
-  return redirectTo;
+  return sanitizeLocalPath(
+    typeof value === "string" ? value : null,
+    APP_PATH,
+  );
 };
 
 const errorResponse = (error: string, status = 400, code?: ApiErrorCode) =>
@@ -109,5 +107,11 @@ export async function POST(request: Request) {
     );
   }
 
-  return withCookie(successResponse(redirectTo), result.data.token);
+  const resolvedRedirectTo = result.data.legal?.requiresAcceptance
+    ? redirectTo.startsWith("/legal")
+      ? redirectTo
+      : buildLegalPath(redirectTo)
+    : redirectTo;
+
+  return withCookie(successResponse(resolvedRedirectTo), result.data.token);
 }

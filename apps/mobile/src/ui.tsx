@@ -1,16 +1,30 @@
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import type {
+  PlayModeSnapshot,
+  PlayModeType,
+} from '@reward/shared-types/play-mode';
 
 import { mobileFeedbackTheme, mobilePalette, mobileSurfaceTheme } from './theme';
+
+const playModeOrder: PlayModeType[] = [
+  'standard',
+  'dual_bet',
+  'deferred_double',
+  'snowball',
+];
 
 export type FieldProps = {
   label: string;
   value: string;
   onChangeText: (value: string) => void;
+  onSubmitEditing?: () => void;
   secureTextEntry?: boolean;
   autoCapitalize?: 'none' | 'sentences';
   keyboardType?: 'default' | 'email-address' | 'numeric';
+  returnKeyType?: 'done' | 'go' | 'next' | 'send';
   placeholder?: string;
+  testID?: string;
 };
 
 export function Field(props: FieldProps) {
@@ -26,7 +40,10 @@ export function Field(props: FieldProps) {
         secureTextEntry={props.secureTextEntry}
         autoCapitalize={props.autoCapitalize ?? 'none'}
         keyboardType={props.keyboardType ?? 'default'}
+        returnKeyType={props.returnKeyType}
         autoCorrect={false}
+        onSubmitEditing={props.onSubmitEditing}
+        testID={props.testID}
       />
     </View>
   );
@@ -40,6 +57,7 @@ export type ActionButtonProps = {
   compact?: boolean;
   accessibilityLabel?: string;
   accessibilityHint?: string;
+  testID?: string;
 };
 
 export function ActionButton(props: ActionButtonProps) {
@@ -53,6 +71,7 @@ export function ActionButton(props: ActionButtonProps) {
       accessibilityLabel={props.accessibilityLabel ?? props.label}
       accessibilityHint={props.accessibilityHint}
       accessibilityState={{ disabled: props.disabled ?? false }}
+      testID={props.testID}
       style={[
         styles.button,
         props.compact ? styles.buttonCompact : null,
@@ -81,6 +100,7 @@ export type TextLinkProps = {
   onPress: () => void;
   disabled?: boolean;
   tone?: 'default' | 'danger';
+  testID?: string;
 };
 
 export function TextLink(props: TextLinkProps) {
@@ -91,6 +111,7 @@ export function TextLink(props: TextLinkProps) {
       accessibilityRole="button"
       accessibilityLabel={props.label}
       accessibilityState={{ disabled: props.disabled ?? false }}
+      testID={props.testID}
     >
       <Text
         style={[
@@ -121,12 +142,90 @@ export function SectionCard(props: SectionCardProps) {
   );
 }
 
+export type PlayModeCopy = {
+  title: string;
+  subtitle: string;
+  currentLabel: string;
+  nextLabel: string;
+  streakLabel: string;
+  carryActive: string;
+  carryIdle: string;
+  modes: Record<PlayModeType, string>;
+};
+
+export type PlayModeSelectorProps = {
+  copy: PlayModeCopy;
+  snapshot: PlayModeSnapshot | null;
+  onSelect: (type: PlayModeType) => void;
+  disabled?: boolean;
+};
+
+export function PlayModeSelector(props: PlayModeSelectorProps) {
+  return (
+    <View style={styles.playModeCard}>
+      <Text style={styles.playModeTitle}>{props.copy.title}</Text>
+      <Text style={styles.playModeSubtitle}>{props.copy.subtitle}</Text>
+      {props.snapshot ? (
+        <View style={styles.playModeMetaRow}>
+          <Text style={styles.playModeMetaText}>
+            {props.copy.currentLabel}: x{props.snapshot.appliedMultiplier}
+          </Text>
+          <Text style={styles.playModeMetaText}>
+            {props.copy.nextLabel}: x{props.snapshot.nextMultiplier}
+          </Text>
+          <Text style={styles.playModeMetaText}>
+            {props.copy.streakLabel}: {props.snapshot.streak}
+          </Text>
+          <Text style={styles.playModeMetaText}>
+            {props.snapshot.carryActive
+              ? props.copy.carryActive
+              : props.copy.carryIdle}
+          </Text>
+        </View>
+      ) : null}
+      <View style={styles.playModeGrid}>
+        {playModeOrder.map((mode) => {
+          const active = props.snapshot?.type === mode;
+          return (
+            <Pressable
+              key={mode}
+              onPress={() => props.onSelect(mode)}
+              disabled={props.disabled}
+              accessibilityRole="button"
+              accessibilityLabel={props.copy.modes[mode]}
+              accessibilityState={{
+                disabled: props.disabled ?? false,
+                selected: active,
+              }}
+              style={[
+                styles.playModeChip,
+                active ? styles.playModeChipActive : null,
+                props.disabled ? styles.playModeChipDisabled : null,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.playModeChipLabel,
+                  active ? styles.playModeChipLabelActive : null,
+                ]}
+              >
+                {props.copy.modes[mode]}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 export type ToastTone = 'success' | 'error' | 'info';
 
 export type ToastBannerProps = {
   message: string;
   onDismiss: () => void;
   tone?: ToastTone;
+  testID?: string;
 };
 
 export function ToastBanner(props: ToastBannerProps) {
@@ -138,6 +237,7 @@ export function ToastBanner(props: ToastBannerProps) {
         onPress={props.onDismiss}
         accessibilityRole="button"
         accessibilityLabel="Dismiss notification"
+        testID={props.testID}
         style={[
           styles.toastCard,
           tone === 'success'
@@ -174,6 +274,61 @@ const styles = StyleSheet.create({
     color: mobilePalette.textMuted,
     fontSize: 14,
     lineHeight: 20,
+  },
+  playModeCard: {
+    gap: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: mobilePalette.border,
+    backgroundColor: mobilePalette.panelMuted,
+    padding: 16,
+  },
+  playModeTitle: {
+    color: mobilePalette.text,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  playModeSubtitle: {
+    color: mobilePalette.textMuted,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  playModeMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  playModeMetaText: {
+    color: mobilePalette.textMuted,
+    fontSize: 12,
+  },
+  playModeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  playModeChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: mobilePalette.border,
+    backgroundColor: mobilePalette.panel,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  playModeChipActive: {
+    borderColor: mobilePalette.accent,
+    backgroundColor: mobilePalette.accent,
+  },
+  playModeChipDisabled: {
+    opacity: 0.55,
+  },
+  playModeChipLabel: {
+    color: mobilePalette.text,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  playModeChipLabelActive: {
+    color: mobileSurfaceTheme.primaryTextOnAccent,
   },
   field: {
     gap: 8,

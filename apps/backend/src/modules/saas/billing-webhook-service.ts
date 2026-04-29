@@ -14,10 +14,13 @@ import { readSqlRows } from '../../shared/sql-result';
 import { captureException } from '../../shared/telemetry';
 import {
   computeWebhookRetryDelayMs,
+  isBillingRunSyncConflictError,
   parseStripeEventObject,
 } from './billing';
 import {
   config,
+  markBillingRunSyncProcessing,
+  recordBillingRunSyncFailure,
   resolveBillingRunForStripeInvoice,
   resolveStripeWebhookContext,
   syncBillingRunFromInvoice,
@@ -44,7 +47,36 @@ const processSaasStripeWebhookEventRow = async (
       billingRunId: context.billingRunId,
     });
     if (run) {
-      await syncBillingRunFromInvoice(run, context.invoice, event.type);
+      const processingRun = await markBillingRunSyncProcessing(run, {
+        action: 'stripe_webhook',
+        stage: 'invoice_webhook',
+        observedInvoiceStatus: context.invoice.status,
+        eventType: event.type,
+      });
+      try {
+        await syncBillingRunFromInvoice(processingRun, context.invoice, event.type, {
+          action: "stripe_webhook",
+          stage: "invoice_webhook",
+        });
+      } catch (error) {
+        if (isBillingRunSyncConflictError(error)) {
+          throw error;
+        }
+
+        try {
+          await recordBillingRunSyncFailure(processingRun, {
+            action: 'stripe_webhook',
+            stage: 'invoice_webhook',
+            error,
+            recoveryPath: 'wait_for_stripe_webhook_retry_or_reconciliation',
+            observedInvoiceStatus: context.invoice.status,
+            eventType: event.type,
+          });
+        } catch {
+          // Preserve the original webhook sync error when failure bookkeeping cannot be written.
+        }
+        throw error;
+      }
     }
   }
 
@@ -187,12 +219,12 @@ export async function runSaasStripeWebhookCompensationCycle(params?: {
 
   let processed = 0;
   let failed = 0;
+  let contended = 0;
   for (const row of claimed) {
     try {
       await processSaasStripeWebhookEventRow(row);
       processed += 1;
     } catch (error) {
-      failed += 1;
       const attempts = Math.max(1, Number(row.attempts ?? 1));
       await db
         .update(saasStripeWebhookEvents)
@@ -207,6 +239,18 @@ export async function runSaasStripeWebhookCompensationCycle(params?: {
           updatedAt: new Date(),
         })
         .where(eq(saasStripeWebhookEvents.id, row.id));
+
+      if (isBillingRunSyncConflictError(error)) {
+        contended += 1;
+        logger.info('saas stripe webhook event deferred due to billing run contention', {
+          saasWebhookEventId: row.id,
+          saasStripeEventId: row.eventId,
+          attempts,
+        });
+        continue;
+      }
+
+      failed += 1;
       captureException(error, {
         tags: {
           alert_priority: 'high',
@@ -230,6 +274,7 @@ export async function runSaasStripeWebhookCompensationCycle(params?: {
   return {
     claimed: claimed.length,
     processed,
+    contended,
     failed,
   };
 }

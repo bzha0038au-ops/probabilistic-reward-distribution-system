@@ -53,6 +53,7 @@ type KycCopy = {
     user: string
     legalName: string
     documentType: string
+    documentExpiresAt: string
     documentNumberLast4: string
     countryCode: string
     submittedAt: string
@@ -70,9 +71,11 @@ type KycCopy = {
     approve: string
     reject: string
     requestMoreInfo: string
+    requestReverification: string
     approveDescription: string
     rejectDescription: string
     requestMoreInfoDescription: string
+    requestReverificationDescription: string
     optionalReason: string
     requiredReason: string
     noLongerPending: string
@@ -90,6 +93,7 @@ type KycCopy = {
     approved: string
     rejected: string
     moreInfoRequested: string
+    reverificationRequested: string
   }
   tierLabels: Record<"tier_0" | "tier_1" | "tier_2", string>
   statusLabels: Record<
@@ -113,7 +117,11 @@ type KycCopy = {
     string
   >
   reviewActionLabels: Record<
-    "submitted" | "approved" | "rejected" | "request_more_info",
+    | "submitted"
+    | "approved"
+    | "rejected"
+    | "request_more_info"
+    | "reverification_requested",
     string
   >
 }
@@ -178,6 +186,7 @@ const enCopy: KycCopy = {
     user: "User",
     legalName: "Legal Name",
     documentType: "Document Type",
+    documentExpiresAt: "Document Expires At",
     documentNumberLast4: "Document Last 4",
     countryCode: "Country",
     submittedAt: "Submitted At",
@@ -195,12 +204,15 @@ const enCopy: KycCopy = {
     approve: "Approve",
     reject: "Reject",
     requestMoreInfo: "Request More Info",
+    requestReverification: "Trigger Reverification",
     approveDescription:
       "Promote the user to the requested tier and release the linked KYC freeze if one exists.",
     rejectDescription:
       "Reject the submission and persist a required rejection reason for audit and user follow-up.",
     requestMoreInfoDescription:
       "Keep the case in the KYC workflow and freeze withdrawals until additional material arrives.",
+    requestReverificationDescription:
+      "Downgrade the active KYC tier to Tier 0, notify the user, and force a fresh document submission.",
     optionalReason: "Reason (optional)",
     requiredReason: "Reason (required)",
     noLongerPending:
@@ -219,6 +231,7 @@ const enCopy: KycCopy = {
     approved: "KYC profile approved.",
     rejected: "KYC profile rejected.",
     moreInfoRequested: "KYC profile moved to more-info-required.",
+    reverificationRequested: "KYC reverification requested.",
   },
   tierLabels: {
     tier_0: "Tier 0",
@@ -251,6 +264,7 @@ const enCopy: KycCopy = {
     approved: "Approved",
     rejected: "Rejected",
     request_more_info: "Request More Info",
+    reverification_requested: "Reverification Requested",
   },
 }
 
@@ -310,6 +324,7 @@ const zhCopy: KycCopy = {
     user: "用户",
     legalName: "法定姓名",
     documentType: "证件类型",
+    documentExpiresAt: "证件到期时间",
     documentNumberLast4: "证件尾号",
     countryCode: "国家/地区",
     submittedAt: "提交时间",
@@ -327,10 +342,13 @@ const zhCopy: KycCopy = {
     approve: "批准",
     reject: "拒绝",
     requestMoreInfo: "补件",
+    requestReverification: "发起重核验",
     approveDescription: "将用户升级到申请层级，并释放关联的 KYC 冻结记录。",
     rejectDescription: "拒绝申请，并写入必填的拒绝原因，便于审计和后续通知。",
     requestMoreInfoDescription:
       "要求用户补充资料，并继续保持提现冻结，直到新资料到达。",
+    requestReverificationDescription:
+      "把当前生效 KYC 层级降回 Tier 0，通知用户，并强制重新提交证件材料。",
     optionalReason: "原因（可选）",
     requiredReason: "原因（必填）",
     noLongerPending: "该资料已不是待审核状态，当前页面只提供历史查看。",
@@ -348,6 +366,7 @@ const zhCopy: KycCopy = {
     approved: "KYC 资料已批准。",
     rejected: "KYC 资料已拒绝。",
     moreInfoRequested: "KYC 资料已流转到补件状态。",
+    reverificationRequested: "已发起 KYC 重核验。",
   },
   tierLabels: {
     tier_0: "Tier 0",
@@ -380,6 +399,7 @@ const zhCopy: KycCopy = {
     approved: "已批准",
     rejected: "已拒绝",
     request_more_info: "要求补件",
+    reverification_requested: "发起重核验",
   },
 }
 

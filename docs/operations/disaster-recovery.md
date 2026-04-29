@@ -91,7 +91,8 @@ Minimum acceptance criteria:
 
 ## Drill Scenarios
 
-Run at least one of these every quarter:
+Run the staging full-database restore drill every month. In addition, exercise
+at least one broader DR scenario every quarter:
 
 - restore the latest logical dump into a staging clone
 - recover to a specific timestamp after simulated accidental deletion

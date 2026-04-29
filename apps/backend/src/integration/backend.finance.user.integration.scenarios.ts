@@ -1,5 +1,4 @@
 import {
-  authNotificationCaptures,
   buildUserAuthHeaders,
   enrollUserMfa,
   getApp,
@@ -18,9 +17,71 @@ import {
   deposits,
   freezeRecords,
   ledgerEntries,
+  notificationDeliveries,
+  notificationRecords,
   userWallets,
   withdrawals,
 } from '@reward/database';
+
+const expectQueuedAmlAdminNotification = async (params: {
+  adminUserId: number;
+  adminEmail: string;
+  subjectUserId: number;
+  subjectEmail: string;
+  checkpoint: string;
+}) => {
+  const [record] = await getDb()
+    .select({
+      userId: notificationRecords.userId,
+      kind: notificationRecords.kind,
+      data: notificationRecords.data,
+    })
+    .from(notificationRecords)
+    .where(
+      and(
+        eq(notificationRecords.userId, params.adminUserId),
+        eq(notificationRecords.kind, 'aml_review'),
+      ),
+    )
+    .limit(1);
+
+  expect(record).toMatchObject({
+    userId: params.adminUserId,
+    kind: 'aml_review',
+    data: expect.objectContaining({
+      userId: params.subjectUserId,
+      userEmail: params.subjectEmail,
+      checkpoint: params.checkpoint,
+    }),
+  });
+
+  const deliveries = await getDb()
+    .select({
+      channel: notificationDeliveries.channel,
+      recipient: notificationDeliveries.recipient,
+    })
+    .from(notificationDeliveries)
+    .where(
+      and(
+        eq(notificationDeliveries.userId, params.adminUserId),
+        eq(notificationDeliveries.kind, 'aml_review'),
+      ),
+    )
+    .orderBy(asc(notificationDeliveries.id));
+
+  expect(deliveries).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        channel: 'email',
+        recipient: params.adminEmail,
+      }),
+      expect.objectContaining({
+        channel: 'in_app',
+        recipient: `user:${params.adminUserId}`,
+      }),
+    ]),
+  );
+};
 
 export function registerFinanceUserScenarios() {
   it('POST /bank-cards creates cards and updates default selection', async () => {
@@ -149,7 +210,7 @@ export function registerFinanceUserScenarios() {
   });
 
   it('POST /deposits freezes the user when first-deposit AML screening hits', async () => {
-    await seedAdminAccount({
+    const { user: adminUser } = await seedAdminAccount({
       email: 'aml-finance-admin@example.com',
     });
     const user = await seedUserWithWallet({
@@ -175,14 +236,13 @@ export function registerFinanceUserScenarios() {
 
     expect(response.statusCode).toBe(423);
     expect(response.json().error.code).toBe('AML_REVIEW_REQUIRED');
-    expect(authNotificationCaptures.amlReview).toHaveLength(1);
-    expect(authNotificationCaptures.amlReview[0]).toEqual(
-      expect.objectContaining({
-        email: 'aml-finance-admin@example.com',
-        checkpoint: 'first_deposit',
-        userEmail: user.email,
-      }),
-    );
+    await expectQueuedAmlAdminNotification({
+      adminUserId: adminUser.id,
+      adminEmail: 'aml-finance-admin@example.com',
+      subjectUserId: user.id,
+      subjectEmail: user.email,
+      checkpoint: 'first_deposit',
+    });
 
     const storedDeposits = await getDb()
       .select({ id: deposits.id })
@@ -389,7 +449,7 @@ export function registerFinanceUserScenarios() {
   });
 
   it('POST /withdrawals freezes the user before funds are locked when AML screening hits', async () => {
-    await seedAdminAccount({
+    const { user: adminUser } = await seedAdminAccount({
       email: 'aml-withdraw-admin@example.com',
     });
     const user = await seedUserWithWallet({
@@ -417,14 +477,13 @@ export function registerFinanceUserScenarios() {
 
     expect(response.statusCode).toBe(423);
     expect(response.json().error.code).toBe('AML_REVIEW_REQUIRED');
-    expect(authNotificationCaptures.amlReview).toHaveLength(1);
-    expect(authNotificationCaptures.amlReview[0]).toEqual(
-      expect.objectContaining({
-        email: 'aml-withdraw-admin@example.com',
-        checkpoint: 'withdrawal_request',
-        userEmail: user.email,
-      }),
-    );
+    await expectQueuedAmlAdminNotification({
+      adminUserId: adminUser.id,
+      adminEmail: 'aml-withdraw-admin@example.com',
+      subjectUserId: user.id,
+      subjectEmail: user.email,
+      checkpoint: 'withdrawal_request',
+    });
 
     const [wallet] = await getDb()
       .select({

@@ -6,6 +6,7 @@ import type { CurrentLegalDocumentsResponse } from "@reward/shared-types/legal";
 import { Form } from "@/app/form";
 import { SubmitButton } from "@/app/submit-button";
 import { AuthPageShell } from "@/components/auth-page-shell";
+import { RegisterDeviceFingerprintField } from "@/components/register-device-fingerprint-field";
 import {
   Card,
   CardContent,
@@ -24,6 +25,22 @@ const formatLegalSlug = (slug: string) =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
 
+const parseReferrerId = (
+  value: FormDataEntryValue | string | null | undefined,
+) => {
+  const raw = String(value ?? "").trim();
+  if (raw === "") {
+    return null;
+  }
+
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  return parsed;
+};
+
 async function loadCurrentLegalDocuments() {
   return apiRequestServer<CurrentLegalDocumentsResponse>(
     USER_API_ROUTES.legal.current,
@@ -38,9 +55,14 @@ async function registerAction(formData: FormData) {
   const t = await getServerTranslations();
   const email = String(formData.get("email") ?? "").toLowerCase();
   const password = String(formData.get("password") ?? "");
+  const birthDate = String(formData.get("birthDate") ?? "").trim();
+  const deviceFingerprint = String(
+    formData.get("deviceFingerprint") ?? "",
+  ).trim();
+  const referrerId = parseReferrerId(formData.get("referrerId"));
   const legalDocumentsResult = await loadCurrentLegalDocuments();
 
-  if (!email || !password) {
+  if (!email || !password || !birthDate) {
     redirect(`/register?error=${encodeURIComponent(t("auth.missingFields"))}`);
   }
 
@@ -67,6 +89,9 @@ async function registerAction(formData: FormData) {
       body: JSON.stringify({
         email,
         password,
+        birthDate,
+        ...(deviceFingerprint ? { deviceFingerprint } : {}),
+        ...(referrerId ? { referrerId } : {}),
         legalAcceptances: legalDocuments.map((document) => ({
           slug: document.slug,
           version: document.version,
@@ -86,7 +111,7 @@ async function registerAction(formData: FormData) {
 export default async function Register({
   searchParams,
 }: {
-  searchParams?: Promise<{ error?: string }>;
+  searchParams?: Promise<{ error?: string; ref?: string; referrerId?: string }>;
 }) {
   return <RegisterPage searchParams={await searchParams} />;
 }
@@ -94,13 +119,16 @@ export default async function Register({
 async function RegisterPage({
   searchParams,
 }: {
-  searchParams?: { error?: string };
+  searchParams?: { error?: string; ref?: string; referrerId?: string };
 }) {
   const pageT = await getServerTranslations();
   const legalDocumentsResult = await loadCurrentLegalDocuments();
   const errorMessage = searchParams?.error
     ? decodeURIComponent(searchParams.error)
     : null;
+  const referrerId = parseReferrerId(
+    searchParams?.referrerId ?? searchParams?.ref,
+  );
   const legalDocuments = legalDocumentsResult.ok
     ? legalDocumentsResult.data.items
     : [];
@@ -124,6 +152,10 @@ async function RegisterPage({
               emailPlaceholder: pageT("common.emailPlaceholder"),
             }}
           >
+            <RegisterDeviceFingerprintField />
+            {referrerId ? (
+              <input type="hidden" name="referrerId" value={referrerId} />
+            ) : null}
             {errorMessage && (
               <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
                 {errorMessage}
@@ -134,6 +166,15 @@ async function RegisterPage({
                 {legalLoadError}
               </p>
             )}
+            <label className="grid gap-2 text-sm text-slate-700">
+              <span>{pageT("common.birthDate")}</span>
+              <input
+                type="date"
+                name="birthDate"
+                className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                required
+              />
+            </label>
             {legalDocuments.length > 0 && (
               <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <div className="space-y-1">

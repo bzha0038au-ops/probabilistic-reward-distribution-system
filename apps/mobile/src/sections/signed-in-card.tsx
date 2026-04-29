@@ -79,6 +79,7 @@ export function SignedInCard(props: SignedInCardProps) {
           disabled={props.submitting || props.playingDrawCount !== null || props.playingQuickEight}
           variant="danger"
           compact
+          testID="account-sign-out-button"
         />
       </View>
 

@@ -97,6 +97,8 @@ export const communityReports = pgTable(
     }),
     reason: varchar("reason", { length: 64 }).notNull(),
     detail: text("detail"),
+    source: varchar("source", { length: 24 }).notNull().default("user_report"),
+    metadata: jsonb("metadata"),
     status: varchar("status", { length: 16 }).notNull().default("open"),
     resolutionNote: text("resolution_note"),
     resolvedByAdminId: integer("resolved_by_admin_id").references(() => admins.id, {

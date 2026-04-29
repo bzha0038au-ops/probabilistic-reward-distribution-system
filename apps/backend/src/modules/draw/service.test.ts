@@ -11,6 +11,16 @@ vi.mock('../../shared/config', () => ({
     port: 4000,
     drawPoolCacheTtlSeconds: 60,
   }),
+  getConfigView: () => ({
+    databaseUrl: 'postgres://test',
+    drawCost: 10,
+    logLevel: 'info',
+    nodeEnv: 'test',
+    webBaseUrl: 'http://localhost:3000',
+    adminBaseUrl: 'http://localhost:5173',
+    port: 4000,
+    drawPoolCacheTtlSeconds: 60,
+  }),
 }));
 
 vi.mock('../../db', () => ({

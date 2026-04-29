@@ -19,8 +19,10 @@ import { sendPasswordResetNotification } from '../auth/notification-service';
 import { issueAuthToken } from '../auth/token-service';
 import {
   getActiveUserFreezeScopes,
+  getUserAssociationGraph,
   listUserFreezeRecords,
 } from '../risk/service';
+import { getUserJurisdictionState } from '../risk/jurisdiction-service';
 import { revokeAuthSessions } from '../session/service';
 
 const config = getConfigView();
@@ -154,7 +156,16 @@ export async function getAdminUserDetail(userId: number) {
     return null;
   }
 
-  const [wallet, kycProfile, freezeRecords, recentDraws, depositRows, withdrawalRows, recentLoginIps] =
+  const [
+    wallet,
+    kycProfile,
+    jurisdiction,
+    freezeRecords,
+    recentDraws,
+    depositRows,
+    withdrawalRows,
+    recentLoginIps,
+  ] =
     await Promise.all([
       db
         .select({
@@ -170,12 +181,14 @@ export async function getAdminUserDetail(userId: number) {
         .then((rows) => rows[0] ?? null),
       db
         .select({
+          id: kycProfiles.id,
           currentTier: kycProfiles.currentTier,
         })
         .from(kycProfiles)
         .where(eq(kycProfiles.userId, userId))
         .limit(1)
         .then((rows) => rows[0] ?? null),
+      getUserJurisdictionState(userId),
       listUserFreezeRecords(userId, 50),
       db
         .select({
@@ -273,6 +286,10 @@ export async function getAdminUserDetail(userId: number) {
       email: user.email,
       phone: user.phone,
       role: user.role,
+      birthDate: user.birthDate ?? null,
+      registrationCountryCode: user.registrationCountryCode ?? null,
+      countryTier: user.countryTier,
+      countryResolvedAt: user.countryResolvedAt,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
       emailVerifiedAt: user.emailVerifiedAt,
@@ -281,9 +298,11 @@ export async function getAdminUserDetail(userId: number) {
       pityStreak: user.pityStreak,
       lastDrawAt: user.lastDrawAt,
       lastWinAt: user.lastWinAt,
+      kycProfileId: kycProfile?.id ?? null,
       kycTier,
       kycTierSource,
       activeScopes,
+      jurisdiction,
     },
     wallet: wallet ?? {
       withdrawableBalance: '0',
@@ -297,6 +316,26 @@ export async function getAdminUserDetail(userId: number) {
     recentPayments,
     recentLoginIps,
   };
+}
+
+export async function getAdminUserAssociations(
+  userId: number,
+  options: {
+    days?: number;
+    signalLimit?: number;
+  } = {}
+) {
+  const [user] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.id, userId), eq(users.role, 'user')))
+    .limit(1);
+
+  if (!user) {
+    return null;
+  }
+
+  return getUserAssociationGraph(userId, options);
 }
 
 export async function forceLogoutUserByAdmin(userId: number) {

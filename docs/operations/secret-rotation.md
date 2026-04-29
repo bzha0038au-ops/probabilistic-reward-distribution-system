@@ -3,6 +3,10 @@
 Production secrets are expected to arrive through a secret manager and be
 materialized as files in `$DEPLOY_PATH/shared/<environment>/secrets`.
 
+Run a secret-rotation drill at least once every 90 days, and immediately after
+suspected exposure. The drill is manual by intent, but the repo now provides
+an executable CLI so the rotation path is not "follow prose and hope".
+
 ## Secret Files
 
 | Filename | Used by |
@@ -12,54 +16,199 @@ materialized as files in `$DEPLOY_PATH/shared/<environment>/secrets`.
 | `backend_database_url` | backend, migration job |
 | `backend_redis_url` | backend, notification worker |
 | `admin_jwt_secret` | backend, admin |
-| `user_jwt_secret` | backend, frontend |
-| `admin_jwt_secret_previous` | backend, admin (optional rotation window) |
-| `user_jwt_secret_previous` | backend, frontend (optional rotation window) |
+| `user_jwt_secret` | backend, frontend, saas-portal verifier |
+| `admin_jwt_secret_previous` | backend, admin (optional drain window) |
+| `user_jwt_secret_previous` | backend, frontend, saas-portal verifier (optional drain window) |
 | `admin_mfa_encryption_secret` | backend |
 | `admin_mfa_break_glass_secret` | backend |
-| `frontend_auth_secret` | frontend |
+| `frontend_auth_secret` | frontend / Auth.js |
 
 Optional provider secret files:
 
 - `auth_smtp_pass`
 - `auth_twilio_auth_token`
 
-## Rotation Rules
+## Executable CLI
 
-- Rotate on a fixed cadence and immediately after suspected exposure.
-- Stage first, then production.
-- Record who rotated the secret, when, why, and which deployment picked it up.
-- Use different secret values per environment. Never promote the same value
-  from staging into production.
+Use the unified entrypoint from the repo root:
 
-## Rotation Procedure
+```bash
+pnpm ops:rotate-secret jwt status --target admin
+pnpm ops:rotate-secret jwt stage --target admin --generate --apply
+pnpm ops:rotate-secret jwt smoke --target admin --require-previous
+pnpm ops:rotate-secret jwt finalize --target admin --apply
 
-1. Create the new value in the secret manager.
-2. Sync the updated secret file into
-   `$DEPLOY_PATH/shared/<environment>/secrets`.
-3. If the rotated secret is `admin_jwt_secret` or `user_jwt_secret`, copy the
-   old live value into `admin_jwt_secret_previous` or `user_jwt_secret_previous`
-   before deploying. Keep the new value in the primary file; signers only use
-   the primary file and verifiers accept both values during the drain window.
-4. If the rotated secret changes a connection string, update the matching env
-   file in `$DEPLOY_PATH/shared/<environment>/env`.
-5. Deploy the target environment so containers restart against the new secret.
-6. Validate login, write paths, and readiness probes.
-7. Wait at least one full session TTL (`ADMIN_SESSION_TTL` for admin sessions,
-   `USER_SESSION_TTL` for user sessions) so old cookies naturally age out.
-8. Remove the `*_previous` file, deploy again, then revoke the old value.
+pnpm ops:rotate-secret saas status --project-id 123
+pnpm ops:rotate-secret saas rotate --project-id 123 --key-id 456 --reason scheduled-rotation
+pnpm ops:rotate-secret saas drill --project-id 123 --key-id 456 --current-key-file /secure/canary-key.txt --overlap-seconds 300
+```
 
-## Session Rotation Notes
+`pnpm ops:rotate-jwt` remains available as the narrow legacy helper, but new
+runbooks should use `pnpm ops:rotate-secret`.
 
-- `admin_jwt_secret` rotates without downtime when backend and admin both load
-  the new current secret and the previous fallback secret in the same deploy.
-- `user_jwt_secret` rotates without downtime when backend and frontend both load
-  the new current secret and the previous fallback secret in the same deploy.
-- `frontend_auth_secret` still invalidates Auth.js sessions. Schedule that
-  rotation separately if you also need to preserve active web logins.
-- Rotating `postgres_password` requires a coordinated update of
-  `backend_database_url`.
-- Rotating `redis_password` requires a coordinated update of
-  `backend_redis_url`.
-- Rotate `admin_mfa_break_glass_secret` after every use, not only on the normal
-  cadence.
+## Quarterly Drill Standard
+
+Every quarterly drill must prove three things in production:
+
+1. `ADMIN_JWT_SECRET_PREVIOUS` really lets existing admin sessions survive one deploy.
+2. `USER_JWT_SECRET_PREVIOUS` really lets existing user sessions survive one deploy.
+3. SaaS project API key rotation really supports overlap, cutover, and old-key rejection.
+
+Use a dedicated canary SaaS tenant/project for the API key drill. Do not use a
+customer-owned live integration as the rehearsal target.
+
+Record the drill in the change ticket or incident system with:
+
+- date, operator, approver
+- environment
+- command transcript or pasted output
+- current and new secret fingerprints
+- deploy SHA / release id
+- validation results for admin login, user session continuity, and SaaS canary
+
+## JWT Rotation Procedure
+
+This is for `USER_JWT_SECRET` and `ADMIN_JWT_SECRET`. The mechanism is:
+
+- signers always use the current secret file
+- verifiers accept both current and `*_PREVIOUS` during the drain window
+- after one full session TTL, remove `*_PREVIOUS` and deploy again
+
+### 1. Inspect current state
+
+```bash
+pnpm ops:rotate-secret jwt status --target admin
+pnpm ops:rotate-secret jwt status --target user
+```
+
+Confirm the current files resolve under the production secret directory and
+that no stale `*_PREVIOUS` file is already active unless you are finishing an
+in-flight rotation.
+
+### 2. Stage the new secret
+
+```bash
+pnpm ops:rotate-secret jwt stage --target admin --generate --apply
+pnpm ops:rotate-secret jwt stage --target user --generate --apply
+```
+
+This writes:
+
+- the old live value into `admin_jwt_secret_previous` / `user_jwt_secret_previous`
+- the new live value into `admin_jwt_secret` / `user_jwt_secret`
+
+If your secret manager owns file sync, generate the value there first and then
+re-run with `--value-file`.
+
+### 3. Deploy and prove the fallback path
+
+Deploy the environment so backend + admin + frontend + saas-portal all restart
+against the new files, then run:
+
+```bash
+pnpm ops:rotate-secret jwt smoke --target admin --require-previous
+pnpm ops:rotate-secret jwt smoke --target user --require-previous
+```
+
+The smoke command signs synthetic tokens with both current and previous values
+and runs the real verifier code paths:
+
+- `admin`: backend + admin session verifier
+- `user`: backend + frontend + saas-portal verifier
+
+This is the required proof that the `*_PREVIOUS` placeholder mechanism is
+actually wired on prod, not just documented.
+
+### 4. Live validation
+
+After the deploy, explicitly validate:
+
+- existing admin session still works
+- new admin login still works
+- an existing user web session still works
+- a fresh user login still works
+- readiness probes stay healthy
+
+`AUTH_SECRET` is not part of this dual-secret mechanism. Rotating it still
+invalidates Auth.js sessions and should be scheduled separately.
+
+### 5. Drain and finalize
+
+Wait at least one full session TTL:
+
+- `ADMIN_SESSION_TTL` for admin
+- `USER_SESSION_TTL` for user
+
+Then remove the fallback file and deploy again:
+
+```bash
+pnpm ops:rotate-secret jwt finalize --target admin --apply
+pnpm ops:rotate-secret jwt finalize --target user --apply
+```
+
+Re-check login and readiness, then revoke the retired values in the secret
+manager.
+
+## SaaS API Key Rotation Procedure
+
+This is for project API keys under `/v1/engine/*`. It is not file-based and it
+does not use `*_PREVIOUS`. Instead, rotation creates a new key, keeps the old
+key alive for an overlap window, then lets the predecessor expire.
+
+### Canary requirements
+
+Before the quarterly drill, prepare:
+
+- one dedicated canary tenant/project in production
+- a current plaintext canary API key stored in the secret manager
+- one synthetic probe that can be repointed to the new key immediately
+
+### Inspect key chain
+
+```bash
+pnpm ops:rotate-secret saas status --project-id <canary_project_id>
+```
+
+### Run the drill
+
+```bash
+pnpm ops:rotate-secret saas drill \
+  --project-id <canary_project_id> \
+  --key-id <current_key_id> \
+  --current-key-file /secure/canary-key.txt \
+  --overlap-seconds 300 \
+  --reason quarterly-secret-rotation-drill
+```
+
+The drill performs a real rotation and verifies:
+
+1. old key authenticates during the overlap window
+2. new key authenticates during the overlap window
+3. old key stops authenticating after overlap expiry
+4. new key continues to authenticate after overlap expiry
+
+The command prints the fresh plaintext key once. Update the canary secret
+manager entry and the canary probe immediately.
+
+### Non-drill rotation
+
+For planned production cutovers outside the quarterly drill:
+
+```bash
+pnpm ops:rotate-secret saas rotate \
+  --project-id <project_id> \
+  --key-id <current_key_id> \
+  --reason scheduled-rotation
+```
+
+Deliver the fresh key through the team's secret manager process, confirm the
+integrator has cut over, and monitor request success during the overlap window.
+
+## Special Cases
+
+- `frontend_auth_secret`: rotate in a separate maintenance window because it
+  invalidates Auth.js sessions immediately.
+- `postgres_password`: coordinate with `backend_database_url`.
+- `redis_password`: coordinate with `backend_redis_url`.
+- `admin_mfa_break_glass_secret`: rotate after every use, not just on the
+  normal cadence.

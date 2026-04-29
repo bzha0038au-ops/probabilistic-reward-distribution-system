@@ -35,6 +35,7 @@ export const kycReviewActionValues = [
   "approved",
   "rejected",
   "request_more_info",
+  "reverification_requested",
 ] as const;
 export const kycMimeTypeValues = [
   "image/jpeg",
@@ -97,6 +98,7 @@ export const KycUserDocumentSchema = z.object({
   sizeBytes: z.number().int().nonnegative().nullable().optional(),
   storagePath: z.string().optional(),
   createdAt: z.union([z.string(), z.date()]),
+  expiresAt: z.union([z.string(), z.date()]).nullable().optional(),
   metadata: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 export type KycUserDocument = z.infer<typeof KycUserDocumentSchema>;
@@ -152,8 +154,36 @@ export const KycSubmitRequestSchema = z.object({
     .toUpperCase()
     .regex(/^[A-Z]{2}$/)
     .optional(),
+  documentExpiresAt: z.string().trim().datetime({ offset: true }).optional(),
   notes: z.string().trim().max(500).optional(),
   documents: z.array(KycSubmitDocumentSchema).min(2).max(5),
+}).superRefine((value, ctx) => {
+  const requiresDocumentExpiry =
+    value.documentType === "national_id" ||
+    value.documentType === "passport" ||
+    value.documentType === "driver_license";
+
+  if (requiresDocumentExpiry && !value.documentExpiresAt) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Document expiry is required.",
+      path: ["documentExpiresAt"],
+    });
+    return;
+  }
+
+  if (!value.documentExpiresAt) {
+    return;
+  }
+
+  const expiresAt = new Date(value.documentExpiresAt);
+  if (Number.isNaN(expiresAt.valueOf()) || expiresAt.valueOf() <= Date.now()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Document expiry must be in the future.",
+      path: ["documentExpiresAt"],
+    });
+  }
 });
 export type KycSubmitRequest = z.infer<typeof KycSubmitRequestSchema>;
 
@@ -213,4 +243,11 @@ export const KycRequestMoreInfoRequestSchema = z.object({
 });
 export type KycRequestMoreInfoRequest = z.infer<
   typeof KycRequestMoreInfoRequestSchema
+>;
+
+export const KycRequestReverificationRequestSchema = z.object({
+  reason: z.string().trim().max(1000).optional(),
+});
+export type KycRequestReverificationRequest = z.infer<
+  typeof KycRequestReverificationRequestSchema
 >;

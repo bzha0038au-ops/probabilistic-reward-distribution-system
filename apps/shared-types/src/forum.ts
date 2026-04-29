@@ -7,6 +7,15 @@ import { UserFreezeReasonSchema } from "./risk";
 export const forumReportStatusValues = ["open", "resolved"] as const;
 export const ForumReportStatusSchema = z.enum(forumReportStatusValues);
 
+export const forumModerationQueueSourceValues = [
+  "user_report",
+  "automated_signal",
+  "mixed",
+] as const;
+export const ForumModerationQueueSourceSchema = z.enum(
+  forumModerationQueueSourceValues,
+);
+
 export const ForumModerationQueueItemSchema = z.object({
   postId: z.number().int().positive(),
   threadId: z.number().int().positive(),
@@ -20,6 +29,10 @@ export const ForumModerationQueueItemSchema = z.object({
   latestReportDetail: z.string().nullable(),
   oldestReportedAt: z.union([z.string(), z.date()]),
   latestReportedAt: z.union([z.string(), z.date()]),
+  source: ForumModerationQueueSourceSchema,
+  signalProviders: z.array(z.string()),
+  autoHidden: z.boolean(),
+  moderationScore: z.number().min(0).max(1).nullable(),
 });
 
 export const ForumGameplayMuteRecordSchema = z.object({

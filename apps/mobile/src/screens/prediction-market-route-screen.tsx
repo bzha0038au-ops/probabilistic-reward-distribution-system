@@ -21,6 +21,7 @@ import type {
 
 import { mobileFeedbackTheme, mobilePalette as palette } from "../theme";
 import type { MobileRouteLabels, MobileRouteScreens } from "../route-copy";
+import { buildTestId } from "../testing";
 import { ActionButton, SectionCard } from "../ui";
 import { RouteSwitcher } from "./route-switcher";
 import type { MobileAppRoute, MobileStyles } from "./types";
@@ -143,6 +144,7 @@ export function PredictionMarketRouteScreen(
             }
             variant="secondary"
             compact
+            testID="prediction-market-refresh-markets-button"
           />
         </View>
 
@@ -183,6 +185,7 @@ export function PredictionMarketRouteScreen(
                     accessibilityLabel={market.title}
                     accessibilityHint="Double tap to open this prediction market."
                     accessibilityState={{ selected }}
+                    testID={buildTestId("prediction-market-card", market.slug)}
                     style={[
                       styles.marketCard,
                       selected ? styles.marketCardSelected : null,
@@ -289,6 +292,7 @@ export function PredictionMarketRouteScreen(
                   accessibilityRole="button"
                   accessibilityLabel={props.screenCopy.portfolioFilterLabels[status]}
                   accessibilityState={{ selected: active }}
+                  testID={buildTestId("prediction-market-portfolio-filter", status)}
                   style={[
                     styles.filterChip,
                     active ? styles.filterChipActive : null,
@@ -316,6 +320,7 @@ export function PredictionMarketRouteScreen(
             disabled={props.loadingPredictionMarketHistory}
             variant="secondary"
             compact
+            testID="prediction-market-refresh-history-button"
           />
         </View>
 
@@ -403,6 +408,7 @@ export function PredictionMarketRouteScreen(
                 }
                 variant="secondary"
                 compact
+                testID="prediction-market-previous-page-button"
               />
               <ActionButton
                 label={props.screenCopy.nextPage}
@@ -413,6 +419,7 @@ export function PredictionMarketRouteScreen(
                 }
                 variant="secondary"
                 compact
+                testID="prediction-market-next-page-button"
               />
             </View>
           </View>
@@ -563,6 +570,7 @@ function PredictionMarketDetailPanel(props: PredictionMarketDetailPanelProps) {
                 accessibilityLabel={outcome.label}
                 accessibilityHint="Double tap to select this outcome."
                 accessibilityState={{ selected }}
+                testID={buildTestId("prediction-market-outcome-card", outcome.key)}
                 style={[
                   styles.outcomeCard,
                   selected ? styles.outcomeCardSelected : null,
@@ -614,6 +622,7 @@ function PredictionMarketDetailPanel(props: PredictionMarketDetailPanelProps) {
           autoCorrect={false}
           placeholder={props.stakeAmount}
           placeholderTextColor={palette.textMuted}
+          testID="prediction-market-stake-input"
         />
         <Text style={styles.betHint}>
           {marketOpen ? props.screenCopy.stakeHint : props.screenCopy.marketClosed}
@@ -632,6 +641,7 @@ function PredictionMarketDetailPanel(props: PredictionMarketDetailPanelProps) {
             !marketOpen ||
             !props.selectedOutcomeKey
           }
+          testID="prediction-market-place-position-button"
         />
       </View>
 
@@ -694,7 +704,10 @@ function PredictionMarketPortfolioCard(
   const { item } = props;
 
   return (
-    <View style={styles.holdingCard}>
+    <View
+      style={styles.holdingCard}
+      testID={buildTestId("prediction-market-portfolio-card", item.market.slug)}
+    >
       <View style={styles.portfolioHeader}>
         <View style={styles.portfolioHeaderCopy}>
           <Text style={styles.marketCardTitle}>{item.market.title}</Text>
@@ -765,6 +778,7 @@ function PredictionMarketPortfolioCard(
         onPress={() => props.onSelectPredictionMarket(item.market.id)}
         variant="secondary"
         compact
+        testID={buildTestId("prediction-market-focus-market-button", item.market.slug)}
       />
 
       <View style={styles.positionList}>
@@ -795,7 +809,10 @@ function PredictionMarketPositionCard(props: PredictionMarketPositionCardProps) 
   const outcomeLabel = getOutcomeLabel(props.market, props.outcomeKey);
 
   return (
-    <View style={styles.positionCard}>
+    <View
+      style={styles.positionCard}
+      testID={buildTestId("prediction-market-position-card", props.outcomeKey)}
+    >
       <View style={styles.positionCardHeader}>
         <View>
           <Text style={styles.positionOutcome}>{outcomeLabel}</Text>

@@ -75,16 +75,17 @@ export const publishHoldemRealtimeUpdate = (
           privateUpdates: [],
         };
   const update = fanout.publicUpdate;
+  const publicPayload = JSON.parse(JSON.stringify(update)) as RealtimeJsonValue;
 
   publishRealtimeToTopic({
     topic: HOLDEM_REALTIME_LOBBY_TOPIC,
     event: HOLDEM_REALTIME_LOBBY_EVENT,
-    data: update,
+    data: publicPayload,
   });
   publishRealtimeToTopic({
     topic: buildHoldemRealtimeTableTopic(update.table.id),
     event: HOLDEM_REALTIME_TABLE_EVENT,
-    data: update,
+    data: publicPayload,
   });
 
   for (const privateUpdate of fanout.privateUpdates) {

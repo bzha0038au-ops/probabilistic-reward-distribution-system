@@ -1,25 +1,25 @@
-import 'dotenv/config';
+import "dotenv/config";
 
-import { client } from '../db';
+import { client } from "../db";
 import {
   startSaasBillingDispatcher,
   stopSaasBillingDispatcher,
-} from '../modules/saas/billing-dispatcher';
-import { getConfigView } from '../shared/config';
-import { logger } from '../shared/logger';
+} from "../modules/saas/billing-dispatcher";
+import { getConfigView } from "../shared/config";
+import { logger } from "../shared/logger";
 import {
   captureException,
   initializeObservability,
   shutdownObservability,
-} from '../shared/telemetry';
+} from "../shared/telemetry";
 
 initializeObservability();
 const config = getConfigView();
 
 type ShutdownSignal =
   | NodeJS.Signals
-  | 'uncaughtException'
-  | 'unhandledRejection';
+  | "uncaughtException"
+  | "unhandledRejection";
 
 let shuttingDown = false;
 
@@ -31,18 +31,18 @@ const shutdown = async (signal: ShutdownSignal, error?: unknown) => {
   shuttingDown = true;
 
   if (error) {
-    logger.error('saas billing worker shutting down after fatal error', {
+    logger.error("saas billing worker shutting down after fatal error", {
       signal,
       err: error,
     });
     captureException(error, {
       tags: {
-        service_role: 'saas_billing_worker',
+        service_role: "saas_billing_worker",
         signal,
       },
     });
   } else {
-    logger.info('saas billing worker shutting down', {
+    logger.info("saas billing worker shutting down", {
       signal,
     });
   }
@@ -52,7 +52,7 @@ const shutdown = async (signal: ShutdownSignal, error?: unknown) => {
   try {
     await client.end();
   } catch (closeError) {
-    logger.warning('failed to close saas billing worker database client', {
+    logger.warning("failed to close saas billing worker database client", {
       err: closeError,
     });
   }
@@ -62,31 +62,33 @@ const shutdown = async (signal: ShutdownSignal, error?: unknown) => {
   process.exit(error ? 1 : 0);
 };
 
-process.on('uncaughtException', (error) => {
-  void shutdown('uncaughtException', error);
+process.on("uncaughtException", (error) => {
+  void shutdown("uncaughtException", error);
 });
 
-process.on('unhandledRejection', (reason) => {
-  void shutdown('unhandledRejection', reason);
+process.on("unhandledRejection", (reason) => {
+  void shutdown("unhandledRejection", reason);
 });
 
-process.on('SIGTERM', () => {
-  void shutdown('SIGTERM');
+process.on("SIGTERM", () => {
+  void shutdown("SIGTERM");
 });
 
-process.on('SIGINT', () => {
-  void shutdown('SIGINT');
+process.on("SIGINT", () => {
+  void shutdown("SIGINT");
 });
 
 startSaasBillingDispatcher();
 
-logger.info('saas billing worker booted', {
+logger.info("saas billing worker booted", {
   enabled: config.saasBillingWorkerEnabled,
   intervalMs: config.saasBillingWorkerIntervalMs,
   webhookBatchSize: config.saasBillingWebhookBatchSize,
   webhookLockTimeoutMs: config.saasBillingWebhookLockTimeoutMs,
   automationEnabled: config.saasBillingAutomationEnabled,
   automationBatchSize: config.saasBillingAutomationBatchSize,
+  reportExportBatchSize: config.saasReportExportBatchSize,
+  reportExportLockTimeoutMs: config.saasReportExportLockTimeoutMs,
   outboundWebhookBatchSize: config.saasOutboundWebhookBatchSize,
   outboundWebhookLockTimeoutMs: config.saasOutboundWebhookLockTimeoutMs,
   outboundWebhookRequestTimeoutMs: config.saasOutboundWebhookRequestTimeoutMs,

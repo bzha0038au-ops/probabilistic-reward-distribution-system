@@ -40,6 +40,20 @@ export const parsePositiveInt = (source: unknown, key: string) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 };
 
+export const readHeaderValue = (
+  headers: Record<string, unknown>,
+  key: string
+) => {
+  const value = headers[key.toLowerCase()];
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (typeof raw !== 'string') {
+    return null;
+  }
+
+  const trimmed = raw.trim();
+  return trimmed === '' ? null : trimmed;
+};
+
 export const readRecordValue = (source: unknown, key: string) => {
   const value = Reflect.get(toObject(source), key);
   if (typeof value !== 'object' || value === null) {

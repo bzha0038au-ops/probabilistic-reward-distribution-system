@@ -11,6 +11,7 @@ import {
 } from "@reward/shared-types/admin";
 import { API_ERROR_CODES } from "@reward/shared-types/api";
 import { NotificationDeliveryQuerySchema } from "@reward/shared-types/notification";
+import { JurisdictionRuleUpsertSchema } from "@reward/shared-types/risk";
 
 import { ADMIN_PERMISSION_KEYS } from "../../../modules/admin-permission/definitions";
 import {
@@ -26,6 +27,10 @@ import {
   releaseUserFreeze,
   upsertManualCollusionFlag,
 } from "../../../modules/risk/service";
+import {
+  listJurisdictionRules,
+  upsertJurisdictionRule,
+} from "../../../modules/risk/jurisdiction-service";
 import { recordAdminAction } from "../../../modules/admin/audit";
 import {
   getNotificationDeliverySummary,
@@ -157,6 +162,58 @@ export async function registerAdminSecurityRoutes(
 
       const dashboard = await getCollusionDashboard(parsed.data);
       return sendSuccess(reply, dashboard);
+    },
+  );
+
+  protectedRoutes.get(
+    "/admin/jurisdiction-rules",
+    { preHandler: [requireAdminPermission(ADMIN_PERMISSION_KEYS.RISK_READ)] },
+    async (_request, reply) => {
+      const items = await listJurisdictionRules();
+      return sendSuccess(reply, items);
+    },
+  );
+
+  protectedRoutes.post(
+    "/admin/jurisdiction-rules",
+    {
+      config: { rateLimit: adminRateLimit },
+      preHandler: [
+        requireAdminPermission(ADMIN_PERMISSION_KEYS.RISK_FREEZE_USER),
+        enforceAdminLimit,
+      ],
+    },
+    async (request, reply) => {
+      const parsed = parseSchema(
+        JurisdictionRuleUpsertSchema,
+        toObject(request.body),
+      );
+      if (!parsed.isValid) {
+        return sendError(
+          reply,
+          400,
+          "Invalid request.",
+          parsed.errors,
+          API_ERROR_CODES.INVALID_REQUEST,
+        );
+      }
+
+      const rule = await upsertJurisdictionRule(parsed.data);
+      await recordAdminAction(
+        withAdminAuditContext(request, {
+          adminId: request.admin?.adminId ?? null,
+          action: "jurisdiction_rule_upsert",
+          targetType: "jurisdiction_rule",
+          targetId: rule.id,
+          metadata: {
+            countryCode: rule.countryCode,
+            minimumAge: rule.minimumAge,
+            allowedFeatures: rule.allowedFeatures,
+          },
+        }),
+      );
+
+      return sendSuccess(reply, rule);
     },
   );
 

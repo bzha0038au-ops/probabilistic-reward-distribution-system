@@ -11,7 +11,7 @@ import type {
 import type { PlayModeOutcome } from "@reward/shared-types/play-mode";
 import Decimal from "decimal.js";
 
-import { db } from "../../db";
+import { db, type DbTransaction } from "../../db";
 import { conflictError } from "../../shared/errors";
 import { toDecimal, toMoneyString } from "../../shared/money";
 import { getFairnessCommit } from "../fairness/service";
@@ -19,10 +19,7 @@ import { assertKycStakeAllowed } from "../kyc/service";
 import { assertWalletLedgerInvariant } from "../wallet/invariant-service";
 import {
   loadUserPlayModeSnapshot,
-  lockUserPlayModeState,
-  resolveRequestedPlayMode,
   resolveSettledPlayMode,
-  saveUserPlayModeState,
 } from "../play-mode/service";
 import {
   getDrawCost,
@@ -49,6 +46,14 @@ type DrawRecordSnapshot = {
   status: DrawResult["status"];
   createdAt: Date;
   metadata: unknown;
+};
+
+export type ResolvedDrawPlayResult = {
+  requestedCount: number;
+  records: DrawRecordSnapshot[];
+  endingBalance: string;
+  pityState: DrawPityState;
+  playMode: import("@reward/shared-types/play-mode").PlayModeSnapshot;
 };
 
 const FEATURED_PRIZE_COUNT = 4;
@@ -298,117 +303,98 @@ export async function getDrawCatalog(userId: number) {
   };
 }
 
-export async function executeDrawPlay(
+export const executeResolvedDrawPlayInTransaction = async (
+  tx: DbTransaction,
   userId: number,
   request: DrawPlayRequest,
-): Promise<DrawPlayResponse> {
+  activePlayMode: import("@reward/shared-types/play-mode").PlayModeSnapshot,
+) => {
   const requestedCount = Math.floor(Number(request.count ?? 0));
   if (!Number.isFinite(requestedCount) || requestedCount <= 0) {
     throw conflictError("Invalid draw count.");
   }
 
-  const { records, endingBalance, pityState, playMode } = await db.transaction(
-    async (tx) => {
-      const [drawSystem, probabilityControl, storedPlayMode] = await Promise.all([
-        getDrawSystemConfig(tx),
-        getProbabilityControlConfig(tx),
-        lockUserPlayModeState(tx, userId, "draw"),
-      ]);
-      if (!storedPlayMode) {
-        throw conflictError("Draw play mode state is unavailable.");
-      }
+  const [drawSystem, probabilityControl] = await Promise.all([
+    getDrawSystemConfig(tx),
+    getProbabilityControlConfig(tx),
+  ]);
+  const effectiveCount = requestedCount * activePlayMode.appliedMultiplier;
 
-      const activePlayMode = resolveRequestedPlayMode({
-        requestedMode: request.playMode ?? null,
-        storedMode: storedPlayMode.mode,
-        storedState: storedPlayMode.state,
-      });
-      const effectiveCount = requestedCount * activePlayMode.appliedMultiplier;
+  const maxBatchCount = normalizeMaxBatchCount(drawSystem.maxDrawPerRequest);
+  if (effectiveCount > maxBatchCount) {
+    throw conflictError("Requested batch size exceeds the configured maximum.");
+  }
 
-      const maxBatchCount = normalizeMaxBatchCount(
-        drawSystem.maxDrawPerRequest,
-      );
-      if (effectiveCount > maxBatchCount) {
-        throw conflictError(
-          "Requested batch size exceeds the configured maximum.",
-        );
-      }
-
-      const normalizedDrawCost = getNormalizedDrawCost(
-        await getDrawCost(tx),
-        drawSystem,
-      );
-      await assertKycStakeAllowed(
-        userId,
-        toMoneyString(normalizedDrawCost.mul(effectiveCount)),
-        tx,
-      );
-
-      const results: DrawRecordSnapshot[] = [];
-
-      for (let index = 0; index < effectiveCount; index += 1) {
-        const record = await executeDrawInTransaction(tx, userId, {
-          clientNonce: resolveBatchClientNonce(
-            request.clientNonce,
-            index,
-            effectiveCount,
-          ),
-          playMode: activePlayMode,
-        });
-
-        results.push({
-          id: record.id,
-          userId: record.userId,
-          prizeId: record.prizeId,
-          drawCost: record.drawCost,
-          rewardAmount: record.rewardAmount,
-          status: record.status,
-          createdAt: record.createdAt,
-          metadata: record.metadata,
-        });
-      }
-
-      const settledPlayMode = resolveSettledPlayMode({
-        snapshot: activePlayMode,
-        outcome: classifyDrawPlayModeOutcome(results),
-      });
-      await saveUserPlayModeState({
-        tx,
-        rowId: storedPlayMode.id,
-        snapshot: settledPlayMode,
-      });
-
-      const [walletRow, userRow] = await Promise.all([
-        tx
-          .select({ balance: userWallets.withdrawableBalance })
-          .from(userWallets)
-          .where(eq(userWallets.userId, userId))
-          .limit(1),
-        tx
-          .select({ pityStreak: users.pityStreak })
-          .from(users)
-          .where(eq(users.id, userId))
-          .limit(1),
-      ]);
-
-      const response = {
-        records: results,
-        endingBalance: walletRow[0]?.balance ?? "0.00",
-        pityState: buildPityState(
-          probabilityControl,
-          Number(userRow[0]?.pityStreak ?? 0),
-        ),
-        playMode: settledPlayMode,
-      };
-
-      await assertWalletLedgerInvariant(tx, userId, {
-        service: "draw",
-        operation: "executeDrawPlay",
-      });
-
-      return response;
-    },
+  const normalizedDrawCost = getNormalizedDrawCost(await getDrawCost(tx), drawSystem);
+  await assertKycStakeAllowed(
+    userId,
+    toMoneyString(normalizedDrawCost.mul(effectiveCount)),
+    tx,
   );
+
+  const results: DrawRecordSnapshot[] = [];
+
+  for (let index = 0; index < effectiveCount; index += 1) {
+    const record = await executeDrawInTransaction(tx, userId, {
+      clientNonce: resolveBatchClientNonce(
+        request.clientNonce,
+        index,
+        effectiveCount,
+      ),
+      playMode: activePlayMode,
+    });
+
+    results.push({
+      id: record.id,
+      userId: record.userId,
+      prizeId: record.prizeId,
+      drawCost: record.drawCost,
+      rewardAmount: record.rewardAmount,
+      status: record.status,
+      createdAt: record.createdAt,
+      metadata: record.metadata,
+    });
+  }
+
+  const settledPlayMode = resolveSettledPlayMode({
+    snapshot: activePlayMode,
+    outcome: classifyDrawPlayModeOutcome(results),
+  });
+
+  const [walletRow, userRow] = await Promise.all([
+    tx
+      .select({ balance: userWallets.withdrawableBalance })
+      .from(userWallets)
+      .where(eq(userWallets.userId, userId))
+      .limit(1),
+    tx
+      .select({ pityStreak: users.pityStreak })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1),
+  ]);
+
+  await assertWalletLedgerInvariant(tx, userId, {
+    service: "draw",
+    operation: "executeResolvedDrawPlayInTransaction",
+  });
+
+  return {
+    requestedCount,
+    records: results,
+    endingBalance: walletRow[0]?.balance ?? "0.00",
+    pityState: buildPityState(
+      probabilityControl,
+      Number(userRow[0]?.pityStreak ?? 0),
+    ),
+    playMode: settledPlayMode,
+  } satisfies ResolvedDrawPlayResult;
+};
+
+export const buildDrawPlayResponseFromResult = async (
+  result: ResolvedDrawPlayResult,
+): Promise<DrawPlayResponse> => {
+  const { requestedCount, records, endingBalance, pityState, playMode } = result;
 
   const prizeIds = [
     ...new Set(
@@ -454,6 +440,17 @@ export async function executeDrawPlay(
     playMode,
     results,
   };
+};
+
+export async function executeResolvedDrawPlay(
+  userId: number,
+  request: DrawPlayRequest,
+  activePlayMode: import("@reward/shared-types/play-mode").PlayModeSnapshot,
+): Promise<DrawPlayResponse> {
+  const result = await db.transaction((tx) =>
+    executeResolvedDrawPlayInTransaction(tx, userId, request, activePlayMode),
+  );
+  return buildDrawPlayResponseFromResult(result);
 }
 
 export const serializeDrawRecordForResponse = async (

@@ -30,6 +30,9 @@
     if (amount < 0) return "text-warning"
     return "text-slate-900"
   }
+
+  const slaBadgeClass = (breached: boolean | undefined) =>
+    breached ? "badge-error" : "badge-success"
 </script>
 
 <header class="space-y-3">
@@ -61,7 +64,7 @@
   </div>
 {/if}
 
-<section class="mt-6 grid gap-4 md:grid-cols-5">
+<section class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
   <div class="card bg-base-100 shadow">
     <div class="card-body">
       <p class="text-sm text-slate-500">{t("engine.summary.unresolved")}</p>
@@ -69,6 +72,36 @@
         <span class="inline-flex h-2.5 w-2.5 rounded-full bg-error"></span>
         <p class="text-2xl font-semibold">{summary?.unresolvedCount ?? 0}</p>
       </div>
+    </div>
+  </div>
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <p class="text-sm text-slate-500">{t("engine.summary.overdue")}</p>
+      <p class="text-2xl font-semibold">{summary?.overdueCount ?? 0}</p>
+      <p class="text-xs text-slate-500">
+        {t("engine.summary.slaTarget")}: {summary?.slaHours ?? 24}h
+      </p>
+    </div>
+  </div>
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <p class="text-sm text-slate-500">
+        {t("engine.summary.zeroDriftStreak")}
+      </p>
+      <p class="text-2xl font-semibold">
+        {summary?.zeroDriftStreakDays ?? 0}
+      </p>
+      <p class="text-xs text-slate-500">{t("admin.metrics.reconciliationStreak")}</p>
+    </div>
+  </div>
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <p class="text-sm text-slate-500">
+        {t("engine.summary.requireEngineering")}
+      </p>
+      <p class="text-2xl font-semibold">
+        {summary?.requireEngineeringCount ?? 0}
+      </p>
     </div>
   </div>
   <div class="card bg-base-100 shadow">
@@ -81,16 +114,6 @@
     <div class="card-body">
       <p class="text-sm text-slate-500">{t("engine.summary.acknowledged")}</p>
       <p class="text-2xl font-semibold">{summary?.acknowledgedCount ?? 0}</p>
-    </div>
-  </div>
-  <div class="card bg-base-100 shadow">
-    <div class="card-body">
-      <p class="text-sm text-slate-500">
-        {t("engine.summary.requireEngineering")}
-      </p>
-      <p class="text-2xl font-semibold">
-        {summary?.requireEngineeringCount ?? 0}
-      </p>
     </div>
   </div>
   <div class="card bg-base-100 shadow">
@@ -141,6 +164,7 @@
           <th>{t("engine.table.headers.user")}</th>
           <th>{t("engine.table.headers.status")}</th>
           <th>{t("engine.table.headers.delta")}</th>
+          <th>{t("engine.table.headers.sla")}</th>
           <th>{t("engine.table.headers.ledgerSnapshot")}</th>
           <th>{t("engine.table.headers.walletSnapshot")}</th>
           <th>{t("engine.table.headers.lastDetectedAt")}</th>
@@ -151,7 +175,7 @@
       <tbody>
         {#if alerts.length === 0}
           <tr>
-            <td colspan="8" class="text-center text-sm text-slate-500">
+            <td colspan="9" class="text-center text-sm text-slate-500">
               {t("engine.table.empty")}
             </td>
           </tr>
@@ -173,6 +197,35 @@
               </td>
               <td class={`font-mono font-semibold ${deltaClass(alert.deltaAmount)}`}>
                 {formatMoney(alert.deltaAmount)}
+              </td>
+              <td class="min-w-48 align-top text-xs">
+                <div class="space-y-2">
+                  <span class={`badge ${slaBadgeClass(alert.slaBreached)}`}>
+                    {alert.slaBreached
+                      ? t("engine.sla.breached")
+                      : t("engine.sla.healthy")}
+                  </span>
+                  <div class="space-y-1">
+                    <div class="flex justify-between gap-3">
+                      <span class="text-slate-500">
+                        {t("engine.sla.firstDetectedAt")}
+                      </span>
+                      <span>{formatDateTime(alert.firstDetectedAt)}</span>
+                    </div>
+                    <div class="flex justify-between gap-3">
+                      <span class="text-slate-500">{t("engine.sla.dueAt")}</span>
+                      <span>{formatDateTime(alert.slaDueAt)}</span>
+                    </div>
+                    {#if alert.escalatedAt}
+                      <div class="flex justify-between gap-3">
+                        <span class="text-slate-500">
+                          {t("engine.sla.escalatedAt")}
+                        </span>
+                        <span>{formatDateTime(alert.escalatedAt)}</span>
+                      </div>
+                    {/if}
+                  </div>
+                </div>
               </td>
               <td class="min-w-64 align-top">
                 <div class="space-y-1 text-xs">

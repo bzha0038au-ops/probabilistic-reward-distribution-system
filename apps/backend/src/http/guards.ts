@@ -29,15 +29,19 @@ import {
   verifyUserSessionToken,
 } from "../shared/user-session";
 import { toDecimal, toMoneyString } from "../shared/money";
-import { sendError } from "./respond";
+import { sendError, sendErrorForException } from "./respond";
 import { isUserFrozen } from "../modules/risk/service";
+import {
+  resolveRequestCountryCode,
+  syncUserJurisdictionState,
+} from "../modules/risk/jurisdiction-service";
 import {
   getSystemFlags,
   getWithdrawalRiskConfig,
 } from "../modules/system/service";
 import { getEffectiveUserKycTier } from "../modules/kyc/service";
 import { db } from "../db";
-import { getCurrentLegalAcceptanceStateForUser } from "../modules/legal/service";
+import { assertCurrentLegalAcceptanceForUser } from "../modules/legal/service";
 import { getUserById } from "../modules/user/service";
 import {
   isUserMfaEnabled,
@@ -70,6 +74,12 @@ const userKycTierRank: Record<KycTier, number> = {
   tier_1: 1,
   tier_2: 2,
 };
+
+const jurisdictionScopedFreezeSet = new Set<UserFreezeScope>([
+  "withdrawal_lock",
+  "gameplay_lock",
+  "topup_lock",
+]);
 
 export const requireUser = async (request: FastifyRequest) => {
   const header = request.headers.authorization;
@@ -166,6 +176,17 @@ export const requireUserFreezeScope = (scope: UserFreezeScope) => {
       return sendError(reply, 401, "Unauthorized");
     }
 
+    if (jurisdictionScopedFreezeSet.has(scope)) {
+      const countryCode = await resolveRequestCountryCode({
+        headers: request.headers as Record<string, unknown>,
+        ip: request.ip,
+      });
+      await syncUserJurisdictionState({
+        userId: user.userId,
+        countryCodeOverride: countryCode,
+      });
+    }
+
     const frozen = await isUserFrozen(user.userId, { scope });
     if (frozen) {
       return sendError(reply, 423, freezeErrorMessages[scope]);
@@ -223,6 +244,7 @@ export const requireUserKycTier = (requirements: {
     }
 
     const currentTier = await getEffectiveUserKycTier(user.userId);
+    request.userKycTier = currentTier;
     if (
       userKycTierRank[currentTier] <
       userKycTierRank[requirements.minimum]
@@ -247,18 +269,16 @@ export const requireCurrentLegalAcceptance = async (
     return sendError(reply, 401, "Unauthorized");
   }
 
-  const legal = await getCurrentLegalAcceptanceStateForUser(user.userId);
-  if (!legal.requiresAcceptance) {
+  try {
+    await assertCurrentLegalAcceptanceForUser(user.userId);
     return;
+  } catch (error) {
+    return sendErrorForException(
+      reply,
+      error,
+      "Accept the current legal documents to continue.",
+    );
   }
-
-  return sendError(
-    reply,
-    403,
-    "Accept the current legal documents to continue.",
-    undefined,
-    API_ERROR_CODES.LEGAL_ACCEPTANCE_REQUIRED,
-  );
 };
 
 export const requireAdminGuard = async (

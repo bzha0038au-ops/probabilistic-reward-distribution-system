@@ -39,6 +39,34 @@ const buildBodyPreview = (body: string) => {
 const toComparableTimestamp = (value: string | Date) =>
   value instanceof Date ? value.toISOString() : value;
 
+const readReportMetadata = (value: unknown) =>
+  value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : null;
+
+const readSignalProviders = (value: Record<string, unknown> | null) => {
+  if (!value) {
+    return [];
+  }
+
+  const signalProviders = value.signalProviders;
+  if (!Array.isArray(signalProviders)) {
+    return [];
+  }
+
+  return signalProviders.filter(
+    (provider): provider is string => typeof provider === "string" && provider !== "",
+  );
+};
+
+const readModerationScore = (value: Record<string, unknown> | null) => {
+  const score = value?.moderationScore;
+  return typeof score === "number" ? score : null;
+};
+
+const readAutoHidden = (value: Record<string, unknown> | null) =>
+  value?.autoHidden === true;
+
 const toQueueItems = (
   rows: Array<{
     postId: number;
@@ -50,6 +78,8 @@ const toQueueItems = (
     postStatus: string;
     reportReason: string;
     reportDetail: string | null;
+    reportSource: string;
+    reportMetadata: unknown;
     reportCreatedAt: Date;
   }>,
   limit: number,
@@ -59,6 +89,11 @@ const toQueueItems = (
   for (const row of rows) {
     const reportCreatedAt = row.reportCreatedAt.toISOString();
     const existing = queue.get(row.postId);
+    const reportMetadata = readReportMetadata(row.reportMetadata);
+    const signalProviders = readSignalProviders(reportMetadata);
+    const moderationScore = readModerationScore(reportMetadata);
+    const source =
+      row.reportSource === "automated_signal" ? "automated_signal" : "user_report";
 
     if (!existing) {
       queue.set(row.postId, {
@@ -74,11 +109,27 @@ const toQueueItems = (
         latestReportDetail: row.reportDetail,
         oldestReportedAt: reportCreatedAt,
         latestReportedAt: reportCreatedAt,
+        source,
+        signalProviders,
+        autoHidden: readAutoHidden(reportMetadata),
+        moderationScore,
       });
       continue;
     }
 
     existing.reportCount += 1;
+    existing.source =
+      existing.source === source ? existing.source : "mixed";
+    existing.signalProviders = [
+      ...new Set([...existing.signalProviders, ...signalProviders]),
+    ];
+    existing.autoHidden = existing.autoHidden || readAutoHidden(reportMetadata);
+    existing.moderationScore =
+      moderationScore === null
+        ? existing.moderationScore
+        : existing.moderationScore === null
+          ? moderationScore
+          : Math.max(existing.moderationScore, moderationScore);
     if (reportCreatedAt > existing.latestReportedAt) {
       existing.latestReportedAt = reportCreatedAt;
       existing.latestReportReason = row.reportReason;
@@ -131,6 +182,8 @@ export async function getForumModerationOverview(options: {
         postStatus: communityPosts.status,
         reportReason: communityReports.reason,
         reportDetail: communityReports.detail,
+        reportSource: communityReports.source,
+        reportMetadata: communityReports.metadata,
         reportCreatedAt: communityReports.createdAt,
       })
       .from(communityReports)

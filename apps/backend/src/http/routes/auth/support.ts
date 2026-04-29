@@ -226,6 +226,7 @@ export const detectLoginAnomaly = async (payload: {
   successEventType: "user_login_success" | "admin_login_success";
   currentIp?: string | null;
   currentUserAgent?: string | null;
+  currentDeviceFingerprint?: string | null;
 }) => {
   if (config.anomalousLoginLookbackDays <= 0) {
     return null;
@@ -252,6 +253,10 @@ export const detectLoginAnomaly = async (payload: {
   }
 
   const signals: string[] = [];
+  const previousDeviceFingerprint = readStringValue(
+    previous.metadata,
+    "deviceFingerprint",
+  );
   if (payload.currentIp && previous.ip && payload.currentIp !== previous.ip) {
     signals.push("new_ip");
   }
@@ -261,6 +266,13 @@ export const detectLoginAnomaly = async (payload: {
     payload.currentUserAgent !== previous.userAgent
   ) {
     signals.push("new_user_agent");
+  }
+  if (
+    payload.currentDeviceFingerprint &&
+    previousDeviceFingerprint &&
+    payload.currentDeviceFingerprint !== previousDeviceFingerprint
+  ) {
+    signals.push("new_device_fingerprint");
   }
 
   if (signals.length === 0) {
@@ -279,12 +291,19 @@ export const handleLoginAnomaly = async (payload: {
   anomalyEventType: "user_login_anomaly" | "admin_login_anomaly";
   currentIp?: string | null;
   currentUserAgent?: string | null;
+  currentDeviceFingerprint?: string | null;
   anomaly: NonNullable<Awaited<ReturnType<typeof detectLoginAnomaly>>>;
 }) => {
+  const previousDeviceFingerprint = readStringValue(
+    payload.anomaly.previous.metadata,
+    "deviceFingerprint",
+  );
   const metadata = {
     signals: payload.anomaly.signals,
     previousIp: payload.anomaly.previous.ip ?? null,
     previousUserAgent: payload.anomaly.previous.userAgent ?? null,
+    previousDeviceFingerprint,
+    currentDeviceFingerprint: payload.currentDeviceFingerprint ?? null,
     previousCreatedAt: new Date(
       payload.anomaly.previous.createdAt
     ).toISOString(),
@@ -309,6 +328,7 @@ export const handleLoginAnomaly = async (payload: {
       loginType: payload.anomalyEventType,
       currentIp: payload.currentIp ?? null,
       currentUserAgent: payload.currentUserAgent ?? null,
+      currentDeviceFingerprint: payload.currentDeviceFingerprint ?? null,
     },
     score: payload.anomaly.signals.length >= 2 ? 2 : 1,
   });

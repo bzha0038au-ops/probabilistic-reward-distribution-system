@@ -19,7 +19,10 @@
     "./blackjack": "./src/blackjack.ts",
     "./community": "./src/community.ts",
     "./common": "./src/common.ts",
+    "./data-rights": "./src/data-rights.ts",
+    "./dealer": "./src/dealer.ts",
     "./draw": "./src/draw.ts",
+    "./experiments": "./src/experiments.ts",
     "./fairness": "./src/fairness.ts",
     "./finance": "./src/finance.ts",
     "./forum": "./src/forum.ts",
@@ -35,6 +38,7 @@
     "./realtime": "./src/realtime.ts",
     "./risk": "./src/risk.ts",
     "./saas": "./src/saas.ts",
+    "./saas-status": "./src/saas-status.ts",
     "./table-engine": "./src/table-engine.ts",
     "./table-monitoring": "./src/table-monitoring.ts",
     "./user": "./src/user.ts"
@@ -63,8 +67,17 @@
       "common": [
         "src/common.ts"
       ],
+      "data-rights": [
+        "src/data-rights.ts"
+      ],
+      "dealer": [
+        "src/dealer.ts"
+      ],
       "draw": [
         "src/draw.ts"
+      ],
+      "experiments": [
+        "src/experiments.ts"
       ],
       "fairness": [
         "src/fairness.ts"
@@ -110,6 +123,9 @@
       ],
       "saas": [
         "src/saas.ts"
+      ],
+      "saas-status": [
+        "src/saas-status.ts"
       ],
       "table-engine": [
         "src/table-engine.ts"

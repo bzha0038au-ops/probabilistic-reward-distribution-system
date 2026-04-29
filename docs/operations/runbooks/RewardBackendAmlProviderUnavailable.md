@@ -10,7 +10,7 @@ psql "$DATABASE_URL" -c "select id, user_id, checkpoint, provider_key, result, c
 ```
 
 - 先确认影响 checkpoint 是 `registration`、`first_deposit` 还是 `withdrawal_request`；不同 checkpoint 的用户影响面不同。
-- 核对当前 `AML_PROVIDER_KEY` 配置和最近变更记录。代码里如果 provider key 未注册，会直接报 `Configured AML provider ... is not registered.`。
+- 核对当前 `AML_PROVIDER_KEY` 配置和最近变更记录。它现在是 opaque key，不需要改 shared-types/schema；但如果该 key 没有对应到后端已注册实现，代码会直接报 `Configured AML provider ... is not registered.`。
 - 当前仓库只内建了 `mock` provider；如果生产环境没有额外注册的真实 provider，就不存在 repo-owned 的热切换后备。不要擅自把生产切到 `mock`。
 
 ## T. Trigger

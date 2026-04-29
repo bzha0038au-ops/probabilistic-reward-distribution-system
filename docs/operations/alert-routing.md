@@ -35,7 +35,7 @@ schedules are enabled.
 - PostgreSQL data volume alerts: route 70% to the ticket queue, 85%/95% to the page chain, and have the 95% rule fan out to the AI ops agent for an automatic expansion attempt.
 - Redis memory alerts: route 70% to the ticket queue and 85%/95% to the page chain.
 - Registry storage alerts: route the 80% threshold to the Telegram ticket chat so rollback images are preserved before registry GC pressure starts.
-- Missing restore-drill evidence older than 90 days: treat as a sev2 operational readiness issue and page `DEPLOY_TG_PAGE_CHAT_ID`.
+- Missing restore-drill evidence older than 45 days: treat as a sev2 operational readiness issue and page `DEPLOY_TG_PAGE_CHAT_ID`.
 
 ## Source Of Truth
 

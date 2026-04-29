@@ -3,6 +3,7 @@ import {
   admins,
   saasApiKeys,
   saasBillingAccounts,
+  saasBillingDisputes,
   saasBillingRuns,
   saasBillingTopUps,
   saasOutboundWebhookDeliveries,
@@ -28,9 +29,15 @@ import {
   or,
   sql,
 } from "@reward/database/orm";
-import type { SaasApiKey, SaasOverview } from "@reward/shared-types/saas";
+import {
+  defaultSaasOverviewUiCopy,
+  type SaasApiKey,
+  type SaasOverview,
+  type SaasOverviewUiCopy,
+} from "@reward/shared-types/saas";
 
 import { db } from "../../db";
+import { resolveExperimentConfig } from "../experiments/service";
 import { type SaasAdminActor, resolveAccessibleTenantIds } from "./access";
 import {
   BILLING_LIVE_ENVIRONMENT,
@@ -39,6 +46,7 @@ import {
 import {
   toSaasApiKey,
   toSaasBilling,
+  toSaasBillingDispute,
   toSaasBillingRun,
   toSaasBillingTopUp,
   toSaasInvite,
@@ -58,10 +66,45 @@ import {
   summarizePrizeEngineProjectRateLimitUsage,
 } from "./prize-engine-rate-limit";
 import { listPrizeEngineObservabilityDistributions } from "./prize-engine-service";
+import { SAAS_STATUS_REQUEST_REFERENCE_TYPE } from "../saas-status/constants";
+
+const SAAS_PORTAL_OVERVIEW_COPY_EXPERIMENT_KEY = "saas-portal-overview-copy";
+
+const buildDefaultSaasOverviewUiCopy = (): SaasOverviewUiCopy => ({
+  overview: {
+    sandbox: { ...defaultSaasOverviewUiCopy.overview.sandbox },
+    snippet: { ...defaultSaasOverviewUiCopy.overview.snippet },
+  },
+});
+
+const resolveSaasOverviewUiCopy = async (
+  viewerUserId?: number,
+): Promise<SaasOverviewUiCopy> => {
+  const baseCopy = buildDefaultSaasOverviewUiCopy();
+  if (!viewerUserId) {
+    return baseCopy;
+  }
+
+  return (
+    await resolveExperimentConfig({
+      userId: viewerUserId,
+      config: {
+        ...baseCopy,
+        experiment: {
+          expKey: SAAS_PORTAL_OVERVIEW_COPY_EXPERIMENT_KEY,
+        },
+      },
+    })
+  ).config;
+};
 
 export async function getSaasOverview(
   actor?: SaasAdminActor,
+  options?: {
+    viewerUserId?: number;
+  },
 ): Promise<SaasOverview> {
+  const uiCopy = await resolveSaasOverviewUiCopy(options?.viewerUserId);
   const accessibleTenantIds = await resolveAccessibleTenantIds(actor ?? null);
   if (accessibleTenantIds !== null && accessibleTenantIds.length === 0) {
     return {
@@ -81,6 +124,7 @@ export async function getSaasOverview(
       apiKeys: [],
       billingRuns: [],
       topUps: [],
+      disputes: [],
       invites: [],
       tenantLinks: [],
       agentControls: [],
@@ -88,6 +132,7 @@ export async function getSaasOverview(
       outboundWebhooks: [],
       outboundDeliveries: [],
       recentUsage: [],
+      uiCopy,
     };
   }
 
@@ -110,6 +155,10 @@ export async function getSaasOverview(
   const topUpTenantFilter =
     accessibleTenantIds && accessibleTenantIds.length > 0
       ? inArray(saasBillingTopUps.tenantId, accessibleTenantIds)
+      : undefined;
+  const disputeTenantFilter =
+    accessibleTenantIds && accessibleTenantIds.length > 0
+      ? inArray(saasBillingDisputes.tenantId, accessibleTenantIds)
       : undefined;
   const usageTenantFilter =
     accessibleTenantIds && accessibleTenantIds.length > 0
@@ -146,6 +195,7 @@ export async function getSaasOverview(
     memberships,
     billingRuns,
     topUps,
+    disputes,
     invites,
     tenantLinks,
     agentControls,
@@ -238,6 +288,18 @@ export async function getSaasOverview(
           .from(saasBillingTopUps)
           .orderBy(desc(saasBillingTopUps.id))
           .limit(20),
+    disputeTenantFilter
+      ? db
+          .select()
+          .from(saasBillingDisputes)
+          .where(disputeTenantFilter)
+          .orderBy(desc(saasBillingDisputes.id))
+          .limit(50)
+      : db
+          .select()
+          .from(saasBillingDisputes)
+          .orderBy(desc(saasBillingDisputes.id))
+          .limit(50),
     inviteTenantFilter
       ? db
           .select()
@@ -278,13 +340,21 @@ export async function getSaasOverview(
       ? db
           .select()
           .from(saasUsageEvents)
-          .where(usageTenantFilter)
-          .orderBy(desc(saasUsageEvents.id))
+          .where(
+            and(
+              usageTenantFilter,
+              sql`${saasUsageEvents.referenceType} is distinct from ${SAAS_STATUS_REQUEST_REFERENCE_TYPE}`,
+            ),
+          )
+          .orderBy(desc(saasUsageEvents.createdAt), desc(saasUsageEvents.id))
           .limit(20)
       : db
           .select()
           .from(saasUsageEvents)
-          .orderBy(desc(saasUsageEvents.id))
+          .where(
+            sql`${saasUsageEvents.referenceType} is distinct from ${SAAS_STATUS_REQUEST_REFERENCE_TYPE}`,
+          )
+          .orderBy(desc(saasUsageEvents.createdAt), desc(saasUsageEvents.id))
           .limit(20),
     projectFilter
       ? db
@@ -315,6 +385,7 @@ export async function getSaasOverview(
               usageTenantFilter,
               eq(saasUsageEvents.environment, BILLING_LIVE_ENVIRONMENT),
               inArray(saasUsageEvents.eventType, BILLING_REWARD_EVENT_TYPES),
+              sql`${saasUsageEvents.referenceType} is distinct from ${SAAS_STATUS_REQUEST_REFERENCE_TYPE}`,
               gte(
                 saasUsageEvents.createdAt,
                 new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
@@ -332,6 +403,7 @@ export async function getSaasOverview(
             and(
               eq(saasUsageEvents.environment, BILLING_LIVE_ENVIRONMENT),
               inArray(saasUsageEvents.eventType, BILLING_REWARD_EVENT_TYPES),
+              sql`${saasUsageEvents.referenceType} is distinct from ${SAAS_STATUS_REQUEST_REFERENCE_TYPE}`,
               gte(
                 saasUsageEvents.createdAt,
                 new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
@@ -533,6 +605,7 @@ export async function getSaasOverview(
     ),
     billingRuns: billingRuns.map(toSaasBillingRun),
     topUps: topUps.map(toSaasBillingTopUp),
+    disputes: disputes.map(toSaasBillingDispute),
     invites: invites.map(toSaasInvite),
     tenantLinks: tenantLinks.map(toSaasTenantLink),
     agentControls: agentControls.map(toSaasAgentControl),
@@ -540,5 +613,6 @@ export async function getSaasOverview(
     outboundWebhooks: outboundWebhooks.map(toSaasOutboundWebhook),
     outboundDeliveries: outboundDeliveries.map(toSaasOutboundWebhookDelivery),
     recentUsage: recentUsageRows.map(toSaasUsageEvent),
+    uiCopy,
   };
 }

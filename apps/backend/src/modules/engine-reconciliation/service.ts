@@ -3,13 +3,18 @@ import type {
   ReconciliationAlertStatus,
   ReconciliationAlertSummary,
 } from '@reward/shared-types/finance';
-import { reconciliationAlerts, users } from '@reward/database';
+import { reconciliationAlerts, users, walletReconciliationRuns } from '@reward/database';
 import { and, desc, eq, sql } from '@reward/database/orm';
 
 import { db } from '../../db';
+import { getConfigView } from '../../shared/config';
+import { logger } from '../../shared/logger';
 import { toDecimal, toMoneyString } from '../../shared/money';
+import { emitReconciliationAlertSecurityEvent } from '../security-events/service';
+import { notifyWalletReconciliationAlert } from '../wallet/reconciliation-alert-notifier';
 
 const WALLET_RECONCILIATION_ALERT_TYPE = 'wallet_balance_drift';
+const config = getConfigView();
 
 type AlertRow = {
   id: number;
@@ -28,16 +33,19 @@ type AlertRow = {
   expectedTotal: string | number;
   actualTotal: string | number;
   metadata: unknown;
+  firstDetectedAt: Date | string | null;
   lastDetectedAt: Date | string | null;
   resolvedAt: Date | string | null;
   createdAt: Date | string | null;
   updatedAt: Date | string | null;
+  runId: number | null;
 };
 
 type AlertWorkflowMetadata = {
   statusNote: string | null;
   statusUpdatedByAdminId: number | null;
   statusUpdatedAt: string | null;
+  systemEscalatedAt: string | null;
 };
 
 const buildActiveVsResolvedSort = () => sql<number>`
@@ -72,6 +80,23 @@ const readDateLike = (value: unknown) => {
   return Number.isNaN(parsed.valueOf()) ? value : parsed.toISOString();
 };
 
+const buildSlaDueAt = (value: Date | string | null) => {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(parsed.valueOf())) {
+    return null;
+  }
+
+  return new Date(
+    parsed.getTime() + config.walletReconciliationSlaHours * 60 * 60 * 1000
+  ).toISOString();
+};
+
+const isUnresolvedAlertStatus = (status: string) => status !== 'resolved';
+
 const readWorkflowMetadata = (metadataValue: unknown): AlertWorkflowMetadata => {
   const workflow = toRecord(Reflect.get(toRecord(metadataValue), 'workflow'));
 
@@ -84,6 +109,7 @@ const readWorkflowMetadata = (metadataValue: unknown): AlertWorkflowMetadata => 
       Reflect.get(workflow, 'statusUpdatedByAdminId')
     ),
     statusUpdatedAt: readDateLike(Reflect.get(workflow, 'statusUpdatedAt')),
+    systemEscalatedAt: readDateLike(Reflect.get(workflow, 'systemEscalatedAt')),
   };
 };
 
@@ -114,6 +140,14 @@ const computeDeltaAmount = (row: Pick<AlertRow, 'actualTotal' | 'expectedTotal'>
 const mapAlertRow = (row: AlertRow): ReconciliationAlertRecord => {
   const metadata = toRecord(row.metadata);
   const workflow = readWorkflowMetadata(metadata);
+  const slaDueAt = buildSlaDueAt(row.firstDetectedAt);
+  const slaBreached =
+    isUnresolvedAlertStatus(row.status) &&
+    slaDueAt !== null &&
+    new Date(slaDueAt).valueOf() <= Date.now();
+  const escalatedAt =
+    workflow.systemEscalatedAt ??
+    (row.status === 'require_engineering' ? workflow.statusUpdatedAt : null);
 
   return {
     id: row.id,
@@ -143,7 +177,11 @@ const mapAlertRow = (row: AlertRow): ReconciliationAlertRecord => {
     statusNote: workflow.statusNote,
     statusUpdatedByAdminId: workflow.statusUpdatedByAdminId,
     statusUpdatedAt: workflow.statusUpdatedAt,
+    firstDetectedAt: row.firstDetectedAt,
     lastDetectedAt: row.lastDetectedAt,
+    slaDueAt,
+    slaBreached,
+    escalatedAt,
     resolvedAt: row.resolvedAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -169,10 +207,12 @@ const selectAlertRows = () =>
       expectedTotal: reconciliationAlerts.expectedTotal,
       actualTotal: reconciliationAlerts.actualTotal,
       metadata: reconciliationAlerts.metadata,
+      firstDetectedAt: reconciliationAlerts.firstDetectedAt,
       lastDetectedAt: reconciliationAlerts.lastDetectedAt,
       resolvedAt: reconciliationAlerts.resolvedAt,
       createdAt: reconciliationAlerts.createdAt,
       updatedAt: reconciliationAlerts.updatedAt,
+      runId: reconciliationAlerts.runId,
     })
     .from(reconciliationAlerts)
     .leftJoin(users, eq(users.id, reconciliationAlerts.userId));
@@ -203,6 +243,8 @@ const buildWorkflowMetadata = (payload: {
       operatorNote: payload.statusNote,
       statusUpdatedByAdminId: payload.adminId,
       statusUpdatedAt: payload.updatedAt.toISOString(),
+      systemEscalationReason: null,
+      systemEscalatedAt: null,
     },
   };
 };
@@ -233,15 +275,88 @@ export async function getReconciliationAlertById(alertId: number) {
   return row ? mapAlertRow(row as AlertRow) : null;
 }
 
-export async function getReconciliationAlertSummary(): Promise<ReconciliationAlertSummary> {
+const buildZeroDriftStreakDays = async () => {
   const rows = await db
     .select({
-      status: reconciliationAlerts.status,
-      total: sql<number>`count(*)::int`,
+      completedAt: walletReconciliationRuns.completedAt,
+      mismatchedUsers: walletReconciliationRuns.mismatchedUsers,
     })
-    .from(reconciliationAlerts)
-    .where(eq(reconciliationAlerts.alertType, WALLET_RECONCILIATION_ALERT_TYPE))
-    .groupBy(reconciliationAlerts.status);
+    .from(walletReconciliationRuns)
+    .where(
+      and(
+        eq(walletReconciliationRuns.status, 'completed'),
+        sql`${walletReconciliationRuns.completedAt} is not null`
+      )
+    )
+    .orderBy(desc(walletReconciliationRuns.completedAt))
+    .limit(180);
+
+  const dailyResults: Array<{ day: string; mismatchedUsers: number }> = [];
+  const seenDays = new Set<string>();
+
+  for (const row of rows) {
+    if (!row.completedAt) {
+      continue;
+    }
+
+    const day = row.completedAt.toISOString().slice(0, 10);
+    if (seenDays.has(day)) {
+      continue;
+    }
+
+    seenDays.add(day);
+    dailyResults.push({
+      day,
+      mismatchedUsers: Number(row.mismatchedUsers ?? 0),
+    });
+  }
+
+  let streakDays = 0;
+  let previousDay: Date | null = null;
+
+  for (const result of dailyResults) {
+    if (result.mismatchedUsers > 0) {
+      break;
+    }
+
+    const currentDay = new Date(`${result.day}T00:00:00.000Z`);
+    if (
+      previousDay &&
+      previousDay.valueOf() - currentDay.valueOf() !== 24 * 60 * 60 * 1000
+    ) {
+      break;
+    }
+
+    streakDays += 1;
+    previousDay = currentDay;
+  }
+
+  return streakDays;
+};
+
+export async function getReconciliationAlertSummary(): Promise<ReconciliationAlertSummary> {
+  const [rows, overdueRow, zeroDriftStreakDays] = await Promise.all([
+    db
+      .select({
+        status: reconciliationAlerts.status,
+        total: sql<number>`count(*)::int`,
+      })
+      .from(reconciliationAlerts)
+      .where(eq(reconciliationAlerts.alertType, WALLET_RECONCILIATION_ALERT_TYPE))
+      .groupBy(reconciliationAlerts.status),
+    db
+      .select({
+        overdueCount: sql<number>`count(*) filter (
+          where ${reconciliationAlerts.status} <> 'resolved'
+            and ${reconciliationAlerts.firstDetectedAt}
+              <= now() - (${config.walletReconciliationSlaHours} * interval '1 hour')
+        )`,
+        oldestOpenAt: sql<Date | null>`min(${reconciliationAlerts.firstDetectedAt}) filter (where ${reconciliationAlerts.status} <> 'resolved')`,
+      })
+      .from(reconciliationAlerts)
+      .where(eq(reconciliationAlerts.alertType, WALLET_RECONCILIATION_ALERT_TYPE)),
+    buildZeroDriftStreakDays(),
+  ]);
 
   const summary: ReconciliationAlertSummary = {
     openCount: 0,
@@ -249,6 +364,10 @@ export async function getReconciliationAlertSummary(): Promise<ReconciliationAle
     requireEngineeringCount: 0,
     resolvedCount: 0,
     unresolvedCount: 0,
+    overdueCount: Number(overdueRow[0]?.overdueCount ?? 0),
+    slaHours: config.walletReconciliationSlaHours,
+    zeroDriftStreakDays,
+    oldestOpenAt: overdueRow[0]?.oldestOpenAt ?? null,
   };
 
   for (const row of rows) {
@@ -329,5 +448,46 @@ export async function updateReconciliationAlertStatus(payload: {
     return null;
   }
 
-  return getReconciliationAlertById(updated.id);
+  const alert = await getReconciliationAlertById(updated.id);
+  if (alert && payload.status === 'resolved') {
+    void notifyWalletReconciliationAlert('resolved', {
+      alertId: alert.id,
+      runId: null,
+      fingerprint: alert.dedupeKey ?? `wallet-reconciliation:${String(alert.id)}`,
+      userId: alert.userId,
+      userEmail: alert.userEmail ?? null,
+      status: alert.status,
+      expectedTotal: alert.ledgerSnapshot.totalBalance ?? '0.00',
+      actualTotal: alert.walletSnapshot.totalBalance ?? '0.00',
+      firstDetectedAt: alert.firstDetectedAt ?? null,
+      lastDetectedAt: alert.lastDetectedAt ?? null,
+      resolvedAt: alert.resolvedAt ?? null,
+      statusNote: alert.statusNote ?? null,
+    }).catch((error) => {
+      logger.error('manual reconciliation resolve notification failed', {
+        alertId: alert.id,
+        err: error,
+      });
+    });
+  }
+
+  if (alert) {
+    await emitReconciliationAlertSecurityEvent({
+      eventType: 'wallet_reconciliation_alert_status_changed',
+      alertId: alert.id,
+      userId: alert.userId,
+      adminId: payload.adminId,
+      status: alert.status,
+      deltaAmount: alert.deltaAmount,
+      fingerprint: `${alert.dedupeKey}:status:${alert.status}`,
+      metadata: {
+        alertType: WALLET_RECONCILIATION_ALERT_TYPE,
+        statusNote: payload.statusNote,
+        statusUpdatedByAdminId: payload.adminId,
+      },
+      occurredAt: now,
+    });
+  }
+
+  return alert;
 }

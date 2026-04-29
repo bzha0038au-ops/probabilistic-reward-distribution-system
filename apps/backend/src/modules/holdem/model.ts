@@ -6,6 +6,10 @@ import {
   HoldemFairnessSchema,
   HoldemTableEmojiSchema,
   HoldemTableMessageKindSchema,
+  HoldemTournamentPayoutSchema,
+  HoldemTableRakePolicySchema,
+  HoldemTournamentStandingSchema,
+  HoldemTournamentStatusSchema,
   type HoldemTableMessage,
   HoldemPotSchema,
   HoldemRecentHandSchema,
@@ -13,7 +17,9 @@ import {
   HoldemSeatStatusSchema,
   HoldemStreetSchema,
   HoldemTableStatusSchema,
+  HoldemTableTypeSchema,
 } from "@reward/shared-types/holdem";
+import { DealerFeedSchema } from "@reward/shared-types/dealer";
 
 import type { DbClient, DbTransaction } from "../../db";
 import { internalInvariantError } from "../../shared/errors";
@@ -41,6 +47,17 @@ const HoldemHoleCardsColumnSchema = z.preprocess(
 const NullableJsonColumnSchema: z.ZodType<unknown | null | undefined> =
   z.preprocess(parseMaybeJsonString, z.unknown().nullable().optional());
 
+export const HoldemSeatTournamentMetadataSchema = z
+  .object({
+    entryBuyInAmount: z.string(),
+    registeredAt: DateLikeSchema,
+    eliminatedAt: DateLikeSchema.nullable().default(null),
+    finishingPlace: z.number().int().positive().nullable().default(null),
+    prizeAmount: z.string().nullable().default(null),
+  })
+  .nullable()
+  .default(null);
+
 export const HoldemSeatMetadataSchema = z
   .object({
     sittingOut: z.boolean().default(false),
@@ -48,6 +65,7 @@ export const HoldemSeatMetadataSchema = z
     timeBankRemainingMs: z.number().int().nonnegative().default(0),
     winner: z.boolean().default(false),
     bestHand: HoldemBestHandSchema.nullable().default(null),
+    tournament: HoldemSeatTournamentMetadataSchema,
   })
   .default({
     sittingOut: false,
@@ -55,9 +73,30 @@ export const HoldemSeatMetadataSchema = z
     timeBankRemainingMs: 0,
     winner: false,
     bestHand: null,
+    tournament: null,
   });
 
+export const HoldemTableTournamentMetadataSchema = z
+  .object({
+    status: HoldemTournamentStatusSchema.default("registering"),
+    buyInAmount: z.string(),
+    startingStackAmount: z.string(),
+    prizePoolAmount: z.string().default("0.00"),
+    registeredCount: z.number().int().nonnegative().default(0),
+    payoutPlaces: z.number().int().positive().nullable().default(null),
+    allowRebuy: z.boolean().default(false),
+    allowCashOut: z.boolean().default(false),
+    completedAt: DateLikeSchema.nullable().default(null),
+    standings: z.array(HoldemTournamentStandingSchema).default([]),
+    payouts: z.array(HoldemTournamentPayoutSchema).default([]),
+  })
+  .nullable()
+  .default(null);
+
 export const HoldemTableMetadataSchema = z.object({
+  tableType: HoldemTableTypeSchema.default("cash"),
+  rakePolicy: HoldemTableRakePolicySchema.nullable().default(null),
+  tournament: HoldemTableTournamentMetadataSchema,
   handNumber: z.number().int().nonnegative().default(0),
   stage: HoldemStreetSchema.nullable().default(null),
   dealerSeatIndex: z.number().int().nonnegative().nullable().default(null),
@@ -80,6 +119,7 @@ export const HoldemTableMetadataSchema = z.object({
   winnerSeatIndexes: z.array(z.number().int().nonnegative()).default([]),
   resolvedPots: z.array(HoldemPotSchema).default([]),
   recentHands: z.array(HoldemRecentHandSchema).default([]),
+  dealerEvents: DealerFeedSchema.default([]),
 });
 
 export const HoldemTableRowSchema = z.object({

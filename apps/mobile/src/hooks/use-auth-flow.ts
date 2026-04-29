@@ -69,6 +69,7 @@ export function useAuthFlow(options: UseAuthFlowOptions) {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [birthDate, setBirthDate] = useState("");
   const [resetTokenInput, setResetTokenInput] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [verificationTokenInput, setVerificationTokenInput] = useState("");
@@ -78,6 +79,7 @@ export function useAuthFlow(options: UseAuthFlowOptions) {
 
   const resetAuthInputs = useCallback(() => {
     setPassword("");
+    setBirthDate("");
     setResetTokenInput("");
     setNewPassword("");
     setVerificationTokenInput("");
@@ -239,8 +241,8 @@ export function useAuthFlow(options: UseAuthFlowOptions) {
     async (legalAcceptances: RegisterRequest["legalAcceptances"] = []) => {
       resetFeedback();
 
-      if (!normalizedEmail || !password) {
-        setError("Email and password are required.");
+      if (!normalizedEmail || !password || !birthDate.trim()) {
+        setError("Email, password, and birth date are required.");
         return;
       }
 
@@ -248,6 +250,7 @@ export function useAuthFlow(options: UseAuthFlowOptions) {
       const response = await api.register({
         email: normalizedEmail,
         password,
+        birthDate: birthDate.trim(),
         legalAcceptances,
       });
 
@@ -265,6 +268,7 @@ export function useAuthFlow(options: UseAuthFlowOptions) {
       api,
       normalizedEmail,
       password,
+      birthDate,
       resetFeedback,
       setError,
       setMessage,
@@ -441,6 +445,7 @@ export function useAuthFlow(options: UseAuthFlowOptions) {
     applyAuthLink,
     email,
     password,
+    birthDate,
     resetTokenInput,
     newPassword,
     verificationTokenInput,
@@ -448,6 +453,7 @@ export function useAuthFlow(options: UseAuthFlowOptions) {
     normalizedEmail,
     setEmail,
     setPassword,
+    setBirthDate,
     setResetTokenInput,
     setNewPassword,
     setVerificationTokenInput,

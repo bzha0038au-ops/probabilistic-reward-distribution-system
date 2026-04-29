@@ -41,6 +41,8 @@
   }
 
   const formatValue = (value: string) => value.replaceAll("_", " ")
+  const formatProviders = (providers: string[]) =>
+    providers.map((provider) => formatValue(provider)).join(", ")
 
   const authorLabel = (item: ForumModerationQueueItem) =>
     item.authorEmail
@@ -174,6 +176,7 @@
                 <th>{t("forum.moderation.queue.headers.author")}</th>
                 <th>{t("forum.moderation.queue.headers.thread")}</th>
                 <th>{t("forum.moderation.queue.headers.reports")}</th>
+                <th>{t("forum.moderation.queue.headers.source")}</th>
                 <th>{t("forum.moderation.queue.headers.latestReason")}</th>
                 <th>{t("forum.moderation.queue.headers.status")}</th>
                 <th>{t("forum.moderation.queue.headers.reportedAt")}</th>
@@ -215,12 +218,32 @@
                     <span class="badge badge-outline">{item.reportCount}</span>
                   </td>
                   <td class="align-top">
+                    <div class="flex flex-col items-start gap-2">
+                      <span class="badge badge-ghost">{formatValue(item.source)}</span>
+                      {#if item.moderationScore !== null}
+                        <span class="text-xs text-slate-500">
+                          {item.moderationScore.toFixed(2)}
+                        </span>
+                      {/if}
+                    </div>
+                  </td>
+                  <td class="align-top">
                     <div class="max-w-xs space-y-1 text-sm">
                       <p class="font-medium text-slate-900">
                         {formatValue(item.latestReportReason)}
                       </p>
                       {#if item.latestReportDetail}
                         <p class="text-slate-500">{item.latestReportDetail}</p>
+                      {/if}
+                      {#if item.signalProviders.length > 0}
+                        <p class="text-xs text-slate-500">
+                          {formatProviders(item.signalProviders)}
+                        </p>
+                      {/if}
+                      {#if item.autoHidden}
+                        <span class="badge badge-warning badge-outline">
+                          {t("forum.moderation.queue.autoHidden")}
+                        </span>
                       {/if}
                     </div>
                   </td>

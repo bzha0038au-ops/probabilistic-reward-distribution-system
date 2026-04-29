@@ -32,6 +32,6 @@ export async function getTransactionHistory(userId: number, limit = 50) {
     .select()
     .from(ledgerEntries)
     .where(eq(ledgerEntries.userId, userId))
-    .orderBy(desc(ledgerEntries.id))
+    .orderBy(desc(ledgerEntries.createdAt), desc(ledgerEntries.id))
     .limit(limit);
 }

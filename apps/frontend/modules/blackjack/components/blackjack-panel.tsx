@@ -1,6 +1,7 @@
 "use client";
 
 import { startTransition, useEffect, useState } from "react";
+import type { DealerEvent } from "@reward/shared-types/dealer";
 import type {
   BlackjackAction,
   BlackjackCardView,
@@ -10,7 +11,14 @@ import type {
   BlackjackOverviewResponse,
 } from "@reward/shared-types/blackjack";
 import { BLACKJACK_CONFIG } from "@reward/shared-types/blackjack";
+import type { PlayModeType } from "@reward/shared-types/play-mode";
+import {
+  applyDealerEventFeed,
+  createDealerRealtimeClient,
+} from "@reward/user-core";
 
+import { DealerFeed } from "@/components/dealer-feed";
+import { PlayModeSwitcher } from "@/components/play-mode-switcher";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -30,6 +38,8 @@ const suitSymbols = {
   diamonds: "♦",
   clubs: "♣",
 } as const;
+const realtimeApiBaseUrl =
+  process.env.NEXT_PUBLIC_API_BASE_URL?.trim() || "http://localhost:4000";
 
 const statusTone = {
   active: "border-sky-400/30 bg-sky-400/10 text-sky-100",
@@ -89,6 +99,8 @@ const copy = {
     seat: "Seat",
     aiDealer: "AI dealer",
     you: "You",
+    dealerFeedTitle: "Dealer commentary",
+    dealerFeedEmpty: "The dealer will narrate the hand here once the cards are moving.",
   },
   "zh-CN": {
     title: "二十一点",
@@ -136,6 +148,8 @@ const copy = {
     seat: "座位",
     aiDealer: "AI 智能荷官",
     you: "你",
+    dealerFeedTitle: "荷官播报",
+    dealerFeedEmpty: "发牌后，智能荷官会在这里播报动作、节奏和简短解说。",
   },
 } as const;
 
@@ -415,6 +429,35 @@ function TableBlock(props: {
   );
 }
 
+const appendDealerEventToOverview = (params: {
+  currentOverview: BlackjackOverviewResponse | null;
+  event: DealerEvent;
+}) => {
+  if (!params.currentOverview?.activeGame) {
+    return params.currentOverview;
+  }
+
+  const activeGame = params.currentOverview.activeGame;
+  const matchesActiveGame =
+    params.event.referenceId === activeGame.id ||
+    params.event.tableRef === activeGame.table.tableId ||
+    params.event.tableRef === `blackjack:${activeGame.id}`;
+  if (!matchesActiveGame) {
+    return params.currentOverview;
+  }
+
+  return {
+    ...params.currentOverview,
+    activeGame: {
+      ...activeGame,
+      dealerEvents: applyDealerEventFeed({
+        currentEvents: activeGame.dealerEvents,
+        event: params.event,
+      }),
+    },
+  } satisfies BlackjackOverviewResponse;
+};
+
 export function BlackjackPanel({
   disabled = false,
   disabledReason = null,
@@ -429,11 +472,21 @@ export function BlackjackPanel({
   );
   const [stakeAmount, setStakeAmount] = useState(BLACKJACK_CONFIG.minStake);
   const [loading, setLoading] = useState(false);
+  const [updatingPlayMode, setUpdatingPlayMode] = useState(false);
   const [actingAction, setActingAction] = useState<
     BlackjackAction | "start" | null
   >(null);
   const [error, setError] = useState<string | null>(null);
   const currentConfig = overview?.config ?? BLACKJACK_CONFIG;
+  const effectiveStakePreview = (() => {
+    const numericStake = Number(stakeAmount || "0");
+    if (!Number.isFinite(numericStake)) {
+      return null;
+    }
+    return (
+      numericStake * (overview?.playMode.appliedMultiplier ?? 1)
+    ).toFixed(2);
+  })();
 
   async function refreshOverview() {
     const response = await browserUserApiClient.getBlackjackOverview();
@@ -457,6 +510,82 @@ export function BlackjackPanel({
   useEffect(() => {
     void refreshOverview();
   }, []);
+
+  useEffect(() => {
+    let disposed = false;
+
+    const client = createDealerRealtimeClient({
+      baseUrl: realtimeApiBaseUrl,
+      getAuthToken: async () => {
+        const tokenResponse = await browserUserApiClient.getUserRealtimeToken();
+        if (!tokenResponse.ok) {
+          if (tokenResponse.status === 401) {
+            return null;
+          }
+
+          throw new Error(tokenResponse.error.message);
+        }
+
+        return tokenResponse.data.token;
+      },
+      onDealerEvent: (event) => {
+        if (disposed) {
+          return;
+        }
+
+        startTransition(() => {
+          setOverview((currentOverview) =>
+            appendDealerEventToOverview({
+              currentOverview,
+              event,
+            }),
+          );
+        });
+      },
+      onUnauthorized: () => {
+        if (!disposed) {
+          setError("Session expired or was revoked. Refresh and sign in again.");
+        }
+      },
+      onWarning: (warning) => {
+        if (!disposed) {
+          setError(warning);
+        }
+      },
+    });
+
+    client.start();
+    return () => {
+      disposed = true;
+      client.stop();
+    };
+  }, []);
+
+  async function handleChangePlayMode(type: PlayModeType) {
+    if (!overview || updatingPlayMode) {
+      return;
+    }
+
+    setUpdatingPlayMode(true);
+    const response = await browserUserApiClient.setPlayMode("blackjack", { type });
+    setUpdatingPlayMode(false);
+
+    if (!response.ok) {
+      setError(response.error?.message ?? t("draw.errorFallback"));
+      return;
+    }
+
+    startTransition(() => {
+      setOverview((current) =>
+        current
+          ? {
+              ...current,
+              playMode: response.data.snapshot,
+            }
+          : current,
+      );
+    });
+  }
 
   async function handleStart() {
     if (!stakeAmount.trim()) {
@@ -571,6 +700,13 @@ export function BlackjackPanel({
             {c.singleHand}
           </span>
         </div>
+
+        <PlayModeSwitcher
+          snapshot={overview?.playMode ?? null}
+          disabled={loading || disabled || Boolean(overview?.activeGame)}
+          loading={updatingPlayMode}
+          onSelect={(type) => void handleChangePlayMode(type)}
+        />
       </CardHeader>
 
       <CardContent className="space-y-5">
@@ -592,6 +728,11 @@ export function BlackjackPanel({
                   {c.minStake} {currentConfig.minStake} / {c.maxStake}{" "}
                   {currentConfig.maxStake}
                 </p>
+                {effectiveStakePreview ? (
+                  <p className="text-xs text-emerald-300/90">
+                    Effective stake: {effectiveStakePreview}
+                  </p>
+                ) : null}
               </div>
               <Button
                 onClick={handleStart}
@@ -668,6 +809,13 @@ export function BlackjackPanel({
             ) : null}
           </div>
         )}
+
+        <DealerFeed
+          dealerLabel={c.aiDealer}
+          emptyLabel={c.dealerFeedEmpty}
+          events={overview?.activeGame?.dealerEvents ?? []}
+          title={c.dealerFeedTitle}
+        />
 
         {disabledReason ? (
           <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">

@@ -106,7 +106,7 @@ Response:
 - database restore or failover may be required
 - there is evidence of silent financial inconsistency
 - backup artifacts are missing or unreadable
-- restore drill evidence is older than 90 days during a real incident
+- restore drill evidence is older than 45 days during a real incident
 
 ## After Stabilization
 

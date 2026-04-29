@@ -3,6 +3,7 @@ import {
   drawRecords,
   ledgerEntries,
   missions,
+  referrals,
   users,
 } from "@reward/database";
 import { eq, sql } from "@reward/database/orm";
@@ -168,6 +169,47 @@ const countCompletedUsers = async (definition: RewardMissionDefinition) => {
     return Number(row?.total ?? 0);
   }
 
+  if (definition.params.metric === "deposit_credited_count") {
+    const row = readFirstSqlRow<CountRow>(await db.execute(sql`
+      SELECT count(*) AS "total"
+      FROM (
+        SELECT ${deposits.userId}
+        FROM ${deposits}
+        WHERE ${deposits.status} = 'credited'
+        GROUP BY ${deposits.userId}
+        HAVING count(*) >= ${definition.params.target}
+      ) AS "qualified_users"
+    `));
+
+    return Number(row?.total ?? 0);
+  }
+
+  if (definition.params.metric === "referral_success_count") {
+    const qualifiedAtCondition =
+      definition.params.cadence === "daily"
+        ? sql`AND ${referrals.qualifiedAt} >= ${startOfDay().toISOString()}`
+        : sql``;
+    const rewardIdCondition = definition.params.rewardId
+      ? sql`AND ${referrals.rewardId} = ${definition.params.rewardId}`
+      : sql``;
+
+    const row = readFirstSqlRow<CountRow>(await db.execute(sql`
+      SELECT count(*) AS "total"
+      FROM (
+        SELECT ${referrals.referrerId}
+        FROM ${referrals}
+        WHERE ${referrals.status} = 'qualified'
+          AND ${referrals.qualifiedAt} IS NOT NULL
+          ${qualifiedAtCondition}
+          ${rewardIdCondition}
+        GROUP BY ${referrals.referrerId}
+        HAVING count(*) >= ${definition.params.target}
+      ) AS "qualified_users"
+    `));
+
+    return Number(row?.total ?? 0);
+  }
+
   const row = readFirstSqlRow<CountRow>(await db.execute(sql`
     SELECT count(*) AS "total"
     FROM (
@@ -257,7 +299,10 @@ export async function createMission(payload: {
   reward: string;
   isActive: boolean;
 }) {
-  const params = parseMissionParams(payload.type, payload.params);
+  const params =
+    payload.type === "daily_checkin"
+      ? parseMissionParams("daily_checkin", payload.params)
+      : parseMissionParams("metric_threshold", payload.params);
   if (payload.type === "daily_checkin") {
     await ensureSingleDailyCheckInMission(db);
   }
@@ -323,10 +368,13 @@ export async function updateMission(
   }
 
   const nextType = (payload.type ?? current.type) as RewardMissionDefinitionType;
-  const nextParams = parseMissionParams(
-    nextType,
-    payload.params ?? current.params,
-  );
+  const nextParams =
+    nextType === "daily_checkin"
+      ? parseMissionParams("daily_checkin", payload.params ?? current.params)
+      : parseMissionParams(
+          "metric_threshold",
+          payload.params ?? current.params,
+        );
   if (nextType === "daily_checkin") {
     await ensureSingleDailyCheckInMission(db, missionId);
   }

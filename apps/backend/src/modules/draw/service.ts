@@ -1,6 +1,6 @@
 export { executeDraw, executeDrawInTransaction } from './execute-draw';
 export {
-  executeDrawPlay,
+  executeResolvedDrawPlay as executeDrawPlay,
   getDrawCatalog,
   serializeDrawRecordForResponse,
 } from './gacha';

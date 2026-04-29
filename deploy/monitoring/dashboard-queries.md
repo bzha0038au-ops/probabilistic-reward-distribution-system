@@ -29,6 +29,15 @@ Use these PromQL queries to build the minimum production dashboard.
 - Draw error ratio:
   `sum(rate(reward_backend_draw_requests_total{outcome="error"}[10m])) / clamp_min(sum(rate(reward_backend_draw_requests_total[10m])), 1)`
 
+## Holdem Realtime
+
+- Publish latency P95 by event:
+  `histogram_quantile(0.95, sum(rate(reward_backend_realtime_publish_duration_seconds_bucket{channel="holdem"}[10m])) by (le, event))`
+- Client receive latency P95 by surface:
+  `histogram_quantile(0.95, sum(rate(reward_backend_realtime_receive_latency_seconds_bucket{channel="holdem"}[10m])) by (le, surface))`
+- Client receive sample rate by surface:
+  `sum(rate(reward_backend_realtime_receive_latency_seconds_count{channel="holdem"}[10m])) by (surface)`
+
 ## Withdraw Stuck
 
 - Stuck withdrawals by status:

@@ -80,8 +80,10 @@ topology in `docker-compose.prod.yml`.
   the manual deploy workflow.
 - `docs/operations/alert-routing.md` and
   `docs/operations/on-call-schedule.md` are current.
-- A restore drill has been completed within the last 90 days.
-- Secret rotation procedure is documented and tested:
+- A monthly staging restore drill has been completed within the last 45 days.
+- [`docs/operations/dr-drills.md`](./operations/dr-drills.md) shows the latest successful restore row.
+- A secret-rotation drill has been completed within the last 90 days.
+- Secret rotation procedure is documented, executable, and tested:
   [`docs/operations/secret-rotation.md`](./operations/secret-rotation.md).
 - On-call has reviewed:
   - [`docs/operations/backup-and-restore.md`](./operations/backup-and-restore.md)

@@ -44,7 +44,10 @@ const fileRuleConfigs: FileRuleConfig[] = [
       ],
       saasLedgerEntries: [/eq\s*\(\s*saasLedgerEntries\.projectId\s*,/s],
       saasFairnessSeeds: [/eq\s*\(\s*saasFairnessSeeds\.projectId\s*,/s],
-      saasUsageEvents: [/eq\s*\(\s*saasUsageEvents\.projectId\s*,/s],
+      saasUsageEvents: [
+        /eq\s*\(\s*saasUsageEvents\.projectId\s*,/s,
+        /eq\s*\(\s*saasUsageEvents\.tenantId\s*,/s,
+      ],
     },
     rawSqlPatterns: [
       /pg_advisory_xact_lock\s*\(/s,
@@ -61,7 +64,10 @@ const fileRuleConfigs: FileRuleConfig[] = [
         /eq\s*\(\s*saasProjects\.id\s*,/s,
         /eq\s*\(\s*saasProjects\.tenantId\s*,/s,
       ],
-      saasTenants: [/eq\s*\(\s*saasTenants\.id\s*,/s],
+      saasTenants: [
+        /eq\s*\(\s*saasTenants\.id\s*,/s,
+        /eq\s*\(\s*saasTenants\.slug\s*,/s,
+      ],
       saasApiKeys: [
         /eq\s*\(\s*saasApiKeys\.projectId\s*,/s,
         /eq\s*\(\s*saasApiKeys\.keyHash\s*,/s,

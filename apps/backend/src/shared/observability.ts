@@ -133,6 +133,8 @@ type ObservabilityState = {
     'surface' | 'operation' | 'outcome' | 'status_family'
   >;
   stripeApiFailuresTotal: Counter<'surface' | 'operation' | 'reason'>;
+  realtimePublishDurationSeconds: Histogram<'scope' | 'channel' | 'event'>;
+  realtimeReceiveLatencySeconds: Histogram<'surface' | 'channel' | 'event'>;
 };
 
 let observabilityState: ObservabilityState | null = null;
@@ -179,6 +181,7 @@ const saasDistributionBreachReasons = [
 const noMetricValue = 'none';
 
 export const SAAS_WEBHOOK_RETRY_EXHAUSTED_ATTEMPTS_ALERT_THRESHOLD = 8;
+export const HOLDEM_REALTIME_RECEIVE_P95_ALERT_THRESHOLD_MS = 200;
 
 const getObservabilityState = () => {
   if (observabilityState) {
@@ -419,6 +422,20 @@ const getObservabilityState = () => {
       name: 'reward_backend_stripe_api_failures_total',
       help: 'Total Stripe API failures grouped by surface, operation, and failure reason.',
       labelNames: ['surface', 'operation', 'reason'] as const,
+      registers: [registry],
+    }),
+    realtimePublishDurationSeconds: new Histogram({
+      name: 'reward_backend_realtime_publish_duration_seconds',
+      help: 'Realtime publish duration in seconds grouped by scope, channel, and event.',
+      labelNames: ['scope', 'channel', 'event'] as const,
+      buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.2, 0.5, 1, 2],
+      registers: [registry],
+    }),
+    realtimeReceiveLatencySeconds: new Histogram({
+      name: 'reward_backend_realtime_receive_latency_seconds',
+      help: 'Client-observed realtime receive latency in seconds grouped by surface, channel, and event.',
+      labelNames: ['surface', 'channel', 'event'] as const,
+      buckets: [0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.3, 0.5, 1, 2],
       registers: [registry],
     }),
   };
@@ -1015,6 +1032,26 @@ const checkNotificationSmsProvider = async () => {
   });
 };
 
+const checkNotificationPushProvider = async () => {
+  const { pushProvider } = getNotificationProviderStatus();
+  const disabled = pushProvider === 'unavailable';
+
+  return runDependencyCheck({
+    name: 'auth_notification_push',
+    required: false,
+    disabled,
+    details: {
+      provider: pushProvider,
+      probeType: 'configuration',
+    },
+    probe: disabled
+      ? undefined
+      : async () => {
+          assertNotificationChannelAvailable('push');
+        },
+  });
+};
+
 const checkPaymentAutomation = async () => {
   const summary = getPaymentCapabilitySummary();
 
@@ -1050,6 +1087,7 @@ export const buildReadinessReport = async (): Promise<ReadinessReport> => {
     checkRedis(),
     checkNotificationEmailProvider(),
     checkNotificationSmsProvider(),
+    checkNotificationPushProvider(),
     checkPaymentAutomation(),
   ]);
 
@@ -1206,6 +1244,38 @@ export const recordStripeApiFailure = (payload: {
     operation: readMetricValue(payload.operation, 'unknown'),
     reason: payload.reason,
   });
+};
+
+export const recordRealtimePublishDuration = (payload: {
+  scope: 'topic' | 'user' | 'session';
+  channel: string;
+  event: string;
+  durationMs: number;
+}) => {
+  getObservabilityState().realtimePublishDurationSeconds.observe(
+    {
+      scope: payload.scope,
+      channel: readMetricValue(payload.channel, 'unknown'),
+      event: readMetricValue(payload.event, 'unknown'),
+    },
+    Math.max(0, payload.durationMs) / 1000
+  );
+};
+
+export const recordRealtimeReceiveLatency = (payload: {
+  surface: 'web' | 'ios' | 'android';
+  channel: string;
+  event: string;
+  latencyMs: number;
+}) => {
+  getObservabilityState().realtimeReceiveLatencySeconds.observe(
+    {
+      surface: payload.surface,
+      channel: readMetricValue(payload.channel, 'unknown'),
+      event: readMetricValue(payload.event, 'unknown'),
+    },
+    Math.max(0, payload.latencyMs) / 1000
+  );
 };
 
 export const resetObservabilityMetrics = () => {

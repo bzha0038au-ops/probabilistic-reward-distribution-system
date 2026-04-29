@@ -3,6 +3,7 @@ import postgres from 'postgres';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
+const TEST_BIRTH_DATE = '1990-01-01';
 
 if (!databaseUrl) {
   throw new Error('TEST_DATABASE_URL must be set for e2e tests.');
@@ -62,6 +63,7 @@ test('user can register, verify email, and sign in through the browser', async (
   await page.goto('/register');
   await page.getByLabel('Email Address').fill(email);
   await page.getByLabel('Password').fill(password);
+  await page.getByLabel('Birth Date').fill(TEST_BIRTH_DATE);
   await page.getByRole('button', { name: 'Create Account' }).click();
 
   await expect(page).toHaveURL(/\/login\?registered=1$/);

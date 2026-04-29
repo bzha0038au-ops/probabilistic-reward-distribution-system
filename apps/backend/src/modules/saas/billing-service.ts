@@ -19,6 +19,10 @@ export {
   syncBillingTopUp,
 } from './billing-top-up-service';
 export {
+  createBillingDispute,
+  reviewBillingDispute,
+} from './billing-dispute-service';
+export {
   handleSaasStripeWebhook,
   runSaasStripeWebhookCompensationCycle,
 } from './billing-webhook-service';

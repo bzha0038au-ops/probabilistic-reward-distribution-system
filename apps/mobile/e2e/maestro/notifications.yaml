@@ -1,0 +1,24 @@
+appId: ${REWARD_MOBILE_APP_ID}
+env:
+  REWARD_E2E_EMAIL: mobile.e2e.alice@example.com
+  REWARD_E2E_PASSWORD: User123!
+---
+- scrollUntilVisible:
+    element:
+      id: auth-login-seeded-button
+    direction: DOWN
+- tapOn:
+    id: auth-login-seeded-button
+    waitUntilVisible: true
+- tapOn:
+    text: "Allow"
+    optional: true
+- assertVisible:
+    id: home-open-route-button-account
+- tapOn:
+    id: app-notifications-bell-button
+    waitUntilVisible: true
+- assertVisible:
+    id: notifications-refresh-button
+- assertVisible:
+    id: notifications-mark-all-read-button

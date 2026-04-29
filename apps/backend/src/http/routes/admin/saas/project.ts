@@ -10,6 +10,7 @@ import {
   SaasProjectPatchSchema,
   SaasProjectPrizeCreateSchema,
   SaasProjectPrizePatchSchema,
+  SaasRewardEnvelopeUpsertSchema,
 } from "@reward/shared-types/saas";
 
 import { ADMIN_PERMISSION_KEYS } from "../../../../modules/admin-permission/definitions";
@@ -24,6 +25,7 @@ import {
   listProjectPrizes,
   rotateProjectApiKey,
   revokeProjectApiKey,
+  upsertProjectRewardEnvelope,
   updateSaasOutboundWebhook,
   updateProjectPrize,
   updateSaasProject,
@@ -140,6 +142,79 @@ export async function registerAdminSaasProjectRoutes(
         return sendSuccess(reply, project);
       } catch (error) {
         return sendErrorForException(reply, error, "Failed to update project.");
+      }
+    },
+  );
+
+  protectedRoutes.post(
+    "/admin/saas/projects/:projectId/reward-envelopes/:window",
+    {
+      config: { rateLimit: adminRateLimit },
+      preHandler: [
+        requireAdminPermission(ADMIN_PERMISSION_KEYS.CONFIG_UPDATE),
+        enforceAdminLimit,
+      ],
+    },
+    async (request, reply) => {
+      const projectId = parseIdParam(request.params, "projectId");
+      if (!projectId) {
+        return sendError(
+          reply,
+          400,
+          "Invalid project id.",
+          undefined,
+          API_ERROR_CODES.INVALID_PROJECT_ID,
+        );
+      }
+
+      const params = toObject(request.params);
+      const window =
+        typeof Reflect.get(params, "window") === "string"
+          ? String(Reflect.get(params, "window"))
+          : undefined;
+      const parsed = parseSchema(SaasRewardEnvelopeUpsertSchema, {
+        ...toObject(request.body),
+        window,
+      });
+      if (!parsed.isValid) {
+        return sendError(
+          reply,
+          400,
+          "Invalid request.",
+          parsed.errors,
+          API_ERROR_CODES.INVALID_REQUEST,
+        );
+      }
+
+      try {
+        const envelope = await upsertProjectRewardEnvelope(projectId, parsed.data, {
+          adminId: request.admin!.adminId,
+          permissions: request.admin!.permissions,
+        });
+        await recordAdminAction({
+          adminId: request.admin?.adminId ?? null,
+          action: "saas_reward_envelope_upsert",
+          targetType: "saas_reward_envelope",
+          targetId: envelope.id,
+          metadata: {
+            scope: "project",
+            projectId,
+            tenantId: envelope.tenantId,
+            window: envelope.window,
+            onCapHitStrategy: envelope.onCapHitStrategy,
+            budgetCap: envelope.budgetCap,
+            expectedPayoutPerCall: envelope.expectedPayoutPerCall,
+            varianceCap: envelope.varianceCap,
+          },
+          ip: request.ip,
+        });
+        return sendSuccess(reply, envelope);
+      } catch (error) {
+        return sendErrorForException(
+          reply,
+          error,
+          "Failed to save reward envelope.",
+        );
       }
     },
   );

@@ -43,7 +43,10 @@ export const prepareDrawSelection = async (params: {
     clientNonce,
   } = params;
 
-  const poolBalance = await getPoolBalance(tx, true);
+  // Selection only needs a snapshot of the pool balance. Holding a house-account
+  // row lock for the full draw transaction serializes unrelated draws and can
+  // cause the integration concurrency cases to time out under load.
+  const poolBalance = await getPoolBalance(tx);
   const poolNoise = applyPoolNoise(poolBalance, {
     noiseEnabled: poolSystem.noiseEnabled,
     noiseRange: poolSystem.noiseRange,

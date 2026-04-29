@@ -13,7 +13,7 @@ import { admins, users } from './user.js';
 export const adminActions = pgTable(
   'admin_actions',
   {
-    id: serial('id').primaryKey(),
+    id: serial('id').notNull(),
     adminId: integer('admin_id').references(() => admins.id, {
       onDelete: 'set null',
     }),
@@ -29,6 +29,7 @@ export const adminActions = pgTable(
       .defaultNow(),
   },
   (table) => ({
+    idIdx: index('admin_actions_id_idx').on(table.id),
     adminIdx: index('admin_actions_admin_idx').on(table.adminId),
     adminCreatedIdx: index('admin_actions_admin_created_idx').on(
       table.adminId,

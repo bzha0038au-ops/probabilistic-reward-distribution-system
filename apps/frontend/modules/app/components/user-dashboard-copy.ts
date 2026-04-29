@@ -29,7 +29,7 @@ export const userDashboardCopy = {
     quickEightOpen: 'Open Quick Eight',
     holdemTitle: "Texas Hold'em",
     holdemDescription:
-      'Create or join a multiplayer cash table, buy in with locked funds, and play streets on `/app/holdem`.',
+      'Create or join multiplayer casual or cash tables, choose the seat count, and play streets on `/app/holdem`.',
     holdemOpen: "Open Hold'em",
     blackjackTitle: 'Blackjack',
     blackjackDescription:
@@ -212,7 +212,7 @@ export const userDashboardCopy = {
     quickEightOpen: '打开快八页面',
     holdemTitle: '德州扑克',
     holdemDescription:
-      '在 `/app/holdem` 创建或加入多人现金桌，买入后按 preflop / flop / turn / river 顺序推进。',
+      '在 `/app/holdem` 创建或加入多人娱乐局或现金桌，自选人数后按 preflop / flop / turn / river 顺序推进。',
     holdemOpen: '打开德州牌桌',
     blackjackTitle: '二十一点',
     blackjackDescription: '接入同桌 AI 智能荷官的二十一点已拆到独立页面 `/app/blackjack`。',

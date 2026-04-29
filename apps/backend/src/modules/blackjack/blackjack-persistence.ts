@@ -1,4 +1,5 @@
 import { eq, sql } from "@reward/database/orm";
+import type { DealerEvent } from "@reward/shared-types/dealer";
 import type {
   BlackjackCard,
   BlackjackConfig,
@@ -10,6 +11,7 @@ import { blackjackGames, userWallets, users } from "@reward/database";
 import { db, type DbTransaction } from "../../db";
 import { persistenceError } from "../../shared/errors";
 import { toDecimal, toMoneyString } from "../../shared/money";
+import { appendDealerFeedEvent, buildDealerEvent } from "../dealer-bot/service";
 import { appendRoundEvents } from "../hand-history/service";
 import { BLACKJACK_ROUND_TYPE } from "../hand-history/round-id";
 import {
@@ -136,6 +138,7 @@ export const persistGameState = async (
     playMode: game.metadata.playMode,
     playerHands: game.metadata.playerHands,
     activeHandIndex: game.metadata.activeHandIndex,
+    dealerEvents: game.metadata.dealerEvents,
   };
   const turnDeadlineAt =
     game.turnDeadlineAt ? new Date(game.turnDeadlineAt).toISOString() : null;
@@ -158,6 +161,38 @@ export const persistGameState = async (
         updated_at = ${nowIso}
     WHERE id = ${game.id}
   `);
+};
+
+const buildBlackjackDealerRuleEvent = (params: {
+  game: BlackjackGameState;
+  actionCode: string;
+  text: string;
+  metadata?: Record<string, unknown> | null;
+}) =>
+  buildDealerEvent({
+    kind: "action",
+    source: "rule",
+    gameType: "blackjack",
+    tableId: null,
+    tableRef: params.game.metadata.table.tableId,
+    roundId: `${BLACKJACK_ROUND_TYPE}:${params.game.id}`,
+    referenceId: params.game.id,
+    phase: params.game.status === "active" ? "active" : "settlement",
+    actionCode: params.actionCode,
+    text: params.text,
+    metadata: params.metadata ?? null,
+  });
+
+const appendBlackjackDealerEvents = (
+  game: BlackjackGameState,
+  events: DealerEvent[],
+) => {
+  for (const event of events) {
+    game.metadata.dealerEvents = appendDealerFeedEvent(
+      game.metadata.dealerEvents,
+      event,
+    );
+  }
 };
 
 export const applyStakeDebit = async (params: {
@@ -238,12 +273,34 @@ export const settleGameByStatus = async (params: {
   game.settledAt = new Date();
   game.metadata.activeHandIndex = null;
   const playerTotals = summarizePlayerTotals(game);
+  const dealerFeedEvents = [
+    buildBlackjackDealerRuleEvent({
+      game,
+      actionCode:
+        status === "dealer_blackjack" ? "dealer_blackjack" : "hand_settled",
+      text:
+        status === "dealer_blackjack"
+          ? "Dealer shows a natural blackjack."
+          : `Dealer closes the hand as ${status.replace(/_/g, " ")}.`,
+      metadata: {
+        status,
+      },
+    }),
+  ];
+  appendBlackjackDealerEvents(game, dealerFeedEvents);
 
   await appendRoundEvents(tx, {
     roundType: BLACKJACK_ROUND_TYPE,
     roundEntityId: game.id,
     userId: game.userId,
     events: [
+      ...dealerFeedEvents.map((event) => ({
+        type: "dealer_action",
+        actor: "dealer" as const,
+        payload: {
+          dealerEvent: event,
+        },
+      })),
       {
         type: "round_settled",
         actor: "system",
@@ -292,6 +349,7 @@ export const settleGameByStatus = async (params: {
   return {
     balance: nextWalletBalance,
     game,
+    dealerEvents: dealerFeedEvents,
   };
 };
 
@@ -315,6 +373,37 @@ export const settleResolvedHands = async (params: {
   game.settledAt = new Date();
   game.metadata.activeHandIndex = null;
   const playerTotals = summarizePlayerTotals(game);
+  const dealerFeedEvents = [
+    ...dealerEvents.map((event) =>
+      buildBlackjackDealerRuleEvent({
+        game,
+        actionCode: "dealer_draw",
+        text: `Dealer draws to ${event.payload.total}.`,
+        metadata: {
+          card: event.payload.card,
+          total: event.payload.total,
+        },
+      }),
+    ),
+    buildBlackjackDealerRuleEvent({
+      game,
+      actionCode: "dealer_stand",
+      text: `Dealer stands on ${dealerScore.total}.`,
+      metadata: {
+        total: dealerScore.total,
+        soft: dealerScore.soft,
+      },
+    }),
+    buildBlackjackDealerRuleEvent({
+      game,
+      actionCode: "hand_settled",
+      text: `Dealer settles the hand as ${status.replace(/_/g, " ")}.`,
+      metadata: {
+        status,
+      },
+    }),
+  ];
+  appendBlackjackDealerEvents(game, dealerFeedEvents);
 
   await appendRoundEvents(tx, {
     roundType: BLACKJACK_ROUND_TYPE,
@@ -322,6 +411,13 @@ export const settleResolvedHands = async (params: {
     userId: game.userId,
     events: [
       ...dealerEvents,
+      ...dealerFeedEvents.map((event) => ({
+        type: "dealer_action",
+        actor: "dealer" as const,
+        payload: {
+          dealerEvent: event,
+        },
+      })),
       {
         type: "round_settled",
         actor: "system",
@@ -376,6 +472,7 @@ export const settleResolvedHands = async (params: {
   return {
     balance: nextWalletBalance,
     game,
+    dealerEvents: dealerFeedEvents,
   };
 };
 

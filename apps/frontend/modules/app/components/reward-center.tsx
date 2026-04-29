@@ -60,9 +60,9 @@ const copy = {
           "Finish 3 draws in one day to unlock the daily sprint payout.",
       },
       top_up_starter: {
-        title: "Top-up starter",
+        title: "First deposit bonus",
         description:
-          "Create your first deposit request to unlock a starter economy reward.",
+          "Complete your first credited deposit to receive an automatic starter bonus.",
       },
     } satisfies Record<string, { title: string; description: string }>,
   },
@@ -106,8 +106,8 @@ const copy = {
         description: "单日完成 3 次抽奖，解锁当日冲刺奖励。",
       },
       top_up_starter: {
-        title: "首充起步",
-        description: "创建第一笔充值申请，领取起步型经济奖励。",
+        title: "首充奖励",
+        description: "完成第一笔到账充值后，系统会自动发放首充奖励。",
       },
     } satisfies Record<string, { title: string; description: string }>,
   },

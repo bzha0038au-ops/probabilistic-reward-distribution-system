@@ -13,6 +13,8 @@ export type StripeInvoice = {
   status: string | null;
   hosted_invoice_url: string | null;
   invoice_pdf: string | null;
+  amount_paid: number | null;
+  amount_remaining: number | null;
   starting_balance: number | null;
   amount_due: number | null;
   total: number | null;
@@ -37,6 +39,14 @@ export type StripeEvent = {
   data: {
     object: unknown;
   };
+};
+
+export type StripeCreditNote = {
+  id: string;
+  status: string;
+  pdf: string | null;
+  pre_payment_amount: number | null;
+  post_payment_amount: number | null;
 };
 
 type StripeRequestOptions = {
@@ -75,6 +85,12 @@ type StripeClient = {
       transactionId: string,
       input?: Record<string, unknown>
     ): Promise<StripeBalanceTransaction>;
+  };
+  creditNotes: {
+    create(
+      input: Record<string, unknown>,
+      options?: StripeRequestOptions
+    ): Promise<StripeCreditNote>;
   };
   invoices: {
     create(
