@@ -4,7 +4,6 @@ import { persistWinningOutcome } from './reward-persistence';
 import type {
   DebitedDrawState,
   DrawConfigBundle,
-  DrawUserRow,
   PreparedDrawSelection,
   ResolvedDrawOutcome,
 } from './types';
@@ -12,8 +11,7 @@ import type {
 export const resolveDrawOutcome = async (params: {
   tx: DbTransaction;
   userId: number;
-  user: DrawUserRow;
-  drawState: Pick<DebitedDrawState, 'drawCost' | 'bonusBefore' | 'userPoolAfterDebit'>;
+  drawState: Pick<DebitedDrawState, 'drawCost' | 'userPoolAfterDebit'>;
   selectionState: PreparedDrawSelection;
   economy: DrawConfigBundle['economy'];
   poolSystem: DrawConfigBundle['poolSystem'];
@@ -23,7 +21,6 @@ export const resolveDrawOutcome = async (params: {
   const {
     tx,
     userId,
-    user,
     drawState,
     selectionState,
     economy,
@@ -50,9 +47,7 @@ export const resolveDrawOutcome = async (params: {
   return persistWinningOutcome({
     tx,
     userId,
-    user,
     plan: decision.plan,
-    bonusBefore: drawState.bonusBefore,
     userPoolAfterDebit: drawState.userPoolAfterDebit,
     now,
   });

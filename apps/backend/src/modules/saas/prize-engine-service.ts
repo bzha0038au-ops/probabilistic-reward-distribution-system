@@ -306,6 +306,42 @@ type PrizeEngineAgentUpsertInput = {
   status?: "active" | "suspended" | "archived";
 };
 
+type PrizeEngineUsageEventPayload = {
+  tenantId: number;
+  projectId: number;
+  apiKeyId: number;
+  playerId?: number | null;
+  environment: SaaSEnvironment;
+  eventType: PrizeEngineApiKeyScope;
+  decisionType?: "reject" | "mute" | "payout" | null;
+  referenceType?: string | null;
+  referenceId?: number | null;
+  units?: number;
+  amount?: string;
+  currency?: string;
+  metadata?: Record<string, unknown> | null;
+};
+
+type PrizeEngineRewardPostCommitWork = {
+  drawRecordSnapshot?: {
+    drawRecordId: number;
+    metadata: Record<string, unknown>;
+  } | null;
+  groupCorrelationValues?: typeof saasAgentGroupCorrelations.$inferInsert | null;
+  usageEventPayload: PrizeEngineUsageEventPayload;
+  webhookDelivery?: {
+    project: {
+      id: number;
+      tenantId: number;
+      slug: string;
+      name: string;
+      environment: string;
+      currency: string;
+    };
+    response: PrizeEngineRewardResponse;
+  } | null;
+};
+
 const loadProjectState = async (
   tx: DbTransaction,
   projectId: number,
@@ -325,21 +361,35 @@ const loadProjectState = async (
   return readSqlRows<LockedProjectStateRow>(result)[0] ?? null;
 };
 
-const lockProjectStateForSettlement = async (
+const updateProjectStateForSettlement = async (
   tx: DbTransaction,
-  projectId: number,
-  environment: SaaSEnvironment,
+  params: {
+    projectId: number;
+    environment: SaaSEnvironment;
+    drawCost: string;
+    rewardAmount: string;
+  },
 ) => {
   const result = await tx.execute(sql`
-    SELECT
+    UPDATE ${saasProjects}
+    SET
+      prize_pool_balance = GREATEST(
+        ${saasProjects.prizePoolBalance} + ${params.drawCost} - ${params.rewardAmount},
+        0
+      ),
+      updated_at = NOW()
+    WHERE ${saasProjects.id} = ${params.projectId}
+      AND ${saasProjects.environment} = ${params.environment}
+      AND ${saasProjects.status} = 'active'
+      AND (
+        ${params.rewardAmount}::numeric = 0
+        OR ${saasProjects.prizePoolBalance} >= ${params.rewardAmount}::numeric
+      )
+    RETURNING
       id,
       tenant_id AS "tenantId",
       status,
       prize_pool_balance AS "prizePoolBalance"
-    FROM ${saasProjects}
-    WHERE ${saasProjects.id} = ${projectId}
-      AND ${saasProjects.environment} = ${environment}
-    FOR UPDATE
   `);
 
   return readSqlRows<LockedProjectStateRow>(result)[0] ?? null;
@@ -372,7 +422,7 @@ const loadProject = async (
   };
 };
 
-const loadLockedPlayer = async (
+const loadPlayer = async (
   tx: DbTransaction,
   projectId: number,
   externalPlayerId: string,
@@ -389,7 +439,6 @@ const loadLockedPlayer = async (
     FROM ${saasPlayers}
     WHERE ${saasPlayers.projectId} = ${projectId}
       AND ${saasPlayers.externalPlayerId} = ${externalPlayerId}
-    FOR UPDATE
   `);
 
   const row = readSqlRows<LockedPlayerRow>(result)[0];
@@ -403,7 +452,7 @@ const loadLockedPlayer = async (
   };
 };
 
-const loadLockedAgent = async (
+const loadAgent = async (
   tx: DbTransaction,
   projectId: number,
   agentId: string,
@@ -421,7 +470,6 @@ const loadLockedAgent = async (
     FROM ${saasAgents}
     WHERE ${saasAgents.projectId} = ${projectId}
       AND ${saasAgents.externalId} = ${agentId}
-    FOR UPDATE
   `);
 
   const row = readSqlRows<LockedAgentRow>(result)[0];
@@ -435,13 +483,22 @@ const loadLockedAgent = async (
   };
 };
 
-const loadLockedPrize = async (
+const decrementPrizeStockForSettlement = async (
   tx: DbTransaction,
   projectId: number,
   prizeId: number,
 ) => {
   const result = await tx.execute(sql`
-    SELECT
+    UPDATE ${saasProjectPrizes}
+    SET
+      stock = ${saasProjectPrizes.stock} - 1,
+      updated_at = NOW()
+    WHERE ${saasProjectPrizes.id} = ${prizeId}
+      AND ${saasProjectPrizes.projectId} = ${projectId}
+      AND ${saasProjectPrizes.isActive} = true
+      AND ${saasProjectPrizes.deletedAt} IS NULL
+      AND ${saasProjectPrizes.stock} > 0
+    RETURNING
       id,
       project_id AS "projectId",
       name,
@@ -451,10 +508,6 @@ const loadLockedPrize = async (
       is_active AS "isActive",
       deleted_at AS "deletedAt",
       metadata
-    FROM ${saasProjectPrizes}
-    WHERE ${saasProjectPrizes.id} = ${prizeId}
-      AND ${saasProjectPrizes.projectId} = ${projectId}
-    FOR UPDATE
   `);
 
   const row = readSqlRows<LockedPrizeRow>(result)[0];
@@ -468,7 +521,26 @@ const loadLockedPrize = async (
   };
 };
 
-const loadLockedTenantRiskEnvelope = async (
+const restorePrizeStockAfterSettlementFallback = async (
+  tx: DbTransaction,
+  projectId: number,
+  prizeId: number,
+) => {
+  await tx
+    .update(saasProjectPrizes)
+    .set({
+      stock: sql`${saasProjectPrizes.stock} + 1`,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(saasProjectPrizes.id, prizeId),
+        eq(saasProjectPrizes.projectId, projectId),
+      ),
+    );
+};
+
+const loadTenantRiskEnvelope = async (
   tx: DbTransaction,
   tenantId: number,
 ) => {
@@ -481,7 +553,6 @@ const loadLockedTenantRiskEnvelope = async (
       risk_envelope_emergency_stop AS "riskEnvelopeEmergencyStop"
     FROM ${saasTenants}
     WHERE ${saasTenants.id} = ${tenantId}
-    FOR UPDATE
   `);
 
   return readSqlRows<LockedTenantRiskEnvelopeRow>(result)[0] ?? null;
@@ -925,8 +996,8 @@ const ensureProjectAgent = async (
   projectId: number,
   payload: PrizeEngineAgentUpsertInput,
 ) => {
-  let agent = await loadLockedAgent(tx, projectId, payload.agentId);
-  const legacyPlayer = await loadLockedPlayer(tx, projectId, payload.agentId);
+  let agent = await loadAgent(tx, projectId, payload.agentId);
+  const legacyPlayer = await loadPlayer(tx, projectId, payload.agentId);
   const nextGroupId = normalizeOptionalString(payload.groupId);
   const nextFingerprint = normalizeOptionalString(payload.fingerprint);
   const nextOwnerMetadata =
@@ -946,7 +1017,7 @@ const ensureProjectAgent = async (
         status: payload.status ?? "active",
       })
       .onConflictDoNothing();
-    agent = await loadLockedAgent(tx, projectId, payload.agentId);
+    agent = await loadAgent(tx, projectId, payload.agentId);
   } else {
     const updatePatch: Partial<typeof saasAgents.$inferInsert> = {};
 
@@ -1004,7 +1075,7 @@ const ensureProjectPlayer = async (
   projectId: number,
   payload: PrizeEnginePlayerUpsertInput,
 ) => {
-  let player = await loadLockedPlayer(tx, projectId, payload.externalPlayerId);
+  let player = await loadPlayer(tx, projectId, payload.externalPlayerId);
   const nextMetadata = normalizeMetadata(payload.metadata);
 
   if (!player) {
@@ -1019,7 +1090,7 @@ const ensureProjectPlayer = async (
         metadata: nextMetadata,
       })
       .onConflictDoNothing();
-    player = await loadLockedPlayer(tx, projectId, payload.externalPlayerId);
+    player = await loadPlayer(tx, projectId, payload.externalPlayerId);
   } else if (
     payload.displayName !== undefined ||
     payload.metadata !== undefined
@@ -1330,21 +1401,7 @@ const loadProjectSelectionStats = async (
 };
 
 export const recordPrizeEngineUsageEvent = async (
-  payload: {
-    tenantId: number;
-    projectId: number;
-    apiKeyId: number;
-    playerId?: number | null;
-    environment: SaaSEnvironment;
-    eventType: PrizeEngineApiKeyScope;
-    decisionType?: "reject" | "mute" | "payout" | null;
-    referenceType?: string | null;
-    referenceId?: number | null;
-    units?: number;
-    amount?: string;
-    currency?: string;
-    metadata?: Record<string, unknown> | null;
-  },
+  payload: PrizeEngineUsageEventPayload,
   dbExecutor: Pick<typeof db, "insert"> | DbTransaction = db,
 ) => {
   await dbExecutor.insert(saasUsageEvents).values({
@@ -1361,6 +1418,120 @@ export const recordPrizeEngineUsageEvent = async (
     amount: payload.amount ?? "0",
     currency: payload.currency ?? "USD",
     metadata: payload.metadata ?? null,
+  });
+};
+
+const runPrizeEngineSideEffectInBackground = (
+  label: string,
+  metadata: Record<string, unknown>,
+  runner: () => Promise<unknown>,
+) => {
+  void runner().catch((error) => {
+    logger.warning("prize engine post-commit side effect failed", {
+      sideEffect: label,
+      ...metadata,
+      err: error,
+    });
+  });
+};
+
+const shouldAwaitPrizeEngineUsageEvent = (
+  payload: PrizeEngineUsageEventPayload,
+) =>
+  payload.environment === "live" &&
+  toDecimal(payload.amount ?? 0).gt(0);
+
+const insertPrizeEngineGroupCorrelation = async (
+  values: typeof saasAgentGroupCorrelations.$inferInsert,
+) => {
+  await db
+    .insert(saasAgentGroupCorrelations)
+    .values(values)
+    .onConflictDoNothing();
+};
+
+const updatePrizeEngineDrawRecordSnapshot = async (params: {
+  drawRecordId: number;
+  metadata: Record<string, unknown>;
+}) => {
+  await db
+    .update(saasDrawRecords)
+    .set({
+      metadata: params.metadata,
+    })
+    .where(eq(saasDrawRecords.id, params.drawRecordId));
+};
+
+const runPrizeEngineRewardPostCommitWork = async (
+  work: PrizeEngineRewardPostCommitWork,
+) => {
+  const awaitedTasks: Array<Promise<unknown>> = [];
+
+  if (work.groupCorrelationValues) {
+    awaitedTasks.push(
+      insertPrizeEngineGroupCorrelation(work.groupCorrelationValues),
+    );
+  }
+
+  if (work.webhookDelivery) {
+    awaitedTasks.push(
+      enqueueRewardCompletedWebhookDeliveries(work.webhookDelivery),
+    );
+  }
+
+  if (work.drawRecordSnapshot) {
+    runPrizeEngineSideEffectInBackground(
+      "draw_record_snapshot",
+      {
+        drawRecordId: work.drawRecordSnapshot.drawRecordId,
+        tenantId: work.usageEventPayload.tenantId,
+        projectId: work.usageEventPayload.projectId,
+      },
+      async () => {
+        await updatePrizeEngineDrawRecordSnapshot(work.drawRecordSnapshot!);
+      },
+    );
+  }
+
+  if (shouldAwaitPrizeEngineUsageEvent(work.usageEventPayload)) {
+    awaitedTasks.push(recordPrizeEngineUsageEvent(work.usageEventPayload));
+  } else {
+    runPrizeEngineSideEffectInBackground(
+      "usage_event",
+      {
+        tenantId: work.usageEventPayload.tenantId,
+        projectId: work.usageEventPayload.projectId,
+        apiKeyId: work.usageEventPayload.apiKeyId,
+        environment: work.usageEventPayload.environment,
+        eventType: work.usageEventPayload.eventType,
+        referenceType: work.usageEventPayload.referenceType ?? null,
+        referenceId: work.usageEventPayload.referenceId ?? null,
+      },
+      async () => {
+        await recordPrizeEngineUsageEvent(work.usageEventPayload);
+      },
+    );
+  }
+
+  if (awaitedTasks.length === 0) {
+    return;
+  }
+
+  const settled = await Promise.allSettled(awaitedTasks);
+  settled.forEach((result, index) => {
+    if (result.status === "fulfilled") {
+      return;
+    }
+
+    logger.warning("prize engine post-commit side effect failed", {
+      sideEffectIndex: index,
+      tenantId: work.usageEventPayload.tenantId,
+      projectId: work.usageEventPayload.projectId,
+      apiKeyId: work.usageEventPayload.apiKeyId,
+      environment: work.usageEventPayload.environment,
+      eventType: work.usageEventPayload.eventType,
+      err: result.reason,
+    });
   });
 };
 
@@ -1383,66 +1554,61 @@ const markTenantOnboardedAfterSuccess = async (params: {
   subjectId?: string | null;
 }) => {
   try {
-    await db.transaction(async (tx) => {
-      const completedAt = new Date();
-      const [tenant] = await tx
-        .update(saasTenants)
-        .set({
-          onboardedAt: completedAt,
-          updatedAt: completedAt,
+    const completedAt = new Date();
+    const [tenant] = await db
+      .update(saasTenants)
+      .set({
+        onboardedAt: completedAt,
+        updatedAt: completedAt,
+      })
+      .where(
+        and(
+          eq(saasTenants.id, params.auth.tenantId),
+          isNull(saasTenants.onboardedAt),
+        ),
+      )
+      .returning({
+        id: saasTenants.id,
+        name: saasTenants.name,
+        billingEmail: saasTenants.billingEmail,
+      });
+
+    if (!tenant) {
+      return;
+    }
+
+    let recipient = tenant.billingEmail?.trim() || null;
+    if (!recipient) {
+      const [owner] = await db
+        .select({
+          email: users.email,
         })
+        .from(saasTenantMemberships)
+        .innerJoin(admins, eq(saasTenantMemberships.adminId, admins.id))
+        .innerJoin(users, eq(admins.userId, users.id))
         .where(
           and(
-            eq(saasTenants.id, params.auth.tenantId),
-            isNull(saasTenants.onboardedAt),
+            eq(saasTenantMemberships.tenantId, params.auth.tenantId),
+            eq(saasTenantMemberships.role, "tenant_owner"),
           ),
         )
-        .returning({
-          id: saasTenants.id,
-          name: saasTenants.name,
-          billingEmail: saasTenants.billingEmail,
-        });
+        .limit(1);
 
-      if (!tenant) {
-        return;
-      }
+      recipient = owner?.email?.trim() || null;
+    }
 
-      let recipient = tenant.billingEmail?.trim() || null;
-      if (!recipient) {
-        const [owner] = await tx
-          .select({
-            email: users.email,
-          })
-          .from(saasTenantMemberships)
-          .innerJoin(admins, eq(saasTenantMemberships.adminId, admins.id))
-          .innerJoin(users, eq(admins.userId, users.id))
-          .where(
-            and(
-              eq(saasTenantMemberships.tenantId, params.auth.tenantId),
-              eq(saasTenantMemberships.role, "tenant_owner"),
-            ),
-          )
-          .limit(1);
+    if (!recipient) {
+      return;
+    }
 
-        recipient = owner?.email?.trim() || null;
-      }
-
-      if (!recipient) {
-        return;
-      }
-
-      await sendSaasOnboardingCompleteNotification(
-        {
-          email: recipient,
-          tenantName: tenant.name,
-          projectName: params.auth.projectName,
-          environment: params.environment,
-          activityType: params.activityType,
-          subjectId: params.subjectId ?? null,
-          completedAt,
-        },
-        tx,
-      );
+    await sendSaasOnboardingCompleteNotification({
+      email: recipient,
+      tenantName: tenant.name,
+      projectName: params.auth.projectName,
+      environment: params.environment,
+      activityType: params.activityType,
+      subjectId: params.subjectId ?? null,
+      completedAt,
     });
   } catch (error) {
     logger.warning("failed to finalize saas tenant onboarding", {
@@ -2433,7 +2599,7 @@ const executePrizeEngineReward = async (
   assertProjectEnvironment(auth, environment);
   const rewardMultiplier = resolveAgentRewardMultiplier(auth);
 
-  const { response, replayed } = await db.transaction(
+  const { response, replayed, postCommitWork } = await db.transaction(
     async (tx) => {
       const project = await loadProject(tx, auth.projectId, environment);
       if (!project || project.status !== "active") {
@@ -2452,7 +2618,7 @@ const executePrizeEngineReward = async (
       );
       assertRewardEnvelopeNotRejected(preflightRewardEnvelopeDecision);
 
-      const tenantRiskEnvelope = await loadLockedTenantRiskEnvelope(
+      const tenantRiskEnvelope = await loadTenantRiskEnvelope(
         tx,
         project.tenantId,
       );
@@ -2553,7 +2719,7 @@ const executePrizeEngineReward = async (
         });
         if (replay) {
           return {
-            rewardEnvelopeStates,
+            postCommitWork: null,
             response: replay.response,
             replayed: true,
           };
@@ -2730,22 +2896,22 @@ const executePrizeEngineReward = async (
         riskAdjustment,
       });
 
-      let selectedPrize: LockedPrizeRow | null = null;
+      let selectedPrizeCandidate: PrizeEngineConstraintPrizeRow | null = null;
       if (selection.selection?.kind === "prize") {
-        selectedPrize = await loadLockedPrize(
-          tx,
-          project.id,
-          selection.selection.id,
-        );
-        const scaledSelectedRewardAmount = selectedPrize
-          ? scaleRewardAmount(selectedPrize.rewardAmount, rewardMultiplier)
+        selectedPrizeCandidate =
+          prizeRows.find((row) => row.id === selection.selection?.id) ?? null;
+        const scaledSelectedRewardAmount = selectedPrizeCandidate
+          ? scaleRewardAmount(
+              selectedPrizeCandidate.rewardAmount,
+              rewardMultiplier,
+            )
           : new Decimal(0);
         if (
-          !selectedPrize ||
-          selectedPrize.projectId !== project.id ||
-          !selectedPrize.isActive ||
-          selectedPrize.deletedAt ||
-          selectedPrize.stock <= 0 ||
+          !selectedPrizeCandidate ||
+          selectedPrizeCandidate.projectId !== project.id ||
+          !selectedPrizeCandidate.isActive ||
+          selectedPrizeCandidate.deletedAt ||
+          selectedPrizeCandidate.stock <= 0 ||
           scaledSelectedRewardAmount.gt(project.prizePoolBalance) ||
           effectiveRiskEnvelope.emergencyStop ||
           (effectiveRiskEnvelope.maxSinglePayout !== null &&
@@ -2761,12 +2927,15 @@ const executePrizeEngineReward = async (
               .plus(scaledSelectedRewardAmount)
               .gt(effectiveRiskEnvelope.dailyBudgetCap))
         ) {
-          selectedPrize = null;
+          selectedPrizeCandidate = null;
         }
       }
 
-      let rewardAmount = selectedPrize
-        ? scaleRewardAmount(selectedPrize.rewardAmount, rewardMultiplier)
+      let rewardAmount = selectedPrizeCandidate
+        ? scaleRewardAmount(
+            selectedPrizeCandidate.rewardAmount,
+            rewardMultiplier,
+          )
         : new Decimal(0);
       const scopeEnvelopeOutcome: PrizeEngineRewardEnvelopeOutcome = {
         mode:
@@ -2789,7 +2958,7 @@ const executePrizeEngineReward = async (
         assertRewardEnvelopeNotRejected(finalRewardEnvelopeDecision);
 
         if (finalRewardEnvelopeDecision.mode === "mute") {
-          selectedPrize = null;
+          selectedPrizeCandidate = null;
           rewardAmount = new Decimal(0);
         }
 
@@ -2798,7 +2967,7 @@ const executePrizeEngineReward = async (
             ? preflightRewardEnvelopeDecision
             : finalRewardEnvelopeDecision;
       } else {
-        selectedPrize = null;
+        selectedPrizeCandidate = null;
         rewardAmount = new Decimal(0);
       }
 
@@ -2822,7 +2991,7 @@ const executePrizeEngineReward = async (
           liveBillingHardCapActive ||
           currentMonthBillableTotalAmount.plus(decisionFee).gt(hardCapAmount)
         ) {
-          selectedPrize = null;
+          selectedPrizeCandidate = null;
           rewardAmount = new Decimal(0);
           billingThrottleReason = "monthly_hard_cap";
           rewardEnvelopeOutcome = {
@@ -2848,26 +3017,72 @@ const executePrizeEngineReward = async (
           }
         }
       }
-      const lockedProjectState = await lockProjectStateForSettlement(
-        tx,
-        project.id,
-        environment,
-      );
-      if (!lockedProjectState || lockedProjectState.status !== "active") {
+
+      let selectedPrize: LockedPrizeRow | null = null;
+      let settledProjectState: LockedProjectStateRow | null = null;
+      const drawCostFixed = drawCost.toFixed(2);
+
+      if (selectedPrizeCandidate) {
+        const decrementedPrize = await decrementPrizeStockForSettlement(
+          tx,
+          project.id,
+          selectedPrizeCandidate.id,
+        );
+
+        if (decrementedPrize) {
+          const winningProjectState = await updateProjectStateForSettlement(tx, {
+            projectId: project.id,
+            environment,
+            drawCost: drawCostFixed,
+            rewardAmount: rewardAmount.toFixed(2),
+          });
+
+          if (winningProjectState) {
+            selectedPrize = decrementedPrize;
+            settledProjectState = winningProjectState;
+          } else {
+            await restorePrizeStockAfterSettlementFallback(
+              tx,
+              project.id,
+              decrementedPrize.id,
+            );
+
+            const projectStateAfterFallback = await loadProjectState(
+              tx,
+              project.id,
+              environment,
+            );
+            if (
+              !projectStateAfterFallback ||
+              projectStateAfterFallback.status !== "active"
+            ) {
+              throw notFoundError("Project not found.", {
+                code: API_ERROR_CODES.PROJECT_NOT_FOUND,
+              });
+            }
+
+            rewardAmount = new Decimal(0);
+          }
+        } else {
+          rewardAmount = new Decimal(0);
+        }
+      }
+
+      if (!settledProjectState) {
+        settledProjectState =
+          drawCost.eq(0) && rewardAmount.eq(0)
+            ? await loadProjectState(tx, project.id, environment)
+            : await updateProjectStateForSettlement(tx, {
+                projectId: project.id,
+                environment,
+                drawCost: drawCostFixed,
+                rewardAmount: rewardAmount.toFixed(2),
+              });
+      }
+      if (!settledProjectState || settledProjectState.status !== "active") {
         throw notFoundError("Project not found.", {
           code: API_ERROR_CODES.PROJECT_NOT_FOUND,
         });
-      }
-
-      if (selectedPrize) {
-        const scaledSelectedRewardAmount = scaleRewardAmount(
-          selectedPrize.rewardAmount,
-          rewardMultiplier,
-        );
-        if (scaledSelectedRewardAmount.gt(lockedProjectState.prizePoolBalance)) {
-          selectedPrize = null;
-          rewardAmount = new Decimal(0);
-        }
       }
 
       const expectedRewardAmount = computeExpectedRewardAmount({
@@ -2886,36 +3101,17 @@ const executePrizeEngineReward = async (
         missWeight: Number(project.missWeight ?? 0),
         actualRewardAmount: rewardAmount.toFixed(2),
       });
-      const startingBalance = toDecimal(player.balance);
-      const endingBalance = startingBalance.minus(drawCost).plus(rewardAmount);
-      const startingPoolBalance = toDecimal(lockedProjectState.prizePoolBalance);
-      const endingPoolBalance = Decimal.max(
-        startingPoolBalance.plus(drawCost).minus(rewardAmount),
-        0,
-      );
+      const endingPoolBalance = toDecimal(settledProjectState.prizePoolBalance);
+      const startingPoolBalance = endingPoolBalance
+        .minus(drawCost)
+        .plus(rewardAmount);
       const won = rewardAmount.gt(0);
-      const nextPityStreak = won ? 0 : Number(player.pityStreak ?? 0) + 1;
-
-      if (selectedPrize) {
-        await tx
-          .update(saasProjectPrizes)
-          .set({
-            stock: selectedPrize.stock - 1,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(saasProjectPrizes.id, selectedPrize.id),
-              eq(saasProjectPrizes.projectId, project.id),
-            ),
-          );
-      }
 
       const [updatedPlayer] = await tx
         .update(saasPlayers)
         .set({
-          balance: endingBalance.toFixed(2),
-          pityStreak: nextPityStreak,
+          balance: sql`${saasPlayers.balance} - ${drawCostFixed} + ${rewardAmount.toFixed(2)}`,
+          pityStreak: won ? 0 : sql`${saasPlayers.pityStreak} + 1`,
           updatedAt: new Date(),
         })
         .where(
@@ -2932,13 +3128,8 @@ const executePrizeEngineReward = async (
         });
       }
 
-      await tx
-        .update(saasProjects)
-        .set({
-          prizePoolBalance: endingPoolBalance.toFixed(2),
-          updatedAt: new Date(),
-        })
-        .where(eq(saasProjects.id, project.id));
+      const endingBalance = toDecimal(updatedPlayer.balance);
+      const startingBalance = endingBalance.plus(drawCost).minus(rewardAmount);
 
       if (!drawCost.eq(0)) {
         await tx.insert(saasLedgerEntries).values({
@@ -3075,54 +3266,60 @@ const executePrizeEngineReward = async (
         })
         .returning();
 
-      if (groupId) {
-        const groupRewardAmountAfter =
-          groupConstraintStats.rewardAmount.plus(rewardAmount);
-        const groupExpectedRewardAmountAfter =
-          groupConstraintStats.expectedRewardAmount.plus(expectedRewardAmount);
-        const agentRewardAmountAfter =
-          agentConstraintStats.rewardAmount.plus(rewardAmount);
-        const agentExpectedRewardAmountAfter =
-          agentConstraintStats.expectedRewardAmount.plus(expectedRewardAmount);
+      const groupCorrelationValues = groupId
+        ? (() => {
+            const groupRewardAmountAfter =
+              groupConstraintStats.rewardAmount.plus(rewardAmount);
+            const groupExpectedRewardAmountAfter =
+              groupConstraintStats.expectedRewardAmount.plus(
+                expectedRewardAmount,
+              );
+            const agentRewardAmountAfter =
+              agentConstraintStats.rewardAmount.plus(rewardAmount);
+            const agentExpectedRewardAmountAfter =
+              agentConstraintStats.expectedRewardAmount.plus(
+                expectedRewardAmount,
+              );
 
-        await tx.insert(saasAgentGroupCorrelations).values({
-          projectId: project.id,
-          agentId: agentScopeId,
-          playerId: player.id,
-          drawRecordId: record.id,
-          groupId,
-          windowSeconds: constraintConfig.evaluationWindowSeconds,
-          groupDrawCountWindow: groupConstraintStats.drawCount + 1,
-          groupDistinctPlayerCountWindow:
-            groupConstraintStats.distinctPlayerCount +
-            (groupConstraintStats.containsCurrentPlayer ? 0 : 1),
-          groupRewardAmountWindow: groupRewardAmountAfter.toFixed(4),
-          groupExpectedRewardAmountWindow:
-            groupExpectedRewardAmountAfter.toFixed(4),
-          groupPositiveVarianceWindow: computePositiveVariance(
-            groupRewardAmountAfter,
-            groupExpectedRewardAmountAfter,
-          ).toFixed(4),
-          agentDrawCountWindow: agentConstraintStats.drawCount + 1,
-          agentRewardAmountWindow: agentRewardAmountAfter.toFixed(4),
-          agentExpectedRewardAmountWindow:
-            agentExpectedRewardAmountAfter.toFixed(4),
-          agentPositiveVarianceWindow: computePositiveVariance(
-            agentRewardAmountAfter,
-            agentExpectedRewardAmountAfter,
-          ).toFixed(4),
-          metadata: {
-            environment,
-            playerExternalId: player.externalPlayerId,
-            agentId: agentScopeId,
-            agentRecordId: trackedAgent.id,
-            agentScopeId,
-            rewardEnvelopeMode: rewardEnvelopeOutcome.mode,
-            groupTriggered: groupScopedPrizeRows.triggered,
-            agentTriggered: agentScopedPrizeRows.triggered,
-          },
-        });
-      }
+            return {
+              projectId: project.id,
+              agentId: agentScopeId,
+              playerId: player.id,
+              drawRecordId: record.id,
+              groupId,
+              windowSeconds: constraintConfig.evaluationWindowSeconds,
+              groupDrawCountWindow: groupConstraintStats.drawCount + 1,
+              groupDistinctPlayerCountWindow:
+                groupConstraintStats.distinctPlayerCount +
+                (groupConstraintStats.containsCurrentPlayer ? 0 : 1),
+              groupRewardAmountWindow: groupRewardAmountAfter.toFixed(4),
+              groupExpectedRewardAmountWindow:
+                groupExpectedRewardAmountAfter.toFixed(4),
+              groupPositiveVarianceWindow: computePositiveVariance(
+                groupRewardAmountAfter,
+                groupExpectedRewardAmountAfter,
+              ).toFixed(4),
+              agentDrawCountWindow: agentConstraintStats.drawCount + 1,
+              agentRewardAmountWindow: agentRewardAmountAfter.toFixed(4),
+              agentExpectedRewardAmountWindow:
+                agentExpectedRewardAmountAfter.toFixed(4),
+              agentPositiveVarianceWindow: computePositiveVariance(
+                agentRewardAmountAfter,
+                agentExpectedRewardAmountAfter,
+              ).toFixed(4),
+              metadata: {
+                environment,
+                playerExternalId: player.externalPlayerId,
+                agentId: agentScopeId,
+                agentRecordId: trackedAgent.id,
+                agentScopeId,
+                rewardEnvelopeMode: rewardEnvelopeOutcome.mode,
+                groupTriggered: groupScopedPrizeRows.triggered,
+                agentTriggered: agentScopedPrizeRows.triggered,
+              },
+            } satisfies typeof saasAgentGroupCorrelations.$inferInsert;
+          })()
+        : null;
 
       if (!rewardAmount.eq(0)) {
         await tx.insert(saasLedgerEntries).values({
@@ -3151,38 +3348,35 @@ const executePrizeEngineReward = async (
       }
 
       const decisionType = won ? "payout" : "mute";
-      await recordPrizeEngineUsageEvent(
-        {
-          tenantId: auth.tenantId,
-          projectId: auth.projectId,
-          apiKeyId: auth.apiKeyId,
-          playerId: updatedPlayer.id,
-          environment,
-          eventType: usageEventType,
+      const usageEventPayload = {
+        tenantId: auth.tenantId,
+        projectId: auth.projectId,
+        apiKeyId: auth.apiKeyId,
+        playerId: updatedPlayer.id,
+        environment,
+        eventType: usageEventType,
+        decisionType,
+        referenceType: usageReferenceType,
+        referenceId: record.id,
+        amount:
+          environment === "live" && !billingThrottleReason
+            ? auth.decisionPricing[decisionType]
+            : "0",
+        currency: auth.billingCurrency,
+        metadata: buildAgentUsageMetadata(auth, {
           decisionType,
-          referenceType: usageReferenceType,
-          referenceId: record.id,
-          amount:
-            environment === "live" && !billingThrottleReason
-              ? auth.decisionPricing[decisionType]
-              : "0",
-          currency: auth.billingCurrency,
-          metadata: buildAgentUsageMetadata(auth, {
-            decisionType,
-            externalPlayerId: updatedPlayer.externalPlayerId,
-            groupId,
-            status: record.status,
-            prizeId: record.prizeId,
-            billable: environment === "live" && !billingThrottleReason,
-            billingThrottleReason,
-            rewardEnvelopeMode: rewardEnvelopeOutcome.mode,
-            rewardEnvelopeTriggered: rewardEnvelopeOutcome.triggered,
-          }),
-        },
-        tx,
-      );
+          externalPlayerId: updatedPlayer.externalPlayerId,
+          groupId,
+          status: record.status,
+          prizeId: record.prizeId,
+          billable: environment === "live" && !billingThrottleReason,
+          billingThrottleReason,
+          rewardEnvelopeMode: rewardEnvelopeOutcome.mode,
+          rewardEnvelopeTriggered: rewardEnvelopeOutcome.triggered,
+        }),
+      } satisfies PrizeEngineUsageEventPayload;
 
-      const nextRewardEnvelopeStates = await consumeRewardEnvelopeStates(tx, {
+      await consumeRewardEnvelopeStates(tx, {
         states: rewardEnvelopeStates,
         rewardAmount,
       });
@@ -3230,7 +3424,7 @@ const executePrizeEngineReward = async (
                 {
                   id: selectedPrize.id,
                   name: selectedPrize.name,
-                  stock: Math.max(selectedPrize.stock - 1, 0),
+                  stock: Math.max(selectedPrize.stock, 0),
                   weight: selectedPrize.weight,
                   rewardAmount: rewardAmount.toFixed(2),
                 },
@@ -3240,39 +3434,41 @@ const executePrizeEngineReward = async (
         ...(legacy ? { legacy } : {}),
       } satisfies PrizeEngineRewardResponse;
 
-      await tx
-        .update(saasDrawRecords)
-        .set({
-          metadata: {
-            ...(normalizeMetadata(record.metadata) ?? {}),
-            agentSnapshot: response.agent,
-            playerSnapshot: response.player,
-            prizeSnapshot: response.result.prize ?? null,
-            responseSnapshot: response,
-            legacy: legacy ?? null,
-          },
-        })
-        .where(eq(saasDrawRecords.id, record.id));
-
-      await enqueueRewardCompletedWebhookDeliveries(tx, {
-        project: {
-          id: project.id,
-          tenantId: project.tenantId,
-          slug: project.slug,
-          name: project.name,
-          environment: project.environment,
-          currency: project.currency,
-        },
-        response,
-      });
-
       return {
-        rewardEnvelopeStates: nextRewardEnvelopeStates,
+        postCommitWork: {
+          drawRecordSnapshot: {
+            drawRecordId: record.id,
+            metadata: {
+              ...(normalizeMetadata(record.metadata) ?? {}),
+              agentSnapshot: response.agent,
+              playerSnapshot: response.player,
+              prizeSnapshot: response.result.prize ?? null,
+              responseSnapshot: response,
+              legacy: legacy ?? null,
+            },
+          },
+          groupCorrelationValues,
+          usageEventPayload,
+          webhookDelivery: {
+            project: {
+              id: project.id,
+              tenantId: project.tenantId,
+              slug: project.slug,
+              name: project.name,
+              environment: project.environment,
+              currency: project.currency,
+            },
+            response,
+          },
+        } satisfies PrizeEngineRewardPostCommitWork,
         response,
         replayed: false,
       };
     },
   );
+  if (postCommitWork) {
+    await runPrizeEngineRewardPostCommitWork(postCommitWork);
+  }
   return {
     response,
     replayed,
@@ -3306,12 +3502,24 @@ export async function createPrizeEngineReward(params: {
     antiExploitTrace,
   });
 
-  await markTenantOnboardedAfterSuccess({
-    auth,
-    environment,
-    activityType: "reward",
-    subjectId: payload.agent.agentId,
-  });
+  runPrizeEngineSideEffectInBackground(
+    "tenant_onboarding_finalize",
+    {
+      tenantId: auth.tenantId,
+      projectId: auth.projectId,
+      environment,
+      activityType: "reward",
+      subjectId: payload.agent.agentId,
+    },
+    async () => {
+      await markTenantOnboardedAfterSuccess({
+        auth,
+        environment,
+        activityType: "reward",
+        subjectId: payload.agent.agentId,
+      });
+    },
+  );
 
   return result.response;
 }
@@ -3373,12 +3581,24 @@ export async function createPrizeEngineDraw(params: {
     antiExploitTrace,
   });
 
-  await markTenantOnboardedAfterSuccess({
-    auth,
-    environment,
-    activityType: rewardContext ? "reward" : "draw",
-    subjectId: rewardContext?.agent.agentId ?? payload.player.playerId,
-  });
+  runPrizeEngineSideEffectInBackground(
+    "tenant_onboarding_finalize",
+    {
+      tenantId: auth.tenantId,
+      projectId: auth.projectId,
+      environment,
+      activityType: rewardContext ? "reward" : "draw",
+      subjectId: rewardContext?.agent.agentId ?? payload.player.playerId,
+    },
+    async () => {
+      await markTenantOnboardedAfterSuccess({
+        auth,
+        environment,
+        activityType: rewardContext ? "reward" : "draw",
+        subjectId: rewardContext?.agent.agentId ?? payload.player.playerId,
+      });
+    },
+  );
 
   if (rewardContext) {
     return result.response;

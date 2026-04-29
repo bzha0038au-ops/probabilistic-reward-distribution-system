@@ -7,6 +7,12 @@
     "base": {
       "pnpm": "10.31.0"
     },
+    "development": {
+      "extends": "base",
+      "distribution": "internal",
+      "developmentClient": true,
+      "channel": "development"
+    },
     "preview": {
       "extends": "base",
       "distribution": "internal",

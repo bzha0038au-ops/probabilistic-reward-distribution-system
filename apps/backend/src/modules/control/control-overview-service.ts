@@ -9,14 +9,19 @@ import { db } from "../../db";
 import { toMoneyString } from "../../shared/money";
 import { reviewPaymentProviderConfig } from "../payment/provider-config";
 import {
+  getAntiAbuseConfig,
   getAuthFailureConfig,
   getBlackjackConfig,
   getBonusReleaseConfig,
   getDrawCost,
+  getDrawSystemConfig,
   getGamificationRewardConfig,
+  getPaymentConfig,
+  getSystemFlags,
   getPoolBalance,
   getRandomizationConfig,
   getSaasUsageAlertConfig,
+  getWithdrawalRiskConfig,
 } from "../system/service";
 import {
   buildSaasTenantRiskEnvelopeSummary,
@@ -185,6 +190,11 @@ export const toSystemConfigResponse = async (
   const [
     poolBalance,
     drawCost,
+    systemFlags,
+    drawSystem,
+    paymentConfig,
+    antiAbuseConfig,
+    withdrawalRiskConfig,
     randomization,
     bonusRelease,
     authFailure,
@@ -194,6 +204,11 @@ export const toSystemConfigResponse = async (
   ] = await Promise.all([
     getPoolBalance(executor),
     getDrawCost(executor),
+    getSystemFlags(executor),
+    getDrawSystemConfig(executor),
+    getPaymentConfig(executor),
+    getAntiAbuseConfig(executor),
+    getWithdrawalRiskConfig(executor),
     getRandomizationConfig(executor),
     getBonusReleaseConfig(executor),
     getAuthFailureConfig(executor),
@@ -205,6 +220,15 @@ export const toSystemConfigResponse = async (
   return {
     poolBalance: toMoneyString(poolBalance),
     drawCost: toMoneyString(drawCost),
+    maintenanceMode: systemFlags.maintenanceMode,
+    registrationEnabled: systemFlags.registrationEnabled,
+    loginEnabled: systemFlags.loginEnabled,
+    drawEnabled: drawSystem.drawEnabled,
+    paymentDepositEnabled: paymentConfig.depositEnabled,
+    paymentWithdrawEnabled: paymentConfig.withdrawEnabled,
+    antiAbuseAutoFreezeEnabled: antiAbuseConfig.autoFreeze,
+    withdrawRiskNewCardFirstWithdrawalReviewEnabled:
+      withdrawalRiskConfig.newCardFirstWithdrawalReviewEnabled,
     weightJitterEnabled: randomization.weightJitterEnabled,
     weightJitterPct: toMoneyString(randomization.weightJitterPct),
     bonusAutoReleaseEnabled: bonusRelease.bonusAutoReleaseEnabled,

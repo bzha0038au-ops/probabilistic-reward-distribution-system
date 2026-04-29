@@ -64,6 +64,10 @@ POSTGRES_SSL=false
 ```dotenv
 DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5433/reward_local
 POSTGRES_URL=postgresql://postgres:postgres@127.0.0.1:5433/reward_local
+DB_POOL_MAX=30
+DB_POOL_IDLE_TIMEOUT_SECONDS=20
+DB_POOL_CONNECT_TIMEOUT_SECONDS=30
+DB_POOL_MAX_LIFETIME_SECONDS=1800
 ADMIN_JWT_SECRET=local_admin_secret_change_me_123456
 USER_JWT_SECRET=local_user_secret_change_me_123456
 ADMIN_MFA_ENCRYPTION_SECRET=local_admin_mfa_secret_change_me_123456

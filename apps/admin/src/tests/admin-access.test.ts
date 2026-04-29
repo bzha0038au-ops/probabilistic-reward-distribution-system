@@ -37,6 +37,11 @@ describe("admin access helpers", () => {
             href: "/finance",
             labelKey: "workspace.items.finance",
           },
+          {
+            id: "economy",
+            href: "/economy",
+            labelKey: "workspace.items.economy",
+          },
         ],
       },
     ])

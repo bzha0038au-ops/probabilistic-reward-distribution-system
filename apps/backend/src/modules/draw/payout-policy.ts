@@ -14,14 +14,12 @@ import type {
 } from './types';
 
 const buildOutcome = (
-  bonusBefore: Decimal,
   status: ResolvedDrawOutcome['status'],
   payoutLimitReason: string | null = null
 ): ResolvedDrawOutcome => ({
   status,
   rewardAmount: toDecimal(0),
   prizeId: null,
-  bonusAfterReward: bonusBefore,
   payoutLimitReason,
 });
 
@@ -125,7 +123,6 @@ export const resolvePayoutPolicy = async (params: {
   selectionState: PreparedDrawSelection;
   drawState: {
     drawCost: Decimal;
-    bonusBefore: Decimal;
     userPoolAfterDebit: Decimal;
   };
   economy: DrawConfigBundle['economy'];
@@ -148,7 +145,7 @@ export const resolvePayoutPolicy = async (params: {
   if (!selection) {
     return {
       terminal: true,
-      outcome: buildOutcome(drawState.bonusBefore, 'miss'),
+      outcome: buildOutcome('miss'),
     };
   }
 
@@ -156,7 +153,7 @@ export const resolvePayoutPolicy = async (params: {
   if ('__isMiss' in candidate) {
     return {
       terminal: true,
-      outcome: buildOutcome(drawState.bonusBefore, 'miss'),
+      outcome: buildOutcome('miss'),
     };
   }
 
@@ -165,7 +162,7 @@ export const resolvePayoutPolicy = async (params: {
   if (!lockedPrize || !lockedPrize.is_active || lockedPrize.stock <= 0) {
     return {
       terminal: true,
-      outcome: buildOutcome(drawState.bonusBefore, 'out_of_stock'),
+      outcome: buildOutcome('out_of_stock'),
     };
   }
 
@@ -188,14 +185,14 @@ export const resolvePayoutPolicy = async (params: {
   ) {
     return {
       terminal: true,
-      outcome: buildOutcome(drawState.bonusBefore, 'miss'),
+      outcome: buildOutcome('miss'),
     };
   }
 
   if (!budgetEvaluation.available) {
     return {
       terminal: true,
-      outcome: buildOutcome(drawState.bonusBefore, 'budget_exhausted'),
+      outcome: buildOutcome('budget_exhausted'),
     };
   }
 
@@ -211,14 +208,14 @@ export const resolvePayoutPolicy = async (params: {
   ) {
     return {
       terminal: true,
-      outcome: buildOutcome(drawState.bonusBefore, 'payout_limited'),
+      outcome: buildOutcome('payout_limited'),
     };
   }
 
   if (economy.houseBankroll.gt(0) && candidateReward.gt(economy.houseBankroll)) {
     return {
       terminal: true,
-      outcome: buildOutcome(drawState.bonusBefore, 'payout_limited'),
+      outcome: buildOutcome('payout_limited'),
     };
   }
 
@@ -228,7 +225,7 @@ export const resolvePayoutPolicy = async (params: {
   ) {
     return {
       terminal: true,
-      outcome: buildOutcome(drawState.bonusBefore, 'payout_limited'),
+      outcome: buildOutcome('payout_limited'),
     };
   }
 
@@ -244,11 +241,7 @@ export const resolvePayoutPolicy = async (params: {
   if (payoutLimitReason) {
     return {
       terminal: true,
-      outcome: buildOutcome(
-        drawState.bonusBefore,
-        'payout_limited',
-        payoutLimitReason
-      ),
+      outcome: buildOutcome('payout_limited', payoutLimitReason),
     };
   }
 

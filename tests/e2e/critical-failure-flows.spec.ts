@@ -645,7 +645,7 @@ test('wallet refresh recovers cleanly after a temporary backend disconnect', asy
 
   await page.route('**/api/backend/wallet', disconnectWalletRoute);
 
-  await page.getByRole('button', { name: 'Refresh' }).click();
+  await page.getByTestId('wallet-refresh-button').click();
   await expect(page.getByTestId('dashboard-error')).toHaveText(
     'Failed to load dashboard data.',
   );
@@ -653,7 +653,7 @@ test('wallet refresh recovers cleanly after a temporary backend disconnect', asy
   await page.unroute('**/api/backend/wallet', disconnectWalletRoute);
 
   await seedWalletBalance(userId, '45.00');
-  await page.getByRole('button', { name: 'Refresh' }).click();
+  await page.getByTestId('wallet-refresh-button').click();
 
   await expect(page.getByTestId('dashboard-error')).toBeHidden();
   await expect(page.getByTestId('wallet-current-balance')).toHaveText('45.00');

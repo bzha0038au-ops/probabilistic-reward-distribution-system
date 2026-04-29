@@ -19,6 +19,16 @@ schedules are enabled.
 - `BACKUP_OWNER` variable: owner for retention, encryption, and offsite copy.
 - `RESTORE_APPROVER` variable: approver for destructive restores and drill sign-off.
 - `RELEASE_APPROVER` variable: approver for production upgrades.
+- `POSTGRES_PITR_ENABLED=true` variable: signals that provider snapshots / PITR are wired for the target environment.
+- `POSTGRES_PITR_STRATEGY` variable: short descriptor such as `managed-snapshots` or `wal-archive+base-backup`.
+- `POSTGRES_PITR_RPO_MINUTES` variable: declared maximum tolerated PITR data loss window.
+- `POSTGRES_WAL_ARCHIVE_ENABLED=true` variable: confirms WAL archival is enabled.
+- `POSTGRES_WAL_ARCHIVE_URI` secret: WAL archive destination or provider reference.
+- `WAF_CDN_PROVIDER` variable: public-edge provider name for the environment.
+- `WAF_CDN_DASHBOARD_URL` variable: operator landing page for WAF/CDN incidents.
+- `ADMIN_EDGE_ACCESS_POLICY` variable: admin-surface access policy / VPN / identity-aware proxy identifier.
+- `NODE_EXPORTER_JOB`, `POSTGRES_EXPORTER_JOB`, `REDIS_EXPORTER_JOB` variables:
+  the scrape jobs expected to carry host, PostgreSQL, and Redis infra alerts.
 
 ## Routing Rules
 
@@ -36,11 +46,15 @@ schedules are enabled.
 - Redis memory alerts: route 70% to the ticket queue and 85%/95% to the page chain.
 - Registry storage alerts: route the 80% threshold to the Telegram ticket chat so rollback images are preserved before registry GC pressure starts.
 - Missing restore-drill evidence older than 45 days: treat as a sev2 operational readiness issue and page `DEPLOY_TG_PAGE_CHAT_ID`.
+- Missing secret-rotation evidence older than 90 days: treat as a sev2 control-readiness issue and page `DEPLOY_TG_PAGE_CHAT_ID`.
 
 ## Source Of Truth
 
 - GitHub Actions schedules the repo-owned backup, backup verification, and restore-drill automation.
 - GitHub Actions also runs the daily committed-evidence freshness check for
-  restore drills.
+  restore drills and secret-rotation drills.
 - The GitHub environment variables above are the named owner registry for this repo.
 - Infra-owned alerts still need Prometheus / Alertmanager (or equivalent) for `/metrics` and `/health/ready`.
+- `deploy/monitoring/alertmanager-routing.example.yml` is the repo-owned
+  routing template for severity-to-chat fanout. Translate it into the real
+  environment config before go-live.

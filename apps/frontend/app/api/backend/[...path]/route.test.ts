@@ -175,6 +175,52 @@ describe("backend proxy route", () => {
     );
   });
 
+  it("forwards play-mode updates for authenticated browser routes", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            snapshot: {
+              gameKey: "holdem",
+              type: "snowball",
+            },
+          },
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+          },
+        },
+      ),
+    );
+
+    const response = await POST(
+      new NextRequest("https://example.com/api/backend/play-modes/holdem", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          type: "snowball",
+        }),
+      }),
+      buildRouteContext(["play-modes", "holdem"]),
+    );
+
+    expect(response.status).toBe(200);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      new URL("http://localhost:4000/play-modes/holdem"),
+      expect.objectContaining({
+        method: "POST",
+        cache: "no-store",
+        headers: expect.any(Headers),
+        body: expect.any(ArrayBuffer),
+      }),
+    );
+  });
+
   it("forwards community reply submissions for authenticated browser routes", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ ok: true, data: { id: 17 } }), {

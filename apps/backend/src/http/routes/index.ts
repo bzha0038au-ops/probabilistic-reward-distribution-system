@@ -6,6 +6,7 @@ export async function registerRoutes(app: AppInstance) {
   const { registerObservabilityRoutes } = await import('./observability');
   const { registerSaasStatusRoutes } = await import('./saas-status');
   const { registerInternalRoutes } = await import('./internal');
+  const { registerIapRoutes } = await import('./iap');
   const { registerPaymentRoutes } = await import('./payment');
   const { registerAuthRoutes } = await import('./auth');
   const { registerCommunityRoutes } = await import('./community');
@@ -16,6 +17,7 @@ export async function registerRoutes(app: AppInstance) {
   await registerObservabilityRoutes(app);
   await registerSaasStatusRoutes(app);
   await registerInternalRoutes(app);
+  await registerIapRoutes(app);
   await registerPaymentRoutes(app);
   if (!minimalBackend) {
     const { registerPortalRoutes } = await import('./portal');

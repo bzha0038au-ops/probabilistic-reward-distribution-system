@@ -9,11 +9,17 @@ type SqlClient = ReturnType<typeof postgres>;
 let cachedClient: SqlClient | null = null;
 let cachedDb: ReturnType<typeof createDb> | null = null;
 
-const createClient = () =>
-  postgres(getConfig().databaseUrl, {
+const createClient = () => {
+  const config = getConfig();
+
+  return postgres(config.databaseUrl, {
     ssl: process.env.POSTGRES_SSL === 'true' ? 'require' : undefined,
-    max: 10,
+    max: config.databasePoolMax,
+    idle_timeout: config.databasePoolIdleTimeoutSeconds,
+    connect_timeout: config.databasePoolConnectTimeoutSeconds,
+    max_lifetime: config.databasePoolMaxLifetimeSeconds,
   });
+};
 
 const getClientInstance = () => {
   if (!cachedClient) {

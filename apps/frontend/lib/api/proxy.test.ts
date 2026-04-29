@@ -43,6 +43,8 @@ const browserRouteExpectations = [
   ["GET", "/markets/12"],
   ["POST", "/markets/12/positions"],
   ["POST", "/markets/12/positions/34/sell"],
+  ["GET", "/play-modes/holdem"],
+  ["POST", "/play-modes/holdem"],
   ["GET", USER_API_ROUTES.holdemTables],
   ["POST", USER_API_ROUTES.holdemTables],
   ["GET", "/holdem/tables/12"],
@@ -180,6 +182,22 @@ describe("api proxy helpers", () => {
       normalizedPath: "/markets/12/positions/34/sell",
       requiresAuth: true,
       methods: ["POST"],
+      methodAllowed: true,
+    });
+
+    expect(resolveBackendProxyRoute("GET", "/play-modes/holdem")).toEqual({
+      matched: true,
+      normalizedPath: "/play-modes/holdem",
+      requiresAuth: true,
+      methods: ["GET", "POST"],
+      methodAllowed: true,
+    });
+
+    expect(resolveBackendProxyRoute("POST", "/play-modes/holdem")).toEqual({
+      matched: true,
+      normalizedPath: "/play-modes/holdem",
+      requiresAuth: true,
+      methods: ["GET", "POST"],
       methodAllowed: true,
     });
 
@@ -423,6 +441,18 @@ describe("api proxy helpers", () => {
     expect(resolveBackendProxyRoute("GET", "/admin/deposits")).toEqual({
       matched: false,
       normalizedPath: "/admin/deposits",
+    });
+
+    expect(resolveBackendProxyRoute("GET", "/stats")).toEqual({
+      matched: false,
+      normalizedPath: "/stats",
+    });
+
+    expect(
+      resolveBackendProxyRoute("POST", "/notification-push-devices"),
+    ).toEqual({
+      matched: false,
+      normalizedPath: "/notification-push-devices",
     });
 
     expect(

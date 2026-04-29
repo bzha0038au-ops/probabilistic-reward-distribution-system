@@ -8,15 +8,16 @@ import type {
 import {
   deposits,
   drawRecords,
+  economyLedgerEntries,
   ledgerEntries,
   referrals,
+  userAssetBalances,
   userWallets,
   users,
 } from "@reward/database";
 import { db, type DbClient, type DbTransaction } from "../../db";
-import { grantBonus } from "../bonus/service";
+import { creditAsset } from "../economy/service";
 import { consumeMarketingBudget } from "../system/service";
-import { assertWalletLedgerInvariant } from "../wallet/invariant-service";
 import {
   conflictError,
   notFoundError,
@@ -32,6 +33,7 @@ type DbExecutor = DbClient | DbTransaction;
 const DAILY_BONUS_ENTRY_TYPE = "daily_bonus";
 const GAMIFICATION_REWARD_ENTRY_TYPE = "gamification_reward";
 const DAILY_CLAIM_LIMIT = 30;
+const EARNED_ASSET_CODE = "B_LUCK";
 
 type RewardCenterActorWalletRow = {
   emailVerifiedAt: Date | string | null;
@@ -58,6 +60,19 @@ type RewardCenterMissionClaimRow = {
 type RewardCenterReferralRow = {
   rewardId: string | null;
   qualifiedAt: Date | string | null;
+};
+
+const buildRewardGrantIdempotencyKey = (
+  userId: number,
+  mission: Pick<RewardMission, "id" | "cadence" | "resetsAt">,
+  mode: "auto" | "claim",
+) => {
+  const resetMarker =
+    mission.cadence === "daily"
+      ? toValidDate(mission.resetsAt)?.toISOString().slice(0, 10) ?? "daily"
+      : "lifetime";
+
+  return `reward:${mode}:${userId}:${mission.id}:${resetMarker}`;
 };
 
 const startOfDay = (value = new Date()) => {
@@ -95,6 +110,10 @@ async function readRewardCenterSnapshot(executor: DbExecutor, userId: number) {
     .filter((mission) => mission.type === "metric_threshold")
     .map((mission) => mission.id);
   const missionIdSql = jsonbTextPathSql(ledgerEntries.metadata, "missionId");
+  const economyMissionIdSql = jsonbTextPathSql(
+    economyLedgerEntries.metadata,
+    "missionId",
+  );
 
   const [
     actorWalletResult,
@@ -104,18 +123,20 @@ async function readRewardCenterSnapshot(executor: DbExecutor, userId: number) {
     referralResult,
   ] = await Promise.all([
     executor.execute(sql`
-      WITH ensured_wallet AS (
-        INSERT INTO ${userWallets} ("user_id")
-        VALUES (${userId})
-        ON CONFLICT ("user_id") DO NOTHING
+      WITH ensured_assets AS (
+        INSERT INTO ${userAssetBalances} ("user_id", "asset_code")
+        VALUES (${userId}, ${EARNED_ASSET_CODE})
+        ON CONFLICT ("user_id", "asset_code") DO NOTHING
         RETURNING 1
       )
       SELECT
         ${users.emailVerifiedAt} AS "emailVerifiedAt",
         ${users.phoneVerifiedAt} AS "phoneVerifiedAt",
-        ${userWallets.bonusBalance} AS "bonusBalance"
+        ${userAssetBalances.availableBalance} AS "bonusBalance"
       FROM ${users}
-      JOIN ${userWallets} ON ${userWallets.userId} = ${users.id}
+      LEFT JOIN ${userAssetBalances}
+        ON ${userAssetBalances.userId} = ${users.id}
+       AND ${userAssetBalances.assetCode} = ${EARNED_ASSET_CODE}
       WHERE ${users.id} = ${userId}
       LIMIT 1
     `),
@@ -146,16 +167,32 @@ async function readRewardCenterSnapshot(executor: DbExecutor, userId: number) {
         ) AS "depositCreditedCount"
     `),
     executor.execute(sql`
-      WITH ranked_entries AS (
+      WITH combined_entries AS (
         SELECT
           ${ledgerEntries.createdAt} AS "createdAt",
-          ${ledgerEntries.metadata} AS "metadata",
-          row_number() OVER (
-            ORDER BY ${ledgerEntries.createdAt} DESC
-          ) AS "rowNumber"
+          ${ledgerEntries.metadata} AS "metadata"
         FROM ${ledgerEntries}
         WHERE ${ledgerEntries.userId} = ${userId}
           AND ${ledgerEntries.entryType} = ${DAILY_BONUS_ENTRY_TYPE}
+
+        UNION ALL
+
+        SELECT
+          ${economyLedgerEntries.createdAt} AS "createdAt",
+          ${economyLedgerEntries.metadata} AS "metadata"
+        FROM ${economyLedgerEntries}
+        WHERE ${economyLedgerEntries.userId} = ${userId}
+          AND ${economyLedgerEntries.assetCode} = ${EARNED_ASSET_CODE}
+          AND ${economyLedgerEntries.entryType} = ${DAILY_BONUS_ENTRY_TYPE}
+      ),
+      ranked_entries AS (
+        SELECT
+          "createdAt",
+          "metadata",
+          row_number() OVER (
+            ORDER BY "createdAt" DESC
+          ) AS "rowNumber"
+        FROM combined_entries
       )
       SELECT "createdAt", "metadata"
       FROM ranked_entries
@@ -165,21 +202,42 @@ async function readRewardCenterSnapshot(executor: DbExecutor, userId: number) {
     claimableMissionIds.length === 0
       ? Promise.resolve(null)
       : executor.execute(sql`
-          SELECT
-            ${ledgerEntries.createdAt} AS "createdAt",
-            ${missionIdSql} AS "missionId"
-          FROM ${ledgerEntries}
-          WHERE ${ledgerEntries.userId} = ${userId}
-            AND ${ledgerEntries.entryType} = ${GAMIFICATION_REWARD_ENTRY_TYPE}
-            AND (
-              ${sql.join(
-                claimableMissionIds.map(
-                  (missionId) => sql`${missionIdSql} = ${missionId}`,
-                ),
-                sql` OR `,
-              )}
-            )
-          ORDER BY ${ledgerEntries.createdAt} DESC
+          SELECT *
+          FROM (
+            SELECT
+              ${ledgerEntries.createdAt} AS "createdAt",
+              ${missionIdSql} AS "missionId"
+            FROM ${ledgerEntries}
+            WHERE ${ledgerEntries.userId} = ${userId}
+              AND ${ledgerEntries.entryType} = ${GAMIFICATION_REWARD_ENTRY_TYPE}
+              AND (
+                ${sql.join(
+                  claimableMissionIds.map(
+                    (missionId) => sql`${missionIdSql} = ${missionId}`,
+                  ),
+                  sql` OR `,
+                )}
+              )
+
+            UNION ALL
+
+            SELECT
+              ${economyLedgerEntries.createdAt} AS "createdAt",
+              ${economyMissionIdSql} AS "missionId"
+            FROM ${economyLedgerEntries}
+            WHERE ${economyLedgerEntries.userId} = ${userId}
+              AND ${economyLedgerEntries.assetCode} = ${EARNED_ASSET_CODE}
+              AND ${economyLedgerEntries.entryType} = ${GAMIFICATION_REWARD_ENTRY_TYPE}
+              AND (
+                ${sql.join(
+                  claimableMissionIds.map(
+                    (missionId) => sql`${economyMissionIdSql} = ${missionId}`,
+                  ),
+                  sql` OR `,
+                )}
+              )
+          ) mission_claims
+          ORDER BY "createdAt" DESC
         `),
     hasReferralMission
       ? executor.execute(sql`
@@ -299,19 +357,28 @@ export async function grantEligibleAutoRewardMissions(
         continue;
       }
 
-      await grantBonus(
+      await creditAsset(
         {
           userId,
+          assetCode: EARNED_ASSET_CODE,
           amount: mission.rewardAmount,
           entryType: GAMIFICATION_REWARD_ENTRY_TYPE,
           referenceType: "reward_mission",
-          metadata: {
-            reason: "reward_mission_auto",
-            missionId: mission.id,
-            cadence: mission.cadence,
-            awardMode: "auto_grant",
-            bonusUnlockWagerRatio: mission.bonusUnlockWagerRatio,
-            trigger: options.trigger,
+          audit: {
+            sourceApp: "backend.gamification",
+            idempotencyKey: buildRewardGrantIdempotencyKey(
+              userId,
+              mission,
+              "auto",
+            ),
+            metadata: {
+              reason: "reward_mission_auto",
+              missionId: mission.id,
+              cadence: mission.cadence,
+              awardMode: "auto_grant",
+              bonusUnlockWagerRatio: mission.bonusUnlockWagerRatio,
+              trigger: options.trigger,
+            },
           },
         },
         tx,
@@ -327,16 +394,7 @@ export async function grantEligibleAutoRewardMissions(
   };
 
   if (executor === db) {
-    return db.transaction(async (tx) => {
-      const result = await run(tx);
-      if (result.length > 0) {
-        await assertWalletLedgerInvariant(tx, userId, {
-          service: "gamification",
-          operation: "grantEligibleAutoRewardMissions",
-        });
-      }
-      return result;
-    });
+    return db.transaction(async (tx) => run(tx));
   }
 
   return run(executor);
@@ -387,17 +445,26 @@ export async function claimRewardMission(
       throw conflictError("Reward budget unavailable.");
     }
 
-    await grantBonus(
+    await creditAsset(
       {
         userId,
+        assetCode: EARNED_ASSET_CODE,
         amount: mission.rewardAmount,
         entryType: GAMIFICATION_REWARD_ENTRY_TYPE,
         referenceType: "reward_mission",
-        metadata: {
-          reason: "reward_mission",
-          missionId: mission.id,
-          cadence: mission.cadence,
-          bonusUnlockWagerRatio: mission.bonusUnlockWagerRatio,
+        audit: {
+          sourceApp: "backend.gamification",
+          idempotencyKey: buildRewardGrantIdempotencyKey(
+            userId,
+            mission,
+            "claim",
+          ),
+          metadata: {
+            reason: "reward_mission",
+            missionId: mission.id,
+            cadence: mission.cadence,
+            bonusUnlockWagerRatio: mission.bonusUnlockWagerRatio,
+          },
         },
       },
       tx,
@@ -407,11 +474,6 @@ export async function claimRewardMission(
       missionId: mission.id,
       grantedAmount: mission.rewardAmount,
     };
-
-    await assertWalletLedgerInvariant(tx, userId, {
-      service: "gamification",
-      operation: "claimRewardMission",
-    });
 
     return result;
   });
@@ -448,15 +510,22 @@ export async function grantDailyCheckInRewardOnLogin(userId: number) {
       return null;
     }
 
-    await grantBonus(
+    await creditAsset(
       {
         userId,
+        assetCode: EARNED_ASSET_CODE,
         amount: dailyMission.reward,
         entryType: DAILY_BONUS_ENTRY_TYPE,
         referenceType: "reward_mission",
-        metadata: {
-          reason: "daily_bonus",
-          missionId: dailyMission.id,
+        audit: {
+          sourceApp: "backend.gamification",
+          idempotencyKey: `reward:daily:${userId}:${dailyMission.id}:${dayStart
+            .toISOString()
+            .slice(0, 10)}`,
+          metadata: {
+            reason: "daily_bonus",
+            missionId: dailyMission.id,
+          },
         },
       },
       tx,

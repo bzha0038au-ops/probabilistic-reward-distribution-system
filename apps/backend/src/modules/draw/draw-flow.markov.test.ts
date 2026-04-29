@@ -140,7 +140,6 @@ const makePolicyParams = (selectionState: PreparedDrawSelection) => ({
   selectionState,
   drawState: {
     drawCost: new Decimal(10),
-    bonusBefore: new Decimal(0),
     userPoolAfterDebit: new Decimal(10),
   },
   economy: {
@@ -227,7 +226,6 @@ const projectNextState = async (
       last_draw_at: null,
       last_win_at: null,
       withdrawable_balance: '100.00',
-      bonus_balance: '0.00',
       wagered_amount: '0.00',
     },
     status,
@@ -321,7 +319,6 @@ const simulateFullDrawFlow = async (steps: number) => {
         last_draw_at: null,
         last_win_at: null,
         withdrawable_balance: '100.00',
-        bonus_balance: '0.00',
         wagered_amount: '0.00',
       },
       status,

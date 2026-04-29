@@ -3,6 +3,7 @@ import Decimal from "decimal.js";
 import { z } from "zod";
 import { API_ERROR_CODES } from "@reward/shared-types/api";
 import type { DealerEvent } from "@reward/shared-types/dealer";
+import type { AssetCode } from "@reward/shared-types/economy";
 import {
   handHistories,
   holdemTableMessages,
@@ -54,6 +55,11 @@ import { hashPassword } from "../auth/password";
 import { ensureFairnessSeed } from "../fairness/service";
 import { appendRoundEvents } from "../hand-history/service";
 import { HOLDEM_ROUND_TYPE, buildRoundId } from "../hand-history/round-id";
+import {
+  adjustLockedAsset,
+  lockAsset,
+  unlockAsset,
+} from "../economy/service";
 import { applyHouseBankrollDelta, applyPrizePoolDelta } from "../house/service";
 import {
   appendDealerFeedEvent,
@@ -138,6 +144,7 @@ const LockedWalletRowsSchema = z.array(LockedWalletRowSchema);
 type LockedWalletRow = z.infer<typeof LockedWalletRowSchema>;
 
 const HOLDEM_REFERENCE_TYPE = "holdem_table";
+const HOLDEM_CASUAL_ASSET_CODE: AssetCode = "B_LUCK";
 const DEFAULT_HOLDEM_RAKE_BPS = 500;
 const DEFAULT_HOLDEM_RAKE_CAP_AMOUNT = "8.00";
 const DEFAULT_HOLDEM_RAKE_NO_FLOP_NO_DROP = true;
@@ -180,6 +187,22 @@ type HoldemTimeBankPolicy = {
 
 const holdemTurnConfig = getConfigView<HoldemTurnConfig>();
 const activeHoldemBotRunnerTableIds = new Set<number>();
+const activeHoldemBotRunnerTasks = new Map<number, Promise<void>>();
+const activeHoldemAsyncTasks = new Set<Promise<unknown>>();
+
+const trackHoldemAsyncTask = <T>(task: Promise<T>) => {
+  activeHoldemAsyncTasks.add(task);
+  void task.finally(() => {
+    activeHoldemAsyncTasks.delete(task);
+  });
+  return task;
+};
+
+export async function awaitHoldemAsyncWorkForTests() {
+  while (activeHoldemAsyncTasks.size > 0) {
+    await Promise.allSettled([...activeHoldemAsyncTasks]);
+  }
+}
 
 const defaultTableName = () => `Hold'em ${new Date().toISOString().slice(11, 19)}`;
 
@@ -440,6 +463,9 @@ const resolveHoldemFundingSource = (
   tableType: HoldemTableType,
 ): HoldemTableFundingSource =>
   isCasualTableType(tableType) ? "bonus" : "withdrawable";
+
+const usesHoldemEarnedAsset = (balanceType: HoldemTableFundingSource) =>
+  balanceType === "bonus";
 
 const resolveTournamentStartingStackAmount = (
   config?: HoldemTournamentCreateConfig,
@@ -1465,7 +1491,7 @@ const emitAsyncHoldemDealerLanguageEvent = (params: {
   summary: Record<string, unknown>;
   seatIndex?: number | null;
 }) => {
-  void (async () => {
+  const task = (async () => {
     const event = await maybeGenerateDealerLanguageEvent({
       scenario: params.scenario,
       locale: "",
@@ -1514,6 +1540,8 @@ const emitAsyncHoldemDealerLanguageEvent = (params: {
       scenario: params.scenario,
     });
   });
+
+  trackHoldemAsyncTask(task);
 };
 
 const buildHoldemTransitionDealerEvents = (params: {
@@ -2671,86 +2699,97 @@ const resolveAutomatedHoldemBotAction = (params: {
 };
 
 const runAutomatedHoldemBotTurns = async (tableId: number) => {
-  if (activeHoldemBotRunnerTableIds.has(tableId)) {
+  const existingTask = activeHoldemBotRunnerTasks.get(tableId);
+  if (existingTask) {
+    await existingTask;
     return;
   }
-  activeHoldemBotRunnerTableIds.add(tableId);
 
-  try {
-    for (
-      let actionCount = 0;
-      actionCount < HOLD_EM_BOT_RUNNER_MAX_ACTIONS;
-      actionCount += 1
-    ) {
-      const transition = await db.transaction(async (tx) => {
-        const state = await loadTableState(tx, tableId, { lock: true });
-        if (!state) {
-          return null;
-        }
-        assertHoldemBotTableInvariant(state);
+  const task = trackHoldemAsyncTask(
+    (async () => {
+      activeHoldemBotRunnerTableIds.add(tableId);
 
-        const pendingSeat = getPendingActorSeat(state);
-        if (!pendingSeat || !isBotSeat(pendingSeat) || state.status !== "active") {
-          return null;
-        }
+      try {
+        for (
+          let actionCount = 0;
+          actionCount < HOLD_EM_BOT_RUNNER_MAX_ACTIONS;
+          actionCount += 1
+        ) {
+          const transition = await db.transaction(async (tx) => {
+            const state = await loadTableState(tx, tableId, { lock: true });
+            if (!state) {
+              return null;
+            }
+            assertHoldemBotTableInvariant(state);
 
-        const previousStacks = new Map(
-          state.seats.map((seat) => [seat.userId, toDecimal(seat.stackAmount)] as const),
-        );
-        const lockedWallets = await loadLockedWalletRows(
-          tx,
-          state.seats.map((seat) => seat.userId),
-        );
-        const beforeState = cloneTableState(state);
-        const timeout = processExpiredHoldemTurn(state, new Date());
-        if (timeout) {
-          return persistHoldemTransition({
-            tx,
-            beforeState,
-            afterState: state,
-            previousStacks,
-            lockedWallets,
-            action: timeout.action,
-            actingUserId: pendingSeat.userId,
-            timedOut: true,
-            timeBankConsumedMs: timeout.timeBankConsumedMs,
+            const pendingSeat = getPendingActorSeat(state);
+            if (!pendingSeat || !isBotSeat(pendingSeat) || state.status !== "active") {
+              return null;
+            }
+
+            const previousStacks = new Map(
+              state.seats.map((seat) => [seat.userId, toDecimal(seat.stackAmount)] as const),
+            );
+            const lockedWallets = await loadLockedWalletRows(
+              tx,
+              state.seats.map((seat) => seat.userId),
+            );
+            const beforeState = cloneTableState(state);
+            const timeout = processExpiredHoldemTurn(state, new Date());
+            if (timeout) {
+              return persistHoldemTransition({
+                tx,
+                beforeState,
+                afterState: state,
+                previousStacks,
+                lockedWallets,
+                action: timeout.action,
+                actingUserId: pendingSeat.userId,
+                timedOut: true,
+                timeBankConsumedMs: timeout.timeBankConsumedMs,
+              });
+            }
+
+            const decision = resolveAutomatedHoldemBotAction({
+              state,
+              seat: pendingSeat,
+            });
+            actOnHoldemSeat(state, {
+              seatIndex: pendingSeat.seatIndex,
+              action: decision.action,
+              amount: decision.amount,
+            });
+            return persistHoldemTransition({
+              tx,
+              beforeState,
+              afterState: state,
+              previousStacks,
+              lockedWallets,
+              action: decision.action,
+              actingUserId: pendingSeat.userId,
+            });
           });
+
+          if (!transition) {
+            break;
+          }
+
+          publishHoldemDealerTransition(tableId, transition);
         }
-
-        const decision = resolveAutomatedHoldemBotAction({
-          state,
-          seat: pendingSeat,
+      } catch (error) {
+        logger.warning("holdem bot runner failed", {
+          err: error,
+          tableId,
         });
-        actOnHoldemSeat(state, {
-          seatIndex: pendingSeat.seatIndex,
-          action: decision.action,
-          amount: decision.amount,
-        });
-        return persistHoldemTransition({
-          tx,
-          beforeState,
-          afterState: state,
-          previousStacks,
-          lockedWallets,
-          action: decision.action,
-          actingUserId: pendingSeat.userId,
-        });
-      });
-
-      if (!transition) {
-        break;
+      } finally {
+        activeHoldemBotRunnerTableIds.delete(tableId);
+        activeHoldemBotRunnerTasks.delete(tableId);
       }
+    })(),
+  );
 
-      publishHoldemDealerTransition(tableId, transition);
-    }
-  } catch (error) {
-    logger.warning("holdem bot runner failed", {
-      err: error,
-      tableId,
-    });
-  } finally {
-    activeHoldemBotRunnerTableIds.delete(tableId);
-  }
+  activeHoldemBotRunnerTasks.set(tableId, task);
+  await task;
 };
 
 const scheduleAutomatedHoldemBotTurns = (tableId: number) => {
@@ -3001,6 +3040,7 @@ const seatHoldemBots = async (params: {
       tableId: params.state.id,
       seatIndex,
       userId: botUser.id,
+      linkedGroupId: params.state.metadata.linkedGroup?.groupId ?? null,
       stackAmount: buyInAmountString,
       committedAmount: "0.00",
       totalCommittedAmount: "0.00",
@@ -3185,31 +3225,47 @@ const applyBuyInToWallet = async (params: {
     tableType,
     balanceType,
   } = params;
-  const withdrawableBefore = toDecimal(wallet.withdrawableBalance);
-  const bonusBefore = toDecimal(wallet.bonusBalance);
-  const lockedBefore = toDecimal(wallet.lockedBalance);
-  const sourceBefore =
-    balanceType === "bonus" ? bonusBefore : withdrawableBefore;
-  if (sourceBefore.lt(amount)) {
-    throw conflictError(
-      balanceType === "bonus"
-        ? "Insufficient bonus balance."
-        : "Insufficient withdrawable balance.",
+  if (usesHoldemEarnedAsset(balanceType)) {
+    const assetResult = await lockAsset(
+      {
+        userId: wallet.userId,
+        assetCode: HOLDEM_CASUAL_ASSET_CODE,
+        amount: toMoneyString(amount),
+        entryType: "holdem_buy_in",
+        referenceType: HOLDEM_REFERENCE_TYPE,
+        referenceId: tableId,
+        audit: {
+          sourceApp: "backend.holdem",
+          metadata: {
+            balanceType,
+            assetCode: HOLDEM_CASUAL_ASSET_CODE,
+            tableName,
+            seatIndex,
+            tableType,
+          },
+        },
+      },
+      tx,
     );
+
+    wallet.bonusBalance = assetResult.availableAfter;
+    wallet.lockedBalance = assetResult.lockedAfter;
+    return;
   }
-  const withdrawableAfter =
-    balanceType === "withdrawable"
-      ? withdrawableBefore.minus(amount)
-      : withdrawableBefore;
-  const bonusAfter =
-    balanceType === "bonus" ? bonusBefore.minus(amount) : bonusBefore;
+
+  const withdrawableBefore = toDecimal(wallet.withdrawableBalance);
+  const lockedBefore = toDecimal(wallet.lockedBalance);
+  const sourceBefore = withdrawableBefore;
+  if (sourceBefore.lt(amount)) {
+    throw conflictError("Insufficient withdrawable balance.");
+  }
+  const withdrawableAfter = withdrawableBefore.minus(amount);
   const lockedAfter = lockedBefore.plus(amount);
 
   await tx
     .update(userWallets)
     .set({
       withdrawableBalance: toMoneyString(withdrawableAfter),
-      bonusBalance: toMoneyString(bonusAfter),
       lockedBalance: toMoneyString(lockedAfter),
       updatedAt: new Date(),
     })
@@ -3220,9 +3276,7 @@ const applyBuyInToWallet = async (params: {
     entryType: "holdem_buy_in",
     amount: toMoneyString(amount.negated()),
     balanceBefore: toMoneyString(sourceBefore),
-    balanceAfter: toMoneyString(
-      balanceType === "bonus" ? bonusAfter : withdrawableAfter,
-    ),
+    balanceAfter: toMoneyString(withdrawableAfter),
     referenceType: HOLDEM_REFERENCE_TYPE,
     referenceId: tableId,
     metadata: {
@@ -3236,7 +3290,6 @@ const applyBuyInToWallet = async (params: {
   });
 
   wallet.withdrawableBalance = toMoneyString(withdrawableAfter);
-  wallet.bonusBalance = toMoneyString(bonusAfter);
   wallet.lockedBalance = toMoneyString(lockedAfter);
 };
 
@@ -3405,25 +3458,46 @@ const applyCashOutToWallet = async (params: {
   if (amount.lte(0)) {
     return;
   }
+  if (usesHoldemEarnedAsset(balanceType)) {
+    const assetResult = await unlockAsset(
+      {
+        userId: wallet.userId,
+        assetCode: HOLDEM_CASUAL_ASSET_CODE,
+        amount: toMoneyString(amount),
+        entryType: "holdem_cash_out",
+        referenceType: HOLDEM_REFERENCE_TYPE,
+        referenceId: tableId,
+        audit: {
+          sourceApp: "backend.holdem",
+          metadata: {
+            balanceType,
+            assetCode: HOLDEM_CASUAL_ASSET_CODE,
+            tableName,
+            seatIndex,
+            tableType,
+          },
+        },
+      },
+      tx,
+    );
+
+    wallet.bonusBalance = assetResult.availableAfter;
+    wallet.lockedBalance = assetResult.lockedAfter;
+    return;
+  }
+
   const withdrawableBefore = toDecimal(wallet.withdrawableBalance);
-  const bonusBefore = toDecimal(wallet.bonusBalance);
   const lockedBefore = toDecimal(wallet.lockedBalance);
   if (lockedBefore.lt(amount)) {
     throw conflictError("Locked balance is lower than the table stack.");
   }
-  const withdrawableAfter =
-    balanceType === "withdrawable"
-      ? withdrawableBefore.plus(amount)
-      : withdrawableBefore;
-  const bonusAfter =
-    balanceType === "bonus" ? bonusBefore.plus(amount) : bonusBefore;
+  const withdrawableAfter = withdrawableBefore.plus(amount);
   const lockedAfter = lockedBefore.minus(amount);
 
   await tx
     .update(userWallets)
     .set({
       withdrawableBalance: toMoneyString(withdrawableAfter),
-      bonusBalance: toMoneyString(bonusAfter),
       lockedBalance: toMoneyString(lockedAfter),
       updatedAt: new Date(),
     })
@@ -3433,12 +3507,8 @@ const applyCashOutToWallet = async (params: {
     userId: wallet.userId,
     entryType: "holdem_cash_out",
     amount: toMoneyString(amount),
-    balanceBefore: toMoneyString(
-      balanceType === "bonus" ? bonusBefore : withdrawableBefore,
-    ),
-    balanceAfter: toMoneyString(
-      balanceType === "bonus" ? bonusAfter : withdrawableAfter,
-    ),
+    balanceBefore: toMoneyString(withdrawableBefore),
+    balanceAfter: toMoneyString(withdrawableAfter),
     referenceType: HOLDEM_REFERENCE_TYPE,
     referenceId: tableId,
     metadata: {
@@ -3452,7 +3522,6 @@ const applyCashOutToWallet = async (params: {
   });
 
   wallet.withdrawableBalance = toMoneyString(withdrawableAfter);
-  wallet.bonusBalance = toMoneyString(bonusAfter);
   wallet.lockedBalance = toMoneyString(lockedAfter);
 };
 
@@ -3883,6 +3952,7 @@ const syncSettledLockedBalances = async (params: {
     handHistoryId,
   } = params;
   const roundId = handHistoryId ? buildHoldemRoundId(handHistoryId) : null;
+  const balanceType = resolveHoldemFundingSource(state.metadata.tableType);
   const rakeBySeatIndex = new Map(
     (appliedRake?.seatRakeAmounts ?? []).map((entry) => [
       entry.seatIndex,
@@ -3909,6 +3979,68 @@ const syncSettledLockedBalances = async (params: {
     if (!wallet) {
       throw notFoundError("Wallet not found for seated holdem user.");
     }
+    if (usesHoldemEarnedAsset(balanceType)) {
+      if (grossDelta.eq(0) === false) {
+        const grossResult = await adjustLockedAsset(
+          {
+            userId: seat.userId,
+            assetCode: HOLDEM_CASUAL_ASSET_CODE,
+            amount: toMoneyString(grossDelta),
+            entryType: "holdem_hand_result",
+            referenceType: HOLDEM_REFERENCE_TYPE,
+            referenceId: state.id,
+            audit: {
+              sourceApp: "backend.holdem",
+              metadata: {
+                balanceType: "locked",
+                assetCode: HOLDEM_CASUAL_ASSET_CODE,
+                handNumber: state.metadata.handNumber,
+                handHistoryId,
+                roundId,
+                tableName: state.name,
+                tableType: state.metadata.tableType,
+              },
+            },
+          },
+          tx,
+        );
+
+        wallet.bonusBalance = grossResult.availableAfter;
+        wallet.lockedBalance = grossResult.lockedAfter;
+      }
+
+      if (rakeAmount.gt(0)) {
+        const rakeResult = await adjustLockedAsset(
+          {
+            userId: seat.userId,
+            assetCode: HOLDEM_CASUAL_ASSET_CODE,
+            amount: toMoneyString(rakeAmount.negated()),
+            entryType: "holdem_rake",
+            referenceType: HOLDEM_REFERENCE_TYPE,
+            referenceId: state.id,
+            audit: {
+              sourceApp: "backend.holdem",
+              metadata: {
+                balanceType: "locked",
+                assetCode: HOLDEM_CASUAL_ASSET_CODE,
+                handNumber: state.metadata.handNumber,
+                handHistoryId,
+                roundId,
+                tableName: state.name,
+                tableType: state.metadata.tableType,
+              },
+            },
+          },
+          tx,
+        );
+
+        wallet.bonusBalance = rakeResult.availableAfter;
+        wallet.lockedBalance = rakeResult.lockedAfter;
+      }
+
+      continue;
+    }
+
     let lockedBefore = toDecimal(wallet.lockedBalance);
 
     if (grossDelta.eq(0) === false) {
@@ -4784,6 +4916,7 @@ export const createHoldemTableInTransaction = async (
     tableId: createdTable.id,
     seatIndex: 0,
     userId,
+    linkedGroupId: options?.linkedGroup?.groupId ?? null,
     stackAmount: tournamentStartingStackAmount ?? buyInAmountString,
     committedAmount: "0.00",
     totalCommittedAmount: "0.00",
@@ -4971,6 +5104,7 @@ export async function joinHoldemTable(
       tableId: state.id,
       seatIndex,
       userId,
+      linkedGroupId: state.metadata.linkedGroup?.groupId ?? null,
       stackAmount: tournament?.startingStackAmount ?? buyInAmountString,
       committedAmount: "0.00",
       totalCommittedAmount: "0.00",

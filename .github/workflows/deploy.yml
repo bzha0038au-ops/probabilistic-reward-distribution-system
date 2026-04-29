@@ -47,6 +47,34 @@ jobs:
       AUTH_SECRET: deploy-web-secret-1234567890abcdefghij
       API_BASE_URL: http://127.0.0.1:4000
       NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:4000
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      BACKUP_ALERT_WEBHOOK_URL: ${{ secrets.BACKUP_ALERT_WEBHOOK_URL }}
+      BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
+      OFFSITE_STORAGE_URI: ${{ secrets.OFFSITE_STORAGE_URI }}
+      BACKUP_ARCHIVE_S3_URI: ${{ secrets.BACKUP_ARCHIVE_S3_URI }}
+      DEPLOY_TG_BOT_TOKEN: ${{ secrets.DEPLOY_TG_BOT_TOKEN }}
+      DEPLOY_TG_PAGE_CHAT_ID: ${{ secrets.DEPLOY_TG_PAGE_CHAT_ID }}
+      DEPLOY_TG_DIGEST_CHAT_ID: ${{ secrets.DEPLOY_TG_DIGEST_CHAT_ID }}
+      PRIMARY_ONCALL: ${{ vars.PRIMARY_ONCALL }}
+      SECONDARY_ONCALL: ${{ vars.SECONDARY_ONCALL }}
+      BACKUP_OWNER: ${{ vars.BACKUP_OWNER }}
+      RESTORE_APPROVER: ${{ vars.RESTORE_APPROVER }}
+      RELEASE_APPROVER: ${{ vars.RELEASE_APPROVER }}
+      POSTGRES_PITR_ENABLED: ${{ vars.POSTGRES_PITR_ENABLED }}
+      POSTGRES_PITR_STRATEGY: ${{ vars.POSTGRES_PITR_STRATEGY }}
+      POSTGRES_PITR_RPO_MINUTES: ${{ vars.POSTGRES_PITR_RPO_MINUTES }}
+      POSTGRES_WAL_ARCHIVE_ENABLED: ${{ vars.POSTGRES_WAL_ARCHIVE_ENABLED }}
+      POSTGRES_WAL_ARCHIVE_URI: ${{ secrets.POSTGRES_WAL_ARCHIVE_URI }}
+      WAF_CDN_PROVIDER: ${{ vars.WAF_CDN_PROVIDER }}
+      WAF_CDN_DASHBOARD_URL: ${{ vars.WAF_CDN_DASHBOARD_URL }}
+      ADMIN_EDGE_ACCESS_POLICY: ${{ vars.ADMIN_EDGE_ACCESS_POLICY }}
+      HOST_HARDENING_LAST_REVIEW_UTC: ${{ vars.HOST_HARDENING_LAST_REVIEW_UTC }}
+      HOST_PATCH_WINDOW: ${{ vars.HOST_PATCH_WINDOW }}
+      NODE_EXPORTER_JOB: ${{ vars.NODE_EXPORTER_JOB }}
+      POSTGRES_EXPORTER_JOB: ${{ vars.POSTGRES_EXPORTER_JOB }}
+      REDIS_EXPORTER_JOB: ${{ vars.REDIS_EXPORTER_JOB }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -74,6 +102,9 @@ jobs:
 
       - name: Install
         run: pnpm install --frozen-lockfile
+
+      - name: Validate External Production Controls
+        run: pnpm ops:release-gate --environment ${{ inputs.environment }}
 
       - name: Check
         run: pnpm check

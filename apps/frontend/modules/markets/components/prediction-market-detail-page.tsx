@@ -126,7 +126,7 @@ export function PredictionMarketDetailPage({
     try {
       const walletResponse = await browserUserApiClient.getWalletBalance();
       if (walletResponse.ok) {
-        setWalletBalance(walletResponse.data.balance);
+        setWalletBalance(walletResponse.data.balance.withdrawableBalance);
       }
     } catch {
       // Keep the latest market state visible even if the balance refresh fails.
@@ -151,7 +151,7 @@ export function PredictionMarketDetailPage({
       setMarket(marketResponse.data);
 
       if (walletResponse.ok) {
-        setWalletBalance(walletResponse.data.balance);
+        setWalletBalance(walletResponse.data.balance.withdrawableBalance);
       }
     } catch {
       setError(t("markets.loadFailed"));

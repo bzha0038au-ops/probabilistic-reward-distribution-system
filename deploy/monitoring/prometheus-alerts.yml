@@ -13,6 +13,30 @@ groups:
           description: A required dependency has been unhealthy for at least 5 minutes.
           runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/runbooks/RewardBackendNotReady.md
 
+      - alert: RewardBackendPostgresDependencyDown
+        expr: max_over_time(reward_backend_dependency_status{name="postgres",status="down"}[5m]) > 0
+        for: 5m
+        labels:
+          severity: page
+          service: reward-backend
+          component: postgres
+        annotations:
+          summary: Reward backend PostgreSQL dependency is down
+          description: PostgreSQL has remained unavailable in backend readiness snapshots for at least 5 minutes.
+          runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/on-call-runbook.md
+
+      - alert: RewardBackendRedisDependencyDown
+        expr: max_over_time(reward_backend_dependency_status{name="redis",status="down"}[10m]) > 0
+        for: 10m
+        labels:
+          severity: ticket
+          service: reward-backend
+          component: redis
+        annotations:
+          summary: Reward backend Redis dependency is down
+          description: Redis has remained unavailable in backend readiness snapshots for at least 10 minutes. Investigate cache pressure, credential drift, or network loss before request latency degrades further.
+          runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/on-call-runbook.md
+
       - alert: RewardBackend5xxRateHigh
         expr: |
           (
@@ -216,9 +240,149 @@ groups:
           description: An outbound request reused an idempotency key in a conflicting way and needs investigation.
           runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/runbooks/RewardBackendPaymentOutboundIdempotencyConflict.md
 
+      - alert: RewardBackendIapVerificationFailuresHigh
+        expr: |
+          sum(
+            increase(
+              reward_backend_iap_purchase_fulfillment_failed_total{
+                stage="verify"
+              }[10m]
+            )
+          ) > 10
+        for: 10m
+        labels:
+          severity: page
+          service: reward-backend
+          component: economy
+        annotations:
+          summary: Reward IAP verification failures are spiking
+          description: More than 10 store verification attempts have failed in 10 minutes across Apple or Google purchase verification.
+          runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/runbooks/RewardBackendIapVerificationFailuresHigh.md
+
+      - alert: RewardBackendIapFulfillmentBacklogGrowing
+        expr: |
+          sum(
+            reward_backend_store_purchase_orders_total{
+              status="verified"
+            }
+          ) > 0
+        for: 15m
+        labels:
+          severity: page
+          service: reward-backend
+          component: economy
+        annotations:
+          summary: Reward IAP fulfillment backlog is growing
+          description: Verified store purchase orders have remained undispatched for at least 15 minutes and need replay or rollback handling.
+          runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/runbooks/RewardBackendGiftPackDeliveryFailure.md
+
+      - alert: RewardBackendGiftPackReplayDeliveryDetected
+        expr: |
+          sum(
+            increase(
+              reward_backend_gift_pack_delivered_total{mode="restore"}[15m]
+            )
+          ) > 0
+        for: 5m
+        labels:
+          severity: ticket
+          service: reward-backend
+          component: economy
+        annotations:
+          summary: Reward gift pack replay deliveries were triggered
+          description: At least one gift pack order required restore-mode delivery in the last 15 minutes. Confirm this was operator initiated and not repeated store notifications.
+          runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/runbooks/RewardBackendGiftPackDeliveryFailure.md
+
+      - alert: RewardBackendGiftingActivitySpike
+        expr: |
+          sum(increase(reward_backend_gift_sent_total[10m])) > 200
+        for: 10m
+        labels:
+          severity: ticket
+          service: reward-backend
+          component: economy
+        annotations:
+          summary: Reward gifting activity spiked sharply
+          description: Completed B luck gift sends exceeded 200 in 10 minutes. Review gift-lock signals, device overlap, and reciprocal-gifting patterns for abuse.
+          runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/runbooks/RewardBackendGiftingActivitySpike.md
+
   - name: reward-capacity
     interval: 30s
     rules:
+      - alert: RewardHostFilesystemUsage85
+        expr: |
+          (
+            1 -
+            (
+              node_filesystem_avail_bytes{
+                fstype!~"tmpfs|ramfs|overlay|squashfs|nsfs|fuse.lxcfs",
+                mountpoint=~"(/|.*(docker|reward[_-]proxy|proxy/logs).*)"
+              }
+              /
+              clamp_min(
+                node_filesystem_size_bytes{
+                  fstype!~"tmpfs|ramfs|overlay|squashfs|nsfs|fuse.lxcfs",
+                  mountpoint=~"(/|.*(docker|reward[_-]proxy|proxy/logs).*)"
+                },
+                1
+              )
+            )
+          ) > 0.85
+        for: 15m
+        labels:
+          severity: page
+          service: reward-infra
+          component: host-filesystem
+        annotations:
+          summary: Host filesystem usage is above 85%
+          description: Host or Docker filesystem {{ $labels.mountpoint }} on {{ $labels.instance }} has remained above 85% usage for 15 minutes. Free space before logs, images, or deploy artifacts force a write stop.
+          runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/host-hardening.md
+
+      - alert: RewardHostFilesystemReadOnly
+        expr: |
+          node_filesystem_readonly{
+            fstype!~"tmpfs|ramfs|overlay|squashfs|nsfs|fuse.lxcfs",
+            mountpoint=~"(/|.*(docker|reward[_-]proxy|proxy/logs|reward[_-]postgres[_-]data|reward[_-]redis[_-]data|reward_ops_src_pgdata).*)"
+          } == 1
+        for: 5m
+        labels:
+          severity: page
+          service: reward-infra
+          component: host-filesystem
+        annotations:
+          summary: Host filesystem is read-only
+          description: Mountpoint {{ $labels.mountpoint }} on {{ $labels.instance }} is read-only. Treat this as an active degradation and preserve forensic evidence before restarting services.
+          runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/host-hardening.md
+
+      - alert: RewardHostInodeUsage85
+        expr: |
+          (
+            1 -
+            (
+              node_filesystem_files_free{
+                fstype!~"tmpfs|ramfs|overlay|squashfs|nsfs|fuse.lxcfs",
+                mountpoint=~"(/|.*(docker|reward[_-]proxy|proxy/logs|reward[_-]postgres[_-]data|reward[_-]redis[_-]data|reward_ops_src_pgdata).*)"
+              }
+              /
+              clamp_min(
+                node_filesystem_files{
+                  fstype!~"tmpfs|ramfs|overlay|squashfs|nsfs|fuse.lxcfs",
+                  mountpoint=~"(/|.*(docker|reward[_-]proxy|proxy/logs|reward[_-]postgres[_-]data|reward[_-]redis[_-]data|reward_ops_src_pgdata).*)"
+                },
+                1
+              )
+            )
+          ) > 0.85
+        for: 15m
+        labels:
+          severity: page
+          service: reward-infra
+          component: host-filesystem
+        annotations:
+          summary: Host inode usage is above 85%
+          description: Mountpoint {{ $labels.mountpoint }} on {{ $labels.instance }} has remained above 85% inode usage for 15 minutes. Clear runaway small-file growth before containers or PostgreSQL stop creating files.
+          runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/host-hardening.md
+
       # These rules assume node_exporter is scraping host mountpoints, including
       # Docker volume paths such as reward_postgres_data / reward_redis_data /
       # reward_ops_src_pgdata, and that redis_exporter exposes maxmemory metrics.

@@ -6,7 +6,6 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 
 import postgres, { type Sql } from 'postgres';
-import { PostgresInstance } from 'pg-embedded';
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -553,6 +552,7 @@ export async function startTestDatabase(profile: string): Promise<TestDatabase> 
   }
 
   const dataDir = path.join(runDir, 'pgdata');
+  const { PostgresInstance } = await import('pg-embedded');
 
   await mkdir(dataDir, { recursive: true });
   await mkdir(sharedInstallationDir, { recursive: true });

@@ -81,6 +81,8 @@ export const KNOWN_USER_LEDGER_ENTRY_TYPES = [
   "holdem_tournament_buy_in",
   "holdem_tournament_refund",
   "holdem_tournament_payout",
+  "play_mode_payout_deferred",
+  "play_mode_payout_released",
   "prediction_market_stake",
   "prediction_market_sell",
   "prediction_market_payout",
@@ -120,6 +122,11 @@ const BONUS_CREDIT_ENTRY_TYPES = [
   "gamification_reward",
 ] as const;
 
+const PLAY_MODE_DEFERRED_ENTRY_TYPES = [
+  "play_mode_payout_deferred",
+  "play_mode_payout_released",
+] as const;
+
 const STAKE_ENTRY_TYPES = [
   "draw_cost",
   "quick_eight_stake",
@@ -138,6 +145,10 @@ const REFUND_ENTRY_TYPES = [
   "withdraw_rejected_refund",
   "withdraw_reversed_refund",
 ] as const;
+
+const readPlayModeDeferredBalanceTypeSql = sql`
+  COALESCE(NULLIF(le.metadata->>'balanceType', ''), 'withdrawable')
+`;
 
 const toNumericLiteral = (entryTypes: readonly string[]) =>
   entryTypes.map((entryType) => sql`${entryType}`);
@@ -229,6 +240,9 @@ const loadWalletInvariantRows = async (
             CASE
               WHEN le.type IN (${sql.join(toNumericLiteral(WITHDRAWABLE_DIRECT_ENTRY_TYPES), sql`, `)})
                 THEN le.amount
+              WHEN le.type IN (${sql.join(toNumericLiteral(PLAY_MODE_DEFERRED_ENTRY_TYPES), sql`, `)})
+                AND ${readPlayModeDeferredBalanceTypeSql} = 'withdrawable'
+                THEN le.amount
               WHEN le.type IN (${sql.join(toNumericLiteral(RELEASE_ENTRY_TYPES), sql`, `)})
                 THEN le.amount
               ELSE 0
@@ -240,6 +254,9 @@ const loadWalletInvariantRows = async (
           SUM(
             CASE
               WHEN le.type IN (${sql.join(toNumericLiteral(BONUS_CREDIT_ENTRY_TYPES), sql`, `)})
+                THEN le.amount
+              WHEN le.type IN (${sql.join(toNumericLiteral(PLAY_MODE_DEFERRED_ENTRY_TYPES), sql`, `)})
+                AND ${readPlayModeDeferredBalanceTypeSql} = 'bonus'
                 THEN le.amount
               WHEN le.type IN (${sql.join(toNumericLiteral(RELEASE_ENTRY_TYPES), sql`, `)})
                 THEN -le.amount
@@ -268,6 +285,12 @@ const loadWalletInvariantRows = async (
                 'prediction_market_refund'
               )
                 THEN ${readPredictionMarketLockedDeltaSql}
+              WHEN le.type IN (${sql.join(toNumericLiteral(PLAY_MODE_DEFERRED_ENTRY_TYPES), sql`, `)})
+                THEN ROUND(
+                  COALESCE(NULLIF(le.metadata->>'lockedBalanceAfter', '')::numeric, 0)
+                  - COALESCE(NULLIF(le.metadata->>'lockedBalanceBefore', '')::numeric, 0),
+                  2
+                )
               ELSE 0
             END
           ),
@@ -371,6 +394,13 @@ export const deriveWalletLedgerEffects = (entry: WalletLedgerEntrySnapshot) => {
   const unlockRatio = toDecimal(
     readDecimalLike(Reflect.get(metadata, "unlockRatio")),
   );
+  const deferredBalanceType =
+    Reflect.get(metadata, "balanceType") === "bonus" ? "bonus" : "withdrawable";
+  const deferredLockedDelta = readBalanceDeltaFromMetadata(
+    metadata,
+    "lockedBalanceBefore",
+    "lockedBalanceAfter",
+  );
 
   switch (entry.entryType) {
     case "deposit_credit":
@@ -453,6 +483,15 @@ export const deriveWalletLedgerEffects = (entry: WalletLedgerEntrySnapshot) => {
         withdrawable: toDecimal(0),
         bonus: toDecimal(0),
         locked: amount,
+        wagered: toDecimal(0),
+      };
+    case "play_mode_payout_deferred":
+    case "play_mode_payout_released":
+      return {
+        withdrawable:
+          deferredBalanceType === "withdrawable" ? amount : toDecimal(0),
+        bonus: deferredBalanceType === "bonus" ? amount : toDecimal(0),
+        locked: deferredLockedDelta,
         wagered: toDecimal(0),
       };
     default:

@@ -920,6 +920,22 @@ async function main() {
     process.env.LOAD_MULTI_TENANT_PROJECTS,
     5,
   );
+  const backendDbPoolMax = normalizePositiveInteger(
+    process.env.DB_POOL_MAX,
+    30,
+  );
+  const backendDbPoolIdleTimeoutSeconds = normalizePositiveInteger(
+    process.env.DB_POOL_IDLE_TIMEOUT_SECONDS,
+    20,
+  );
+  const backendDbPoolConnectTimeoutSeconds = normalizePositiveInteger(
+    process.env.DB_POOL_CONNECT_TIMEOUT_SECONDS,
+    30,
+  );
+  const backendDbPoolMaxLifetimeSeconds = normalizePositiveInteger(
+    process.env.DB_POOL_MAX_LIFETIME_SECONDS,
+    1800,
+  );
   const selectedScenarioIds = new Set(
     String(process.env.LOAD_SCENARIO_IDS ?? '')
       .split(',')
@@ -961,6 +977,16 @@ async function main() {
           RATE_LIMIT_FINANCE_WINDOW_MS: '60000',
           RATE_LIMIT_GLOBAL_MAX: '100000',
           RATE_LIMIT_GLOBAL_WINDOW_MS: '60000',
+          DB_POOL_MAX: String(backendDbPoolMax),
+          DB_POOL_IDLE_TIMEOUT_SECONDS: String(
+            backendDbPoolIdleTimeoutSeconds,
+          ),
+          DB_POOL_CONNECT_TIMEOUT_SECONDS: String(
+            backendDbPoolConnectTimeoutSeconds,
+          ),
+          DB_POOL_MAX_LIFETIME_SECONDS: String(
+            backendDbPoolMaxLifetimeSeconds,
+          ),
         },
         healthUrl: `${backendBaseUrl}/health`,
         shutdownTimeoutMs: backendShutdownTimeoutMs,
@@ -1144,6 +1170,12 @@ async function main() {
       console.log(
         JSON.stringify(
           {
+            databasePool: {
+              connectTimeoutSeconds: backendDbPoolConnectTimeoutSeconds,
+              idleTimeoutSeconds: backendDbPoolIdleTimeoutSeconds,
+              max: backendDbPoolMax,
+              maxLifetimeSeconds: backendDbPoolMaxLifetimeSeconds,
+            },
             generatedAt: new Date().toISOString(),
             scenarios: summaries,
           },

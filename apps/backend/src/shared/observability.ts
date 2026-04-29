@@ -72,6 +72,15 @@ type ObservabilityState = {
   amlReviewHitsGauge: Gauge<'state'>;
   amlReviewOldestPendingAgeSeconds: Gauge;
   drawRequestsTotal: Counter<'outcome'>;
+  giftSentTotal: Counter;
+  giftEnergyExhaustedTotal: Counter;
+  iapPurchaseVerifiedTotal: Counter<'store_channel' | 'delivery_type'>;
+  iapPurchaseFulfillmentFailedTotal: Counter<
+    'stage' | 'store_channel' | 'delivery_type'
+  >;
+  giftPackDeliveredTotal: Counter<'store_channel' | 'mode'>;
+  economyLedgerWriteFailedTotal: Counter<'entry_type'>;
+  storePurchaseOrdersGauge: Gauge<'status' | 'delivery_type'>;
   stuckWithdrawalsGauge: Gauge<'status'>;
   oldestStuckWithdrawalAgeSeconds: Gauge<'status'>;
   paymentWebhookSignatureVerificationsTotal: Counter<
@@ -261,6 +270,46 @@ const getObservabilityState = () => {
       name: 'reward_backend_draw_requests_total',
       help: 'Total draw execution attempts grouped by outcome.',
       labelNames: ['outcome'] as const,
+      registers: [registry],
+    }),
+    giftSentTotal: new Counter({
+      name: 'reward_backend_gift_sent_total',
+      help: 'Total completed B luck gift sends.',
+      registers: [registry],
+    }),
+    giftEnergyExhaustedTotal: new Counter({
+      name: 'reward_backend_gift_energy_exhausted_total',
+      help: 'Total gift send attempts rejected because energy was exhausted.',
+      registers: [registry],
+    }),
+    iapPurchaseVerifiedTotal: new Counter({
+      name: 'reward_backend_iap_purchase_verified_total',
+      help: 'Total IAP purchase verifications accepted by store channel and delivery type.',
+      labelNames: ['store_channel', 'delivery_type'] as const,
+      registers: [registry],
+    }),
+    iapPurchaseFulfillmentFailedTotal: new Counter({
+      name: 'reward_backend_iap_purchase_fulfillment_failed_total',
+      help: 'Total IAP verification or fulfillment failures grouped by stage, store channel, and delivery type.',
+      labelNames: ['stage', 'store_channel', 'delivery_type'] as const,
+      registers: [registry],
+    }),
+    giftPackDeliveredTotal: new Counter({
+      name: 'reward_backend_gift_pack_delivered_total',
+      help: 'Total gift pack deliveries grouped by store channel and fulfillment mode.',
+      labelNames: ['store_channel', 'mode'] as const,
+      registers: [registry],
+    }),
+    economyLedgerWriteFailedTotal: new Counter({
+      name: 'reward_backend_economy_ledger_write_failed_total',
+      help: 'Total failed writes to economy_ledger_entries grouped by entry type.',
+      labelNames: ['entry_type'] as const,
+      registers: [registry],
+    }),
+    storePurchaseOrdersGauge: new Gauge({
+      name: 'reward_backend_store_purchase_orders_total',
+      help: 'Count of store purchase orders grouped by status and delivery type.',
+      labelNames: ['status', 'delivery_type'] as const,
       registers: [registry],
     }),
     stuckWithdrawalsGauge: new Gauge({
@@ -579,6 +628,37 @@ const refreshWithdrawalStuckMetrics = async () => {
       (Date.now() - oldestUpdatedAt.getTime()) / 1000
     );
     oldestStuckWithdrawalAgeSeconds.set({ status }, ageSeconds);
+  }
+};
+
+const refreshStorePurchaseOrderMetrics = async () => {
+  const { storePurchaseOrdersGauge } = getObservabilityState();
+  storePurchaseOrdersGauge.reset();
+
+  const result = await client`
+    SELECT
+      o.status,
+      p.delivery_type AS "deliveryType",
+      count(*)::int AS count
+    FROM store_purchase_orders AS o
+    INNER JOIN iap_products AS p
+      ON p.id = o.iap_product_id
+    GROUP BY o.status, p.delivery_type
+  `;
+  const rows = readSqlRows<{
+    status: string;
+    deliveryType: string;
+    count: number;
+  }>(result);
+
+  for (const row of rows) {
+    storePurchaseOrdersGauge.set(
+      {
+        status: readMetricValue(row.status, 'unknown'),
+        delivery_type: readMetricValue(row.deliveryType, 'unknown'),
+      },
+      Number(row.count ?? 0)
+    );
   }
 };
 
@@ -1151,6 +1231,7 @@ export const refreshOperationalMetrics = async () => {
     }
 
     await refreshAmlReviewMetrics();
+    await refreshStorePurchaseOrderMetrics();
     await refreshWithdrawalStuckMetrics();
     await refreshPaymentWebhookMetrics();
     await refreshPaymentReconciliationMetrics();
@@ -1189,6 +1270,52 @@ export const renderMetrics = () => getObservabilityState().registry.metrics();
 
 export const recordDrawRequestOutcome = (outcome: 'success' | 'error') => {
   getObservabilityState().drawRequestsTotal.inc({ outcome });
+};
+
+export const recordGiftSent = () => {
+  getObservabilityState().giftSentTotal.inc();
+};
+
+export const recordGiftEnergyExhausted = () => {
+  getObservabilityState().giftEnergyExhaustedTotal.inc();
+};
+
+export const recordIapPurchaseVerified = (payload: {
+  storeChannel: string | null | undefined;
+  deliveryType: string | null | undefined;
+}) => {
+  getObservabilityState().iapPurchaseVerifiedTotal.inc({
+    store_channel: readMetricValue(payload.storeChannel, 'unknown'),
+    delivery_type: readMetricValue(payload.deliveryType, 'unknown'),
+  });
+};
+
+export const recordIapPurchaseFulfillmentFailed = (payload: {
+  stage: 'verify' | 'fulfill' | 'restore' | 'reverse';
+  storeChannel: string | null | undefined;
+  deliveryType: string | null | undefined;
+}) => {
+  getObservabilityState().iapPurchaseFulfillmentFailedTotal.inc({
+    stage: payload.stage,
+    store_channel: readMetricValue(payload.storeChannel, 'unknown'),
+    delivery_type: readMetricValue(payload.deliveryType, 'unknown'),
+  });
+};
+
+export const recordGiftPackDelivered = (payload: {
+  storeChannel: string | null | undefined;
+  mode: 'purchase' | 'restore';
+}) => {
+  getObservabilityState().giftPackDeliveredTotal.inc({
+    store_channel: readMetricValue(payload.storeChannel, 'unknown'),
+    mode: payload.mode,
+  });
+};
+
+export const recordEconomyLedgerWriteFailed = (entryType: string | null | undefined) => {
+  getObservabilityState().economyLedgerWriteFailedTotal.inc({
+    entry_type: readMetricValue(entryType, 'unknown'),
+  });
 };
 
 export const recordPaymentWebhookSignatureVerification = (payload: {

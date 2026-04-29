@@ -9,7 +9,14 @@ import {
   seedUserWithWallet,
 } from './integration-test-support';
 import { asc, eq, sql } from '@reward/database/orm';
-import { deposits, ledgerEntries, missions, userWallets } from '@reward/database';
+import {
+  deposits,
+  economyLedgerEntries,
+  ledgerEntries,
+  missions,
+  userAssetBalances,
+  userWallets,
+} from '@reward/database';
 
 vi.mock('../modules/aml', () => ({
   screenUserFirstDeposit: vi.fn(async () => undefined),
@@ -147,7 +154,7 @@ describeIntegrationSuite('backend top-up integration', () => {
   );
 
   it(
-    'credited first deposits auto-award the starter bonus into bonus balance',
+    'credited first deposits auto-award the starter bonus into B_LUCK while keeping legacy bonus balance at zero',
     async () => {
       const user = await seedUserWithWallet({
         email: 'top-up-first-deposit-bonus@example.com',
@@ -218,10 +225,31 @@ describeIntegrationSuite('backend top-up integration', () => {
 
       expect(wallet).toEqual({
         withdrawableBalance: '25.50',
-        bonusBalance: '10.00',
+        bonusBalance: '0.00',
       });
 
-      const entries = await getDb()
+      const [earnedAsset] = await getDb()
+        .select({
+          assetCode: userAssetBalances.assetCode,
+          availableBalance: userAssetBalances.availableBalance,
+          lifetimeEarned: userAssetBalances.lifetimeEarned,
+          lifetimeSpent: userAssetBalances.lifetimeSpent,
+        })
+        .from(userAssetBalances)
+        .where(
+          sql`${userAssetBalances.userId} = ${user.id}
+            AND ${userAssetBalances.assetCode} = 'B_LUCK'`,
+        )
+        .limit(1);
+
+      expect(earnedAsset).toEqual({
+        assetCode: 'B_LUCK',
+        availableBalance: '10.00',
+        lifetimeEarned: '10.00',
+        lifetimeSpent: '0.00',
+      });
+
+      const legacyEntries = await getDb()
         .select({
           entryType: ledgerEntries.entryType,
           amount: ledgerEntries.amount,
@@ -233,16 +261,34 @@ describeIntegrationSuite('backend top-up integration', () => {
         .where(eq(ledgerEntries.userId, user.id))
         .orderBy(asc(ledgerEntries.id));
 
-      expect(entries).toEqual([
+      expect(legacyEntries).toEqual([
         {
           entryType: 'deposit_credit',
           amount: '25.50',
           missionId: null,
           bonusUnlockWagerRatio: null,
         },
+      ]);
+
+      const economyEntries = await getDb()
+        .select({
+          entryType: economyLedgerEntries.entryType,
+          amount: economyLedgerEntries.amount,
+          assetCode: economyLedgerEntries.assetCode,
+          missionId:
+            sql<string | null>`${economyLedgerEntries.metadata} ->> 'missionId'`,
+          bonusUnlockWagerRatio:
+            sql<string | null>`${economyLedgerEntries.metadata} ->> 'bonusUnlockWagerRatio'`,
+        })
+        .from(economyLedgerEntries)
+        .where(eq(economyLedgerEntries.userId, user.id))
+        .orderBy(asc(economyLedgerEntries.id));
+
+      expect(economyEntries).toEqual([
         {
           entryType: 'gamification_reward',
           amount: '10.00',
+          assetCode: 'B_LUCK',
           missionId: 'top_up_starter',
           bonusUnlockWagerRatio: '1.00',
         },

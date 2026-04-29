@@ -1,11 +1,9 @@
 import { createHash } from "node:crypto";
-import { API_ERROR_CODES } from "@reward/shared-types/api";
 import type {
   PrizeEngineBehaviorInput,
   SaasProjectStrategy,
 } from "@reward/shared-types/saas";
 
-import { badRequestError } from "../../shared/errors";
 import { toDecimal } from "../../shared/money";
 import { deriveRandomPick, pickByWeight } from "../draw/helpers";
 import type {
@@ -15,6 +13,10 @@ import type {
 import { resolveProjectRiskWeightDecayAlpha } from "./prize-engine-domain";
 
 const DEFAULT_EPSILON_GREEDY_EPSILON = 0.1;
+const DEFAULT_SOFTMAX_TEMPERATURE = 1;
+const DEFAULT_THOMPSON_PRIOR_ALPHA = 1;
+const DEFAULT_THOMPSON_PRIOR_BETA = 1;
+const DEFAULT_THOMPSON_PRIOR_STRENGTH = 2;
 
 export type PrizeEngineSelectionStats = {
   pulls: number;
@@ -57,11 +59,18 @@ type PrizeEngineSelectionMetadata = {
   randomPick: number | null;
   algorithm: string;
   epsilon?: number | null;
+  temperature?: number | null;
   decision?: "explore" | "exploit" | null;
   selectionDigest?: string | null;
   candidateCount?: number | null;
   selectedArmId?: number | null;
   selectedArmKind?: "prize" | "miss" | null;
+  selectedArmScore?: number | null;
+  selectedArmProbability?: number | null;
+  priorAlpha?: number | null;
+  priorBeta?: number | null;
+  priorStrength?: number | null;
+  scoreNormalizationMax?: number | null;
   risk?: {
     inputRisk: number;
     previousAccumulatedRisk: number;
@@ -114,6 +123,8 @@ const clampUnitInterval = (value: number) => {
 
 const roundRiskMetric = (value: number) =>
   Number(clampUnitInterval(value).toFixed(6));
+
+const roundSelectionMetric = (value: number) => Number(value.toFixed(6));
 
 const normalizeBehaviorSignal = (value: number | undefined, fallback = 0) => {
   const parsed = Number(value ?? fallback);
@@ -175,6 +186,14 @@ const resolveAverageReward = (stats?: PrizeEngineSelectionStats) => {
 
 const resolveExploitScore = (candidate: PrizeEngineSelectionCandidate) =>
   candidate.pulls > 0 ? candidate.averageReward : candidate.score;
+
+const resolveStrategyPositiveNumber = (
+  params: ProjectStrategyParams,
+  key: string,
+) => {
+  const parsed = toFiniteNumber(params[key]);
+  return parsed !== null && parsed > 0 ? parsed : null;
+};
 
 const compareCandidates = (
   left: PrizeEngineSelectionCandidate,
@@ -459,6 +478,318 @@ const selectEpsilonGreedy = (
   };
 };
 
+const selectByContinuousWeight = (
+  candidates: PrizeEngineSelectionCandidate[],
+  weights: number[],
+  params: {
+    fairnessSeed: string;
+    fairnessNonce: string;
+    salt: string;
+  },
+) => {
+  const totalWeight = weights.reduce(
+    (sum, weight) => sum + (Number.isFinite(weight) && weight > 0 ? weight : 0),
+    0,
+  );
+  if (totalWeight <= 0) {
+    return null;
+  }
+
+  const selectionRng = deriveUniformValue(
+    params.fairnessSeed,
+    params.fairnessNonce,
+    params.salt,
+  );
+  const randomPick = selectionRng.value * totalWeight;
+  let cursor = 0;
+
+  for (let index = 0; index < candidates.length; index += 1) {
+    cursor += weights[index] ?? 0;
+    if (randomPick < cursor || index === candidates.length - 1) {
+      return {
+        selection: candidates[index] ?? null,
+        selectionDigest: selectionRng.digest,
+        randomPick,
+        totalWeight,
+        selectedWeight: weights[index] ?? 0,
+      };
+    }
+  }
+
+  return null;
+};
+
+const resolveSoftmaxTemperature = (params: ProjectStrategyParams) =>
+  resolveStrategyPositiveNumber(params, "temperature") ??
+  DEFAULT_SOFTMAX_TEMPERATURE;
+
+const selectSoftmax = (
+  context: PrizeEngineSelectionContext,
+): PrizeEngineSelectionResult => {
+  const temperature = resolveSoftmaxTemperature(context.strategyParams);
+  const candidates = buildCandidates(context, {
+    includeMiss: true,
+    requirePositiveWeight: false,
+  });
+
+  if (candidates.length === 0) {
+    return {
+      selection: null,
+      fairness: {
+        strategy: "softmax",
+        rngDigest: null,
+        totalWeight: null,
+        randomPick: null,
+        temperature,
+        selectionDigest: null,
+        candidateCount: 0,
+        selectedArmId: null,
+        selectedArmKind: null,
+        selectedArmScore: null,
+        selectedArmProbability: null,
+        algorithm: "softmax(exploit_score/temperature)",
+      },
+    };
+  }
+
+  const exploitScores = candidates.map((candidate) =>
+    resolveExploitScore(candidate),
+  );
+  const maxExploitScore = Math.max(...exploitScores);
+  const weights = exploitScores.map((score) =>
+    Math.exp((score - maxExploitScore) / temperature),
+  );
+  const selection = selectByContinuousWeight(candidates, weights, {
+    fairnessSeed: context.fairnessSeed,
+    fairnessNonce: context.fairnessNonce,
+    salt: "softmax-selection",
+  });
+  const selectedArmScore = selection?.selection
+    ? resolveExploitScore(selection.selection)
+    : null;
+  const selectedArmProbability =
+    selection && selection.totalWeight > 0
+      ? selection.selectedWeight / selection.totalWeight
+      : null;
+
+  return {
+    selection: selection?.selection ?? null,
+    fairness: {
+      strategy: "softmax",
+      rngDigest: selection?.selectionDigest ?? null,
+      totalWeight:
+        selection && selection.totalWeight > 0
+          ? roundSelectionMetric(selection.totalWeight)
+          : null,
+      randomPick:
+        selection && selection.totalWeight > 0
+          ? roundSelectionMetric(selection.randomPick)
+          : null,
+      temperature,
+      selectionDigest: selection?.selectionDigest ?? null,
+      candidateCount: candidates.length,
+      selectedArmId: selection?.selection.id ?? null,
+      selectedArmKind: selection?.selection.kind ?? null,
+      selectedArmScore:
+        selectedArmScore !== null
+          ? roundSelectionMetric(selectedArmScore)
+          : null,
+      selectedArmProbability:
+        selectedArmProbability !== null
+          ? roundSelectionMetric(selectedArmProbability)
+          : null,
+      algorithm: "softmax(exploit_score/temperature)",
+    },
+  };
+};
+
+const createDeterministicRng = (
+  fairnessSeed: string,
+  fairnessNonce: string,
+  salt: string,
+) => {
+  let counter = 0;
+
+  return () => {
+    const next = deriveUniformValue(
+      fairnessSeed,
+      fairnessNonce,
+      `${salt}:${counter}`,
+    );
+    counter += 1;
+    return Math.max(next.value, Number.MIN_VALUE);
+  };
+};
+
+const sampleStandardNormal = (rng: () => number) => {
+  const u1 = Math.max(rng(), Number.MIN_VALUE);
+  const u2 = rng();
+  return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+};
+
+const sampleGamma = (shape: number, rng: () => number): number => {
+  if (!Number.isFinite(shape) || shape <= 0) {
+    return 0;
+  }
+
+  if (shape < 1) {
+    return sampleGamma(shape + 1, rng) * Math.pow(rng(), 1 / shape);
+  }
+
+  const d = shape - 1 / 3;
+  const c = 1 / Math.sqrt(9 * d);
+
+  while (true) {
+    let x = 0;
+    let v = 0;
+    do {
+      x = sampleStandardNormal(rng);
+      v = 1 + c * x;
+    } while (v <= 0);
+
+    v = Math.pow(v, 3);
+    const u = rng();
+    if (u < 1 - 0.0331 * Math.pow(x, 4)) {
+      return d * v;
+    }
+
+    if (Math.log(u) < 0.5 * x * x + d * (1 - v + Math.log(v))) {
+      return d * v;
+    }
+  }
+};
+
+const sampleBeta = (alpha: number, beta: number, rng: () => number) => {
+  const left = sampleGamma(alpha, rng);
+  const right = sampleGamma(beta, rng);
+  const total = left + right;
+  return total > 0 ? left / total : 0;
+};
+
+const resolveThompsonPriorAlpha = (params: ProjectStrategyParams) =>
+  resolveStrategyPositiveNumber(params, "priorAlpha") ??
+  DEFAULT_THOMPSON_PRIOR_ALPHA;
+
+const resolveThompsonPriorBeta = (params: ProjectStrategyParams) =>
+  resolveStrategyPositiveNumber(params, "priorBeta") ??
+  DEFAULT_THOMPSON_PRIOR_BETA;
+
+const resolveThompsonPriorStrength = (params: ProjectStrategyParams) =>
+  resolveStrategyPositiveNumber(params, "priorStrength") ??
+  DEFAULT_THOMPSON_PRIOR_STRENGTH;
+
+const selectThompson = (
+  context: PrizeEngineSelectionContext,
+): PrizeEngineSelectionResult => {
+  const priorAlpha = resolveThompsonPriorAlpha(context.strategyParams);
+  const priorBeta = resolveThompsonPriorBeta(context.strategyParams);
+  const priorStrength = resolveThompsonPriorStrength(context.strategyParams);
+  const candidates = buildCandidates(context, {
+    includeMiss: true,
+    requirePositiveWeight: false,
+  });
+
+  if (candidates.length === 0) {
+    return {
+      selection: null,
+      fairness: {
+        strategy: "thompson",
+        rngDigest: null,
+        totalWeight: null,
+        randomPick: null,
+        selectionDigest: null,
+        candidateCount: 0,
+        selectedArmId: null,
+        selectedArmKind: null,
+        selectedArmScore: null,
+        selectedArmProbability: null,
+        priorAlpha,
+        priorBeta,
+        priorStrength,
+        scoreNormalizationMax: null,
+        algorithm: "thompson(beta_posterior_over_normalized_empirical_reward)",
+      },
+    };
+  }
+
+  const scoreNormalizationMax = Math.max(
+    ...candidates.map((candidate) =>
+      Math.max(
+        candidate.score,
+        candidate.averageReward,
+        resolveExploitScore(candidate),
+      ),
+    ),
+    0,
+  );
+  const normalizationMax =
+    scoreNormalizationMax > 0 ? scoreNormalizationMax : 1;
+  const rng = createDeterministicRng(
+    context.fairnessSeed,
+    context.fairnessNonce,
+    "thompson-stream",
+  );
+  const streamDigest = deriveUniformValue(
+    context.fairnessSeed,
+    context.fairnessNonce,
+    "thompson-stream",
+  ).digest;
+  const sampled = candidates.map((candidate) => {
+    const priorMean =
+      normalizationMax > 0
+        ? clampUnitInterval(candidate.score / normalizationMax)
+        : candidate.kind === "miss"
+          ? 0
+          : 1;
+    const observedMean =
+      candidate.pulls > 0
+        ? clampUnitInterval(candidate.averageReward / normalizationMax)
+        : priorMean;
+    const alpha =
+      priorAlpha + priorMean * priorStrength + observedMean * candidate.pulls;
+    const beta =
+      priorBeta +
+      (1 - priorMean) * priorStrength +
+      (1 - observedMean) * candidate.pulls;
+
+    return {
+      candidate,
+      sample: sampleBeta(alpha, beta, rng),
+    };
+  });
+  const ranked = sampled.sort((left, right) => {
+    const sampleDiff = right.sample - left.sample;
+    if (sampleDiff !== 0) {
+      return sampleDiff;
+    }
+
+    return compareCandidates(left.candidate, right.candidate);
+  });
+  const selected = ranked[0] ?? null;
+
+  return {
+    selection: selected?.candidate ?? null,
+    fairness: {
+      strategy: "thompson",
+      rngDigest: streamDigest,
+      totalWeight: null,
+      randomPick: null,
+      selectionDigest: streamDigest,
+      candidateCount: candidates.length,
+      selectedArmId: selected?.candidate.id ?? null,
+      selectedArmKind: selected?.candidate.kind ?? null,
+      selectedArmScore:
+        selected !== null ? roundSelectionMetric(selected.sample) : null,
+      selectedArmProbability: null,
+      priorAlpha,
+      priorBeta,
+      priorStrength,
+      scoreNormalizationMax: roundSelectionMetric(normalizationMax),
+      algorithm: "thompson(beta_posterior_over_normalized_empirical_reward)",
+    },
+  };
+};
+
 export const selectReward = (
   context: PrizeEngineSelectionContext,
 ): PrizeEngineSelectionResult => {
@@ -473,13 +804,11 @@ export const selectReward = (
       result = selectEpsilonGreedy(riskAdjusted.context);
       break;
     case "softmax":
+      result = selectSoftmax(riskAdjusted.context);
+      break;
     case "thompson":
-      throw badRequestError(
-        `Project strategy "${riskAdjusted.context.strategy}" is not implemented yet.`,
-        {
-          code: API_ERROR_CODES.INVALID_REQUEST,
-        },
-      );
+      result = selectThompson(riskAdjusted.context);
+      break;
   }
 
   return {

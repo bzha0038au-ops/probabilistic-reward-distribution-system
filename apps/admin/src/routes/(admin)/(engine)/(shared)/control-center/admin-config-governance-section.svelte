@@ -25,6 +25,18 @@
     if (!config) return
     configForm.poolBalance = String(config.poolBalance ?? "0")
     configForm.drawCost = String(config.drawCost ?? "0")
+    configForm.maintenanceMode = Boolean(config.maintenanceMode)
+    configForm.registrationEnabled = Boolean(config.registrationEnabled)
+    configForm.loginEnabled = Boolean(config.loginEnabled)
+    configForm.drawEnabled = Boolean(config.drawEnabled)
+    configForm.paymentDepositEnabled = Boolean(config.paymentDepositEnabled)
+    configForm.paymentWithdrawEnabled = Boolean(config.paymentWithdrawEnabled)
+    configForm.antiAbuseAutoFreezeEnabled = Boolean(
+      config.antiAbuseAutoFreezeEnabled,
+    )
+    configForm.withdrawRiskNewCardFirstWithdrawalReviewEnabled = Boolean(
+      config.withdrawRiskNewCardFirstWithdrawalReviewEnabled,
+    )
     configForm.weightJitterEnabled = Boolean(config.weightJitterEnabled)
     configForm.weightJitterPct = String(config.weightJitterPct ?? "0")
     configForm.bonusAutoReleaseEnabled = Boolean(config.bonusAutoReleaseEnabled)
@@ -82,6 +94,91 @@
     </div>
 
     <form method="post" action="?/configDraft" class="grid gap-4">
+      <div class="rounded-box border border-warning/40 bg-warning/5 p-4">
+        <div class="mb-4">
+          <p class="text-sm font-semibold text-warning">紧急降级开关</p>
+          <p class="mt-1 text-xs text-slate-600">
+            这些字段会直接影响用户入口、提现、充值和抽奖可用性。保存草稿时必须写明
+            review notes，发布时会被计入审计链。
+          </p>
+        </div>
+
+        <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <label class="label cursor-pointer justify-start gap-3">
+            <input
+              type="checkbox"
+              name="maintenanceMode"
+              class="checkbox checkbox-warning"
+              bind:checked={configForm.maintenanceMode}
+            />
+            <span class="label-text">系统维护模式</span>
+          </label>
+          <label class="label cursor-pointer justify-start gap-3">
+            <input
+              type="checkbox"
+              name="registrationEnabled"
+              class="checkbox checkbox-primary"
+              bind:checked={configForm.registrationEnabled}
+            />
+            <span class="label-text">允许注册</span>
+          </label>
+          <label class="label cursor-pointer justify-start gap-3">
+            <input
+              type="checkbox"
+              name="loginEnabled"
+              class="checkbox checkbox-primary"
+              bind:checked={configForm.loginEnabled}
+            />
+            <span class="label-text">允许登录</span>
+          </label>
+          <label class="label cursor-pointer justify-start gap-3">
+            <input
+              type="checkbox"
+              name="drawEnabled"
+              class="checkbox checkbox-primary"
+              bind:checked={configForm.drawEnabled}
+            />
+            <span class="label-text">允许抽奖</span>
+          </label>
+          <label class="label cursor-pointer justify-start gap-3">
+            <input
+              type="checkbox"
+              name="paymentDepositEnabled"
+              class="checkbox checkbox-primary"
+              bind:checked={configForm.paymentDepositEnabled}
+            />
+            <span class="label-text">允许充值</span>
+          </label>
+          <label class="label cursor-pointer justify-start gap-3">
+            <input
+              type="checkbox"
+              name="paymentWithdrawEnabled"
+              class="checkbox checkbox-primary"
+              bind:checked={configForm.paymentWithdrawEnabled}
+            />
+            <span class="label-text">允许提现</span>
+          </label>
+          <label class="label cursor-pointer justify-start gap-3">
+            <input
+              type="checkbox"
+              name="antiAbuseAutoFreezeEnabled"
+              class="checkbox checkbox-primary"
+              bind:checked={configForm.antiAbuseAutoFreezeEnabled}
+            />
+            <span class="label-text">自动风控冻结</span>
+          </label>
+          <label class="label cursor-pointer justify-start gap-3">
+            <input
+              type="checkbox"
+              name="withdrawRiskNewCardFirstWithdrawalReviewEnabled"
+              class="checkbox checkbox-primary"
+              bind:checked={configForm.withdrawRiskNewCardFirstWithdrawalReviewEnabled}
+            />
+            <span class="label-text">新卡首提强审</span>
+          </label>
+        </div>
+      </div>
+
       <div class="grid gap-4 md:grid-cols-2">
         <div class="form-control">
           <label class="label" for="config-pool">
@@ -371,6 +468,7 @@
             type="number"
             class="input input-bordered"
             bind:value={bonusReleaseForm.userId}
+            disabled
             required
           />
         </div>
@@ -385,6 +483,7 @@
             step="0.01"
             class="input input-bordered"
             bind:value={bonusReleaseForm.amount}
+            disabled
             placeholder={t("admin.bonus.amountPlaceholder")}
           />
         </div>
@@ -393,15 +492,13 @@
       <button
         class="btn btn-primary"
         type="submit"
-        disabled={configForm.bonusAutoReleaseEnabled}
+        disabled
       >
         {t("admin.bonus.release")}
       </button>
-      {#if configForm.bonusAutoReleaseEnabled}
-        <p class="text-xs text-slate-500">
-          {t("admin.bonus.autoReleaseHint")}
-        </p>
-      {/if}
+      <p class="text-xs text-slate-500">
+        {t("admin.bonus.autoReleaseHint")}
+      </p>
     </form>
   </div>
 </div>

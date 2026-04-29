@@ -247,10 +247,7 @@ export async function resolveRuntimePath(filePath: string) {
   if (trimmed.startsWith('/run/secrets/')) {
     const secretRoot = await resolveSecretRoot();
     if (secretRoot) {
-      const mapped = path.join(secretRoot, trimmed.slice('/run/secrets/'.length));
-      if (await fileExists(mapped)) {
-        return mapped;
-      }
+      return path.join(secretRoot, trimmed.slice('/run/secrets/'.length));
     }
   }
 
@@ -289,9 +286,11 @@ export async function primeOpsEnvironment() {
 
   envPrimed = true;
 
-  const envFiles = unique([
+  const explicitEnvFiles = unique([
     ...splitList(process.env.OPS_ENV_FILES),
     ...(process.env.OPS_ENV_FILE ? [process.env.OPS_ENV_FILE] : []),
+  ]);
+  const defaultEnvFiles = [
     path.join(projectRoot, '.env.d/compose.env'),
     path.join(projectRoot, '.env.d/backend.env'),
     path.join(projectRoot, '.env.d/frontend.env'),
@@ -300,7 +299,8 @@ export async function primeOpsEnvironment() {
     path.join(projectRoot, 'apps/frontend/.env'),
     path.join(projectRoot, 'apps/admin/.env'),
     path.join(projectRoot, 'apps/mobile/.env'),
-  ]);
+  ];
+  const envFiles = explicitEnvFiles.length > 0 ? explicitEnvFiles : defaultEnvFiles;
 
   for (const envFile of envFiles) {
     await loadEnvFile(envFile);

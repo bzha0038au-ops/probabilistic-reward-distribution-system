@@ -4,19 +4,21 @@ import { API_ERROR_CODES } from "@reward/shared-types/api";
 
 import { db } from "../../../db";
 import { ADMIN_PERMISSION_KEYS } from "../../../modules/admin-permission/definitions";
-import { releaseBonusManual } from "../../../modules/bonus/service";
 import {
+  getAntiAbuseConfig,
   getAuthFailureConfig,
   getBlackjackConfig,
   getBonusReleaseConfig,
   getDrawCost,
+  getDrawSystemConfig,
   getGamificationRewardConfig,
+  getPaymentConfig,
+  getSystemFlags,
   getPoolBalance,
   getRandomizationConfig,
   getSaasUsageAlertConfig,
+  getWithdrawalRiskConfig,
 } from "../../../modules/system/service";
-import { recordAdminAction } from "../../../modules/admin/audit";
-import { withAdminAuditContext } from "../../admin-audit";
 import { toMoneyString } from "../../../shared/money";
 import { parseSchema } from "../../../shared/validation";
 import { requireAdminPermission } from "../../guards";
@@ -30,6 +32,11 @@ export async function registerAdminConfigRoutes(protectedRoutes: AppInstance) {
     async (_request, reply) => {
       const poolBalance = await getPoolBalance(db);
       const drawCost = await getDrawCost(db);
+      const systemFlags = await getSystemFlags(db);
+      const drawSystem = await getDrawSystemConfig(db);
+      const paymentConfig = await getPaymentConfig(db);
+      const antiAbuseConfig = await getAntiAbuseConfig(db);
+      const withdrawalRiskConfig = await getWithdrawalRiskConfig(db);
       const randomization = await getRandomizationConfig(db);
       const bonusRelease = await getBonusReleaseConfig(db);
       const authFailure = await getAuthFailureConfig(db);
@@ -40,6 +47,15 @@ export async function registerAdminConfigRoutes(protectedRoutes: AppInstance) {
       return sendSuccess(reply, {
         poolBalance: toMoneyString(poolBalance),
         drawCost: toMoneyString(drawCost),
+        maintenanceMode: systemFlags.maintenanceMode,
+        registrationEnabled: systemFlags.registrationEnabled,
+        loginEnabled: systemFlags.loginEnabled,
+        drawEnabled: drawSystem.drawEnabled,
+        paymentDepositEnabled: paymentConfig.depositEnabled,
+        paymentWithdrawEnabled: paymentConfig.withdrawEnabled,
+        antiAbuseAutoFreezeEnabled: antiAbuseConfig.autoFreeze,
+        withdrawRiskNewCardFirstWithdrawalReviewEnabled:
+          withdrawalRiskConfig.newCardFirstWithdrawalReviewEnabled,
         weightJitterEnabled: randomization.weightJitterEnabled,
         weightJitterPct: toMoneyString(randomization.weightJitterPct),
         bonusAutoReleaseEnabled: bonusRelease.bonusAutoReleaseEnabled,
@@ -134,29 +150,14 @@ export async function registerAdminConfigRoutes(protectedRoutes: AppInstance) {
 
       try {
         const payload = parsed.data;
-        const bonusRelease = await getBonusReleaseConfig(db);
-        if (bonusRelease.bonusAutoReleaseEnabled) {
-          return sendError(
-            reply,
-            409,
-            "Auto release is enabled.",
-            undefined,
-            API_ERROR_CODES.AUTO_RELEASE_ENABLED,
-          );
-        }
-
-        const result = await releaseBonusManual({
-          userId: payload.userId,
-          amount: payload.amount,
-        });
-        await recordAdminAction(withAdminAuditContext(request, {
-          adminId: request.admin?.adminId ?? null,
-          action: "bonus_release_manual",
-          targetType: "user",
-          targetId: payload.userId,
-          metadata: { amount: payload.amount },
-        }));
-        return sendSuccess(reply, result);
+        void payload;
+        return sendError(
+          reply,
+          409,
+          "Legacy bonus release is disabled under the B luck economy model.",
+          undefined,
+          API_ERROR_CODES.LEGACY_BONUS_RELEASE_DISABLED,
+        );
       } catch (error) {
         return sendErrorForException(reply, error, "Bonus release failed.");
       }

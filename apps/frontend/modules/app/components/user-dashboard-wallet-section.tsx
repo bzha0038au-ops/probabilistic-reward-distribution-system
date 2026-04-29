@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { UserDashboardCopy } from './user-dashboard-copy';
 import type { UserDashboardController } from './use-user-dashboard';
+import { UserDashboardEconomySection } from './user-dashboard-economy-section';
 import {
   cryptoChannelLabel,
   readVisibleFinanceStatus,
@@ -17,6 +18,7 @@ type Translate = (key: string) => string;
 
 type WalletSectionController = Pick<
   UserDashboardController,
+  | 'wallet'
   | 'walletBalance'
   | 'topUpAmount'
   | 'setTopUpAmount'
@@ -44,6 +46,7 @@ type WalletSectionController = Pick<
 type UserDashboardWalletSectionProps = {
   controller: WalletSectionController;
   copy: UserDashboardCopy;
+  locale: string;
   formatAmount: (value: string | number | null | undefined) => string;
   formatDateTime: (value: string | Date | null | undefined) => string;
   formatStatus: (value: string | null | undefined) => string;
@@ -53,6 +56,7 @@ type UserDashboardWalletSectionProps = {
 export function UserDashboardWalletSection({
   controller,
   copy: c,
+  locale,
   formatAmount,
   formatDateTime,
   formatStatus,
@@ -65,6 +69,16 @@ export function UserDashboardWalletSection({
         <CardDescription>{c.walletDescription}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        <UserDashboardEconomySection
+          locale={locale}
+          wallet={controller.wallet}
+          formatAmount={formatAmount}
+          formatDateTime={formatDateTime}
+          onRefreshWallet={async () => {
+            await controller.handleRefresh()
+          }}
+        />
+
         <div className="rounded-xl border border-slate-200 bg-slate-50 px-5 py-4">
           <p className="text-sm text-slate-500">{c.currentBalance}</p>
           <p
@@ -118,6 +132,7 @@ export function UserDashboardWalletSection({
               type="button"
               variant="ghost"
               size="sm"
+              data-testid="wallet-refresh-button"
               onClick={() => void controller.handleRefresh()}
               disabled={controller.refreshing}
             >

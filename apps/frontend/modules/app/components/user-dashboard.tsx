@@ -154,6 +154,7 @@ export function UserDashboard({
             <UserDashboardWalletSection
               controller={controller}
               copy={c}
+              locale={locale}
               formatAmount={formatAmount}
               formatDateTime={formatDateTime}
               formatStatus={formatStatus}

@@ -3,6 +3,16 @@
 This is the minimum staging/production checklist for the hardened single-host
 topology in `docker-compose.prod.yml`.
 
+The checklist is now backed by an executable gate:
+
+```bash
+pnpm ops:release-gate --environment staging
+pnpm ops:release-gate --environment production
+```
+
+The `Deploy` GitHub Actions workflow runs the same gate before build/test so
+missing external controls block the rollout instead of staying as doc debt.
+
 ## 1. Environment separation
 
 - Development, staging, and production use separate domains, secret values,
@@ -75,6 +85,9 @@ topology in `docker-compose.prod.yml`.
   `OFFSITE_STORAGE_URI`.
 - `BACKUP_ALERT_WEBHOOK_URL` pages the current on-call owner on backup or
   restore-drill failure.
+- `POSTGRES_PITR_ENABLED=true`, `POSTGRES_PITR_STRATEGY`,
+  `POSTGRES_PITR_RPO_MINUTES`, `POSTGRES_WAL_ARCHIVE_ENABLED=true`, and
+  `POSTGRES_WAL_ARCHIVE_URI` are configured on the target GitHub environment.
 - `DEPLOY_TG_BOT_TOKEN`, `DEPLOY_TG_PAGE_CHAT_ID`, and
   `DEPLOY_TG_DIGEST_CHAT_ID` are configured on the GitHub environment used by
   the manual deploy workflow.
@@ -125,6 +138,10 @@ topology in `docker-compose.prod.yml`.
 - `/metrics` is scraped from an internal path or monitoring network.
 - `deploy/monitoring/prometheus-alerts.yml` is loaded into Prometheus or your
   equivalent alerting stack.
+- `deploy/monitoring/alertmanager-routing.example.yml` has been translated into
+  the environment's real Alertmanager routing config.
+- `NODE_EXPORTER_JOB`, `POSTGRES_EXPORTER_JOB`, and `REDIS_EXPORTER_JOB` are
+  configured on the deployment environment and match the real scrape jobs.
 - The deploy host preserves `previous-known-good` tags for backend, frontend,
   and admin images, plus
   `$DEPLOY_PATH/shared/<environment>/ops/release-state.env`.
@@ -140,6 +157,10 @@ topology in `docker-compose.prod.yml`.
   Docker storage, and persistent volumes.
 - Host patching, least privilege, and access controls match
   [`docs/operations/host-hardening.md`](./operations/host-hardening.md).
+- `HOST_HARDENING_LAST_REVIEW_UTC` and `HOST_PATCH_WINDOW` are set on the
+  target GitHub environment.
+- Production go-live has `WAF_CDN_PROVIDER`, `WAF_CDN_DASHBOARD_URL`, and
+  `ADMIN_EDGE_ACCESS_POLICY` configured before internet exposure.
 
 ## 8. Capacity and failure validation
 

@@ -20,6 +20,7 @@
     "admin:promote": "node scripts/promote-admin.js",
     "user:reset-password": "node scripts/reset-password.js",
     "seed:manual": "tsx scripts/seed-manual.ts",
+    "seed:iap-products": "sh ../../scripts/run-tsx.sh scripts/seed-iap-products.ts",
     "seed:saas-portal-demo": "tsx scripts/seed-saas-portal-demo.ts",
     "verify:decision-class-billing": "tsx scripts/verify-decision-class-billing.ts",
     "dev": "tsx watch src/server.ts",
@@ -54,10 +55,11 @@
     "check": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint \"src/**/*.ts\" --max-warnings=0 && tsx scripts/check-prize-engine-tenant-scope.ts",
     "lint:prize-engine-scope": "tsx scripts/check-prize-engine-tenant-scope.ts",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "sh ../../scripts/run-vitest.sh run",
+    "test:watch": "sh ../../scripts/run-vitest.sh"
   },
   "dependencies": {
+    "@apple/app-store-server-library": "3.0.0",
     "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^11.2.0",
     "@fastify/rate-limit": "^10.3.0",

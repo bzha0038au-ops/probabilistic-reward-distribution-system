@@ -154,6 +154,13 @@ Current metrics include:
 - `reward_backend_http_request_duration_seconds`
 - `reward_backend_dependency_status`
 - `reward_backend_draw_requests_total`
+- `reward_backend_gift_sent_total`
+- `reward_backend_gift_energy_exhausted_total`
+- `reward_backend_iap_purchase_verified_total`
+- `reward_backend_iap_purchase_fulfillment_failed_total`
+- `reward_backend_gift_pack_delivered_total`
+- `reward_backend_economy_ledger_write_failed_total`
+- `reward_backend_store_purchase_orders_total`
 - `reward_backend_realtime_publish_duration_seconds`
 - `reward_backend_realtime_receive_latency_seconds`
 - `reward_backend_auth_notification_deliveries`
@@ -204,6 +211,10 @@ The minimum production dashboard should show:
 - readiness by dependency
 - total request rate and 5xx ratio
 - draw success vs error rate
+- gift send volume, gift-energy exhaustion, and gift-lock driven anomaly spikes
+- IAP verified vs fulfillment-failed counts by store channel / delivery type
+- store purchase order backlog by status and delivery type
+- gift-pack deliveries split by purchase vs restore mode
 - Holdem realtime publish P95 and client receive P95 by surface
 - notification backlog counts and oldest pending age
 - AML pending-hit queue depth and oldest pending age
@@ -222,6 +233,10 @@ The minimum production alert set should cover:
 - readiness failures
 - 5xx spikes
 - draw error rate
+- IAP verification failure spikes
+- verified-but-unfulfilled store purchase backlog
+- gift pack restore/replay deliveries
+- gifting activity spikes
 - Holdem realtime receive latency P95 above 200ms
 - withdraw stuck
 - notification backlog / dead-letter growth
@@ -234,6 +249,8 @@ The minimum production alert set should cover:
 - SaaS payout-distribution breach windows
 - PostgreSQL data volume thresholds at 70% / 85% / 95%
 - Redis memory thresholds at 70% / 85% / 95%
+- PostgreSQL dependency-down and Redis dependency-down alerts from backend readiness
+- host filesystem usage, read-only remount, and inode-pressure alerts
 - Registry storage threshold at 80%
 
 ## Payment Runtime Thresholds
@@ -303,6 +320,9 @@ alerts.
 - Container image registry storage:
   ticket the Telegram ops chat at 80% sustained usage for 15 minutes so old
   rollback images are not garbage-collected under pressure.
+- Host filesystem:
+  page at 85% sustained usage for root / Docker / proxy-log filesystems,
+  page immediately on read-only remount, and page at 85% inode usage.
 
 These alerts assume `node_exporter` is scraping Docker volume mountpoints and
 registry storage paths, and that `redis_exporter` exposes

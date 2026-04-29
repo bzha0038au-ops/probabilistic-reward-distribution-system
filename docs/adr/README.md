@@ -31,3 +31,4 @@ easy to lose during rewrites, package moves, or surface splits.
 - [ADR 0002: Prize Engine Selection Strategies](./0002-prize-engine-selection-strategies.md)
 - [ADR 0003: Prize Engine Envelope Layers](./0003-prize-engine-envelope-layers.md)
 - [ADR 0004: User Freeze Taxonomy](./0004-user-freeze-taxonomy.md)
+- [ADR 0005: Consumer Economy Assets And Gifting](./0005-consumer-economy-assets-and-gifting.md)

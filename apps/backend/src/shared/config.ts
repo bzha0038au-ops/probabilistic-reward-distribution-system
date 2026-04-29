@@ -9,6 +9,10 @@ type LogLevel = "debug" | "info" | "warn" | "error";
 
 export type AppConfig = {
   databaseUrl: string;
+  databasePoolMax: number;
+  databasePoolIdleTimeoutSeconds: number;
+  databasePoolConnectTimeoutSeconds: number;
+  databasePoolMaxLifetimeSeconds: number;
   drawCost: number;
   logLevel: LogLevel;
   nodeEnv: "development" | "production" | "test";
@@ -58,6 +62,20 @@ export type AppConfig = {
   paymentOutboundBatchSize: number;
   paymentOutboundLockTimeoutMs: number;
   paymentOutboundUnknownRetryDelayMs: number;
+  appleIapBundleId: string;
+  appleIapAppAppleId: number;
+  appleIapIssuerId: string;
+  appleIapKeyId: string;
+  appleIapPrivateKey: string;
+  appleIapRootCertificatesPem: string;
+  appleIapEnableOnlineChecks: boolean;
+  appleIapDefaultEnvironment: "sandbox" | "production";
+  googlePlayPackageName: string;
+  googlePlayServiceAccountEmail: string;
+  googlePlayServiceAccountPrivateKey: string;
+  googlePlayOauthTokenUrl: string;
+  googlePlayApiBaseUrl: string;
+  googlePlayRtdnBearerToken: string;
   predictionMarketOracleWorkerEnabled: boolean;
   predictionMarketOracleWorkerIntervalMs: number;
   predictionMarketOracleBatchSize: number;
@@ -193,6 +211,30 @@ const schema = {
     format: String,
     default: "",
     env: "DATABASE_URL",
+  },
+  databasePoolMax: {
+    doc: "Maximum postgres-js connections opened by the backend process",
+    format: "int",
+    default: 30,
+    env: "DB_POOL_MAX",
+  },
+  databasePoolIdleTimeoutSeconds: {
+    doc: "Idle connection timeout in seconds for postgres-js pool members",
+    format: "int",
+    default: 20,
+    env: "DB_POOL_IDLE_TIMEOUT_SECONDS",
+  },
+  databasePoolConnectTimeoutSeconds: {
+    doc: "Connection timeout in seconds for establishing new postgres-js connections",
+    format: "int",
+    default: 30,
+    env: "DB_POOL_CONNECT_TIMEOUT_SECONDS",
+  },
+  databasePoolMaxLifetimeSeconds: {
+    doc: "Maximum connection lifetime in seconds before postgres-js recycles a pool member",
+    format: "int",
+    default: 1800,
+    env: "DB_POOL_MAX_LIFETIME_SECONDS",
   },
   drawCost: {
     doc: "Default draw cost (used to seed system_config)",
@@ -494,6 +536,90 @@ const schema = {
     format: "int",
     default: 30_000,
     env: "PAYMENT_OUTBOUND_UNKNOWN_RETRY_DELAY_MS",
+  },
+  appleIapBundleId: {
+    doc: "Bundle identifier used for App Store Server API verification",
+    format: String,
+    default: "",
+    env: "APPLE_IAP_BUNDLE_ID",
+  },
+  appleIapAppAppleId: {
+    doc: "Numeric App Store app id required for production App Store notification verification",
+    format: "nat",
+    default: 0,
+    env: "APPLE_IAP_APPLE_ID",
+  },
+  appleIapIssuerId: {
+    doc: "App Store Connect issuer id for the In-App Purchase key",
+    format: String,
+    default: "",
+    env: "APPLE_IAP_ISSUER_ID",
+  },
+  appleIapKeyId: {
+    doc: "App Store Connect key id for the In-App Purchase key",
+    format: String,
+    default: "",
+    env: "APPLE_IAP_KEY_ID",
+  },
+  appleIapPrivateKey: {
+    doc: "PEM-encoded App Store Server API private key",
+    format: String,
+    default: "",
+    env: "APPLE_IAP_PRIVATE_KEY",
+  },
+  appleIapRootCertificatesPem: {
+    doc: "PEM bundle of Apple root certificates used to verify signed StoreKit JWS payloads",
+    format: String,
+    default: "",
+    env: "APPLE_IAP_ROOT_CERTIFICATES_PEM",
+  },
+  appleIapEnableOnlineChecks: {
+    doc: "Whether to enable OCSP and date checks when verifying Apple signed data",
+    format: Boolean,
+    default: true,
+    env: "APPLE_IAP_ENABLE_ONLINE_CHECKS",
+  },
+  appleIapDefaultEnvironment: {
+    doc: "Default App Store environment to target when incoming purchase payloads do not specify one",
+    format: ["sandbox", "production"],
+    default: "production",
+    env: "APPLE_IAP_DEFAULT_ENVIRONMENT",
+  },
+  googlePlayPackageName: {
+    doc: "Android package name used for Google Play purchase verification",
+    format: String,
+    default: "",
+    env: "GOOGLE_PLAY_PACKAGE_NAME",
+  },
+  googlePlayServiceAccountEmail: {
+    doc: "Google service account email with Android Publisher API access",
+    format: String,
+    default: "",
+    env: "GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL",
+  },
+  googlePlayServiceAccountPrivateKey: {
+    doc: "PEM-encoded Google service account private key for Android Publisher API access",
+    format: String,
+    default: "",
+    env: "GOOGLE_PLAY_SERVICE_ACCOUNT_PRIVATE_KEY",
+  },
+  googlePlayOauthTokenUrl: {
+    doc: "OAuth token endpoint used to obtain Android Publisher API access tokens",
+    format: String,
+    default: "https://oauth2.googleapis.com/token",
+    env: "GOOGLE_PLAY_OAUTH_TOKEN_URL",
+  },
+  googlePlayApiBaseUrl: {
+    doc: "Base URL for Google Play Developer API requests",
+    format: String,
+    default: "https://androidpublisher.googleapis.com",
+    env: "GOOGLE_PLAY_API_BASE_URL",
+  },
+  googlePlayRtdnBearerToken: {
+    doc: "Optional bearer token expected on Google RTDN push requests",
+    format: String,
+    default: "",
+    env: "GOOGLE_PLAY_RTDN_BEARER_TOKEN",
   },
   predictionMarketOracleWorkerEnabled: {
     doc: "Enable the dedicated prediction market oracle polling worker",

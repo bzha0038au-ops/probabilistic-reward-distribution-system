@@ -10,6 +10,7 @@ import {
   uniqueIndex,
   varchar,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import {
   HOLDEM_TABLE_MESSAGE_MAX_LENGTH,
   holdemTableEmojiValues,
@@ -72,6 +73,7 @@ export const holdemTableSeats = pgTable(
     userId: integer("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    linkedGroupId: varchar("linked_group_id", { length: 128 }),
     stackAmount: numeric("stack_amount", { precision: 14, scale: 2 })
       .notNull()
       .default("0"),
@@ -118,7 +120,9 @@ export const holdemTableSeats = pgTable(
       table.tableId,
       table.seatIndex,
     ),
-    userUnique: uniqueIndex("holdem_table_seats_user_unique").on(table.userId),
+    userSoloUnique: uniqueIndex("holdem_table_seats_user_solo_unique")
+      .on(table.userId)
+      .where(sql`${table.linkedGroupId} IS NULL`),
     tableStatusIdx: index("holdem_table_seats_table_status_idx").on(
       table.tableId,
       table.status,
@@ -134,7 +138,7 @@ export const holdemTableSeats = pgTable(
       table.seatLeaseExpiresAt,
       table.autoCashOutPending,
     ),
-    userTableIdx: index("holdem_table_seats_user_table_idx").on(
+    userTableUnique: uniqueIndex("holdem_table_seats_user_table_unique").on(
       table.userId,
       table.tableId,
     ),

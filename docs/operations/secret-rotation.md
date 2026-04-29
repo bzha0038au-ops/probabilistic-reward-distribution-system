@@ -66,6 +66,30 @@ Record the drill in the change ticket or incident system with:
 - deploy SHA / release id
 - validation results for admin login, user session continuity, and SaaS canary
 
+Commit a machine-readable summary to `docs/operations/evidence/` using the
+filename pattern `secret-rotation-YYYY-MM-DD.summary.json`. The release gate and
+daily freshness check read one of these timestamp fields:
+
+- `completed_at_utc`
+- `finished_at_utc`
+- `performed_at_utc`
+- `date`
+
+Example:
+
+```json
+{
+  "date": "2026-04-30",
+  "environment": "production",
+  "operator": "ops@example.com",
+  "approver": "security@example.com",
+  "completed_at_utc": "2026-04-30T02:10:00Z",
+  "scope": ["admin_jwt", "user_jwt", "saas_api_key_canary"],
+  "result": "passed",
+  "evidence_ticket": "SEC-1234"
+}
+```
+
 ## JWT Rotation Procedure
 
 This is for `USER_JWT_SECRET` and `ADMIN_JWT_SECRET`. The mechanism is:

@@ -26,6 +26,6 @@
 | Window (Australia/Sydney) | Primary | Secondary | Backup Owner | Release Approver | Restore Approver |
 | --- | --- | --- | --- | --- | --- |
 | 2026-04-27 to 2026-05-04 | `PRIMARY_ONCALL` | `SECONDARY_ONCALL` | `BACKUP_OWNER` | `RELEASE_APPROVER` | `RESTORE_APPROVER` |
-| 2026-05-04 to 2026-05-11 | update on rotation | update on rotation | `BACKUP_OWNER` | `RELEASE_APPROVER` | `RESTORE_APPROVER` |
-| 2026-05-11 to 2026-05-18 | update on rotation | update on rotation | `BACKUP_OWNER` | `RELEASE_APPROVER` | `RESTORE_APPROVER` |
-| 2026-05-18 to 2026-05-25 | update on rotation | update on rotation | `BACKUP_OWNER` | `RELEASE_APPROVER` | `RESTORE_APPROVER` |
+| 2026-05-04 to 2026-05-11 | `PRIMARY_ONCALL` | `SECONDARY_ONCALL` | `BACKUP_OWNER` | `RELEASE_APPROVER` | `RESTORE_APPROVER` |
+| 2026-05-11 to 2026-05-18 | `PRIMARY_ONCALL` | `SECONDARY_ONCALL` | `BACKUP_OWNER` | `RELEASE_APPROVER` | `RESTORE_APPROVER` |
+| 2026-05-18 to 2026-05-25 | `PRIMARY_ONCALL` | `SECONDARY_ONCALL` | `BACKUP_OWNER` | `RELEASE_APPROVER` | `RESTORE_APPROVER` |

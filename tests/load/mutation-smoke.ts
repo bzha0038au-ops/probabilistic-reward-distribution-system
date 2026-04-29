@@ -423,9 +423,20 @@ async function main() {
 
       const claimRows = await sql<Array<{ count: string }>>`
         select count(*)::text as count
-        from ledger_entries
-        where user_id in ${sql(sessions.map((session) => session.user.id))}
-          and type = 'gamification_reward'
+        from (
+          select user_id
+          from ledger_entries
+          where user_id in ${sql(sessions.map((session) => session.user.id))}
+            and type = 'gamification_reward'
+
+          union all
+
+          select user_id
+          from economy_ledger_entries
+          where user_id in ${sql(sessions.map((session) => session.user.id))}
+            and asset_code = 'B_LUCK'
+            and entry_type = 'gamification_reward'
+        ) reward_claim_entries
       `;
 
       const summaries = [drawSummary, claimSummary];

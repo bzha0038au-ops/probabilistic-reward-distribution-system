@@ -23,6 +23,7 @@ export async function registerAdminRoutes(app: AppInstance) {
     const { registerAdminEngineReconciliationRoutes } = await import(
       './engine-reconciliation'
     );
+    const { registerAdminEconomyRoutes } = await import('./economy');
     const { registerAdminFinanceRoutes } = await import('./finance');
 
     await registerAdminMfaRoutes(adminRoutes);
@@ -35,6 +36,7 @@ export async function registerAdminRoutes(app: AppInstance) {
     await registerAdminConfigRoutes(adminRoutes);
     await registerAdminControlRoutes(adminRoutes);
     await registerAdminEngineReconciliationRoutes(adminRoutes);
+    await registerAdminEconomyRoutes(adminRoutes);
     await registerAdminFinanceRoutes(adminRoutes);
 
     if (!minimalBackend) {

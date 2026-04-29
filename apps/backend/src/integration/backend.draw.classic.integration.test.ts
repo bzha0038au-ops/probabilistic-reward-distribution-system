@@ -18,10 +18,12 @@ import { and, asc, eq, inArray } from '@reward/database/orm';
 import { expect } from 'vitest';
 import {
   drawRecords,
+  economyLedgerEntries,
   fairnessAudits,
   fairnessSeeds,
   houseAccount,
   prizes,
+  userAssetBalances,
   userWallets,
 } from '@reward/database';
 import { auditPendingFairnessEpochs } from '../modules/fairness/service';
@@ -51,9 +53,24 @@ describeIntegrationSuite('backend draw classic integration', () => {
 
     expect(wallet).toEqual({
       withdrawableBalance: '90.00',
-      bonusBalance: '5.00',
+      bonusBalance: '0.00',
       wageredAmount: '10.00',
     });
+
+    const [bluckBalance] = await getDb()
+      .select({
+        availableBalance: userAssetBalances.availableBalance,
+      })
+      .from(userAssetBalances)
+      .where(
+        and(
+          eq(userAssetBalances.userId, user.id),
+          eq(userAssetBalances.assetCode, 'B_LUCK'),
+        ),
+      )
+      .limit(1);
+
+    expect(bluckBalance?.availableBalance).toBe('5.00');
 
     const [house] = await getDb()
       .select({ prizePoolBalance: houseAccount.prizePoolBalance })
@@ -67,9 +84,24 @@ describeIntegrationSuite('backend draw classic integration', () => {
       ({ entryType, amount }) => ({ entryType, amount }),
     );
 
-    expect(userEntries).toEqual([
-      { entryType: 'draw_cost', amount: '-10.00' },
-      { entryType: 'draw_reward', amount: '5.00' },
+    expect(userEntries).toEqual([{ entryType: 'draw_cost', amount: '-10.00' }]);
+
+    const economyEntries = await getDb()
+      .select({
+        assetCode: economyLedgerEntries.assetCode,
+        entryType: economyLedgerEntries.entryType,
+        amount: economyLedgerEntries.amount,
+      })
+      .from(economyLedgerEntries)
+      .where(eq(economyLedgerEntries.userId, user.id))
+      .orderBy(asc(economyLedgerEntries.id));
+
+    expect(economyEntries).toEqual([
+      {
+        assetCode: 'B_LUCK',
+        entryType: 'draw_reward',
+        amount: '5.00',
+      },
     ]);
 
     const [storedRecord] = await getDb()

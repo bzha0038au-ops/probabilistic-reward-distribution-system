@@ -58,6 +58,12 @@ Error:
 - `GET /fairness/commit`
 - `GET /fairness/reveal?epoch=...`
 - `GET /wallet`
+- `GET /economy/ledger?limit=50&assetCode=...`
+- `GET /gift-energy`
+- `GET /gifts?limit=50&direction=sent|received|all`
+- `POST /gifts`
+- `GET /iap/products?storeChannel=ios|android&deliveryType=voucher|gift_pack`
+- `POST /iap/purchases/verify`
 - `GET /transactions?limit=50` (returns `ledger_entries` history)
 - `POST /draw`
 - `GET /bank-cards`
@@ -67,6 +73,11 @@ Error:
 - `POST /top-ups`
 - `GET /withdrawals`
 - `POST /withdrawals`
+
+## Public Webhooks
+
+- `POST /iap/notifications/apple` (App Store Server Notifications V2 signed payload intake)
+- `POST /iap/notifications/google` (Google Play RTDN / Pub/Sub push intake)
 
 ## Prize Engine
 

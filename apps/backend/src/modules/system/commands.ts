@@ -1,6 +1,7 @@
 import type Decimal from 'decimal.js';
 
 import {
+  ANTI_ABUSE_AUTO_FREEZE_ENABLED_KEY,
   BLACKJACK_DEALER_HITS_SOFT_17_KEY,
   BLACKJACK_DOUBLE_DOWN_ALLOWED_KEY,
   BLACKJACK_HIT_SPLIT_ACES_ALLOWED_KEY,
@@ -18,6 +19,9 @@ import {
   AUTH_FAILURE_WINDOW_MINUTES_KEY,
   BONUS_AUTO_RELEASE_ENABLED_KEY,
   BONUS_UNLOCK_WAGER_RATIO_KEY,
+  DRAW_ENABLED_KEY,
+  PAYMENT_DEPOSIT_ENABLED_KEY,
+  PAYMENT_WITHDRAW_ENABLED_KEY,
   RANDOM_WEIGHT_JITTER_ENABLED_KEY,
   RANDOM_WEIGHT_JITTER_PCT_KEY,
   REWARD_DRAW_STREAK_DAILY_AMOUNT_KEY,
@@ -27,8 +31,151 @@ import {
   SAAS_USAGE_ALERT_MAX_ANTI_EXPLOIT_RATE_PCT_KEY,
   SAAS_USAGE_ALERT_MAX_MINUTE_QPS_KEY,
   SAAS_USAGE_ALERT_MAX_SINGLE_PAYOUT_AMOUNT_KEY,
+  SYSTEM_LOGIN_ENABLED_KEY,
+  SYSTEM_MAINTENANCE_MODE_KEY,
+  SYSTEM_REGISTRATION_ENABLED_KEY,
+  WITHDRAW_RISK_NEW_CARD_REVIEW_ENABLED_KEY,
 } from './keys';
 import { type DbExecutor, setConfigDecimal } from './store';
+
+export async function setSystemFlagsConfig(
+  db: DbExecutor,
+  config: {
+    maintenanceMode?: boolean;
+    registrationEnabled?: boolean;
+    loginEnabled?: boolean;
+  }
+) {
+  const updates: Promise<void>[] = [];
+
+  if (typeof config.maintenanceMode === 'boolean') {
+    updates.push(
+      setConfigDecimal(
+        db,
+        SYSTEM_MAINTENANCE_MODE_KEY,
+        config.maintenanceMode ? 1 : 0,
+        'System maintenance mode'
+      )
+    );
+  }
+
+  if (typeof config.registrationEnabled === 'boolean') {
+    updates.push(
+      setConfigDecimal(
+        db,
+        SYSTEM_REGISTRATION_ENABLED_KEY,
+        config.registrationEnabled ? 1 : 0,
+        'System registration enabled'
+      )
+    );
+  }
+
+  if (typeof config.loginEnabled === 'boolean') {
+    updates.push(
+      setConfigDecimal(
+        db,
+        SYSTEM_LOGIN_ENABLED_KEY,
+        config.loginEnabled ? 1 : 0,
+        'System login enabled'
+      )
+    );
+  }
+
+  await Promise.all(updates);
+}
+
+export async function setDrawSystemControls(
+  db: DbExecutor,
+  config: { drawEnabled?: boolean }
+) {
+  const updates: Promise<void>[] = [];
+
+  if (typeof config.drawEnabled === 'boolean') {
+    updates.push(
+      setConfigDecimal(
+        db,
+        DRAW_ENABLED_KEY,
+        config.drawEnabled ? 1 : 0,
+        'Draw system enabled'
+      )
+    );
+  }
+
+  await Promise.all(updates);
+}
+
+export async function setPaymentConfig(
+  db: DbExecutor,
+  config: { depositEnabled?: boolean; withdrawEnabled?: boolean }
+) {
+  const updates: Promise<void>[] = [];
+
+  if (typeof config.depositEnabled === 'boolean') {
+    updates.push(
+      setConfigDecimal(
+        db,
+        PAYMENT_DEPOSIT_ENABLED_KEY,
+        config.depositEnabled ? 1 : 0,
+        'Payment deposit enabled'
+      )
+    );
+  }
+
+  if (typeof config.withdrawEnabled === 'boolean') {
+    updates.push(
+      setConfigDecimal(
+        db,
+        PAYMENT_WITHDRAW_ENABLED_KEY,
+        config.withdrawEnabled ? 1 : 0,
+        'Payment withdraw enabled'
+      )
+    );
+  }
+
+  await Promise.all(updates);
+}
+
+export async function setAntiAbuseConfig(
+  db: DbExecutor,
+  config: { autoFreezeEnabled?: boolean }
+) {
+  const updates: Promise<void>[] = [];
+
+  if (typeof config.autoFreezeEnabled === 'boolean') {
+    updates.push(
+      setConfigDecimal(
+        db,
+        ANTI_ABUSE_AUTO_FREEZE_ENABLED_KEY,
+        config.autoFreezeEnabled ? 1 : 0,
+        'Anti-abuse auto freeze enabled'
+      )
+    );
+  }
+
+  await Promise.all(updates);
+}
+
+export async function setWithdrawalRiskConfig(
+  db: DbExecutor,
+  config: {
+    newCardFirstWithdrawalReviewEnabled?: boolean;
+  }
+) {
+  const updates: Promise<void>[] = [];
+
+  if (typeof config.newCardFirstWithdrawalReviewEnabled === 'boolean') {
+    updates.push(
+      setConfigDecimal(
+        db,
+        WITHDRAW_RISK_NEW_CARD_REVIEW_ENABLED_KEY,
+        config.newCardFirstWithdrawalReviewEnabled ? 1 : 0,
+        'New-card first withdrawal review enabled'
+      )
+    );
+  }
+
+  await Promise.all(updates);
+}
 
 export async function setRandomizationConfig(
   db: DbExecutor,

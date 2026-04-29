@@ -9,12 +9,13 @@ import {
   setConfigNumber,
   verifyUserContacts,
 } from './integration-test-support';
-import { asc, eq } from '@reward/database/orm';
+import { and, asc, eq } from '@reward/database/orm';
 import { expect } from 'vitest';
 import {
   drawRecords,
   playModeSessions,
   prizes,
+  userAssetBalances,
   userPlayModes,
   userWallets,
 } from '@reward/database';
@@ -447,6 +448,20 @@ describeIntegrationSuite('backend draw gacha integration', () => {
         status: 'won',
       });
 
+      const [earnedAfterDeferredWin] = await getDb()
+        .select({
+          availableBalance: userAssetBalances.availableBalance,
+        })
+        .from(userAssetBalances)
+        .where(
+          and(
+            eq(userAssetBalances.userId, user.id),
+            eq(userAssetBalances.assetCode, 'B_LUCK'),
+          ),
+        )
+        .limit(1);
+      expect(earnedAfterDeferredWin?.availableBalance).toBe('0.00');
+
       await getDb()
         .update(prizes)
         .set({
@@ -497,14 +512,19 @@ describeIntegrationSuite('backend draw gacha integration', () => {
         status: 'miss',
       });
 
-      const [walletAfterRelease] = await getDb()
+      const [earnedAfterDeferredMiss] = await getDb()
         .select({
-          bonusBalance: userWallets.bonusBalance,
+          availableBalance: userAssetBalances.availableBalance,
         })
-        .from(userWallets)
-        .where(eq(userWallets.userId, user.id))
+        .from(userAssetBalances)
+        .where(
+          and(
+            eq(userAssetBalances.userId, user.id),
+            eq(userAssetBalances.assetCode, 'B_LUCK'),
+          ),
+        )
         .limit(1);
-      expect(walletAfterRelease?.bonusBalance).toBe('5.00');
+      expect(earnedAfterDeferredMiss?.availableBalance).toBe('5.00');
 
       const catalogResponse = await getApp().inject({
         method: 'GET',
@@ -592,6 +612,20 @@ describeIntegrationSuite('backend draw gacha integration', () => {
         },
       });
 
+      const [earnedAfterSnowballWinOne] = await getDb()
+        .select({
+          availableBalance: userAssetBalances.availableBalance,
+        })
+        .from(userAssetBalances)
+        .where(
+          and(
+            eq(userAssetBalances.userId, user.id),
+            eq(userAssetBalances.assetCode, 'B_LUCK'),
+          ),
+        )
+        .limit(1);
+      expect(earnedAfterSnowballWinOne?.availableBalance).toBe('0.00');
+
       const secondResponse = await getApp().inject({
         method: 'POST',
         url: '/draw/play',
@@ -630,6 +664,20 @@ describeIntegrationSuite('backend draw gacha integration', () => {
           snowballCarryAmount: '10.00',
         },
       });
+
+      const [earnedAfterSnowballWinTwo] = await getDb()
+        .select({
+          availableBalance: userAssetBalances.availableBalance,
+        })
+        .from(userAssetBalances)
+        .where(
+          and(
+            eq(userAssetBalances.userId, user.id),
+            eq(userAssetBalances.assetCode, 'B_LUCK'),
+          ),
+        )
+        .limit(1);
+      expect(earnedAfterSnowballWinTwo?.availableBalance).toBe('0.00');
 
       await getDb()
         .update(prizes)
@@ -680,14 +728,19 @@ describeIntegrationSuite('backend draw gacha integration', () => {
       });
       expect(thirdPayload.data.results).toHaveLength(1);
 
-      const [walletAfterSnowballRelease] = await getDb()
+      const [earnedAfterSnowballMiss] = await getDb()
         .select({
-          bonusBalance: userWallets.bonusBalance,
+          availableBalance: userAssetBalances.availableBalance,
         })
-        .from(userWallets)
-        .where(eq(userWallets.userId, user.id))
+        .from(userAssetBalances)
+        .where(
+          and(
+            eq(userAssetBalances.userId, user.id),
+            eq(userAssetBalances.assetCode, 'B_LUCK'),
+          ),
+        )
         .limit(1);
-      expect(walletAfterSnowballRelease?.bonusBalance).toBe('10.00');
+      expect(earnedAfterSnowballMiss?.availableBalance).toBe('10.00');
 
       const [storedMode] = await getDb()
         .select({

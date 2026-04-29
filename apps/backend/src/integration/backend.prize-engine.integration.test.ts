@@ -389,7 +389,9 @@ const seedProjectDrawRecord = async (params: {
       playerId: params.playerId,
       environment: params.environment ?? "sandbox",
       agentId:
-        params.agentId ?? player?.externalPlayerId ?? `player-${params.playerId}`,
+        params.agentId ??
+        player?.externalPlayerId ??
+        `player-${params.playerId}`,
       groupId: params.groupId ?? null,
       prizeId: params.prizeId ?? null,
       drawCost: params.drawCost ?? "10.00",
@@ -578,6 +580,178 @@ describeIntegrationSuite("backend prize engine integration", () => {
       },
     });
     expect(fallbackPrize.id).not.toBe(highMeanPrize.id);
+  });
+
+  it("applies softmax project strategy when creating prize-engine draws", async () => {
+    const seededProject = await seedPrizeEngineProject("softmax-draw", {
+      scopes: DEFAULT_SCOPES,
+    });
+
+    await getDb()
+      .update(saasProjects)
+      .set({
+        strategy: "softmax",
+        strategyParams: {
+          temperature: 0.05,
+        },
+      })
+      .where(eq(saasProjects.id, seededProject.project.id));
+
+    const [lowPrize, highPrize] = await getDb()
+      .insert(saasProjectPrizes)
+      .values([
+        {
+          projectId: seededProject.project.id,
+          name: "Low softmax prize",
+          stock: 10,
+          weight: 1,
+          rewardAmount: "1.00",
+          isActive: true,
+        },
+        {
+          projectId: seededProject.project.id,
+          name: "High softmax prize",
+          stock: 10,
+          weight: 1,
+          rewardAmount: "9.00",
+          isActive: true,
+        },
+      ])
+      .returning();
+
+    const response = await getApp().inject({
+      method: "POST",
+      url: prizeEngineUrl("/v1/engine/draws"),
+      headers: {
+        authorization: `Bearer ${seededProject.apiKey}`,
+      },
+      payload: prizeEnginePayload({
+        player: {
+          playerId: "softmax-player",
+          displayName: "Softmax Player",
+        },
+        clientNonce: "softmax-draw-nonce",
+      }),
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body).toMatchObject({
+      ok: true,
+      data: {
+        result: {
+          prizeId: highPrize.id,
+          rewardAmount: "9.00",
+          fairness: {
+            strategy: "softmax",
+            temperature: 0.05,
+            candidateCount: 2,
+            selectedArmId: highPrize.id,
+            selectedArmKind: "prize",
+          },
+        },
+      },
+    });
+    expect(body.data.result.fairness.selectedArmProbability).toBeGreaterThan(
+      0.99,
+    );
+
+    const [record] = await getDb()
+      .select()
+      .from(saasDrawRecords)
+      .where(eq(saasDrawRecords.projectId, seededProject.project.id))
+      .orderBy(desc(saasDrawRecords.id))
+      .limit(1);
+
+    expect(record?.prizeId).toBe(highPrize.id);
+    expect(record?.metadata).toMatchObject({
+      fairness: {
+        strategy: "softmax",
+        temperature: 0.05,
+        selectedArmId: highPrize.id,
+      },
+    });
+    expect(lowPrize.id).not.toBe(highPrize.id);
+  });
+
+  it("applies thompson project strategy when creating prize-engine draws", async () => {
+    const seededProject = await seedPrizeEngineProject("thompson-draw", {
+      scopes: DEFAULT_SCOPES,
+    });
+
+    await getDb()
+      .update(saasProjects)
+      .set({
+        strategy: "thompson",
+        strategyParams: {
+          priorAlpha: 1,
+          priorBeta: 1,
+          priorStrength: 8,
+        },
+      })
+      .where(eq(saasProjects.id, seededProject.project.id));
+
+    const prize = await seedProjectPrize({
+      projectId: seededProject.project.id,
+      name: "Thompson Prize",
+      rewardAmount: "7.00",
+      stock: 10,
+      weight: 1,
+    });
+
+    const response = await getApp().inject({
+      method: "POST",
+      url: prizeEngineUrl("/v1/engine/draws"),
+      headers: {
+        authorization: `Bearer ${seededProject.apiKey}`,
+      },
+      payload: prizeEnginePayload({
+        player: {
+          playerId: "thompson-player",
+          displayName: "Thompson Player",
+        },
+        clientNonce: "thompson-draw-nonce",
+      }),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      ok: true,
+      data: {
+        result: {
+          prizeId: prize.id,
+          rewardAmount: "7.00",
+          fairness: {
+            strategy: "thompson",
+            priorAlpha: 1,
+            priorBeta: 1,
+            priorStrength: 8,
+            candidateCount: 1,
+            selectedArmId: prize.id,
+            selectedArmKind: "prize",
+            scoreNormalizationMax: 11.2,
+          },
+        },
+      },
+    });
+
+    const [record] = await getDb()
+      .select()
+      .from(saasDrawRecords)
+      .where(eq(saasDrawRecords.projectId, seededProject.project.id))
+      .orderBy(desc(saasDrawRecords.id))
+      .limit(1);
+
+    expect(record?.prizeId).toBe(prize.id);
+    expect(record?.metadata).toMatchObject({
+      fairness: {
+        strategy: "thompson",
+        priorAlpha: 1,
+        priorBeta: 1,
+        priorStrength: 8,
+        selectedArmId: prize.id,
+      },
+    });
   });
 
   it("mutes reward issuance when a project reward envelope budget cap is exceeded", async () => {
@@ -2565,21 +2739,23 @@ describeIntegrationSuite("backend prize engine integration", () => {
       },
     );
 
-    await getDb().insert(experiments).values({
-      key: "reward-epsilon-rollout",
-      description: "Reward strategy params rollout",
-      status: "active",
-      defaultVariantKey: "treatment",
-      variants: [
-        {
-          key: "treatment",
-          weight: 1,
-          payload: {
-            epsilon: 1,
+    await getDb()
+      .insert(experiments)
+      .values({
+        key: "reward-epsilon-rollout",
+        description: "Reward strategy params rollout",
+        status: "active",
+        defaultVariantKey: "treatment",
+        variants: [
+          {
+            key: "treatment",
+            weight: 1,
+            payload: {
+              epsilon: 1,
+            },
           },
-        },
-      ],
-    });
+        ],
+      });
 
     await getDb()
       .update(saasProjects)

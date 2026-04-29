@@ -40,6 +40,7 @@ export type Messages = {
       prizes: string
       changeRequests: string
       permissions: string
+      economy: string
       markets: string
       finance: string
       kyc: string
@@ -1852,6 +1853,7 @@ const translations: Record<Locale, Messages> = {
         prizes: "Prizes",
         changeRequests: "Change Requests",
         permissions: "Permissions",
+        economy: "Economy",
         markets: "Markets",
         finance: "Finance",
         kyc: "KYC Queue",
@@ -1963,15 +1965,15 @@ const translations: Record<Locale, Messages> = {
         submit: "Update Settings",
       },
       bonus: {
-        title: "Bonus Release",
+        title: "Legacy Bonus Release",
         description:
-          "Manually unlock bonus balance when auto release is disabled.",
+          "Retired legacy path. B luck is non-withdrawable and can no longer be released into withdrawable balance.",
         userId: "User ID",
         amount: "Amount",
         amountPlaceholder: "Leave empty to release all",
-        release: "Release Bonus",
+        release: "Release Disabled",
         autoReleaseHint:
-          "Auto release is enabled. Disable it to release manually.",
+          "This legacy release flow is disabled under the B luck economy model.",
       },
       legal: {
         title: "Legal Documents",

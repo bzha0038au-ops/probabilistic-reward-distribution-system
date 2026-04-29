@@ -27,6 +27,7 @@ apps/**/.env
 apps/**/.env.*
 !apps/**/.env.example
 .env.d/
+.secrets/
 deploy/env/*.env
 !deploy/env/*.env.example
 pnpm-debug.log*

@@ -47,6 +47,22 @@ import type {
   DrawOverviewResponse,
   DrawResult,
 } from "@reward/shared-types/draw";
+import type {
+  CreateGiftRequest,
+  CreateGiftResponse,
+  EconomyLedgerResponse,
+  GiftPackCatalogListQuery,
+  GiftPackCatalogListResponse,
+  GiftPackPurchaseCompleteRequest,
+  GiftPackPurchaseCompleteResponse,
+  GiftEnergyResponse,
+  GiftListQuery,
+  GiftListResponse,
+  IapProductListQuery,
+  IapProductListResponse,
+  VerifyIapPurchaseRequest,
+  VerifyIapPurchaseResponse,
+} from "@reward/shared-types/economy";
 import type { ExperimentVariantResponse } from "@reward/shared-types/experiments";
 import type {
   FairnessCommit,
@@ -151,6 +167,13 @@ export const USER_API_ROUTES = {
   },
   communityThreads: "/community/threads",
   wallet: "/wallet",
+  economyLedger: "/economy/ledger",
+  giftEnergy: "/gift-energy",
+  gifts: "/gifts",
+  iapProducts: "/iap/products",
+  iapPurchasesVerify: "/iap/purchases/verify",
+  giftPackCatalog: "/gift-packs/catalog",
+  giftPackPurchaseComplete: "/gift-packs/purchase/complete",
   transactions: "/transactions",
   notifications: "/notifications",
   notificationSummary: "/notifications/summary",
@@ -283,12 +306,15 @@ export const parseApiResponse = async <T>(
   response: Response,
 ): Promise<ApiResult<T>> => {
   const payload = await response.json().catch(() => ({}));
+  const traceId =
+    payload?.traceId ?? response.headers.get("x-trace-id") ?? undefined;
 
   if (!response.ok || !payload?.ok) {
     return {
       ok: false,
       error: payload?.error ?? fallbackError,
       requestId: payload?.requestId,
+      traceId,
       status: response.status,
     };
   }
@@ -297,6 +323,7 @@ export const parseApiResponse = async <T>(
     ok: true,
     data: payload.data as T,
     requestId: payload?.requestId,
+    traceId,
     status: response.status,
   };
 };
@@ -758,6 +785,112 @@ export function createUserApiClient(runtime: UserApiRuntime) {
       return request<WalletBalanceResponse>(
         USER_API_ROUTES.wallet,
         {},
+        overrides,
+      );
+    },
+    getEconomyLedger(
+      params: {
+        limit?: number;
+        assetCode?: string;
+      } = {},
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<EconomyLedgerResponse>(
+        `${USER_API_ROUTES.economyLedger}${toSearch({
+          limit: params.limit,
+          assetCode: params.assetCode,
+        })}`,
+        { cache: "no-store" },
+        overrides,
+      );
+    },
+    getGiftEnergy(overrides: UserApiOverrides = {}) {
+      return request<GiftEnergyResponse>(
+        USER_API_ROUTES.giftEnergy,
+        { cache: "no-store" },
+        overrides,
+      );
+    },
+    createGift(
+      payload: CreateGiftRequest,
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<CreateGiftResponse>(
+        USER_API_ROUTES.gifts,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          cache: "no-store",
+        },
+        overrides,
+      );
+    },
+    listGifts(
+      params: GiftListQuery = {},
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<GiftListResponse>(
+        `${USER_API_ROUTES.gifts}${toSearch({
+          limit: params.limit,
+          direction: params.direction,
+        })}`,
+        { cache: "no-store" },
+        overrides,
+      );
+    },
+    listIapProducts(
+      params: IapProductListQuery = {},
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<IapProductListResponse>(
+        `${USER_API_ROUTES.iapProducts}${toSearch({
+          storeChannel: params.storeChannel,
+          deliveryType: params.deliveryType,
+        })}`,
+        { cache: "no-store" },
+        overrides,
+      );
+    },
+    listGiftPackCatalog(
+      params: GiftPackCatalogListQuery = {},
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<GiftPackCatalogListResponse>(
+        `${USER_API_ROUTES.giftPackCatalog}${toSearch({
+          storeChannel: params.storeChannel,
+        })}`,
+        { cache: "no-store" },
+        overrides,
+      );
+    },
+    verifyIapPurchase(
+      payload: VerifyIapPurchaseRequest,
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<VerifyIapPurchaseResponse>(
+        USER_API_ROUTES.iapPurchasesVerify,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          cache: "no-store",
+        },
+        overrides,
+      );
+    },
+    completeGiftPackPurchase(
+      payload: GiftPackPurchaseCompleteRequest,
+      overrides: UserApiOverrides = {},
+    ) {
+      return request<GiftPackPurchaseCompleteResponse>(
+        USER_API_ROUTES.giftPackPurchaseComplete,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          cache: "no-store",
+        },
         overrides,
       );
     },

@@ -1596,7 +1596,18 @@ export function HoldemPanel() {
                 <button
                   key={table.id}
                   type="button"
-                  onClick={() => setSelectedTableId(table.id)}
+                  onClick={() => {
+                    if (table.id === selectedTableId) {
+                      if (selectedTable?.table.id !== table.id) {
+                        void refreshTable(table.id);
+                        void refreshTableMessages(table.id);
+                      }
+                      return;
+                    }
+                    setSelectedTable(null);
+                    setTableMessages([]);
+                    setSelectedTableId(table.id);
+                  }}
                   className={cn(
                     "w-full rounded-3xl border p-4 text-left transition-colors",
                     table.id === selectedTableId
@@ -1647,7 +1658,9 @@ export function HoldemPanel() {
 
       <Card className="overflow-hidden border-slate-800 bg-slate-950 text-slate-100 shadow-[0_28px_80px_rgba(15,23,42,0.42)]">
         <CardHeader className="border-b border-white/5 bg-[linear-gradient(135deg,_rgba(120,53,15,0.45),_rgba(20,83,45,0.18)_35%,_rgba(2,6,23,0.96)_100%)]">
-          <CardTitle>{activeTable ? activeTable.name : c.title}</CardTitle>
+          <CardTitle data-testid="holdem-active-table-name">
+            {activeTable ? activeTable.name : c.title}
+          </CardTitle>
           <CardDescription className="text-slate-300">
             {activeTable ? c.board : c.emptySelection}
           </CardDescription>

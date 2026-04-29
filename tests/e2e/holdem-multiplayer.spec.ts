@@ -151,6 +151,37 @@ const seedWalletBalance = async (
       wagered_amount = excluded.wagered_amount,
       updated_at = now()
   `;
+
+  await sql`
+    insert into user_asset_balances (
+      user_id,
+      asset_code,
+      available_balance,
+      locked_balance,
+      lifetime_earned,
+      lifetime_spent,
+      created_at,
+      updated_at
+    )
+    values (
+      ${userId},
+      'B_LUCK',
+      ${balances.bonusBalance},
+      '0.00',
+      ${balances.bonusBalance},
+      '0.00',
+      now(),
+      now()
+    )
+    on conflict (user_id, asset_code)
+    do update
+    set
+      available_balance = excluded.available_balance,
+      locked_balance = excluded.locked_balance,
+      lifetime_earned = excluded.lifetime_earned,
+      lifetime_spent = excluded.lifetime_spent,
+      updated_at = now()
+  `;
 };
 
 const waitForTableId = async (tableName: string) =>
@@ -325,6 +356,9 @@ const syncPageToHoldemTable = async (params: {
   }
 
   await lobbyTableButton.click();
+  await expect(params.page.getByTestId('holdem-active-table-name')).toHaveText(
+    params.tableName,
+  );
 };
 
 const forceExpiredHoldemTurn = async (params: {
@@ -576,6 +610,9 @@ const setupTwoPlayerHoldemTable = async (params: {
     /Table type:\s*Casual/,
   );
   await getLobbyTableButton(userTwoPage, tableName).click();
+  await expect(userTwoPage.getByTestId('holdem-active-table-name')).toHaveText(
+    tableName,
+  );
   await expect(userTwoPage.getByRole('button', { name: 'Join table' })).toBeVisible();
   await userTwoPage.getByRole('button', { name: 'Join table' }).click();
 

@@ -14,6 +14,7 @@ import type {
   LedgerEntryRecord,
   WithdrawalRecord,
 } from "@reward/shared-types/finance";
+import type { WalletBalanceResponse } from "@reward/shared-types/user";
 import type {
   RewardCenterResponse,
   RewardMissionId,
@@ -45,6 +46,7 @@ export function useUserDashboard(options: UseUserDashboardOptions) {
   const [currentSession, setCurrentSession] = useState<AuthSessionSummary>(
     initialCurrentSession.session,
   );
+  const [wallet, setWallet] = useState<WalletBalanceResponse | null>(null);
   const [walletBalance, setWalletBalance] = useState("0");
   const [bankCards, setBankCards] = useState<BankCard[]>([]);
   const [cryptoDepositChannels, setCryptoDepositChannels] = useState<
@@ -192,7 +194,10 @@ export function useUserDashboard(options: UseUserDashboardOptions) {
       }
 
       if (walletResponse.ok) {
-        setWalletBalance(walletResponse.data.balance ?? "0");
+        setWallet(walletResponse.data);
+        setWalletBalance(
+          walletResponse.data.balance.withdrawableBalance ?? "0",
+        );
       }
 
       if (transactionsResponse.ok) {
@@ -649,6 +654,7 @@ export function useUserDashboard(options: UseUserDashboardOptions) {
   return {
     currentUser,
     currentSession,
+    wallet,
     walletBalance,
     bankCards,
     cryptoDepositChannels,

@@ -248,6 +248,11 @@
                     <form method="post" action="?/resetProviderCircuit">
                       <input type="hidden" name="providerId" value={provider.id} />
                       <input type="hidden" name="totpCode" value={stepUpCode} />
+                      <input
+                        name="resetReason"
+                        class="input input-bordered input-xs w-full"
+                        placeholder="解除原因"
+                      />
                       <button class="btn btn-xs btn-outline" type="submit">
                         解除熔断
                       </button>
