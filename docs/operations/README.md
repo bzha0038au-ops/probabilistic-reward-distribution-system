@@ -35,6 +35,28 @@ real production launch.
 - [`secret-rotation.md`](./secret-rotation.md): secret file inventory and
   rotation procedure
 
+## Core Incident Runbooks
+
+These are the minimum scenario runbooks that should stay current. The five
+operator-owned incident runbooks below now use the same `P / T / A`
+(`Pre-check / Trigger / Action`) format so responders can skim them fast.
+
+- [`runbooks/RewardBackendWithdrawalsStuck.md`](./runbooks/RewardBackendWithdrawalsStuck.md):
+  stuck withdrawals (`提现卡住`)
+- [`runbooks/RewardBackendWalletReconciliationDrift.md`](./runbooks/RewardBackendWalletReconciliationDrift.md):
+  wallet vs ledger drift (`wallet 对账不平`)
+- [`runbooks/RewardBackendSaasBillingCollectionAtRisk.md`](./runbooks/RewardBackendSaasBillingCollectionAtRisk.md):
+  SaaS tenant billing failure (`saas tenant 计费失败`)
+- [`runbooks/RewardBackendHoldemTableDeadlock.md`](./runbooks/RewardBackendHoldemTableDeadlock.md):
+  holdem table deadlock / stalled turn advancement (`holdem 桌死锁`)
+- [`runbooks/RewardBackendAmlProviderUnavailable.md`](./runbooks/RewardBackendAmlProviderUnavailable.md):
+  AML provider outage or misconfiguration (`AML provider 宕机`)
+
+Adjacent AML queue handling remains separately documented here:
+
+- [`runbooks/RewardBackendAmlHitsOverdue.md`](./runbooks/RewardBackendAmlHitsOverdue.md):
+  overdue AML review queue (`AML 命中超 SLA`)
+
 ## Executable Assets
 
 - Root `pnpm ops:*` shortcuts:
