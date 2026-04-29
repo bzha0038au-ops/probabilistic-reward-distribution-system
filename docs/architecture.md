@@ -23,11 +23,14 @@
 - Draw contract/statuses: `apps/shared-types/src/draw.ts`
 - Finance contract/statuses: `apps/shared-types/src/finance.ts`
 - Notification contract/statuses: `apps/shared-types/src/notification.ts`
+- Hand history contract/statuses: `apps/shared-types/src/hand-history.ts`
+- Architecture decisions: `docs/adr/README.md`
 - Finance persistence schema: `apps/database/src/modules/finance/index.ts`
 - Draw persistence schema: `apps/database/src/modules/prize.ts`
 - Notification persistence schema: `apps/database/src/modules/notification.ts`
 - Module notes: `apps/backend/src/modules/draw/README.md`,
   `apps/backend/src/modules/payment/README.md`,
+  `apps/backend/src/modules/hand-history/README.md`,
   `apps/backend/src/modules/auth/NOTIFICATIONS.md`
 
 ## Wallet Model
@@ -103,6 +106,9 @@ A prize is eligible when (validated after the candidate is picked and locked):
 - `ledger_entries` keeps every user balance movement
 - `house_transactions` keeps every house-side movement
 - `draw_records` stores outcome and metadata
+- `round_events` and `table_events` are append-only replay and audit streams
+  that should use hot/cold lifecycle management instead of indefinite hot-table
+  retention; see `docs/hand-history-archival.md`
 - Admin summary aggregates wins, distributions, spend
 - `notification_deliveries` acts as a durable outbox / dead-letter store
 - A separate auth-notification worker claims rows with `FOR UPDATE SKIP LOCKED`
