@@ -9,6 +9,7 @@ node_modules/
 apps/**/node_modules/
 apps/**/.next/
 apps/**/.next-dev/
+apps/**/.next-e2e-*/
 apps/**/out/
 apps/**/.turbo/
 apps/**/.svelte-kit/
