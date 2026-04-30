@@ -32,33 +32,13 @@
   }
 
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222 47% 11%;
-    --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    --primary: 199 89% 48%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
-    --accent: 199 89% 95%;
-    --accent-foreground: 222 47% 11%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 199 89% 48%;
-    --radius: 0.75rem;
     --app-height: 100vh;
     --app-width: 100vw;
   }
 
   html {
     min-height: 100%;
-    background: hsl(var(--background));
+    background: hsl(var(--color-background));
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
   }
@@ -112,29 +92,29 @@
   }
 
   .page-safe-x {
-    padding-left: calc(env(safe-area-inset-left, 0px) + 1rem);
-    padding-right: calc(env(safe-area-inset-right, 0px) + 1rem);
+    padding-left: calc(env(safe-area-inset-left, 0px) + var(--space-2xl));
+    padding-right: calc(env(safe-area-inset-right, 0px) + var(--space-2xl));
   }
 
   .page-safe-y {
-    padding-top: calc(env(safe-area-inset-top, 0px) + 1rem);
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem);
+    padding-top: calc(env(safe-area-inset-top, 0px) + var(--space-2xl));
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--space-2xl));
   }
 
   .page-safe-top {
-    padding-top: calc(env(safe-area-inset-top, 0px) + 1rem);
+    padding-top: calc(env(safe-area-inset-top, 0px) + var(--space-2xl));
   }
 
   .page-safe-bottom {
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem);
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--space-2xl));
   }
 
   .page-safe-left {
-    padding-left: calc(env(safe-area-inset-left, 0px) + 1rem);
+    padding-left: calc(env(safe-area-inset-left, 0px) + var(--space-2xl));
   }
 
   .page-safe-right {
-    padding-right: calc(env(safe-area-inset-right, 0px) + 1rem);
+    padding-right: calc(env(safe-area-inset-right, 0px) + var(--space-2xl));
   }
 
   .gacha-aurora {
@@ -148,7 +128,7 @@
   .gacha-shell::after {
     content: '';
     position: absolute;
-    inset: 1rem;
+    inset: var(--space-2xl);
     border-radius: 1.75rem;
     border: 1px solid rgba(255, 255, 255, 0.08);
     pointer-events: none;
@@ -184,21 +164,21 @@
 @media (min-width: 640px) {
   @layer utilities {
     .page-safe-x {
-      padding-left: calc(env(safe-area-inset-left, 0px) + 1.5rem);
-      padding-right: calc(env(safe-area-inset-right, 0px) + 1.5rem);
+      padding-left: calc(env(safe-area-inset-left, 0px) + var(--space-5xl));
+      padding-right: calc(env(safe-area-inset-right, 0px) + var(--space-5xl));
     }
 
     .page-safe-y {
-      padding-top: calc(env(safe-area-inset-top, 0px) + 1.5rem);
-      padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 1.5rem);
+      padding-top: calc(env(safe-area-inset-top, 0px) + var(--space-5xl));
+      padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--space-5xl));
     }
 
     .page-safe-top {
-      padding-top: calc(env(safe-area-inset-top, 0px) + 1.5rem);
+      padding-top: calc(env(safe-area-inset-top, 0px) + var(--space-5xl));
     }
 
     .page-safe-bottom {
-      padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 1.5rem);
+      padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--space-5xl));
     }
   }
 }

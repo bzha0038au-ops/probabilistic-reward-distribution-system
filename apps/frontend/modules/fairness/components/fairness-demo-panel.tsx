@@ -10,13 +10,19 @@ import { getFairnessRevealDate, verifyFairnessReveal } from "@reward/user-core";
 import { useLocale } from "@/components/i18n-provider";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  GameMetricTile,
+  GamePill,
+  GameSectionBlock,
+  GameStatusNotice,
+  GameSurfaceCard,
+} from "@/modules/game/components/game-domain-ui";
 import { browserUserApiClient } from "@/lib/api/user-client";
 
 const copy = {
@@ -221,7 +227,7 @@ export function FairnessDemoPanel() {
 
   return (
     <div className="grid gap-6 xl:grid-cols-[0.95fr,1.05fr]">
-      <Card className="border-slate-800 bg-slate-950/90 text-slate-100 shadow-[0_24px_80px_rgba(15,23,42,0.45)]">
+      <GameSurfaceCard>
         <CardHeader className="space-y-3">
           <CardTitle className="text-xl">{c.title}</CardTitle>
           <CardDescription className="text-slate-400">
@@ -229,7 +235,7 @@ export function FairnessDemoPanel() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+          <GameSectionBlock>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="space-y-1">
                 <p className="text-sm font-medium text-slate-100">
@@ -248,52 +254,32 @@ export function FairnessDemoPanel() {
             </div>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-              <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                  {c.currentEpoch}
-                </p>
-                <p className="mt-2 text-lg font-semibold text-slate-100">
-                  {commit?.epoch ?? "--"}
-                </p>
-              </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                  {c.revealAfter}
-                </p>
-                <p className="mt-2 text-sm font-medium text-slate-100">
-                  {revealAt}
-                </p>
-              </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                  Commit
-                </p>
-                <p className="mt-2 font-mono text-sm text-cyan-200">
-                  {commit ? shortenHash(commit.commitHash) : "--"}
-                </p>
-              </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                  {c.verifiedDays}
-                </p>
-                <p className="mt-2 text-lg font-semibold text-slate-100">
-                  {audit?.consecutiveVerifiedDays ?? 0}
-                </p>
-              </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                  {c.lastAutoAudit}
-                </p>
-                <p className="mt-2 text-sm font-medium text-slate-100">
-                  {auditStatus}
-                </p>
-              </div>
+              <GameMetricTile label={c.currentEpoch} value={commit?.epoch ?? "--"} />
+              <GameMetricTile
+                label={c.revealAfter}
+                value={revealAt}
+                valueClassName="mt-2 text-sm font-medium text-slate-100"
+              />
+              <GameMetricTile
+                label="Commit"
+                value={commit ? shortenHash(commit.commitHash) : "--"}
+                valueClassName="mt-2 font-mono text-sm text-cyan-200"
+              />
+              <GameMetricTile
+                label={c.verifiedDays}
+                value={audit?.consecutiveVerifiedDays ?? 0}
+              />
+              <GameMetricTile
+                label={c.lastAutoAudit}
+                value={auditStatus}
+                valueClassName="mt-2 text-sm font-medium text-slate-100"
+              />
             </div>
 
             <p className="mt-4 text-xs text-slate-400">{auditDetail}</p>
-          </div>
+          </GameSectionBlock>
 
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+          <GameSectionBlock>
             <p className="text-sm font-medium text-slate-100">
               {c.explainTitle}
             </p>
@@ -302,18 +288,18 @@ export function FairnessDemoPanel() {
                 <p key={step}>{step}</p>
               ))}
             </div>
-          </div>
+          </GameSectionBlock>
 
           {error ? (
-            <div className="rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">
+            <GameStatusNotice tone="danger">
               {error}
-            </div>
+            </GameStatusNotice>
           ) : null}
         </CardContent>
-      </Card>
+      </GameSurfaceCard>
 
       <div className="space-y-6">
-        <Card className="border-slate-800 bg-slate-950/90 text-slate-100 shadow-[0_24px_80px_rgba(15,23,42,0.45)]">
+        <GameSurfaceCard>
           <CardHeader className="space-y-2">
             <CardTitle className="text-xl">{c.revealCard}</CardTitle>
             <CardDescription className="text-slate-400">
@@ -338,9 +324,9 @@ export function FairnessDemoPanel() {
             </div>
 
             {commit?.epoch === 0 ? (
-              <p className="rounded-xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+              <GameStatusNotice tone="warning">
                 {c.noPreviousEpoch}
-              </p>
+              </GameStatusNotice>
             ) : null}
 
             <Button
@@ -352,10 +338,10 @@ export function FairnessDemoPanel() {
               {revealing ? c.revealing : c.revealButton}
             </Button>
           </CardContent>
-        </Card>
+        </GameSurfaceCard>
 
         {reveal ? (
-          <Card className="border-slate-800 bg-slate-950/90 text-slate-100 shadow-[0_24px_80px_rgba(15,23,42,0.45)]">
+          <GameSurfaceCard>
             <CardHeader className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -365,56 +351,37 @@ export function FairnessDemoPanel() {
                     {formatTimestamp(reveal.revealedAt)}
                   </CardDescription>
                 </div>
-                <div
-                  className={`rounded-full border px-3 py-1 text-sm font-medium ${
-                    verification?.matches
-                      ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-100"
-                      : "border-rose-400/30 bg-rose-400/10 text-rose-100"
-                  }`}
-                >
+                <GamePill tone={verification?.matches ? "success" : "danger"}>
                   {verification?.matches ? c.verified : c.mismatch}
-                </div>
+                </GamePill>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-3">
-                <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                    {c.seed}
-                  </p>
-                  <p className="mt-2 break-all font-mono text-sm text-slate-100">
-                    {reveal.seed}
-                  </p>
-                </div>
-                <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                    {c.publishedCommit}
-                  </p>
-                  <p className="mt-2 break-all font-mono text-sm text-cyan-200">
-                    {reveal.commitHash}
-                  </p>
-                </div>
-                <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                    {c.computedCommit}
-                  </p>
-                  <p className="mt-2 break-all font-mono text-sm text-amber-200">
-                    {verification?.computedHash ?? "--"}
-                  </p>
-                </div>
+                <GameMetricTile
+                  label={c.seed}
+                  value={reveal.seed}
+                  valueClassName="mt-2 break-all font-mono text-sm text-slate-100"
+                />
+                <GameMetricTile
+                  label={c.publishedCommit}
+                  value={reveal.commitHash}
+                  valueClassName="mt-2 break-all font-mono text-sm text-cyan-200"
+                />
+                <GameMetricTile
+                  label={c.computedCommit}
+                  value={verification?.computedHash ?? "--"}
+                  valueClassName="mt-2 break-all font-mono text-sm text-amber-200"
+                />
               </div>
 
-              <div
-                className={`rounded-xl border px-4 py-3 text-sm ${
-                  verification?.matches
-                    ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-100"
-                    : "border-rose-400/30 bg-rose-400/10 text-rose-100"
-                }`}
+              <GameStatusNotice
+                tone={verification?.matches ? "success" : "danger"}
               >
                 {verification?.matches ? c.verifiedBody : c.mismatchBody}
-              </div>
+              </GameStatusNotice>
             </CardContent>
-          </Card>
+          </GameSurfaceCard>
         ) : null}
       </div>
     </div>

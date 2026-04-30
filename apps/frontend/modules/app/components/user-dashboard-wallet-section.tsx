@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { UserDashboardCopy } from './user-dashboard-copy';
+import { WalletActivityCard, WalletSummaryCard } from './user-dashboard-domain-ui';
 import type { UserDashboardController } from './use-user-dashboard';
 import { UserDashboardEconomySection } from './user-dashboard-economy-section';
 import {
@@ -56,15 +57,11 @@ export function UserDashboardWalletSection({
             }}
           />
 
-          <div className="rounded-xl border border-slate-200 bg-slate-50 px-5 py-4">
-            <p className="text-sm text-slate-500">{c.currentBalance}</p>
-            <p
-              className="mt-2 text-3xl font-semibold text-slate-950"
-              data-testid="wallet-current-balance"
-            >
-              {formatAmount(controller.walletBalance)}
-            </p>
-          </div>
+          <WalletSummaryCard
+            label={c.currentBalance}
+            value={formatAmount(controller.walletBalance)}
+            valueTestId="wallet-current-balance"
+          />
         </CardContent>
       </Card>
 
@@ -92,54 +89,27 @@ export function UserDashboardWalletSection({
             <p className="text-sm text-slate-500">{c.noTransactions}</p>
           ) : (
             controller.activityEntries.map((entry) => (
-              <div
+              <WalletActivityCard
                 key={entry.id}
-                className="rounded-xl border border-slate-200 px-4 py-3"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="font-medium text-slate-950">
-                      {formatUserDashboardActivityType(
-                        locale,
-                        entry.entryType,
-                      )}
-                    </p>
-                    <p className="mt-1 text-sm text-slate-500">
-                      {formatDateTime(entry.createdAt)}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p
-                      className={
-                        entry.amount.startsWith('-')
-                          ? 'font-semibold text-rose-600'
-                          : 'font-semibold text-emerald-600'
-                      }
-                    >
-                      {formatAmount(entry.amount)}
-                    </p>
-                    <div className="mt-2 flex flex-wrap justify-end gap-2">
-                      <Badge variant="outline">
-                        {formatUserDashboardActivitySource(
-                          locale,
-                          entry.source,
-                        )}
-                      </Badge>
-                      {entry.assetCode ? (
-                        <Badge variant="secondary">{entry.assetCode}</Badge>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-3 grid gap-1 text-sm text-slate-500 sm:grid-cols-2">
-                  <p>
-                    {c.before}: {formatAmount(entry.balanceBefore)}
-                  </p>
-                  <p>
-                    {c.after}: {formatAmount(entry.balanceAfter)}
-                  </p>
-                </div>
-              </div>
+                title={formatUserDashboardActivityType(locale, entry.entryType)}
+                timestamp={formatDateTime(entry.createdAt)}
+                amount={formatAmount(entry.amount)}
+                amountTone={entry.amount.startsWith('-') ? 'negative' : 'positive'}
+                beforeLabel={c.before}
+                beforeValue={formatAmount(entry.balanceBefore)}
+                afterLabel={c.after}
+                afterValue={formatAmount(entry.balanceAfter)}
+                badges={
+                  <>
+                    <Badge variant="outline">
+                      {formatUserDashboardActivitySource(locale, entry.source)}
+                    </Badge>
+                    {entry.assetCode ? (
+                      <Badge variant="secondary">{entry.assetCode}</Badge>
+                    ) : null}
+                  </>
+                }
+              />
             ))
           )}
         </CardContent>

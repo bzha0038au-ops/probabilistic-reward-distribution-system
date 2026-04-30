@@ -4,6 +4,7 @@ import type { AuthSessionSummary } from "@reward/shared-types/auth";
 import type { MobileSessionSecurityCopy } from "../mobile-copy";
 import type { MobileStyles } from "../screens/types";
 import { mobilePalette } from "../theme";
+import { SecuritySessionCard } from "./domain-ui";
 import { ActionButton, SectionCard } from "../ui";
 
 type SessionSecuritySectionProps = {
@@ -75,13 +76,12 @@ export function SessionSecuritySection(props: SessionSecuritySectionProps) {
       ) : null}
 
       {props.visibleSessions.map((entry) => (
-        <View key={entry.sessionId} style={styles.sessionCard}>
-          <View style={styles.sessionHeader}>
-            <Text style={styles.sessionTitle}>
-              {entry.current
-                ? props.copy.currentDevice
-                : props.copy.activeSession}
-            </Text>
+        <SecuritySessionCard
+          key={entry.sessionId}
+          title={
+            entry.current ? props.copy.currentDevice : props.copy.activeSession
+          }
+          badge={
             <View
               style={[
                 props.styles.badge,
@@ -94,26 +94,16 @@ export function SessionSecuritySection(props: SessionSecuritySectionProps) {
                 {entry.current ? props.copy.currentBadge : entry.kind}
               </Text>
             </View>
-          </View>
-          <Text style={styles.sessionBody}>
-            {props.copy.id(entry.sessionId)}
-          </Text>
-          <Text style={styles.sessionBody}>
-            {props.copy.ip(entry.ip ?? props.copy.unavailable)}
-          </Text>
-          <Text style={styles.sessionBody}>
-            {props.copy.userAgent(props.summarizeUserAgent(entry.userAgent))}
-          </Text>
-          <Text style={styles.sessionBody}>
-            {props.copy.createdAt(props.formatTimestamp(entry.createdAt))}
-          </Text>
-          <Text style={styles.sessionBody}>
-            {props.copy.lastSeenAt(props.formatTimestamp(entry.lastSeenAt))}
-          </Text>
-          <Text style={styles.sessionBody}>
-            {props.copy.expiresAt(props.formatTimestamp(entry.expiresAt))}
-          </Text>
-          <View style={styles.sessionActionRow}>
+          }
+          detailLines={[
+            props.copy.id(entry.sessionId),
+            props.copy.ip(entry.ip ?? props.copy.unavailable),
+            props.copy.userAgent(props.summarizeUserAgent(entry.userAgent)),
+            props.copy.createdAt(props.formatTimestamp(entry.createdAt)),
+            props.copy.lastSeenAt(props.formatTimestamp(entry.lastSeenAt)),
+            props.copy.expiresAt(props.formatTimestamp(entry.expiresAt)),
+          ]}
+          action={
             <ActionButton
               label={
                 entry.current
@@ -125,8 +115,8 @@ export function SessionSecuritySection(props: SessionSecuritySectionProps) {
               variant={entry.current ? "danger" : "secondary"}
               compact
             />
-          </View>
-        </View>
+          }
+        />
       ))}
     </SectionCard>
   );
@@ -139,32 +129,5 @@ const styles = StyleSheet.create({
   sessionMetaLine: {
     color: mobilePalette.textMuted,
     fontSize: 13,
-  },
-  sessionCard: {
-    gap: 8,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: mobilePalette.border,
-    backgroundColor: mobilePalette.panelMuted,
-    padding: 14,
-  },
-  sessionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  sessionTitle: {
-    color: mobilePalette.text,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  sessionBody: {
-    color: mobilePalette.textMuted,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  sessionActionRow: {
-    paddingTop: 4,
   },
 });

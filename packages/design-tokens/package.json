@@ -1,0 +1,25 @@
+{
+  "name": "@reward/design-tokens",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "files": [
+    "dist",
+    "src",
+    "package.json",
+    "tsconfig.json"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./tokens.json": "./src/tokens.json"
+  },
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json --outDir dist && node -e \"require('node:fs').copyFileSync('src/tokens.json', 'dist/tokens.json')\"",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "lint": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}

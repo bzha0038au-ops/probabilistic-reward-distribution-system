@@ -7,6 +7,7 @@ import type {
 import type { MobileRewardCenterCopy } from "../mobile-copy";
 import type { MobileStyles } from "../screens/types";
 import { mobileGameTheme, mobilePalette } from "../theme";
+import { RewardMissionCard, RewardSummaryCard } from "./domain-ui";
 import { ActionButton, SectionCard } from "../ui";
 
 type RewardCenterSectionProps = {
@@ -46,32 +47,20 @@ export function RewardCenterSection(props: RewardCenterSectionProps) {
   return (
     <SectionCard title={props.copy.title} subtitle={props.copy.subtitle}>
       <View style={styles.rewardSummaryGrid}>
-        <View style={styles.rewardSummaryCard}>
-          <Text style={styles.rewardSummaryLabel}>
-            {props.copy.summary.bonusBalance}
-          </Text>
-          <Text style={styles.rewardSummaryValue}>
-            {props.formatAmount(
-              props.rewardCenter?.summary.bonusBalance ?? "0",
-            )}
-          </Text>
-        </View>
-        <View style={styles.rewardSummaryCard}>
-          <Text style={styles.rewardSummaryLabel}>
-            {props.copy.summary.checkInStreak}
-          </Text>
-          <Text style={styles.rewardSummaryValue}>
-            {props.rewardCenter?.summary.streakDays ?? 0}
-          </Text>
-        </View>
-        <View style={styles.rewardSummaryCard}>
-          <Text style={styles.rewardSummaryLabel}>
-            {props.copy.summary.readyToClaim}
-          </Text>
-          <Text style={styles.rewardSummaryValue}>
-            {props.rewardCenter?.summary.availableMissionCount ?? 0}
-          </Text>
-        </View>
+        <RewardSummaryCard
+          label={props.copy.summary.bonusBalance}
+          value={props.formatAmount(
+            props.rewardCenter?.summary.bonusBalance ?? "0",
+          )}
+        />
+        <RewardSummaryCard
+          label={props.copy.summary.checkInStreak}
+          value={props.rewardCenter?.summary.streakDays ?? 0}
+        />
+        <RewardSummaryCard
+          label={props.copy.summary.readyToClaim}
+          value={props.rewardCenter?.summary.availableMissionCount ?? 0}
+        />
       </View>
 
       <View style={props.styles.inlineActions}>
@@ -130,92 +119,51 @@ export function RewardCenterSection(props: RewardCenterSectionProps) {
           const resetsAt = props.formatOptionalTimestamp(mission.resetsAt);
 
           return (
-            <View key={mission.id} style={styles.rewardMissionCard}>
-              <View style={styles.rewardMissionHeader}>
-                <View style={styles.rewardMissionHeading}>
-                  <View style={props.styles.badgeRow}>
-                    <Text style={styles.rewardMissionTitle}>
-                      {missionCopy.title}
+            <RewardMissionCard
+              key={mission.id}
+              title={missionCopy.title}
+              description={missionCopy.description}
+              rewardLabel={props.copy.rewardAmount}
+              rewardValue={props.formatAmount(mission.rewardAmount)}
+              progressLabel={props.copy.progress(
+                mission.progressCurrent,
+                mission.progressTarget,
+              )}
+              progressPercent={progressRatio}
+              badges={
+                <>
+                  <View
+                    style={[
+                      props.styles.badge,
+                      mission.status === "claimed"
+                        ? props.styles.badgeSuccess
+                        : mission.status === "ready"
+                          ? styles.rewardReadyBadge
+                          : mission.status === "disabled"
+                            ? props.styles.badgeMuted
+                            : null,
+                    ]}
+                  >
+                    <Text style={props.styles.badgeText}>
+                      {props.copy.statusLabels[mission.status]}
                     </Text>
-                    <View
-                      style={[
-                        props.styles.badge,
-                        mission.status === "claimed"
-                          ? props.styles.badgeSuccess
-                          : mission.status === "ready"
-                            ? styles.rewardReadyBadge
-                            : mission.status === "disabled"
-                              ? props.styles.badgeMuted
-                              : null,
-                      ]}
-                    >
+                  </View>
+                  {mission.autoAwarded ? (
+                    <View style={[props.styles.badge, props.styles.badgeMuted]}>
                       <Text style={props.styles.badgeText}>
-                        {props.copy.statusLabels[mission.status]}
+                        {props.copy.autoAwardedBadge}
                       </Text>
                     </View>
-                    {mission.autoAwarded ? (
-                      <View
-                        style={[props.styles.badge, props.styles.badgeMuted]}
-                      >
-                        <Text style={props.styles.badgeText}>
-                          {props.copy.autoAwardedBadge}
-                        </Text>
-                      </View>
-                    ) : null}
-                  </View>
-                  <Text style={styles.rewardMissionDescription}>
-                    {missionCopy.description}
-                  </Text>
-                </View>
-
-                <View style={styles.rewardAmountBlock}>
-                  <Text style={styles.rewardAmountLabel}>
-                    {props.copy.rewardAmount}
-                  </Text>
-                  <Text style={styles.rewardAmountValue}>
-                    {props.formatAmount(mission.rewardAmount)}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.rewardProgressHeader}>
-                <Text style={styles.rewardProgressText}>
-                  {props.copy.progress(
-                    mission.progressCurrent,
-                    mission.progressTarget,
-                  )}
-                </Text>
-                <Text style={styles.rewardProgressText}>{progressRatio}%</Text>
-              </View>
-              <View style={styles.rewardProgressTrack}>
-                <View
-                  style={[
-                    styles.rewardProgressFill,
-                    { width: `${progressRatio}%` },
-                  ]}
-                />
-              </View>
-
-              <View style={styles.rewardMissionFooter}>
-                <View style={styles.rewardMissionMeta}>
-                  {claimedAt ? (
-                    <Text style={styles.rewardMissionMetaText}>
-                      {props.copy.claimedAt(claimedAt)}
-                    </Text>
                   ) : null}
-                  {resetsAt ? (
-                    <Text style={styles.rewardMissionMetaText}>
-                      {props.copy.resetsAt(resetsAt)}
-                    </Text>
-                  ) : null}
-                  {!claimedAt && !resetsAt ? (
-                    <Text style={styles.rewardMissionMetaText}>
-                      {props.copy.claimWhenReady}
-                    </Text>
-                  ) : null}
-                </View>
-
-                {mission.autoAwarded ? (
+                </>
+              }
+              metaLines={[
+                ...(claimedAt ? [props.copy.claimedAt(claimedAt)] : []),
+                ...(resetsAt ? [props.copy.resetsAt(resetsAt)] : []),
+                ...(!claimedAt && !resetsAt ? [props.copy.claimWhenReady] : []),
+              ]}
+              action={
+                mission.autoAwarded ? (
                   <Text style={styles.rewardAutoNote}>
                     {props.copy.autoAwardedNote}
                   </Text>
@@ -234,9 +182,9 @@ export function RewardCenterSection(props: RewardCenterSectionProps) {
                     }
                     compact
                   />
-                )}
-              </View>
-            </View>
+                )
+              }
+            />
           );
         })}
       </View>
@@ -250,114 +198,12 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 12,
   },
-  rewardSummaryCard: {
-    flexGrow: 1,
-    minWidth: "30%",
-    gap: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: mobilePalette.border,
-    backgroundColor: mobilePalette.panelMuted,
-    padding: 14,
-  },
-  rewardSummaryLabel: {
-    color: mobilePalette.textMuted,
-    fontSize: 12,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-  },
-  rewardSummaryValue: {
-    color: mobilePalette.text,
-    fontSize: 24,
-    fontWeight: "800",
-  },
   rewardMissionList: {
     gap: 12,
-  },
-  rewardMissionCard: {
-    gap: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: mobilePalette.border,
-    backgroundColor: mobilePalette.panelMuted,
-    padding: 14,
-  },
-  rewardMissionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  rewardMissionHeading: {
-    flex: 1,
-    gap: 8,
-  },
-  rewardMissionTitle: {
-    color: mobilePalette.text,
-    fontSize: 16,
-    fontWeight: "700",
   },
   rewardReadyBadge: {
     borderColor: mobileGameTheme.rewards.ready.borderColor,
     backgroundColor: mobileGameTheme.rewards.ready.backgroundColor,
-  },
-  rewardMissionDescription: {
-    color: mobilePalette.textMuted,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  rewardAmountBlock: {
-    minWidth: 72,
-    alignItems: "flex-end",
-    gap: 4,
-  },
-  rewardAmountLabel: {
-    color: mobilePalette.textMuted,
-    fontSize: 11,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-  },
-  rewardAmountValue: {
-    color: mobilePalette.text,
-    fontSize: 18,
-    fontWeight: "800",
-  },
-  rewardProgressHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  rewardProgressText: {
-    color: mobilePalette.textMuted,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  rewardProgressTrack: {
-    height: 8,
-    overflow: "hidden",
-    borderRadius: 999,
-    backgroundColor: mobileGameTheme.rewards.progressTrack,
-  },
-  rewardProgressFill: {
-    height: "100%",
-    borderRadius: 999,
-    backgroundColor: mobilePalette.accent,
-  },
-  rewardMissionFooter: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  rewardMissionMeta: {
-    flex: 1,
-    gap: 4,
-  },
-  rewardMissionMetaText: {
-    color: mobilePalette.textMuted,
-    fontSize: 12,
-    lineHeight: 18,
   },
   rewardAutoNote: {
     color: mobilePalette.textMuted,

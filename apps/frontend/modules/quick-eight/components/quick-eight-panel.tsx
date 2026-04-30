@@ -7,7 +7,6 @@ import type { WalletBalanceResponse } from "@reward/shared-types/user";
 
 import { Button } from "@/components/ui/button";
 import {
-  Card,
   CardContent,
   CardDescription,
   CardHeader,
@@ -15,6 +14,14 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useLocale, useTranslations } from "@/components/i18n-provider";
+import {
+  GameMetricTile,
+  GameNumberChip,
+  GamePill,
+  GameSectionBlock,
+  GameStatusNotice,
+  GameSurfaceCard,
+} from "@/modules/game/components/game-domain-ui";
 import { readBluckAvailableBalance } from "@/lib/economy-wallet";
 import { browserUserApiClient } from "@/lib/api/user-client";
 import { cn } from "@/lib/utils";
@@ -164,7 +171,7 @@ export function QuickEightPanel({
   }
 
   return (
-    <Card className="border-slate-800 bg-slate-950/90 text-slate-100 shadow-[0_24px_80px_rgba(15,23,42,0.45)]">
+    <GameSurfaceCard>
       <CardHeader className="space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -173,11 +180,11 @@ export function QuickEightPanel({
               {c.description}
             </CardDescription>
           </div>
-          <div className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-sm font-medium text-emerald-200">
+          <GamePill tone="success">
             {c.currentBalance}: {balance}
-          </div>
+          </GamePill>
         </div>
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+        <GameSectionBlock>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-sm font-medium text-slate-100">
@@ -186,13 +193,13 @@ export function QuickEightPanel({
               <p className="mt-1 text-sm text-slate-400">{c.selectionHint}</p>
             </div>
             <div className="flex items-center gap-3 text-sm">
-              <span className="rounded-full border border-slate-700 px-3 py-1 text-slate-200">
+              <GamePill tone="accent">
                 {selectedCount === QUICK_EIGHT_CONFIG.pickCount
                   ? c.selectionReady
                   : `${c.selectionRemaining}: ${
                       QUICK_EIGHT_CONFIG.pickCount - selectedCount
                     }`}
-              </span>
+              </GamePill>
               <Button
                 type="button"
                 variant="outline"
@@ -227,33 +234,29 @@ export function QuickEightPanel({
               );
             })}
           </div>
-        </div>
+        </GameSectionBlock>
       </CardHeader>
 
       <CardContent className="space-y-5">
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr),220px]">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+          <GameSectionBlock>
             <p className="text-sm font-medium text-slate-100">
               {c.paytableTitle}
             </p>
             <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
               {QUICK_EIGHT_CONFIG.payoutTable.map((rule) => (
-                <div
+                <GameMetricTile
                   key={rule.hits}
-                  className="rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2"
-                >
-                  <div className="text-slate-400">
-                    {c.hitsLabel} {rule.hits}
-                  </div>
-                  <div className="mt-1 font-semibold text-slate-100">
-                    {rule.multiplier}x
-                  </div>
-                </div>
+                  className="px-3 py-2"
+                  label={`${c.hitsLabel} ${rule.hits}`}
+                  value={`${rule.multiplier}x`}
+                  valueClassName="mt-1 text-base font-semibold text-slate-100"
+                />
               ))}
             </div>
-          </div>
+          </GameSectionBlock>
 
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+          <GameSectionBlock>
             <label
               className="text-sm font-medium text-slate-100"
               htmlFor="quick-eight-stake"
@@ -276,18 +279,18 @@ export function QuickEightPanel({
             >
               {loading ? c.playing : c.play}
             </Button>
-          </div>
+          </GameSectionBlock>
         </div>
 
         {disabledReason ? (
-          <p className="rounded-md border border-amber-300/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">
+          <GameStatusNotice tone="warning">
             {disabledReason}
-          </p>
+          </GameStatusNotice>
         ) : null}
-        {error ? <p className="text-sm text-rose-300">{error}</p> : null}
+        {error ? <GameStatusNotice tone="danger">{error}</GameStatusNotice> : null}
 
         {result ? (
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+          <GameSectionBlock>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-medium text-slate-100">
@@ -312,17 +315,12 @@ export function QuickEightPanel({
                 <p className="mb-2 text-sm text-slate-400">{c.drawnNumbers}</p>
                 <div className="flex flex-wrap gap-2">
                   {result.drawnNumbers.map((number) => (
-                    <span
+                    <GameNumberChip
                       key={number}
-                      className={cn(
-                        "inline-flex min-w-10 items-center justify-center rounded-full border px-3 py-1 text-sm font-medium",
-                        matchedSet.has(number)
-                          ? "border-emerald-300/40 bg-emerald-300/15 text-emerald-100"
-                          : "border-slate-700 bg-slate-950 text-slate-200",
-                      )}
+                      tone={matchedSet.has(number) ? "success" : "neutral"}
                     >
                       {number}
-                    </span>
+                    </GameNumberChip>
                   ))}
                 </div>
               </div>
@@ -334,12 +332,9 @@ export function QuickEightPanel({
                 {result.matchedNumbers.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {result.matchedNumbers.map((number) => (
-                      <span
-                        key={number}
-                        className="inline-flex min-w-10 items-center justify-center rounded-full border border-amber-300/40 bg-amber-300/15 px-3 py-1 text-sm font-medium text-amber-100"
-                      >
+                      <GameNumberChip key={number} tone="selected">
                         {number}
-                      </span>
+                      </GameNumberChip>
                     ))}
                   </div>
                 ) : (
@@ -347,9 +342,9 @@ export function QuickEightPanel({
                 )}
               </div>
             </div>
-          </div>
+          </GameSectionBlock>
         ) : null}
       </CardContent>
-    </Card>
+    </GameSurfaceCard>
   );
 }

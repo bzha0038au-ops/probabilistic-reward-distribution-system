@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { UserDashboardCopy } from './user-dashboard-copy';
+import { SecuritySessionCard } from './user-dashboard-domain-ui';
 import type { UserDashboardController } from './use-user-dashboard';
 import { resolveUserDashboardBadgeVariant as badgeVariant } from './user-dashboard-utils';
 
@@ -72,46 +73,54 @@ export function UserDashboardActivitySection({
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-              <p className="font-medium text-slate-950">{c.currentDevice}</p>
-              <p className="mt-1 break-all text-slate-500">
-                {c.expires}: {formatDateTime(controller.currentSession.expiresAt)}
-              </p>
-            </div>
+            <SecuritySessionCard
+              title={c.currentDevice}
+              badge={
+                <Badge variant={badgeVariant(true)}>{c.currentDevice}</Badge>
+              }
+              userAgent={controller.currentSession.userAgent ?? c.unknown}
+              details={
+                <>
+                  <p>
+                    {c.device}: {controller.currentSession.ip ?? c.unknown}
+                  </p>
+                  <p>
+                    {c.createdAt}: {formatDateTime(controller.currentSession.createdAt)}
+                  </p>
+                  <p>
+                    {c.expires}: {formatDateTime(controller.currentSession.expiresAt)}
+                  </p>
+                </>
+              }
+            />
 
             {controller.sessions.length === 0 ? (
               <p className="text-sm text-slate-500">{c.noSessions}</p>
             ) : (
               controller.sessions.map((entry) => (
-                <div
+                <SecuritySessionCard
                   key={entry.sessionId}
-                  className="rounded-lg border border-slate-200 px-4 py-3 text-sm text-slate-700"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="font-medium text-slate-950">
-                        {entry.current ? c.currentDevice : c.activeSession}
-                      </p>
-                      <p className="mt-1 break-all text-slate-500">
-                        {entry.userAgent ?? c.unknown}
-                      </p>
-                    </div>
+                  title={entry.current ? c.currentDevice : c.activeSession}
+                  badge={
                     <Badge variant={badgeVariant(entry.current)}>
                       {entry.current ? c.currentDevice : formatStatus(entry.kind)}
                     </Badge>
-                  </div>
-                  <div className="mt-3 grid gap-1 text-slate-500">
-                    <p>
-                      {c.device}: {entry.ip ?? c.unknown}
-                    </p>
-                    <p>
-                      {c.createdAt}: {formatDateTime(entry.createdAt)}
-                    </p>
-                    <p>
-                      {c.expires}: {formatDateTime(entry.expiresAt)}
-                    </p>
-                  </div>
-                  <div className="mt-4">
+                  }
+                  userAgent={entry.userAgent ?? c.unknown}
+                  details={
+                    <>
+                      <p>
+                        {c.device}: {entry.ip ?? c.unknown}
+                      </p>
+                      <p>
+                        {c.createdAt}: {formatDateTime(entry.createdAt)}
+                      </p>
+                      <p>
+                        {c.expires}: {formatDateTime(entry.expiresAt)}
+                      </p>
+                    </>
+                  }
+                  action={
                     <Button
                       type="button"
                       variant={entry.current ? 'destructive' : 'outline'}
@@ -127,8 +136,8 @@ export function UserDashboardActivitySection({
                           ? c.signOutThisDevice
                           : c.revoke}
                     </Button>
-                  </div>
-                </div>
+                  }
+                />
               ))
             )}
           </CardContent>

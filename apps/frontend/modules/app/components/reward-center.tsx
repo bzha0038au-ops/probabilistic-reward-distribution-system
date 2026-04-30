@@ -15,6 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useLocale } from "@/components/i18n-provider";
+import { RewardMissionCard, RewardSummaryCard } from "./user-dashboard-domain-ui";
 
 const copy = {
   en: {
@@ -191,24 +192,18 @@ export function RewardCenter({
       </CardHeader>
       <CardContent className="space-y-6 pt-6">
         <div className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-xl border border-white/80 bg-white/80 px-4 py-4 shadow-sm">
-            <p className="text-sm text-slate-500">{c.bonusBalance}</p>
-            <p className="mt-2 text-2xl font-semibold text-slate-950">
-              {center ? formatAmount(center.summary.bonusBalance) : "0.00"}
-            </p>
-          </div>
-          <div className="rounded-xl border border-white/80 bg-white/80 px-4 py-4 shadow-sm">
-            <p className="text-sm text-slate-500">{c.streakDays}</p>
-            <p className="mt-2 text-2xl font-semibold text-slate-950">
-              {center?.summary.streakDays ?? 0}
-            </p>
-          </div>
-          <div className="rounded-xl border border-white/80 bg-white/80 px-4 py-4 shadow-sm">
-            <p className="text-sm text-slate-500">{c.available}</p>
-            <p className="mt-2 text-2xl font-semibold text-slate-950">
-              {center?.summary.availableMissionCount ?? 0}
-            </p>
-          </div>
+          <RewardSummaryCard
+            label={c.bonusBalance}
+            value={center ? formatAmount(center.summary.bonusBalance) : "0.00"}
+          />
+          <RewardSummaryCard
+            label={c.streakDays}
+            value={center?.summary.streakDays ?? 0}
+          />
+          <RewardSummaryCard
+            label={c.available}
+            value={center?.summary.availableMissionCount ?? 0}
+          />
         </div>
 
         <div className="space-y-3">
@@ -248,52 +243,26 @@ export function RewardCenter({
                 .replace("{target}", String(mission.progressTarget));
 
               return (
-                <div
+                <RewardMissionCard
                   key={mission.id}
-                  className="rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h4 className="text-base font-semibold text-slate-950">
-                          {missionCopy.title}
-                        </h4>
-                        <Badge variant={badgeVariant(mission)}>
-                          {formatStatus(mission)}
-                        </Badge>
-                        {mission.autoAwarded ? (
-                          <Badge variant="outline">{c.auto}</Badge>
-                        ) : null}
-                      </div>
-                      <p className="text-sm text-slate-600">
-                        {missionCopy.description}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                        {c.rewardLabel}
-                      </p>
-                      <p className="text-lg font-semibold text-slate-950">
-                        {formatAmount(mission.rewardAmount)}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 space-y-2">
-                    <div className="flex items-center justify-between text-xs text-slate-500">
-                      <span>{progressLabel}</span>
-                      <span>{ratio}%</span>
-                    </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-amber-400 via-orange-400 to-cyan-500 transition-[width]"
-                        style={{ width: `${ratio}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
-                    <div className="space-y-1">
+                  title={missionCopy.title}
+                  description={missionCopy.description}
+                  rewardLabel={c.rewardLabel}
+                  rewardAmount={formatAmount(mission.rewardAmount)}
+                  progressLabel={progressLabel}
+                  progressPercent={ratio}
+                  statusBadges={
+                    <>
+                      <Badge variant={badgeVariant(mission)}>
+                        {formatStatus(mission)}
+                      </Badge>
+                      {mission.autoAwarded ? (
+                        <Badge variant="outline">{c.auto}</Badge>
+                      ) : null}
+                    </>
+                  }
+                  metaLines={
+                    <>
                       {claimedAt ? (
                         <p>
                           {c.completedAt}: {claimedAt}
@@ -304,8 +273,10 @@ export function RewardCenter({
                           {c.resetsAt}: {resetsAt}
                         </p>
                       ) : null}
-                    </div>
-                    {!mission.autoAwarded ? (
+                    </>
+                  }
+                  action={
+                    !mission.autoAwarded ? (
                       <Button
                         type="button"
                         size="sm"
@@ -318,9 +289,9 @@ export function RewardCenter({
                           ? c.claiming
                           : c.claim}
                       </Button>
-                    ) : null}
-                  </div>
-                </div>
+                    ) : null
+                  }
+                />
               );
             })}
           </div>

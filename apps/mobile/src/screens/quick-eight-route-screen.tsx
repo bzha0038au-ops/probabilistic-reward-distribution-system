@@ -14,6 +14,11 @@ import {
   MobileFairnessCompactSummary,
   type MobileFairnessLocale,
 } from "../fairness";
+import {
+  GameInfoPanel,
+  GameNumberChip,
+  GameStatCard,
+} from "../game-domain-ui";
 import type { MobileRouteLabels, MobileRouteScreens } from "../route-copy";
 import { mobileGameTheme, mobilePalette as palette } from "../theme";
 import { ActionButton, SectionCard } from "../ui";
@@ -98,7 +103,7 @@ export function QuickEightRouteScreen(props: QuickEightRouteScreenProps) {
         title={props.screenCopy.sectionTitle}
         subtitle={props.screenCopy.sectionSubtitle}
       >
-        <View style={styles.quickEightSelectionPanel}>
+        <GameInfoPanel>
           <View style={styles.quickEightSelectionHeader}>
             <Text style={styles.quickEightSelectionTitle}>
               {props.screenCopy.selectionTitle}
@@ -115,12 +120,11 @@ export function QuickEightRouteScreen(props: QuickEightRouteScreenProps) {
           <View style={styles.quickEightSelectedNumbers}>
             {props.quickEightSelection.length > 0 ? (
               props.quickEightSelection.map((value) => (
-                <View
+                <GameNumberChip
                   key={`selected-${value}`}
-                  style={styles.quickEightSelectedChip}
-                >
-                  <Text style={styles.quickEightSelectedChipText}>{value}</Text>
-                </View>
+                  value={value}
+                  tone="selected"
+                />
               ))
             ) : (
               <Text style={styles.quickEightHint}>
@@ -136,7 +140,7 @@ export function QuickEightRouteScreen(props: QuickEightRouteScreenProps) {
               compact
             />
           </View>
-        </View>
+        </GameInfoPanel>
 
         <View style={styles.quickEightBoard}>
           {quickEightBoardNumbers.map((value) => {
@@ -214,17 +218,11 @@ export function QuickEightRouteScreen(props: QuickEightRouteScreenProps) {
 
         <View style={styles.quickEightPaytable}>
           {QUICK_EIGHT_CONFIG.payoutTable.map((rule) => (
-            <View
+            <GameStatCard
               key={`rule-${rule.hits}`}
-              style={styles.quickEightPaytableCard}
-            >
-              <Text style={styles.quickEightPaytableLabel}>
-                {rule.hits} hits
-              </Text>
-              <Text style={styles.quickEightPaytableValue}>
-                {rule.multiplier}x
-              </Text>
-            </View>
+              label={`${rule.hits} hits`}
+              value={`${rule.multiplier}x`}
+            />
           ))}
         </View>
 
@@ -238,7 +236,7 @@ export function QuickEightRouteScreen(props: QuickEightRouteScreenProps) {
         ) : null}
 
         {props.quickEightResult ? (
-          <View style={styles.quickEightResultPanel}>
+          <GameInfoPanel>
             <View style={styles.quickEightResultHeader}>
               <View>
                 <Text style={styles.quickEightResultTitle}>
@@ -275,17 +273,11 @@ export function QuickEightRouteScreen(props: QuickEightRouteScreenProps) {
               </Text>
               <View style={styles.quickEightDrawnGrid}>
                 {props.visibleQuickEightDrawnNumbers.map((value) => (
-                  <View
+                  <GameNumberChip
                     key={`drawn-${value}`}
-                    style={[
-                      styles.quickEightDrawnChip,
-                      props.quickEightMatchedSet.has(value)
-                        ? styles.quickEightDrawnChipHit
-                        : null,
-                    ]}
-                  >
-                    <Text style={styles.quickEightDrawnChipText}>{value}</Text>
-                  </View>
+                    value={value}
+                    tone={props.quickEightMatchedSet.has(value) ? "hit" : "default"}
+                  />
                 ))}
               </View>
             </View>
@@ -297,14 +289,11 @@ export function QuickEightRouteScreen(props: QuickEightRouteScreenProps) {
               <View style={styles.quickEightDrawnGrid}>
                 {props.quickEightResult.matchedNumbers.length > 0 ? (
                   props.quickEightResult.matchedNumbers.map((value) => (
-                    <View
+                    <GameNumberChip
                       key={`match-${value}`}
-                      style={styles.quickEightMatchedChip}
-                    >
-                      <Text style={styles.quickEightMatchedChipText}>
-                        {value}
-                      </Text>
-                    </View>
+                      value={value}
+                      tone="selected"
+                    />
                   ))
                 ) : (
                   <Text style={styles.quickEightHint}>
@@ -313,7 +302,7 @@ export function QuickEightRouteScreen(props: QuickEightRouteScreenProps) {
                 )}
               </View>
             </View>
-          </View>
+          </GameInfoPanel>
         ) : (
           <Text style={props.styles.gachaHint}>
             {props.screenCopy.noRoundYet}

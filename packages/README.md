@@ -1,18 +1,37 @@
 # Package Boundaries
 
-This directory holds reusable clients that sit between app code and backend APIs.
-Packages exist to preserve stable boundaries, not to hide app-specific transport
-or authentication behavior.
+This directory holds reusable shared packages. Most are API-facing clients, and
+some own cross-surface primitives such as shared UI tokens. Packages exist to
+preserve stable boundaries, not to hide app-specific transport or
+authentication behavior.
 
 ## TL;DR
 
 | Surface | Primary audience | Owns | Must not own |
 | --- | --- | --- | --- |
+| `@reward/design-tokens` | First-party web and mobile surfaces | Shared color, spacing, radius, and typography tokens plus platform adapters for Tailwind/CSS variables/native themes | App-local layout decisions, component behavior, or runtime auth |
 | `@reward/user-core` | First-party user surfaces | Shared user API routes, typed request helpers, platform helpers, pure fairness utilities | Web BFF policy, cookie/session storage, retries, admin or SaaS APIs |
 | `@reward/prize-engine-sdk` | External B2B customers and trusted server-to-server callers | Typed `/v1/engine/*` access with project API key auth | End-user auth, locale, browser-secret delivery, tenant admin APIs |
 | App-local adapters / direct `fetch` | A single app or runtime | Environment-specific auth lookup, telemetry, proxying, cache policy, retries | Re-defining shared contracts that already belong in a package |
 
 ## Package Roles
+
+### `@reward/design-tokens`
+
+Use `@reward/design-tokens` for first-party shared visual tokens.
+
+It owns:
+
+- Canonical color tokens consumed by web and mobile shells.
+- Shared spacing, radius, and typography scales.
+- Thin platform adapters such as Tailwind theme extension objects and web CSS
+  variable maps.
+
+It does not own:
+
+- App-specific component composition or layout structure.
+- Conditional theme switching policy owned by a single surface.
+- Icon assets, motion choreography, or runtime feature flags.
 
 ### `@reward/user-core`
 

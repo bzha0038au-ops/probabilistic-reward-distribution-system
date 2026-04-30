@@ -13,7 +13,6 @@ import { PlayModeSwitcher } from "@/components/play-mode-switcher";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
   CardContent,
   CardDescription,
   CardHeader,
@@ -21,6 +20,11 @@ import {
 } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast-provider";
 import { useLocale, useTranslations } from "@/components/i18n-provider";
+import {
+  GameMetricTile,
+  GameStatusNotice,
+  GameSurfaceCard,
+} from "@/modules/game/components/game-domain-ui";
 import { browserUserApiClient } from "@/lib/api/user-client";
 import { cn } from "@/lib/utils";
 
@@ -291,7 +295,7 @@ export function DrawPanel({
   };
 
   return (
-    <Card className="overflow-hidden border-white/10 bg-[#050816] text-slate-100 shadow-[0_30px_120px_rgba(15,23,42,0.65)]">
+    <GameSurfaceCard className="overflow-hidden border-white/10 bg-[#050816] shadow-[0_30px_120px_rgba(15,23,42,0.65)]">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(251,191,36,0.16),transparent_30%),radial-gradient(circle_at_top_right,rgba(56,189,248,0.12),transparent_34%),linear-gradient(180deg,rgba(15,23,42,0.15),rgba(2,6,23,0.92))]" />
 
       <CardHeader className="relative z-10 border-b border-white/8 pb-5">
@@ -322,22 +326,20 @@ export function DrawPanel({
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-2xl border border-amber-200/15 bg-amber-200/10 px-4 py-3 backdrop-blur">
-              <p className="text-[11px] uppercase tracking-[0.24em] text-amber-100/70">
-                {t("draw.currentBalance")}
-              </p>
-              <p className="mt-2 text-2xl font-semibold text-white">
-                {formatAmount(locale, drawCatalog?.balance ?? "0")}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 backdrop-blur">
-              <p className="text-[11px] uppercase tracking-[0.24em] text-slate-300">
-                {t("draw.spinCostLabel")}
-              </p>
-              <p className="mt-2 text-2xl font-semibold text-white">
-                {formatAmount(locale, drawCatalog?.drawCost ?? "0")}
-              </p>
-            </div>
+            <GameMetricTile
+              className="border-amber-200/15 bg-amber-200/10 px-4 py-3 backdrop-blur"
+              label={t("draw.currentBalance")}
+              value={formatAmount(locale, drawCatalog?.balance ?? "0")}
+              labelClassName="text-[11px] tracking-[0.24em] text-amber-100/70"
+              valueClassName="mt-2 text-2xl font-semibold text-white"
+            />
+            <GameMetricTile
+              className="border-white/10 bg-white/[0.04] px-4 py-3 backdrop-blur"
+              label={t("draw.spinCostLabel")}
+              value={formatAmount(locale, drawCatalog?.drawCost ?? "0")}
+              labelClassName="text-[11px] tracking-[0.24em] text-slate-300"
+              valueClassName="mt-2 text-2xl font-semibold text-white"
+            />
           </div>
         </div>
       </CardHeader>
@@ -534,33 +536,33 @@ export function DrawPanel({
           </div>
 
           {disabledReason ? (
-            <p className="rounded-2xl border border-amber-200/20 bg-amber-300/10 px-4 py-3 text-sm text-amber-50">
+            <GameStatusNotice tone="warning" className="rounded-2xl">
               {disabledReason}
-            </p>
+            </GameStatusNotice>
           ) : null}
 
           {!drawCatalog?.drawEnabled && drawCatalog ? (
-            <p className="rounded-2xl border border-amber-200/20 bg-amber-300/10 px-4 py-3 text-sm text-amber-50">
+            <GameStatusNotice tone="warning" className="rounded-2xl">
               {t("draw.disabledBySystem")}
-            </p>
+            </GameStatusNotice>
           ) : null}
 
           {drawCatalog && drawCatalog.maxBatchCount <= 1 ? (
-            <p className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-300">
+            <GameStatusNotice tone="neutral" className="rounded-2xl">
               {t("draw.multiLocked", { max: drawCatalog.maxBatchCount })}
-            </p>
+            </GameStatusNotice>
           ) : null}
 
           {catalogError ? (
-            <p className="rounded-2xl border border-cyan-300/20 bg-cyan-300/10 px-4 py-3 text-sm text-cyan-50">
+            <GameStatusNotice tone="info" className="rounded-2xl">
               {catalogError}
-            </p>
+            </GameStatusNotice>
           ) : null}
 
           {error ? (
-            <p className="rounded-2xl border border-rose-300/20 bg-rose-300/10 px-4 py-3 text-sm text-rose-50">
+            <GameStatusNotice tone="danger" className="rounded-2xl">
               {error}
-            </p>
+            </GameStatusNotice>
           ) : null}
         </div>
 
@@ -666,9 +668,9 @@ export function DrawPanel({
                 </div>
               </div>
             ) : (
-              <p className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-300">
+              <GameStatusNotice tone="neutral" className="mt-4 rounded-2xl">
                 {t("draw.noRecentResults")}
-              </p>
+              </GameStatusNotice>
             )}
           </div>
 
@@ -737,6 +739,6 @@ export function DrawPanel({
           </div>
         </div>
       </CardContent>
-    </Card>
+    </GameSurfaceCard>
   );
 }

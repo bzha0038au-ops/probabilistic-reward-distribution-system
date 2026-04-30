@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { UserDashboardCopy } from './user-dashboard-copy';
 import { GameplayRouteCard } from './user-dashboard-route-card';
+import { DashboardFeedbackNotice } from './user-dashboard-domain-ui';
 import type { UserDashboardController } from './use-user-dashboard';
 import { resolveUserDashboardBadgeVariant as badgeVariant } from './user-dashboard-utils';
 
@@ -70,9 +71,9 @@ export function UserDashboardAccountSection({
               </Badge>
             </div>
 
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+            <DashboardFeedbackNotice tone="warning">
               {c.verificationBanner}
-            </div>
+            </DashboardFeedbackNotice>
 
             <div className="grid gap-5 lg:grid-cols-2">
               <div className="space-y-3">
@@ -147,9 +148,9 @@ export function UserDashboardAccountSection({
                     </form>
                   </div>
                 ) : (
-                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                  <DashboardFeedbackNotice tone="success">
                     {c.phoneVerifiedNotice}
-                  </div>
+                  </DashboardFeedbackNotice>
                 )}
               </div>
             </div>

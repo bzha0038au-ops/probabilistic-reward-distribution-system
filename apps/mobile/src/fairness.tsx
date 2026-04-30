@@ -15,6 +15,11 @@ import {
   mobilePalette,
   mobileTypography,
 } from "./theme";
+import {
+  GameHashCard,
+  GameStatCard,
+  GameStatusPanel,
+} from "./game-domain-ui";
 import { ActionButton, Field, SectionCard } from "./ui";
 
 export type MobileFairnessLocale = "en" | "zh-CN";
@@ -256,22 +261,12 @@ export function MobileFairnessCompactSummary(
       </View>
 
       <View style={styles.metricGrid}>
-        <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>{c.currentEpoch}</Text>
-          <Text style={styles.metricValue}>
-            {props.fairness?.epoch ?? "--"}
-          </Text>
-        </View>
-        <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>{c.revealAfter}</Text>
-          <Text style={styles.metricValue}>{revealAfter}</Text>
-        </View>
-        <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>{c.verifiedDays}</Text>
-          <Text style={styles.metricValue}>
-            {audit?.consecutiveVerifiedDays ?? 0}
-          </Text>
-        </View>
+        <GameStatCard label={c.currentEpoch} value={props.fairness?.epoch ?? "--"} />
+        <GameStatCard label={c.revealAfter} value={revealAfter} />
+        <GameStatCard
+          label={c.verifiedDays}
+          value={audit?.consecutiveVerifiedDays ?? 0}
+        />
       </View>
 
       {props.clientNonce ? (
@@ -283,14 +278,7 @@ export function MobileFairnessCompactSummary(
         </View>
       ) : null}
 
-      <View
-        style={[
-          styles.revealStatusCard,
-          revealReady
-            ? styles.revealStatusCardReady
-            : styles.revealStatusCardWaiting,
-        ]}
-      >
+      <GameStatusPanel tone={revealReady ? "success" : "warning"}>
         <View style={styles.revealStatusHeader}>
           <Text style={styles.hashLabel}>{c.revealStatus}</Text>
           <Text
@@ -313,7 +301,7 @@ export function MobileFairnessCompactSummary(
           {c.lastAutoAudit}: {auditStatus}
         </Text>
         <Text style={styles.revealStatusMeta}>{auditDetail}</Text>
-      </View>
+      </GameStatusPanel>
     </View>
   );
 }
@@ -387,9 +375,7 @@ export function MobileFairnessVerifier(props: MobileFairnessVerifierProps) {
         />
 
         {props.commit?.epoch === 0 ? (
-          <View style={styles.warningPanel}>
-            <Text style={styles.warningText}>{c.noPreviousEpoch}</Text>
-          </View>
+          <GameStatusPanel tone="warning">{c.noPreviousEpoch}</GameStatusPanel>
         ) : null}
 
         <View style={styles.actionRow}>
@@ -429,43 +415,24 @@ export function MobileFairnessVerifier(props: MobileFairnessVerifierProps) {
             </View>
           </View>
 
-          <View
-            style={[
-              styles.statusPanel,
-              props.verification?.matches
-                ? styles.statusPanelSuccess
-                : styles.statusPanelDanger,
-            ]}
+          <GameStatusPanel
+            tone={props.verification?.matches ? "success" : "danger"}
           >
-            <Text
-              style={[
-                styles.statusPanelText,
-                props.verification?.matches
-                  ? styles.statusPanelTextSuccess
-                  : styles.statusPanelTextDanger,
-              ]}
-            >
-              {props.verification?.matches ? c.verifiedBody : c.mismatchBody}
-            </Text>
-          </View>
+            {props.verification?.matches ? c.verifiedBody : c.mismatchBody}
+          </GameStatusPanel>
 
           <View style={styles.resultStack}>
-            <View style={styles.hashCard}>
-              <Text style={styles.hashLabel}>{c.seed}</Text>
-              <Text style={styles.hashValueFull}>{props.reveal.seed}</Text>
-            </View>
-            <View style={styles.hashCard}>
-              <Text style={styles.hashLabel}>{c.publishedCommit}</Text>
-              <Text style={styles.hashValueFull}>
-                {props.reveal.commitHash}
-              </Text>
-            </View>
-            <View style={styles.hashCard}>
-              <Text style={styles.hashLabel}>{c.computedCommit}</Text>
-              <Text style={styles.hashValueFull}>
-                {props.verification?.computedHash ?? c.unknown}
-              </Text>
-            </View>
+            <GameHashCard label={c.seed} value={props.reveal.seed} />
+            <GameHashCard
+              label={c.publishedCommit}
+              value={props.reveal.commitHash}
+              valueTone="accent"
+            />
+            <GameHashCard
+              label={c.computedCommit}
+              value={props.verification?.computedHash ?? c.unknown}
+              valueTone="warning"
+            />
           </View>
         </SectionCard>
       ) : null}

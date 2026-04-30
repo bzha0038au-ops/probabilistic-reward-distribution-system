@@ -1,8 +1,9 @@
 import './globals.css';
 
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import type { Metadata, Viewport } from 'next';
 import { GeistSans } from 'geist/font/sans';
+import { webRootCssVariables, webThemeColor } from '@reward/design-tokens';
 
 import { I18nProvider } from '@/components/i18n-provider';
 import { ObservabilityBootstrap } from '@/components/observability-bootstrap';
@@ -34,9 +35,11 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  themeColor: '#08111f',
+  themeColor: webThemeColor,
   colorScheme: 'light',
 };
+
+const rootTokenStyle = webRootCssVariables as CSSProperties;
 
 export default async function RootLayout({
   children,
@@ -45,7 +48,7 @@ export default async function RootLayout({
   const messages = await getServerMessages(locale);
 
   return (
-    <html lang={locale}>
+    <html lang={locale} style={rootTokenStyle}>
       <body className={`${GeistSans.variable} app-root`}>
         <ObservabilityBootstrap />
         <WebviewBridge />

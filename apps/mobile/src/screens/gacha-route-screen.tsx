@@ -9,6 +9,7 @@ import type {
 import type { PlayModeCopy } from "../ui";
 import type { PlayModeType } from "@reward/shared-types/play-mode";
 
+import { GameInfoPanel, GameStatusPanel } from "../game-domain-ui";
 import type { MobileRouteLabels, MobileRouteScreens } from "../route-copy";
 import {
   getSymbolById,
@@ -305,9 +306,9 @@ export function GachaRouteScreen(props: GachaRouteScreenProps) {
         </View>
 
         {!props.drawCatalog?.drawEnabled && props.drawCatalog ? (
-          <Text style={props.styles.errorText}>
+          <GameStatusPanel tone="warning">
             {props.screenCopy.disabledBySystem}
-          </Text>
+          </GameStatusPanel>
         ) : null}
 
         {props.drawCatalog && props.drawCatalog.maxBatchCount <= 1 ? (
@@ -391,7 +392,7 @@ export function GachaRouteScreen(props: GachaRouteScreenProps) {
         ) : null}
 
         {props.lastDrawPlay ? (
-          <View style={styles.gachaResultPanel}>
+          <GameInfoPanel>
             <Text style={styles.gachaResultTitle}>
               {props.lastDrawPlay.results.length <= 1
                 ? props.screenCopy.latestSinglePull
@@ -472,7 +473,7 @@ export function GachaRouteScreen(props: GachaRouteScreenProps) {
                 );
               })}
             </View>
-          </View>
+          </GameInfoPanel>
         ) : props.drawCatalog ? (
           <Text style={props.styles.gachaHint}>
             {props.screenCopy.noPullYet}

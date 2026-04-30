@@ -16,6 +16,7 @@ import type {
 import type { MobileWalletCopy } from "../mobile-copy";
 import type { MobileStyles } from "../screens/types";
 import { mobilePalette } from "../theme";
+import { WalletAssetCard, WalletHistoryEntryCard } from "./domain-ui";
 import { ActionButton, Field, SectionCard } from "../ui";
 
 type WalletCardProps = {
@@ -166,30 +167,25 @@ export function WalletCard(props: WalletCardProps) {
 
       <View style={styles.assetSection}>
         <Text style={styles.sectionTitle}>{props.copy.assetsTitle}</Text>
-        <View style={styles.assetGrid}>
-          {assets.map((asset) => (
-            <View key={asset.assetCode} style={styles.assetCard}>
-              <Text style={styles.assetCode}>
-                {renderAssetLabel(asset.assetCode)}
-              </Text>
-              <Text style={styles.assetValue}>
-                {props.formatAmount(asset.availableBalance)}
-              </Text>
-              <View style={styles.assetMetaRow}>
-                <Text style={styles.assetMetaLabel}>{props.copy.available}</Text>
-                <Text style={styles.assetMetaValue}>
-                  {props.formatAmount(asset.availableBalance)}
-                </Text>
-              </View>
-              <View style={styles.assetMetaRow}>
-                <Text style={styles.assetMetaLabel}>{props.copy.locked}</Text>
-                <Text style={styles.assetMetaValue}>
-                  {props.formatAmount(asset.lockedBalance)}
-                </Text>
-              </View>
-            </View>
-          ))}
-        </View>
+          <View style={styles.assetGrid}>
+            {assets.map((asset) => (
+              <WalletAssetCard
+                key={asset.assetCode}
+                label={renderAssetLabel(asset.assetCode)}
+                value={props.formatAmount(asset.availableBalance)}
+                detailRows={[
+                  {
+                    label: props.copy.available,
+                    value: props.formatAmount(asset.availableBalance),
+                  },
+                  {
+                    label: props.copy.locked,
+                    value: props.formatAmount(asset.lockedBalance),
+                  },
+                ]}
+              />
+            ))}
+          </View>
       </View>
 
       <View style={styles.giftSection}>
@@ -253,25 +249,18 @@ export function WalletCard(props: WalletCardProps) {
           ) : (
             <View style={styles.timelineList}>
               {giftHistory.map((gift) => (
-                <View key={gift.id} style={styles.timelineCard}>
-                  <View style={styles.timelineHeader}>
-                    <Text style={styles.timelineTitle}>
-                      {props.copy.giftTransferLabel(
-                        gift.senderUserId,
-                        gift.receiverUserId,
-                      )}
-                    </Text>
-                    <Text style={styles.timelineAmount}>
-                      {props.formatAmount(gift.amount)}
-                    </Text>
-                  </View>
-                  <Text style={styles.timelineMeta}>
-                    {props.copy.giftEnergyCost(gift.energyCost)}
-                  </Text>
-                  <Text style={styles.timelineMeta}>
-                    {props.formatDateTime(gift.createdAt)}
-                  </Text>
-                </View>
+                <WalletHistoryEntryCard
+                  key={gift.id}
+                  title={props.copy.giftTransferLabel(
+                    gift.senderUserId,
+                    gift.receiverUserId,
+                  )}
+                  accentValue={props.formatAmount(gift.amount)}
+                  detailLines={[
+                    props.copy.giftEnergyCost(gift.energyCost),
+                    props.formatDateTime(gift.createdAt),
+                  ]}
+                />
               ))}
             </View>
           )}
@@ -284,22 +273,15 @@ export function WalletCard(props: WalletCardProps) {
           ) : (
             <View style={styles.timelineList}>
               {ledgerEntries.map((entry) => (
-                <View key={entry.id} style={styles.timelineCard}>
-                  <View style={styles.timelineHeader}>
-                    <Text style={styles.timelineTitle}>
-                      {renderLedgerLabel(entry)}
-                    </Text>
-                    <Text style={styles.timelineAmount}>
-                      {props.formatAmount(entry.amount)}
-                    </Text>
-                  </View>
-                  <Text style={styles.timelineMeta}>
-                    {renderAssetLabel(entry.assetCode)}
-                  </Text>
-                  <Text style={styles.timelineMeta}>
-                    {props.formatDateTime(entry.createdAt)}
-                  </Text>
-                </View>
+                <WalletHistoryEntryCard
+                  key={entry.id}
+                  title={renderLedgerLabel(entry)}
+                  accentValue={props.formatAmount(entry.amount)}
+                  detailLines={[
+                    renderAssetLabel(entry.assetCode),
+                    props.formatDateTime(entry.createdAt),
+                  ]}
+                />
               ))}
             </View>
           )}
@@ -549,76 +531,10 @@ const styles = StyleSheet.create({
   timelineList: {
     gap: 10,
   },
-  timelineCard: {
-    gap: 6,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: mobilePalette.border,
-    backgroundColor: mobilePalette.panelMuted,
-    padding: 12,
-  },
-  timelineHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  timelineTitle: {
-    flex: 1,
-    color: mobilePalette.text,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  timelineAmount: {
-    color: mobilePalette.accent,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  timelineMeta: {
-    color: mobilePalette.textMuted,
-    fontSize: 12,
-  },
   assetGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 12,
-  },
-  assetCard: {
-    flexGrow: 1,
-    minWidth: "44%",
-    gap: 8,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: mobilePalette.border,
-    backgroundColor: mobilePalette.panelMuted,
-    padding: 14,
-  },
-  assetCode: {
-    color: mobilePalette.text,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  assetValue: {
-    color: mobilePalette.text,
-    fontSize: 24,
-    fontWeight: "800",
-  },
-  assetMetaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  assetMetaLabel: {
-    color: mobilePalette.textMuted,
-    fontSize: 12,
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
-  },
-  assetMetaValue: {
-    color: mobilePalette.text,
-    fontSize: 13,
-    fontWeight: "600",
   },
   storeSection: {
     gap: 12,

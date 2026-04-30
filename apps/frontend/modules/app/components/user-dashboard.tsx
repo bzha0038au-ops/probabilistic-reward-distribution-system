@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/card";
 import { useLocale, useTranslations } from "@/components/i18n-provider";
 import { RewardCenter } from "@/modules/app/components/reward-center";
+import { DashboardFeedbackNotice } from "./user-dashboard-domain-ui";
 import { UserDashboardAccountSection } from "./user-dashboard-account-section";
 import { UserDashboardActivitySection } from "./user-dashboard-activity-section";
 import { userDashboardCopy } from "./user-dashboard-copy";
@@ -100,20 +101,14 @@ export function UserDashboard({
   return (
     <div className="space-y-6">
       {notice ? (
-        <div
-          className="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
-          data-testid="dashboard-notice"
-        >
+        <DashboardFeedbackNotice tone="success" testId="dashboard-notice">
           {notice}
-        </div>
+        </DashboardFeedbackNotice>
       ) : null}
       {error ? (
-        <div
-          className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900"
-          data-testid="dashboard-error"
-        >
+        <DashboardFeedbackNotice tone="danger" testId="dashboard-error">
           {error}
-        </div>
+        </DashboardFeedbackNotice>
       ) : null}
 
       {showAccountSection ? (
