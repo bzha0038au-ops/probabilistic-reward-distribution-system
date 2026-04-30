@@ -67,6 +67,45 @@ type ApiEnvelope<T> =
       };
     };
 
+const legacyCopyText = (value: string) => {
+  if (typeof document === "undefined") {
+    return false;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  textarea.style.pointerEvents = "none";
+
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  textarea.setSelectionRange(0, textarea.value.length);
+
+  const copied =
+    typeof document.execCommand === "function"
+      ? document.execCommand("copy")
+      : false;
+
+  document.body.removeChild(textarea);
+  return copied;
+};
+
+const copyText = async (value: string) => {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(value);
+      return true;
+    } catch {
+      return legacyCopyText(value);
+    }
+  }
+
+  return legacyCopyText(value);
+};
+
 export function PortalDashboard({
   billingSetupStatus,
   billingInsights,
@@ -201,6 +240,7 @@ export function PortalDashboard({
           tenantId: nextTenantId,
         }),
       );
+      router.refresh();
     });
   };
 
@@ -566,17 +606,12 @@ export function PortalDashboard({
   };
 
   const handleCopySandboxSnippet = async () => {
-    if (!navigator.clipboard) {
-      setErrorBanner("Clipboard access is unavailable in this browser.");
+    if (await copyText(sandboxSnippet)) {
+      setSuccessBanner("Copied the sandbox SDK snippet.");
       return;
     }
 
-    try {
-      await navigator.clipboard.writeText(sandboxSnippet);
-      setSuccessBanner("Copied the sandbox SDK snippet.");
-    } catch {
-      setErrorBanner("Failed to copy the sandbox SDK snippet.");
-    }
+    setErrorBanner("Failed to copy the sandbox SDK snippet.");
   };
 
   const handleCopyInviteLink = async () => {
@@ -584,17 +619,12 @@ export function PortalDashboard({
       return;
     }
 
-    if (!navigator.clipboard) {
-      setErrorBanner("Clipboard access is unavailable in this browser.");
+    if (await copyText(createdInvite.inviteUrl)) {
+      setSuccessBanner("Copied the tenant invite link.");
       return;
     }
 
-    try {
-      await navigator.clipboard.writeText(createdInvite.inviteUrl);
-      setSuccessBanner("Copied the tenant invite link.");
-    } catch {
-      setErrorBanner("Failed to copy the tenant invite link.");
-    }
+    setErrorBanner("Failed to copy the tenant invite link.");
   };
 
   const handleRotateKey = async (apiKey: SaasApiKey) => {

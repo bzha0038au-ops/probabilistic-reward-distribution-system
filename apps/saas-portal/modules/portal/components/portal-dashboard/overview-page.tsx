@@ -266,7 +266,10 @@ export function PortalDashboardOverviewPage({
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            <pre className="overflow-x-auto rounded-3xl bg-black/30 p-5 text-sm text-slate-100">
+            <pre
+              key={snippetLanguage}
+              className="overflow-x-auto rounded-3xl bg-black/30 p-5 text-sm text-slate-100"
+            >
               <code>{sandboxSnippet}</code>
             </pre>
             <p className="text-sm leading-6 text-slate-400">

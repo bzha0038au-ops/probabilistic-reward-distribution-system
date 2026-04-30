@@ -110,7 +110,9 @@ describe('saas billing budget helpers', () => {
     });
 
     expect(insights.summary).toMatchObject({
+      availableCreditAmount: '0.00',
       baseMonthlyFee: '100.00',
+      effectiveBudgetAmount: '130.00',
       currentUsageAmount: '20.00',
       currentTotalAmount: '120.00',
       trailing7dUsageAmount: '14.00',
@@ -154,5 +156,37 @@ describe('saas billing budget helpers', () => {
       usageAmount: '2.00',
       totalAmount: '102.00',
     });
+  });
+
+  it('extends the effective budget with available credits and reduces remaining budget after credit consumption', () => {
+    const insights = buildSaasTenantBillingInsights({
+      tenantId: 42,
+      currency: 'USD',
+      baseMonthlyFee: '0.00',
+      metadata: {
+        budgetPolicy: {
+          monthlyBudget: '1500.00',
+          alertThresholdPct: 80,
+          hardCap: '1800.00',
+          alertEmailEnabled: true,
+        },
+      },
+      availableCreditAmount: '300.00',
+      usageRows: makeUsageRows(1, 2, '110.00'),
+      now: new Date('2026-04-02T12:00:00.000Z'),
+    });
+
+    expect(insights.summary).toMatchObject({
+      availableCreditAmount: '300.00',
+      currentTotalAmount: '220.00',
+      effectiveBudgetAmount: '1800.00',
+      monthlyBudget: '1500.00',
+      budgetThresholdAmount: '1440.00',
+      remainingBudgetAmount: '1580.00',
+      remainingHardCapAmount: '1580.00',
+    });
+
+    expect(insights.forecasts.trailing7d.exceedsBudget).toBe(false);
+    expect(insights.forecasts.trailing30d.exceedsBudget).toBe(false);
   });
 });

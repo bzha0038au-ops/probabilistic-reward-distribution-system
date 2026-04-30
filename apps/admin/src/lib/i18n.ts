@@ -582,7 +582,11 @@ export type Messages = {
       sendInvoice: string
       createBillingRun: string
       notePlaceholder: string
+      localCreditNotePlaceholder: string
       createManualTopUp: string
+      createManualCredit: string
+      localCreditHint: string
+      externalSyncUnavailable: string
     }
     quickstart: {
       title: string
@@ -618,6 +622,7 @@ export type Messages = {
       decisionPayoutPlaceholder: string
       portalConfigurationPlaceholder: string
       stripeCustomerPlaceholder: string
+      localBillingMode: string
     }
     riskEnvelope: {
       title: string
@@ -705,6 +710,7 @@ export type Messages = {
       refresh: string
       paidOutOfBand: string
       settle: string
+      externalSyncUnavailable: string
     }
     webhookQueueSection: {
       title: string
@@ -717,8 +723,10 @@ export type Messages = {
     }
     topUpsSection: {
       title: string
+      titleLocal: string
       noNote: string
       sync: string
+      applyLocalCredit: string
     }
     recentUsageSection: {
       title: string
@@ -2441,7 +2449,13 @@ const translations: Record<Locale, Messages> = {
         sendInvoice: "Send invoice",
         createBillingRun: "Create Billing Run",
         notePlaceholder: "Manual customer balance credit",
+        localCreditNotePlaceholder: "Manual local credit note",
         createManualTopUp: "Create Manual Top-up",
+        createManualCredit: "Apply Manual Credit",
+        localCreditHint:
+          "Stripe is disabled in this environment. Manual credits apply directly to the tenant's available budget balance.",
+        externalSyncUnavailable:
+          "Stripe is disabled in this environment. Billing runs can still be drafted locally, but invoice sync and send actions are unavailable.",
       },
       quickstart: {
         title: "hello-reward",
@@ -2479,6 +2493,8 @@ const translations: Record<Locale, Messages> = {
         decisionPayoutPlaceholder: "payout",
         portalConfigurationPlaceholder: "bpc_...",
         stripeCustomerPlaceholder: "cus_...",
+        localBillingMode:
+          "Stripe customer actions are unavailable in this environment. Use local manual credits instead.",
       },
       riskEnvelope: {
         title: "risk_envelope",
@@ -2569,6 +2585,8 @@ const translations: Record<Locale, Messages> = {
         refresh: "refresh",
         paidOutOfBand: "OOB",
         settle: "settle",
+        externalSyncUnavailable:
+          "External invoice sync is unavailable without Stripe in this environment.",
       },
       webhookQueueSection: {
         title: "Webhook Queue",
@@ -2581,8 +2599,10 @@ const translations: Record<Locale, Messages> = {
       },
       topUpsSection: {
         title: "Manual Top-ups",
+        titleLocal: "Manual Credits",
         noNote: "no note",
         sync: "sync",
+        applyLocalCredit: "apply local credit",
       },
       recentUsageSection: {
         title: "Recent Usage",

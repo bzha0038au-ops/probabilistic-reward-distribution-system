@@ -302,6 +302,8 @@ export function SnippetLanguagePicker({
         <button
           key={language}
           type="button"
+          aria-pressed={value === language}
+          data-state={value === language ? "active" : "inactive"}
           className={cn(
             "rounded-full px-3 py-1.5 text-xs font-semibold transition",
             value === language

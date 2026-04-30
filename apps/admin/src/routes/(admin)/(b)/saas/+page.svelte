@@ -125,6 +125,22 @@
       sandboxProjects[0] ??
       null,
   )
+  const defaultBillingCapabilities = {
+    billingRunSync: false,
+    customerPortal: false,
+    localManualCredits: false,
+    paymentMethodSetup: false,
+    stripeEnabled: false,
+    topUpExternalSync: false,
+  }
+  const stripeBillingAvailable = $derived(
+    tenants.some((item) => item.billing?.providerCapabilities.stripeEnabled),
+  )
+  const localManualCreditsAvailable = $derived(
+    tenants.some(
+      (item) => item.billing?.providerCapabilities.localManualCredits,
+    ),
+  )
 
   $effect(() => {
     if (!quickstartProjectId && sandboxProjects[0]) {
@@ -225,6 +241,19 @@
 
   const projectBillingHints = (tenantId: number) =>
     billingRuns.filter((item) => item.tenantId === tenantId).slice(0, 2)
+
+  const billingCapabilitiesForTenant = (tenantId: number) =>
+    tenants.find((item) => item.tenant.id === tenantId)?.billing
+      ?.providerCapabilities ?? defaultBillingCapabilities
+
+  const tenantSupportsTopUpExternalSync = (tenantId: number) =>
+    billingCapabilitiesForTenant(tenantId).topUpExternalSync
+
+  const tenantSupportsLocalManualCredits = (tenantId: number) =>
+    billingCapabilitiesForTenant(tenantId).localManualCredits
+
+  const tenantSupportsBillingRunSync = (tenantId: number) =>
+    billingCapabilitiesForTenant(tenantId).billingRunSync
 
   const formatDecisionPricing = (pricing: {
     reject: string
@@ -981,14 +1010,20 @@
             name="periodEnd"
           />
         </div>
-        <label class="label cursor-pointer justify-start gap-3">
-          <input class="checkbox" type="checkbox" name="finalize" checked />
-          <span>{t("saas.billingOps.finalizeInvoice")}</span>
-        </label>
-        <label class="label cursor-pointer justify-start gap-3">
-          <input class="checkbox" type="checkbox" name="sendInvoice" />
-          <span>{t("saas.billingOps.sendInvoice")}</span>
-        </label>
+        {#if stripeBillingAvailable}
+          <label class="label cursor-pointer justify-start gap-3">
+            <input class="checkbox" type="checkbox" name="finalize" checked />
+            <span>{t("saas.billingOps.finalizeInvoice")}</span>
+          </label>
+          <label class="label cursor-pointer justify-start gap-3">
+            <input class="checkbox" type="checkbox" name="sendInvoice" />
+            <span>{t("saas.billingOps.sendInvoice")}</span>
+          </label>
+        {:else}
+          <p class="text-sm text-slate-500">
+            {t("saas.billingOps.externalSyncUnavailable")}
+          </p>
+        {/if}
         <button class="btn btn-secondary w-full">
           {t("saas.billingOps.createBillingRun")}
         </button>
@@ -1018,12 +1053,21 @@
         <input
           class="input input-bordered w-full"
           name="note"
-          placeholder={t("saas.billingOps.notePlaceholder")}
+          placeholder={localManualCreditsAvailable
+            ? t("saas.billingOps.localCreditNotePlaceholder")
+            : t("saas.billingOps.notePlaceholder")}
         />
         <button class="btn btn-secondary w-full">
-          {t("saas.billingOps.createManualTopUp")}
+          {localManualCreditsAvailable
+            ? t("saas.billingOps.createManualCredit")
+            : t("saas.billingOps.createManualTopUp")}
         </button>
       </form>
+      {#if localManualCreditsAvailable}
+        <p class="mt-3 text-sm text-slate-500">
+          {t("saas.billingOps.localCreditHint")}
+        </p>
+      {/if}
     </div>
   </section>
 
@@ -1276,28 +1320,39 @@
                     {t("saas.riskEnvelope.submit")}
                   </button>
                 </form>
-                <div class="grid grid-cols-2 gap-2">
-                  <form method="post" action="?/openBillingSetup">
-                    <input
-                      type="hidden"
-                      name="tenantId"
-                      value={item.tenant.id}
-                    />
-                    <button class="btn btn-sm w-full">
-                      {t("saas.tenantsSection.bindCard")}
-                    </button>
-                  </form>
-                  <form method="post" action="?/openBillingPortal">
-                    <input
-                      type="hidden"
-                      name="tenantId"
-                      value={item.tenant.id}
-                    />
-                    <button class="btn btn-sm w-full">
-                      {t("saas.tenantsSection.openPortal")}
-                    </button>
-                  </form>
-                </div>
+                {#if billingCapabilitiesForTenant(item.tenant.id).customerPortal ||
+                  billingCapabilitiesForTenant(item.tenant.id).paymentMethodSetup}
+                  <div class="grid grid-cols-2 gap-2">
+                    {#if billingCapabilitiesForTenant(item.tenant.id).paymentMethodSetup}
+                      <form method="post" action="?/openBillingSetup">
+                        <input
+                          type="hidden"
+                          name="tenantId"
+                          value={item.tenant.id}
+                        />
+                        <button class="btn btn-sm w-full">
+                          {t("saas.tenantsSection.bindCard")}
+                        </button>
+                      </form>
+                    {/if}
+                    {#if billingCapabilitiesForTenant(item.tenant.id).customerPortal}
+                      <form method="post" action="?/openBillingPortal">
+                        <input
+                          type="hidden"
+                          name="tenantId"
+                          value={item.tenant.id}
+                        />
+                        <button class="btn btn-sm w-full">
+                          {t("saas.tenantsSection.openPortal")}
+                        </button>
+                      </form>
+                    {/if}
+                  </div>
+                {:else}
+                  <p class="rounded-2xl bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                    {t("saas.tenantsSection.localBillingMode")}
+                  </p>
+                {/if}
               </div>
             </div>
 
@@ -2158,53 +2213,11 @@
                 </p>
               </div>
               <div class="grid gap-2">
-                <form
-                  method="post"
-                  action="?/syncBillingRun"
-                  class="flex flex-wrap gap-2"
-                >
-                  <input type="hidden" name="totpCode" value={stepUpCode} />
-                  <input
-                    type="hidden"
-                    name="billingRunId"
-                    value={billingRun.id}
-                  />
-                  <label class="label cursor-pointer gap-2 py-0 text-xs">
-                    <input
-                      class="checkbox checkbox-xs"
-                      type="checkbox"
-                      name="finalize"
-                      checked
-                    />
-                    <span>{t("saas.billingRunsSection.finalize")}</span>
-                  </label>
-                  <label class="label cursor-pointer gap-2 py-0 text-xs">
-                    <input
-                      class="checkbox checkbox-xs"
-                      type="checkbox"
-                      name="sendInvoice"
-                    />
-                    <span>{t("saas.billingRunsSection.send")}</span>
-                  </label>
-                  <button class="btn btn-xs btn-secondary">
-                    {t("saas.billingRunsSection.sync")}
-                  </button>
-                </form>
-                <div class="flex flex-wrap gap-2">
-                  <form method="post" action="?/refreshBillingRun">
-                    <input
-                      type="hidden"
-                      name="billingRunId"
-                      value={billingRun.id}
-                    />
-                    <button class="btn btn-xs">
-                      {t("saas.billingRunsSection.refresh")}
-                    </button>
-                  </form>
+                {#if tenantSupportsBillingRunSync(billingRun.tenantId)}
                   <form
                     method="post"
-                    action="?/settleBillingRun"
-                    class="flex items-center gap-2"
+                    action="?/syncBillingRun"
+                    class="flex flex-wrap gap-2"
                   >
                     <input type="hidden" name="totpCode" value={stepUpCode} />
                     <input
@@ -2216,15 +2229,63 @@
                       <input
                         class="checkbox checkbox-xs"
                         type="checkbox"
-                        name="paidOutOfBand"
+                        name="finalize"
+                        checked
                       />
-                      <span>{t("saas.billingRunsSection.paidOutOfBand")}</span>
+                      <span>{t("saas.billingRunsSection.finalize")}</span>
                     </label>
-                    <button class="btn btn-xs">
-                      {t("saas.billingRunsSection.settle")}
+                    <label class="label cursor-pointer gap-2 py-0 text-xs">
+                      <input
+                        class="checkbox checkbox-xs"
+                        type="checkbox"
+                        name="sendInvoice"
+                      />
+                      <span>{t("saas.billingRunsSection.send")}</span>
+                    </label>
+                    <button class="btn btn-xs btn-secondary">
+                      {t("saas.billingRunsSection.sync")}
                     </button>
                   </form>
-                </div>
+                  <div class="flex flex-wrap gap-2">
+                    <form method="post" action="?/refreshBillingRun">
+                      <input
+                        type="hidden"
+                        name="billingRunId"
+                        value={billingRun.id}
+                      />
+                      <button class="btn btn-xs">
+                        {t("saas.billingRunsSection.refresh")}
+                      </button>
+                    </form>
+                    <form
+                      method="post"
+                      action="?/settleBillingRun"
+                      class="flex items-center gap-2"
+                    >
+                      <input type="hidden" name="totpCode" value={stepUpCode} />
+                      <input
+                        type="hidden"
+                        name="billingRunId"
+                        value={billingRun.id}
+                      />
+                      <label class="label cursor-pointer gap-2 py-0 text-xs">
+                        <input
+                          class="checkbox checkbox-xs"
+                          type="checkbox"
+                          name="paidOutOfBand"
+                        />
+                        <span>{t("saas.billingRunsSection.paidOutOfBand")}</span>
+                      </label>
+                      <button class="btn btn-xs">
+                        {t("saas.billingRunsSection.settle")}
+                      </button>
+                    </form>
+                  </div>
+                {:else}
+                  <p class="text-xs text-slate-500">
+                    {t("saas.billingRunsSection.externalSyncUnavailable")}
+                  </p>
+                {/if}
               </div>
             </div>
           </div>
@@ -2334,7 +2395,11 @@
 
   <section class="grid gap-6 xl:grid-cols-2">
     <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-      <h2 class="text-lg font-semibold">{t("saas.topUpsSection.title")}</h2>
+      <h2 class="text-lg font-semibold">
+        {localManualCreditsAvailable
+          ? t("saas.topUpsSection.titleLocal")
+          : t("saas.topUpsSection.title")}
+      </h2>
       <div class="mt-4 space-y-2">
         {#each topUps as topUp}
           <div
@@ -2350,12 +2415,24 @@
                 {topUp.note ?? t("saas.topUpsSection.noNote")}
               </p>
             </div>
-            {#if topUp.status !== "synced"}
+            {#if tenantSupportsTopUpExternalSync(topUp.tenantId) &&
+              topUp.status !== "synced" &&
+              topUp.status !== "applied"}
               <form method="post" action="?/syncTopUp">
                 <input type="hidden" name="totpCode" value={stepUpCode} />
                 <input type="hidden" name="topUpId" value={topUp.id} />
                 <button class="btn btn-xs btn-secondary">
                   {t("saas.topUpsSection.sync")}
+                </button>
+              </form>
+            {:else if tenantSupportsLocalManualCredits(topUp.tenantId) &&
+              topUp.status !== "applied" &&
+              topUp.status !== "synced"}
+              <form method="post" action="?/syncTopUp">
+                <input type="hidden" name="totpCode" value={stepUpCode} />
+                <input type="hidden" name="topUpId" value={topUp.id} />
+                <button class="btn btn-xs btn-secondary">
+                  {t("saas.topUpsSection.applyLocalCredit")}
                 </button>
               </form>
             {/if}

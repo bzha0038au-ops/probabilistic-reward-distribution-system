@@ -32,6 +32,7 @@ import {
   type BillingBudgetAlertKind,
 } from "./billing-budget";
 import { loadTenantBillingContext } from "./billing-service-support";
+import { readSaasTenantAvailableCreditAmount } from "./billing-top-up-service";
 import { toSaasBilling } from "./records";
 
 const config = getConfigView();
@@ -207,6 +208,7 @@ export const buildSaasTenantBillingInsights = (params: {
   currency: string;
   baseMonthlyFee: string;
   metadata: unknown;
+  availableCreditAmount?: string;
   usageRows: DailyUsageRow[];
   now?: Date;
 }): SaasTenantBillingInsights => {
@@ -214,6 +216,7 @@ export const buildSaasTenantBillingInsights = (params: {
   const policy = readSaasBillingBudgetPolicy(params.metadata);
   const usageByDay = buildUsageMap(params.usageRows);
   const baseMonthlyFee = toDecimal(params.baseMonthlyFee);
+  const availableCreditAmount = toDecimal(params.availableCreditAmount ?? "0");
 
   const currentUsageAmount = sumUsage(
     usageByDay,
@@ -228,10 +231,14 @@ export const buildSaasTenantBillingInsights = (params: {
   );
   const currentTotalAmount = baseMonthlyFee.plus(currentUsageAmount);
   const monthlyBudget = policy.monthlyBudget ? toDecimal(policy.monthlyBudget) : null;
+  const effectiveBudget =
+    monthlyBudget !== null || availableCreditAmount.greaterThan(0)
+      ? (monthlyBudget ?? new Decimal(0)).plus(availableCreditAmount)
+      : null;
   const hardCap = policy.hardCap ? toDecimal(policy.hardCap) : null;
   const budgetThresholdAmount =
-    monthlyBudget !== null && policy.alertThresholdPct !== null
-      ? monthlyBudget.mul(policy.alertThresholdPct).div(100)
+    effectiveBudget !== null && policy.alertThresholdPct !== null
+      ? effectiveBudget.mul(policy.alertThresholdPct).div(100)
       : null;
 
   const trailing7d = buildForecastScenario({
@@ -240,7 +247,7 @@ export const buildSaasTenantBillingInsights = (params: {
     currentUsageAmount,
     daysRemaining: window.daysRemaining,
     baseMonthlyFee,
-    monthlyBudget,
+    monthlyBudget: effectiveBudget,
   });
   const trailing30d = buildForecastScenario({
     trailingDays: FORECAST_WINDOW_DAYS,
@@ -248,7 +255,7 @@ export const buildSaasTenantBillingInsights = (params: {
     currentUsageAmount,
     daysRemaining: window.daysRemaining,
     baseMonthlyFee,
-    monthlyBudget,
+    monthlyBudget: effectiveBudget,
   });
 
   const thresholdBreached =
@@ -291,14 +298,18 @@ export const buildSaasTenantBillingInsights = (params: {
       currentTotalAmount: toMoneyString(currentTotalAmount),
       trailing7dUsageAmount: toMoneyString(trailing7dUsageAmount),
       trailing30dUsageAmount: toMoneyString(trailing30dUsageAmount),
+      availableCreditAmount: toMoneyString(availableCreditAmount),
       monthlyBudget: monthlyBudget ? toMoneyString(monthlyBudget) : null,
+      effectiveBudgetAmount: effectiveBudget
+        ? toMoneyString(effectiveBudget)
+        : null,
       budgetThresholdAmount: budgetThresholdAmount
         ? toMoneyString(budgetThresholdAmount)
         : null,
       hardCap: hardCap ? toMoneyString(hardCap) : null,
       remainingBudgetAmount:
-        monthlyBudget !== null
-          ? toMoneyString(Decimal.max(monthlyBudget.minus(currentTotalAmount), 0))
+        effectiveBudget !== null
+          ? toMoneyString(Decimal.max(effectiveBudget.minus(currentTotalAmount), 0))
           : null,
       remainingHardCapAmount:
         hardCap !== null
@@ -328,6 +339,10 @@ export async function getSaasTenantBillingInsights(
   await assertTenantCapability(actor ?? null, tenantId, "tenant:read");
 
   const { billingAccount } = await loadTenantBillingContext(tenantId);
+  const availableCreditAmount = await readSaasTenantAvailableCreditAmount(
+    db,
+    tenantId,
+  );
   const usageRows = await readUsageRowsForTenant(
     db,
     tenantId,
@@ -339,6 +354,7 @@ export async function getSaasTenantBillingInsights(
     currency: billingAccount.currency,
     baseMonthlyFee: toMoneyString(billingAccount.baseMonthlyFee),
     metadata: billingAccount.metadata,
+    availableCreditAmount,
     usageRows,
   });
 }

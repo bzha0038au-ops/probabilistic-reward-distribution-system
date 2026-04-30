@@ -21,6 +21,7 @@ import {
   experiments,
   saasApiKeys,
   saasBillingRuns,
+  saasBillingTopUps,
   saasLedgerEntries,
   saasPlayers,
   saasReportExports,
@@ -33,12 +34,15 @@ import {
 import { and, desc, eq } from "@reward/database/orm";
 
 import {
+  createBillingTopUp,
   createBillingRun,
   createProjectApiKey,
   createSaasProject,
   createSaasTenantInvite,
   createSaasTenant,
+  getSaasTenantBillingInsights,
   runSaasReportExportCycle,
+  updateSaasBillingBudgetPolicy,
   upsertSaasBillingAccount,
 } from "../modules/saas/service";
 import { markBillingRunSyncProcessing } from "../modules/saas/billing-service-support";
@@ -831,6 +835,113 @@ describeIntegrationSuite("backend saas integration", () => {
       subjectId: "hello-reward-onboard-agent",
     });
   });
+
+  it(
+    "applies manual local credits in no-stripe environments and reflects them in tenant budget insights",
+    { timeout: 15_000 },
+    async () => {
+      const tenant = await createSaasTenant({
+        slug: "saas-local-credit-tenant",
+        name: "SaaS Local Credit Tenant",
+        status: "active",
+      });
+
+      const liveProject = await createSaasProject({
+        tenantId: tenant.id,
+        slug: "saas-local-credit-live",
+        name: "SaaS Local Credit Live",
+        environment: "live",
+        drawCost: "0",
+      });
+
+      await upsertSaasBillingAccount({
+        tenantId: tenant.id,
+        planCode: "growth",
+        baseMonthlyFee: "0",
+        drawFee: "2",
+        currency: "USD",
+        isBillable: true,
+      });
+      await updateSaasBillingBudgetPolicy({
+        tenantId: tenant.id,
+        monthlyBudget: "1500.00",
+        alertThresholdPct: 80,
+        hardCap: "1800.00",
+      });
+
+      const topUp = await createBillingTopUp({
+        tenantId: tenant.id,
+        amount: "300.00",
+        currency: "USD",
+        note: "Manual local credit",
+      });
+      expect(topUp).toMatchObject({
+        amount: "300.00",
+        source: "local_manual_credit",
+        status: "applied",
+        tenantId: tenant.id,
+      });
+
+      const [storedTopUp] = await getDb()
+        .select()
+        .from(saasBillingTopUps)
+        .where(eq(saasBillingTopUps.id, topUp.id))
+        .limit(1);
+      expect(storedTopUp?.status).toBe("applied");
+
+      const liveKey = await createProjectApiKey({
+        projectId: liveProject.id,
+        label: "Local credit live key",
+        scopes: ["draw:write"],
+      });
+      const periodStart = new Date();
+      const periodEnd = new Date(periodStart.getTime() + 60_000);
+
+      const liveDraw = await getApp().inject({
+        method: "POST",
+        url: prizeEngineUrl("/v1/engine/draws", "live"),
+        headers: {
+          authorization: `Bearer ${liveKey.apiKey}`,
+        },
+        payload: prizeEnginePayload(
+          {
+            player: {
+              playerId: "local-credit-player",
+              displayName: "Local Credit Player",
+            },
+          },
+          "live",
+        ),
+      });
+      expect(liveDraw.statusCode).toBe(200);
+
+      const insightsBeforeRun = await getSaasTenantBillingInsights(tenant.id);
+      expect(insightsBeforeRun.summary).toMatchObject({
+        availableCreditAmount: "300.00",
+        currentTotalAmount: "2.00",
+        effectiveBudgetAmount: "1800.00",
+        remainingBudgetAmount: "1798.00",
+      });
+
+      const billingRun = await createBillingRun({
+        tenantId: tenant.id,
+        periodStart: periodStart.toISOString(),
+        periodEnd: periodEnd.toISOString(),
+      });
+      expect(billingRun).toMatchObject({
+        creditAppliedAmount: "2.00",
+        totalAmount: "0.00",
+      });
+
+      const insightsAfterRun = await getSaasTenantBillingInsights(tenant.id);
+      expect(insightsAfterRun.summary).toMatchObject({
+        availableCreditAmount: "298.00",
+        currentTotalAmount: "2.00",
+        effectiveBudgetAmount: "1798.00",
+        remainingBudgetAmount: "1796.00",
+      });
+    },
+  );
 
   it(
     "lets a portal tenant submit a billing dispute tied to a billing run",

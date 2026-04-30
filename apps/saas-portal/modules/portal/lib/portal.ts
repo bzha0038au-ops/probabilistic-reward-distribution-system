@@ -75,7 +75,7 @@ export const portalRouteMeta: Record<PortalView, PortalRouteMeta> = {
     label: "Billing",
     title: "Billing profile, invoices, and payment setup",
     description:
-      "Open the Stripe portal, attach a payment method, and inspect recent invoice or top-up activity for the selected tenant.",
+      "Inspect the billing profile, credit adjustments, invoices, and any payment actions available for the selected tenant.",
   },
   docs: {
     href: "/portal/docs",

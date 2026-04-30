@@ -135,7 +135,7 @@ export function PortalDashboardDocsPage({
             </div>
 
             <div className="rounded-3xl border border-slate-200 bg-slate-950 p-5 text-sm text-slate-100">
-              <pre className="overflow-x-auto">
+              <pre key={`docs-inline-${snippetLanguage}`} className="overflow-x-auto">
                 <code>{sandboxSnippet}</code>
               </pre>
             </div>
@@ -154,7 +154,10 @@ export function PortalDashboardDocsPage({
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <pre className="overflow-x-auto rounded-3xl bg-black/30 p-5 text-sm text-slate-100">
+          <pre
+            key={`docs-preview-${snippetLanguage}`}
+            className="overflow-x-auto rounded-3xl bg-black/30 p-5 text-sm text-slate-100"
+          >
             <code>{sandboxSnippet}</code>
           </pre>
           <p className="text-sm leading-6 text-slate-400">

@@ -669,7 +669,13 @@ export const zhCNMessages: Messages = {
       sendInvoice: "发送账单",
       createBillingRun: "创建账单批次",
       notePlaceholder: "手动给客户补余额",
+      localCreditNotePlaceholder: "本地手工信用备注",
       createManualTopUp: "创建手动补款",
+      createManualCredit: "应用手工信用",
+      localCreditHint:
+        "当前环境未启用 Stripe。手工信用会直接增加租户的可用预算余额。",
+      externalSyncUnavailable:
+        "当前环境未启用 Stripe。账单批次仍可在本地生成草稿，但无法执行发票同步和发送。",
     },
     quickstart: {
       title: "hello-reward",
@@ -706,6 +712,8 @@ export const zhCNMessages: Messages = {
       decisionPayoutPlaceholder: "派奖",
       portalConfigurationPlaceholder: "bpc_...",
       stripeCustomerPlaceholder: "cus_...",
+      localBillingMode:
+        "当前环境不可用 Stripe 客户动作。请改用本地手工信用。",
     },
     riskEnvelope: {
       title: "risk_envelope",
@@ -796,6 +804,8 @@ export const zhCNMessages: Messages = {
       refresh: "刷新",
       paidOutOfBand: "线下已付",
       settle: "结算",
+      externalSyncUnavailable:
+        "当前环境未启用 Stripe，无法执行外部发票同步。",
     },
     webhookQueueSection: {
       title: "Webhook 队列",
@@ -808,8 +818,10 @@ export const zhCNMessages: Messages = {
     },
     topUpsSection: {
       title: "手动补款",
+      titleLocal: "手工信用",
       noNote: "无备注",
       sync: "同步",
+      applyLocalCredit: "应用本地信用",
     },
     recentUsageSection: {
       title: "最近用量",

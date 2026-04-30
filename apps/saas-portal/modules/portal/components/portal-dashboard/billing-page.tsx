@@ -39,6 +39,32 @@ type BillingPageProps = {
   isPending: boolean;
 };
 
+const defaultBillingCapabilities = {
+  billingRunSync: false,
+  customerPortal: false,
+  localManualCredits: false,
+  paymentMethodSetup: false,
+  stripeEnabled: false,
+  topUpExternalSync: false,
+};
+
+const getTopUpStatusTone = (status: string) => {
+  if (status === "applied" || status === "synced") {
+    return "bg-emerald-100 text-emerald-800 hover:bg-emerald-100";
+  }
+
+  if (status === "failed") {
+    return "bg-rose-100 text-rose-800 hover:bg-rose-100";
+  }
+
+  return "bg-slate-100 text-slate-700 hover:bg-slate-100";
+};
+
+const getTopUpSourceLabel = (source: string) =>
+  source === "local_manual_credit"
+    ? "Local manual credit"
+    : "Stripe balance top-up";
+
 export function PortalDashboardBillingPage({
   billingCurrency,
   billingInsights,
@@ -53,15 +79,25 @@ export function PortalDashboardBillingPage({
   handleUpdateBudgetPolicy,
   isPending,
 }: BillingPageProps) {
+  const billingCapabilities =
+    currentTenant?.billing?.providerCapabilities ?? defaultBillingCapabilities;
+  const hasStripeBillingActions =
+    billingCapabilities.customerPortal ||
+    billingCapabilities.paymentMethodSetup;
+  const budgetComposition =
+    billingInsights?.summary.effectiveBudgetAmount !== null
+      ? `Budget ${billingInsights.summary.monthlyBudget ?? "0.00"} + credits ${billingInsights.summary.availableCreditAmount}`
+      : null;
+
   return (
     <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
       <Card className="border-slate-200 bg-white/90">
         <CardHeader className="gap-2">
           <CardTitle>Billing, forecast, and invoices</CardTitle>
           <CardDescription>
-            Open the Stripe customer portal, attach a payment method, inspect
-            the daily spend curve, and compare trailing 7/30 day month-end
-            projections before usage turns into an invoice surprise.
+            {billingCapabilities.localManualCredits
+              ? "Inspect daily spend, local credit balance, and invoice history. Stripe payment actions are disabled in this environment, so extra spend capacity is applied as manual credits from the internal admin console."
+              : "Open the Stripe customer portal, attach a payment method, inspect the daily spend curve, and compare trailing 7/30 day month-end projections before usage turns into an invoice surprise."}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
@@ -131,15 +167,14 @@ export function PortalDashboardBillingPage({
                         Budget state
                       </p>
                       <p className="mt-2 text-xl font-semibold text-slate-950">
-                        {billingInsights.summary.monthlyBudget
+                        {billingInsights.summary.effectiveBudgetAmount
                           ? `${billingInsights.summary.remainingBudgetAmount} left`
                           : "No target"}
                       </p>
                       <p className="mt-1 text-sm text-slate-600">
-                        Threshold{" "}
-                        {billingInsights.summary.budgetThresholdAmount
-                          ? `${billingInsights.summary.budgetThresholdAmount} ${billingCurrency}`
-                          : "not configured"}
+                        {budgetComposition
+                          ? `${budgetComposition} · threshold ${billingInsights.summary.budgetThresholdAmount ?? "not configured"}`
+                          : `Threshold ${billingInsights.summary.budgetThresholdAmount ?? "not configured"}`}
                       </p>
                     </div>
                   </div>
@@ -150,33 +185,45 @@ export function PortalDashboardBillingPage({
                   </div>
                 )}
 
-                <div className="flex flex-wrap gap-3">
-                  <Button
-                    type="button"
-                    disabled={!currentTenantId || isPending}
-                    onClick={() => {
-                      handleBillingRedirect(
-                        `/portal/saas/tenants/${currentTenantId}/billing/portal`,
-                        "Opening Stripe customer portal…",
-                      );
-                    }}
-                  >
-                    Open billing portal
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={!currentTenantId || isPending}
-                    onClick={() => {
-                      handleBillingRedirect(
-                        `/portal/saas/tenants/${currentTenantId}/billing/setup-session`,
-                        "Opening payment setup session…",
-                      );
-                    }}
-                  >
-                    Add payment method
-                  </Button>
-                </div>
+                {hasStripeBillingActions ? (
+                  <div className="flex flex-wrap gap-3">
+                    {billingCapabilities.customerPortal ? (
+                      <Button
+                        type="button"
+                        disabled={!currentTenantId || isPending}
+                        onClick={() => {
+                          handleBillingRedirect(
+                            `/portal/saas/tenants/${currentTenantId}/billing/portal`,
+                            "Opening Stripe customer portal…",
+                          );
+                        }}
+                      >
+                        Open billing portal
+                      </Button>
+                    ) : null}
+                    {billingCapabilities.paymentMethodSetup ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={!currentTenantId || isPending}
+                        onClick={() => {
+                          handleBillingRedirect(
+                            `/portal/saas/tenants/${currentTenantId}/billing/setup-session`,
+                            "Opening payment setup session…",
+                          );
+                        }}
+                      >
+                        Add payment method
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-4 text-sm text-slate-500">
+                    Stripe payment actions are disabled in this environment.
+                    Manual credit adjustments from the admin console will show
+                    up below and increase the available budget automatically.
+                  </div>
+                )}
               </div>
 
               {billingInsights ? (
@@ -523,10 +570,13 @@ export function PortalDashboardBillingPage({
 
         <Card className="border-slate-200 bg-white/90">
           <CardHeader className="gap-2">
-            <CardTitle>Top-ups</CardTitle>
+            <CardTitle>
+              {billingCapabilities.localManualCredits
+                ? "Credit adjustments"
+                : "Top-ups"}
+            </CardTitle>
             <CardDescription>
-              Recent balance adjustments already present in the overview
-              payload.
+              Recent credit adjustments already present in the overview payload.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
@@ -540,11 +590,17 @@ export function PortalDashboardBillingPage({
                     <p className="text-sm font-medium text-slate-900">
                       {topUp.amount} {topUp.currency}
                     </p>
-                    <Badge className="rounded-full bg-slate-100 text-slate-700 hover:bg-slate-100">
+                    <Badge
+                      className={cn(
+                        "rounded-full",
+                        getTopUpStatusTone(topUp.status),
+                      )}
+                    >
                       {topUp.status}
                     </Badge>
                   </div>
                   <p className="mt-2 text-sm text-slate-600">
+                    {getTopUpSourceLabel(topUp.source)} ·{" "}
                     {topUp.note || "No note"} · {formatDate(topUp.createdAt)}
                   </p>
                 </div>

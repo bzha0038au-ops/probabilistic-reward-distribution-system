@@ -30,9 +30,11 @@ import type {
   SaasApiKeyIssue,
   SaasAgent,
   SaasBillingAccount,
+  SaasBillingProviderCapabilities,
   SaasBillingDispute,
   SaasBillingRun,
   SaasBillingTopUp,
+  SaasBillingTopUpSource,
   SaasAgentControl,
   SaasOutboundWebhook,
   SaasOutboundWebhookDelivery,
@@ -72,6 +74,7 @@ import {
   normalizeProjectStrategyParams,
   resolveProjectSelectionStrategy,
 } from "./prize-engine-domain";
+import { isSaasStripeEnabled } from "./stripe";
 
 export const normalizeScopes = (value: unknown): PrizeEngineApiKeyScope[] => {
   const source = Array.isArray(value) ? value : [];
@@ -149,6 +152,40 @@ const maskWebhookSecret = (secret: string) =>
   secret.length <= 8
     ? `${secret.slice(0, 2)}••••`
     : `${secret.slice(0, 4)}••••${secret.slice(-4)}`;
+
+const resolveSaasBillingProviderCapabilities = (
+  row: typeof saasBillingAccounts.$inferSelect,
+): SaasBillingProviderCapabilities => {
+  const stripeEnabled = isSaasStripeEnabled();
+  const hasStripeCustomer = Boolean(row.stripeCustomerId);
+
+  return {
+    stripeEnabled,
+    customerPortal: stripeEnabled && hasStripeCustomer,
+    paymentMethodSetup: stripeEnabled && hasStripeCustomer,
+    billingRunSync: stripeEnabled && hasStripeCustomer,
+    topUpExternalSync: stripeEnabled && hasStripeCustomer,
+    localManualCredits: !stripeEnabled,
+  };
+};
+
+const resolveSaasBillingTopUpSource = (
+  row: typeof saasBillingTopUps.$inferSelect,
+): SaasBillingTopUpSource => {
+  const metadata = normalizeMetadata(row.metadata);
+  const source = metadata?.topUpSource;
+
+  if (
+    source === "local_manual_credit" ||
+    source === "stripe_balance"
+  ) {
+    return source;
+  }
+
+  return row.stripeCustomerId || row.stripeBalanceTransactionId
+    ? "stripe_balance"
+    : "local_manual_credit";
+};
 
 export const toSaasTenant = (
   row: typeof saasTenants.$inferSelect,
@@ -274,6 +311,7 @@ export const toSaasBilling = (
   drawFee: new Decimal(row.drawFee).toFixed(4),
   decisionPricing: resolveBillingDecisionPricing(row.metadata, row.drawFee),
   budgetPolicy: readSaasBillingBudgetPolicy(row.metadata),
+  providerCapabilities: resolveSaasBillingProviderCapabilities(row),
   currency: row.currency,
   isBillable: Boolean(row.isBillable),
   metadata: redactBillingMetadata(row.metadata),
@@ -351,6 +389,7 @@ export const toSaasBillingTopUp = (
   currency: row.currency,
   note: row.note,
   status: row.status,
+  source: resolveSaasBillingTopUpSource(row),
   stripeCustomerId: row.stripeCustomerId,
   stripeBalanceTransactionId: row.stripeBalanceTransactionId,
   syncedAt: row.syncedAt,

@@ -148,6 +148,7 @@ export type SaasBillingRunExternalSyncStage = z.infer<
 
 export const saasBillingTopUpStatusValues = [
   "pending",
+  "applied",
   "synced",
   "failed",
 ] as const;
@@ -156,6 +157,17 @@ export const SaasBillingTopUpStatusSchema = z.enum(
 );
 export type SaasBillingTopUpStatus = z.infer<
   typeof SaasBillingTopUpStatusSchema
+>;
+
+export const saasBillingTopUpSourceValues = [
+  "local_manual_credit",
+  "stripe_balance",
+] as const;
+export const SaasBillingTopUpSourceSchema = z.enum(
+  saasBillingTopUpSourceValues,
+);
+export type SaasBillingTopUpSource = z.infer<
+  typeof SaasBillingTopUpSourceSchema
 >;
 
 export const saasBillingDisputeStatusValues = [
@@ -547,6 +559,18 @@ export type SaasBillingDecisionBreakdown = z.infer<
   typeof SaasBillingDecisionBreakdownSchema
 >;
 
+export const SaasBillingProviderCapabilitiesSchema = z.object({
+  stripeEnabled: z.boolean(),
+  customerPortal: z.boolean(),
+  paymentMethodSetup: z.boolean(),
+  billingRunSync: z.boolean(),
+  topUpExternalSync: z.boolean(),
+  localManualCredits: z.boolean(),
+});
+export type SaasBillingProviderCapabilities = z.infer<
+  typeof SaasBillingProviderCapabilitiesSchema
+>;
+
 export const SaasBillingAccountSchema = z.object({
   id: z.number().int(),
   tenantId: z.number().int(),
@@ -559,6 +583,7 @@ export const SaasBillingAccountSchema = z.object({
   drawFee: z.string(),
   decisionPricing: SaasBillingDecisionPricingSchema,
   budgetPolicy: SaasBillingBudgetPolicySchema,
+  providerCapabilities: SaasBillingProviderCapabilitiesSchema,
   currency: z.string(),
   isBillable: z.boolean(),
   metadata: z.record(z.string(), z.unknown()).nullable().optional(),
@@ -897,6 +922,7 @@ export const SaasBillingTopUpSchema = z.object({
   currency: z.string(),
   note: z.string().nullable(),
   status: SaasBillingTopUpStatusSchema,
+  source: SaasBillingTopUpSourceSchema,
   stripeCustomerId: z.string().nullable(),
   stripeBalanceTransactionId: z.string().nullable(),
   syncedAt: z.union([z.string(), z.date()]).nullable().optional(),
@@ -970,7 +996,9 @@ export const SaasTenantBillingInsightsSchema = z.object({
     currentTotalAmount: z.string(),
     trailing7dUsageAmount: z.string(),
     trailing30dUsageAmount: z.string(),
+    availableCreditAmount: z.string(),
     monthlyBudget: z.string().nullable(),
+    effectiveBudgetAmount: z.string().nullable(),
     budgetThresholdAmount: z.string().nullable(),
     hardCap: z.string().nullable(),
     remainingBudgetAmount: z.string().nullable(),

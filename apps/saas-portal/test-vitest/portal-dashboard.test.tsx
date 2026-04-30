@@ -80,6 +80,7 @@ import { PortalDashboard } from "@/modules/portal/components/portal-dashboard";
 const teardownDom = installTestDom();
 const fetchMock = vi.fn();
 const clipboardWriteTextMock = vi.fn();
+const documentExecCommandMock = vi.fn();
 const locationAssignCalls: string[] = [];
 let restoreLocationAssign: (() => void) | null = null;
 
@@ -125,6 +126,14 @@ const createOverview = () =>
           currency: "USD",
           drawFee: "0.2",
           planCode: "growth",
+          providerCapabilities: {
+            billingRunSync: false,
+            customerPortal: false,
+            localManualCredits: true,
+            paymentMethodSetup: false,
+            stripeEnabled: false,
+            topUpExternalSync: false,
+          },
         },
         tenant: {
           id: 10,
@@ -252,6 +261,12 @@ describe("PortalDashboard", () => {
         writeText: clipboardWriteTextMock,
       },
     });
+    Object.defineProperty(document, "execCommand", {
+      configurable: true,
+      value: documentExecCommandMock,
+      writable: true,
+    });
+    documentExecCommandMock.mockReturnValue(false);
     restoreLocationAssign = interceptLocationAssign();
   });
 
@@ -327,6 +342,8 @@ describe("PortalDashboard", () => {
       document.querySelector('[data-testid="snippet-bootstrap"]')?.textContent,
     ).toContain("from prize_engine_sdk import PrizeEngineClient");
 
+    portalDashboardMocks.router.refresh.mockClear();
+
     await act(async () => {
       (
         document.querySelectorAll("button")[1] as HTMLButtonElement | undefined
@@ -336,6 +353,7 @@ describe("PortalDashboard", () => {
     expect(portalDashboardMocks.router.replace).toHaveBeenCalledWith(
       "/portal/docs?tenant=77&project=88&invite=invite-1&billingSetup=ready",
     );
+    expect(portalDashboardMocks.router.refresh).toHaveBeenCalledTimes(1);
     expect(portalDashboardMocks.shellProps).toMatchObject({
       currentProjectId: 101,
       currentTenantId: 10,
@@ -1610,7 +1628,7 @@ describe("PortalDashboard", () => {
     });
   });
 
-  it("surfaces clipboard access errors for sandbox snippet copy", async () => {
+  it("surfaces sandbox snippet copy failures when neither clipboard API nor legacy copy succeeds", async () => {
     portalDashboardMocks.usePathname.mockReturnValue("/portal/docs");
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
@@ -1642,8 +1660,46 @@ describe("PortalDashboard", () => {
 
     expect(portalDashboardMocks.shellProps).toMatchObject({
       banner: {
-        message: "Clipboard access is unavailable in this browser.",
+        message: "Failed to copy the sandbox SDK snippet.",
         tone: "error",
+      },
+    });
+  });
+
+  it("falls back to legacy copy for sandbox snippets when clipboard writes fail", async () => {
+    portalDashboardMocks.usePathname.mockReturnValue("/portal/docs");
+    clipboardWriteTextMock.mockRejectedValueOnce(new Error("Clipboard denied."));
+    documentExecCommandMock.mockReturnValueOnce(true);
+
+    renderTestComponent(
+      <PortalDashboard
+        billingSetupStatus="ready"
+        billingInsights={null}
+        error={null}
+        inviteToken="invite-1"
+        overview={createOverview() as never}
+        reportExports={[]}
+        reportsError={null}
+        requestedProjectId={101}
+        requestedTenantId={10}
+        view="docs"
+      />,
+    );
+
+    await flushEffects();
+
+    await act(async () => {
+      await (
+        portalDashboardMocks.viewContentProps?.handleCopySandboxSnippet as () => Promise<void>
+      )();
+    });
+
+    expect(clipboardWriteTextMock).toHaveBeenCalledTimes(1);
+    expect(documentExecCommandMock).toHaveBeenCalledWith("copy");
+    expect(portalDashboardMocks.shellProps).toMatchObject({
+      banner: {
+        message: "Copied the sandbox SDK snippet.",
+        tone: "success",
       },
     });
   });

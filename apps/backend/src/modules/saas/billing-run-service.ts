@@ -44,6 +44,7 @@ import {
   resolveBillingRunCollectionMethod,
   syncBillingRunFromInvoice,
 } from "./billing-service-support";
+import { readSaasTenantAvailableCreditAmount } from "./billing-top-up-service";
 import {
   getSaasStripeClient,
   isSaasStripeEnabled,
@@ -271,7 +272,20 @@ export async function createBillingRun(
     );
     const usageFeeAmount = toDecimal(usageSummary.usageFeeAmount);
     const baseFeeAmount = toDecimal(billingAccountVersion.baseMonthlyFee);
-    const totalAmount = baseFeeAmount.plus(usageFeeAmount);
+    const grossTotalAmount = baseFeeAmount.plus(usageFeeAmount);
+    const availableCreditAmount = !isSaasStripeEnabled()
+      ? toDecimal(
+          await readSaasTenantAvailableCreditAmount(tx, tenant.id, {
+            excludeBillingRunId: billingRun.id,
+          }),
+        )
+      : toDecimal("0");
+    const creditAppliedAmount = availableCreditAmount.greaterThan(
+      grossTotalAmount,
+    )
+      ? grossTotalAmount
+      : availableCreditAmount;
+    const totalAmount = grossTotalAmount.minus(creditAppliedAmount);
     const existingMetadata = normalizeMetadata(billingRun.metadata);
     const nextRunMetadata =
       existingMetadata && Reflect.has(existingMetadata, "externalSync")
@@ -291,7 +305,7 @@ export async function createBillingRun(
         currency: billingAccountVersion.currency,
         baseFeeAmount: baseFeeAmount.toFixed(2),
         usageFeeAmount: usageFeeAmount.toFixed(2),
-        creditAppliedAmount: "0",
+        creditAppliedAmount: creditAppliedAmount.toFixed(2),
         totalAmount: totalAmount.toFixed(2),
         drawCount: usageSummary.drawCount,
         stripeCustomerId: billingAccountVersion.stripeCustomerId,
