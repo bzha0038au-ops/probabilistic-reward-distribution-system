@@ -341,7 +341,7 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "saas_billing_runs" ADD CONSTRAINT "saas_billing_runs_billing_account_id_saas_billing_accounts_id_fk" FOREIGN KEY ("billing_account_id") REFERENCES "public"."saas_billing_accounts"("id") ON DELETE set null ON UPDATE no action;
+ ALTER TABLE "saas_billing_runs" ADD CONSTRAINT "saas_billing_runs_billing_account_fk" FOREIGN KEY ("billing_account_id") REFERENCES "public"."saas_billing_accounts"("id") ON DELETE set null ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
@@ -359,7 +359,7 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "saas_billing_top_ups" ADD CONSTRAINT "saas_billing_top_ups_billing_account_id_saas_billing_accounts_id_fk" FOREIGN KEY ("billing_account_id") REFERENCES "public"."saas_billing_accounts"("id") ON DELETE set null ON UPDATE no action;
+ ALTER TABLE "saas_billing_top_ups" ADD CONSTRAINT "saas_billing_top_ups_billing_account_fk" FOREIGN KEY ("billing_account_id") REFERENCES "public"."saas_billing_accounts"("id") ON DELETE set null ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
@@ -413,7 +413,7 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "saas_stripe_webhook_events" ADD CONSTRAINT "saas_stripe_webhook_events_billing_run_id_saas_billing_runs_id_fk" FOREIGN KEY ("billing_run_id") REFERENCES "public"."saas_billing_runs"("id") ON DELETE set null ON UPDATE no action;
+ ALTER TABLE "saas_stripe_webhook_events" ADD CONSTRAINT "saas_stripe_webhook_events_billing_run_fk" FOREIGN KEY ("billing_run_id") REFERENCES "public"."saas_billing_runs"("id") ON DELETE set null ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;

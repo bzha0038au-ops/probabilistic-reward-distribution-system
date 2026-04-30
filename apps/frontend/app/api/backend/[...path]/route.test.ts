@@ -65,13 +65,13 @@ describe("backend proxy route", () => {
     );
 
     const response = await GET(
-      new NextRequest("https://example.com/api/backend/transactions?limit=8"),
-      buildRouteContext(["transactions"]),
+      new NextRequest("https://example.com/api/backend/economy/ledger?limit=8"),
+      buildRouteContext(["economy", "ledger"]),
     );
 
     expect(response.status).toBe(200);
     expect(fetchSpy).toHaveBeenCalledWith(
-      new URL("http://localhost:4000/transactions?limit=8"),
+      new URL("http://localhost:4000/economy/ledger?limit=8"),
       expect.objectContaining({
         method: "GET",
         cache: "no-store",
@@ -327,6 +327,46 @@ describe("backend proxy route", () => {
     const response = await GET(
       new NextRequest("https://example.com/api/backend/admin/deposits"),
       buildRouteContext(["admin", "deposits"]),
+    );
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({
+      ok: false,
+      error: { message: "Not found.", code: "NOT_FOUND" },
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 for retired legacy finance routes on the browser bff", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    const response = await GET(
+      new NextRequest("https://example.com/api/backend/top-ups"),
+      buildRouteContext(["top-ups"]),
+    );
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({
+      ok: false,
+      error: { message: "Not found.", code: "NOT_FOUND" },
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 for native-only purchase endpoints on the browser bff", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    const response = await POST(
+      new NextRequest("https://example.com/api/backend/iap/purchases/verify", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          storeChannel: "ios",
+        }),
+      }),
+      buildRouteContext(["iap", "purchases", "verify"]),
     );
 
     expect(response.status).toBe(404);

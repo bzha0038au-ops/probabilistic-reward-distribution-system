@@ -97,6 +97,9 @@ Use restores in two cases:
 - isolated drill or analytics clone restore
 - production recovery after corruption, accidental deletion, or bad migration
 - Migrations `0028` through `0035` do not ship repo-owned down SQL; rollback for `quick_eight`, `blackjack`, and `saas` / `prize_engine_saas` changes means restoring to a pre-deploy snapshot or PITR target and then redeploying the previous application release.
+- Migrations `0101+` must carry repo-checked rollback headers
+  (`pnpm guard:migration-discipline`) so deploy review can distinguish
+  `reversible_sql` from `restore_from_snapshot_or_pitr` before the rollout.
 
 Before restoring a production target:
 

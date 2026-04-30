@@ -3,14 +3,6 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import type { UserDashboardCopy } from './user-dashboard-copy';
 import type { UserDashboardController } from './use-user-dashboard';
 import { resolveUserDashboardBadgeVariant as badgeVariant } from './user-dashboard-utils';
@@ -20,7 +12,6 @@ type Translate = (key: string) => string;
 type ActivitySectionController = Pick<
   UserDashboardController,
   | 'currentSession'
-  | 'transactions'
   | 'sessions'
   | 'refreshing'
   | 'sessionLoading'
@@ -32,75 +23,22 @@ type ActivitySectionController = Pick<
 type UserDashboardActivitySectionProps = {
   controller: ActivitySectionController;
   copy: UserDashboardCopy;
-  formatAmount: (value: string | number | null | undefined) => string;
   formatDateTime: (value: string | Date | null | undefined) => string;
   formatStatus: (value: string | null | undefined) => string;
   showSessionsSection: boolean;
-  showTransactionsSection: boolean;
   t: Translate;
 };
 
 export function UserDashboardActivitySection({
   controller,
   copy: c,
-  formatAmount,
   formatDateTime,
   formatStatus,
   showSessionsSection,
-  showTransactionsSection,
   t,
 }: UserDashboardActivitySectionProps) {
   return (
-    <section
-      className={`grid gap-6 ${
-        showTransactionsSection && showSessionsSection
-          ? 'xl:grid-cols-[1.15fr,0.85fr]'
-          : 'xl:grid-cols-1'
-      }`}
-    >
-      {showTransactionsSection ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>{c.transactionsTitle}</CardTitle>
-            <CardDescription>{c.transactionsDescription}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {controller.transactions.length === 0 ? (
-              <p className="text-sm text-slate-500">{c.noTransactions}</p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{c.type}</TableHead>
-                    <TableHead>{c.amount}</TableHead>
-                    <TableHead>{c.before}</TableHead>
-                    <TableHead>{c.after}</TableHead>
-                    <TableHead>{c.reference}</TableHead>
-                    <TableHead>{c.createdAt}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {controller.transactions.map((entry) => (
-                    <TableRow key={entry.id}>
-                      <TableCell>{formatStatus(entry.entryType)}</TableCell>
-                      <TableCell>{formatAmount(entry.amount)}</TableCell>
-                      <TableCell>{formatAmount(entry.balanceBefore)}</TableCell>
-                      <TableCell>{formatAmount(entry.balanceAfter)}</TableCell>
-                      <TableCell>
-                        {entry.referenceType && entry.referenceId
-                          ? `${formatStatus(entry.referenceType)} #${entry.referenceId}`
-                          : c.unknown}
-                      </TableCell>
-                      <TableCell>{formatDateTime(entry.createdAt)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-      ) : null}
-
+    <section className="grid gap-6 xl:grid-cols-1">
       {showSessionsSection ? (
         <Card>
           <CardHeader>

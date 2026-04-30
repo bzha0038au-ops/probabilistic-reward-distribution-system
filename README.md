@@ -175,9 +175,15 @@ pnpm lint
 pnpm test
 pnpm test:integration
 pnpm test:integration:critical
+pnpm test:integration:payments-drill
 pnpm test:e2e
 pnpm test:e2e:critical
+pnpm test:e2e:portal
 pnpm test:e2e:install
+pnpm test:e2e:mobile:prepare
+pnpm test:e2e:mobile
+pnpm guard:migration-discipline
+pnpm guard:surface-file-budgets
 pnpm test:load
 pnpm test:load:mutations
 pnpm dev:notifications

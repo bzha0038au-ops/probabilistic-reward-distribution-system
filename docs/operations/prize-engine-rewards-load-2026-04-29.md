@@ -191,6 +191,26 @@ env \
   - widen prize-row fan-out for tenants whose traffic concentrates on a single prize row
 - After any queueing/admission-control change, rerun the same ladder at `120 / 150 / 180 / 240` for single-tenant and `120 / 150` for multi-tenant so the comparison stays apples-to-apples.
 
+## 2026-04-30 Follow-Up
+
+- The admission-control pass is now wired into the prize-engine write routes:
+  - single-tenant admission control is enforced before reward or draw settlement begins
+  - project-scoped concurrency caps and bounded queueing now sit in front of `/v1/engine/rewards` and `/v1/engine/draws`
+- Runtime knobs are metadata-driven so ops can tune hot tenants without a schema change:
+  - tenant metadata: `prizeEngineAdmission.maxConcurrent` (or `prize_engine_admission.max_concurrent`)
+  - project metadata: `prizeEngineExecution.maxConcurrency`, `queueDepth`, `queueWaitMs` (snake_case variants also accepted)
+- Rejected writes now return `429` plus `Retry-After` with one of:
+  - `TENANT_ADMISSION_CONTROL_LIMIT_EXCEEDED`
+  - `PROJECT_CONCURRENCY_LIMIT_EXCEEDED`
+  - `PROJECT_QUEUE_DEPTH_EXCEEDED`
+  - `PROJECT_QUEUE_WAIT_TIMEOUT`
+- Successful queued writes emit `X-Prize-Engine-Queue-Wait-Ms` so load tests and clients can distinguish clean wins from queued admissions.
+- Hot prize-row fan-out remains an operator playbook, not a new schema primitive:
+  - if one prize row dominates settled wins, split it into multiple identical rows
+  - keep reward amount and presentation aligned across the copies
+  - divide the original row's total weight and stock across those copies so the catalog EV stays unchanged while row-level write pressure spreads out
+- The load ladder rerun is still required after tuning these controls; this section records implementation status, not a new benchmark.
+
 ## Test Harness Note
 
 On degraded runs that intentionally push requests into client timeouts, the local Node 25 plus `postgres-js` harness can emit a shutdown-time `socket.write` null-reference after the JSON summary is already printed. Treat that as a teardown artifact of the local load harness, not as route-level settlement corruption. The successful runs above completed cleanly and persisted the expected `saas_draw_records`.

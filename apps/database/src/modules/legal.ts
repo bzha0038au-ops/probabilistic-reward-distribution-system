@@ -1,5 +1,6 @@
 import {
   boolean,
+  foreignKey,
   index,
   integer,
   pgTable,
@@ -62,10 +63,7 @@ export const legalDocumentPublications = pgTable(
     rolloutPercent: integer("rollout_percent").notNull().default(100),
     fallbackPublicationId: integer("fallback_publication_id"),
     rollbackFromPublicationId: integer("rollback_from_publication_id"),
-    changeRequestId: integer("change_request_id").references(
-      () => configChangeRequests.id,
-      { onDelete: "set null" },
-    ),
+    changeRequestId: integer("change_request_id"),
     publishedByAdminId: integer("published_by_admin_id")
       .notNull()
       .references(() => admins.id, { onDelete: "restrict" }),
@@ -77,6 +75,11 @@ export const legalDocumentPublications = pgTable(
     supersededByPublicationId: integer("superseded_by_publication_id"),
   },
   (table) => ({
+    changeRequestFk: foreignKey({
+      name: "legal_document_publications_change_request_fk",
+      columns: [table.changeRequestId],
+      foreignColumns: [configChangeRequests.id],
+    }).onDelete("set null"),
     activeIdx: index("legal_document_publications_active_idx").on(
       table.documentKey,
       table.locale,
@@ -97,10 +100,7 @@ export const legalDocumentAcceptances = pgTable(
     documentId: integer("document_id")
       .notNull()
       .references(() => legalDocuments.id, { onDelete: "cascade" }),
-    publicationId: integer("publication_id").references(
-      () => legalDocumentPublications.id,
-      { onDelete: "set null" },
-    ),
+    publicationId: integer("publication_id"),
     userId: integer("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -112,6 +112,11 @@ export const legalDocumentAcceptances = pgTable(
       .defaultNow(),
   },
   (table) => ({
+    publicationFk: foreignKey({
+      name: "legal_document_acceptances_publication_fk",
+      columns: [table.publicationId],
+      foreignColumns: [legalDocumentPublications.id],
+    }).onDelete("set null"),
     userDocumentUnique: uniqueIndex("legal_document_acceptances_user_document_unique").on(
       table.userId,
       table.documentId,

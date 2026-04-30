@@ -5,6 +5,7 @@ import {
   createAdminEnv,
   createBackendEnv,
   createFrontendEnv,
+  createSaasPortalEnv,
   findFreePort,
   repoRoot,
   runCommand,
@@ -21,7 +22,9 @@ const criticalE2eSpecs = [
 ];
 
 const saasWebhookSpec = 'tests/e2e/saas-webhook.spec.ts';
+const portalSpec = 'tests/e2e/saas-portal.spec.ts';
 const fullBackendE2eSpecs = [saasWebhookSpec];
+const portalE2eSpecs = [portalSpec];
 
 const warmUpHttp = async (
   url: string,
@@ -116,27 +119,37 @@ async function main() {
   const requiresFullBackend =
     runsFullSuite ||
     requestedSpecPaths.some((specPath) =>
-      fullBackendE2eSpecs.includes(specPath),
+      fullBackendE2eSpecs.includes(specPath) || portalE2eSpecs.includes(specPath),
     );
+  const requiresPortal =
+    runsFullSuite ||
+    requestedSpecPaths.some((specPath) => portalE2eSpecs.includes(specPath));
   const runAdminOnlySaasWebhookSpec =
     !runCriticalOnly &&
     forwardedArgs.length === 1 &&
     requestedSpecPaths.length === 1 &&
     requestedSpecPaths[0] === saasWebhookSpec;
+  const runPortalOnlySpec =
+    !runCriticalOnly &&
+    requestedSpecPaths.length > 0 &&
+    requestedSpecPaths.every((specPath) => portalE2eSpecs.includes(specPath));
   const useMinimalBackend = !requiresFullBackend;
   const database = await startTestDatabase('e2e');
   const backendPort = await findFreePort();
   const frontendPort = await findFreePort();
+  const portalPort = await findFreePort();
   const adminPort = await findFreePort();
   const frontendDistDir = `.next-e2e-${frontendPort}`;
   const frontendTsconfigPath = `${repoRoot}/apps/frontend/tsconfig.json`;
 
   const backendBaseUrl = `http://127.0.0.1:${backendPort}`;
   const frontendBaseUrl = `http://127.0.0.1:${frontendPort}`;
+  const portalBaseUrl = `http://127.0.0.1:${portalPort}`;
   const adminBaseUrl = `http://127.0.0.1:${adminPort}`;
 
   let backend: Awaited<ReturnType<typeof startService>> | null = null;
   let frontend: Awaited<ReturnType<typeof startService>> | null = null;
+  let portal: Awaited<ReturnType<typeof startService>> | null = null;
   let admin: Awaited<ReturnType<typeof startService>> | null = null;
   let saasBillingWorker:
     | Awaited<ReturnType<typeof startBackgroundProcess>>
@@ -217,7 +230,7 @@ async function main() {
       },
     );
 
-    if (!runAdminOnlySaasWebhookSpec) {
+    if (!runAdminOnlySaasWebhookSpec && !runPortalOnlySpec) {
       originalFrontendTsconfig = await readFile(frontendTsconfigPath, 'utf8');
       const frontendTsconfig = JSON.parse(originalFrontendTsconfig) as {
         include?: string[];
@@ -265,6 +278,32 @@ async function main() {
       await warmUpFrontend(frontendBaseUrl);
     }
 
+    if (requiresPortal) {
+      portal = await startService(
+        'pnpm',
+        [
+          '--dir',
+          'apps/saas-portal',
+          'exec',
+          'next',
+          'dev',
+          '--hostname',
+          '127.0.0.1',
+          '--port',
+          String(portalPort),
+        ],
+        {
+          env: createSaasPortalEnv({
+            port: portalPort,
+            apiBaseUrl: backendBaseUrl,
+            appBaseUrl: portalBaseUrl,
+          }),
+          healthUrl: `${portalBaseUrl}/login`,
+          startupTimeoutMs: 240_000,
+        },
+      );
+    }
+
     admin = await startService(
       'pnpm',
       [
@@ -301,15 +340,19 @@ async function main() {
         env: {
           PLAYWRIGHT_BASE_URL: runAdminOnlySaasWebhookSpec
             ? adminBaseUrl
-            : frontendBaseUrl,
+            : runPortalOnlySpec
+              ? portalBaseUrl
+              : frontendBaseUrl,
           PLAYWRIGHT_API_BASE_URL: backendBaseUrl,
           PLAYWRIGHT_ADMIN_BASE_URL: adminBaseUrl,
+          PLAYWRIGHT_PORTAL_BASE_URL: portalBaseUrl,
           TEST_DATABASE_URL: database.databaseUrl,
         },
       },
     );
   } finally {
     await admin?.stop().catch(() => undefined);
+    await portal?.stop().catch(() => undefined);
     await frontend?.stop().catch(() => undefined);
     await holdemTimeoutWorker?.stop().catch(() => undefined);
     await saasBillingWorker?.stop().catch(() => undefined);

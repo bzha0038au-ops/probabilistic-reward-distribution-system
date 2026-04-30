@@ -566,6 +566,99 @@ describeIntegrationSuite("backend saas integration", () => {
     });
   });
 
+  it("keeps empty CSV report exports downloadable through portal routes", async () => {
+    const email = "portal-empty-report-user@example.com";
+    const password = "portal-empty-report-secret-123";
+    await registerUser(email, password);
+    const session = await loginUser(email, password);
+
+    const tenant = await createSaasTenant({
+      slug: "portal-empty-report-tenant",
+      name: "Portal Empty Report Tenant",
+      status: "active",
+    });
+
+    const invite = await createSaasTenantInvite(
+      {
+        tenantId: tenant.id,
+        email,
+        role: "tenant_operator",
+      },
+      {
+        inviteBaseUrl: "http://localhost:3002",
+        invitedByLabel: "Integration test",
+      },
+    );
+
+    const inviteToken = new URL(invite.inviteUrl).searchParams.get("invite");
+    expect(inviteToken).toBeTruthy();
+
+    const acceptResponse = await getApp().inject({
+      method: "POST",
+      url: "/portal/saas/invites/accept",
+      headers: {
+        authorization: `Bearer ${session.token}`,
+        "content-type": "application/json",
+      },
+      payload: {
+        token: inviteToken,
+      },
+    });
+    expect(acceptResponse.statusCode).toBe(200);
+
+    const fromAt = new Date(Date.now() - 60_000).toISOString();
+    const toAt = new Date().toISOString();
+
+    const queueResponse = await getApp().inject({
+      method: "POST",
+      url: `/portal/saas/tenants/${tenant.id}/reports/exports`,
+      headers: {
+        authorization: `Bearer ${session.token}`,
+        "content-type": "application/json",
+      },
+      payload: {
+        resource: "saas_usage_events",
+        format: "csv",
+        fromAt,
+        toAt,
+      },
+    });
+    expect(queueResponse.statusCode).toBe(201);
+
+    const cycle = await runSaasReportExportCycle({ limit: 10 });
+    expect(cycle.processed).toBe(1);
+    expect(cycle.failed).toBe(0);
+
+    const listResponse = await getApp().inject({
+      method: "GET",
+      url: `/portal/saas/tenants/${tenant.id}/reports/exports`,
+      headers: {
+        authorization: `Bearer ${session.token}`,
+      },
+    });
+    expect(listResponse.statusCode).toBe(200);
+
+    const [job] = listResponse.json().data as Array<{
+      downloadUrl: string | null;
+      format: string;
+      rowCount: number | null;
+      status: string;
+    }>;
+    expect(job?.status).toBe("completed");
+    expect(job?.format).toBe("csv");
+    expect(job?.rowCount).toBe(0);
+    expect(job?.downloadUrl).toBeTruthy();
+
+    const downloadUrl = new URL(job!.downloadUrl!);
+    const downloadResponse = await getApp().inject({
+      method: "GET",
+      url: `${downloadUrl.pathname}${downloadUrl.search}`,
+    });
+    expect(downloadResponse.statusCode).toBe(200);
+    expect(downloadResponse.headers["content-type"]).toContain("text/csv");
+    expect(downloadResponse.body).toBe("");
+  });
+
   it(
     "bootstraps a sandbox project and keeps sandbox usage out of billing runs",
     { timeout: 15_000 },

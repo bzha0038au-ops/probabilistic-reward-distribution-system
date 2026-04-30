@@ -46,6 +46,7 @@ type EconomyOverview = {
     recipientUserId: number | null
     status: string
     storeChannel: string
+    metadata: Record<string, unknown> | null
     sku: string
     deliveryType: string
     createdAt: string | Date | null

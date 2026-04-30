@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { AssetCode } from "@reward/shared-types/economy";
 import type {
   PredictionMarketDetail,
   PredictionMarketPool,
   PredictionPosition,
 } from "@reward/shared-types/prediction-market";
+import type { WalletBalanceResponse } from "@reward/shared-types/user";
 
 import { useLocale, useTranslations } from "@/components/i18n-provider";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +23,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast-provider";
+import { readWalletAssetAvailableBalance } from "@/lib/economy-wallet";
 import { browserUserApiClient } from "@/lib/api/user-client";
 import { cn } from "@/lib/utils";
 import { useCurrentUserSession } from "@/modules/app/components/current-session-provider";
@@ -38,10 +41,16 @@ type PredictionMarketDetailPageProps = {
 };
 
 const STAKE_PATTERN = /^\d+(?:\.\d{1,2})?$/;
+const PREDICTION_MARKET_ASSET_CODE: AssetCode = "B_LUCK";
 
 const getOutcomeLabel = (market: PredictionMarketDetail, outcomeKey: string) =>
   market.outcomes.find((outcome) => outcome.key === outcomeKey)?.label ??
   outcomeKey;
+
+const getPredictionMarketAvailableBalance = (
+  wallet: WalletBalanceResponse,
+) =>
+  readWalletAssetAvailableBalance(wallet, PREDICTION_MARKET_ASSET_CODE);
 
 const validatePlacePosition = (
   t: (key: string) => string,
@@ -110,7 +119,7 @@ export function PredictionMarketDetailPage({
   const emailVerified = Boolean(currentSession.user.emailVerifiedAt);
 
   const [market, setMarket] = useState<PredictionMarketDetail | null>(null);
-  const [walletBalance, setWalletBalance] = useState<string | null>(null);
+  const [availableBalance, setAvailableBalance] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [sellingPositionId, setSellingPositionId] = useState<number | null>(
@@ -122,18 +131,20 @@ export function PredictionMarketDetailPage({
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const refreshWalletBalance = async () => {
+  const refreshWalletBalance = useCallback(async () => {
     try {
       const walletResponse = await browserUserApiClient.getWalletBalance();
       if (walletResponse.ok) {
-        setWalletBalance(walletResponse.data.balance.withdrawableBalance);
+        setAvailableBalance(
+          getPredictionMarketAvailableBalance(walletResponse.data),
+        );
       }
     } catch {
       // Keep the latest market state visible even if the balance refresh fails.
     }
-  };
+  }, []);
 
-  const refreshMarket = async () => {
+  const refreshMarket = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -151,18 +162,20 @@ export function PredictionMarketDetailPage({
       setMarket(marketResponse.data);
 
       if (walletResponse.ok) {
-        setWalletBalance(walletResponse.data.balance.withdrawableBalance);
+        setAvailableBalance(
+          getPredictionMarketAvailableBalance(walletResponse.data),
+        );
       }
     } catch {
       setError(t("markets.loadFailed"));
     }
 
     setLoading(false);
-  };
+  }, [marketId, t]);
 
   useEffect(() => {
     void refreshMarket();
-  }, [locale, marketId]);
+  }, [locale, marketId, refreshMarket]);
 
   useEffect(() => {
     if (!market) {
@@ -222,8 +235,8 @@ export function PredictionMarketDetailPage({
     }
 
     if (
-      walletBalance !== null &&
-      Number(parsed.data.stakeAmount) > Number(walletBalance)
+      availableBalance !== null &&
+      Number(parsed.data.stakeAmount) > Number(availableBalance)
     ) {
       setFormError(t("markets.validationStakeBalance"));
       return;
@@ -428,7 +441,7 @@ export function PredictionMarketDetailPage({
                       className="mt-1 text-2xl font-semibold text-white"
                       data-testid="market-available-balance"
                     >
-                      {formatMarketAmount(locale, walletBalance)}
+                      {formatMarketAmount(locale, availableBalance)}
                     </p>
                   </div>
                 </div>

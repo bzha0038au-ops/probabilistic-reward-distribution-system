@@ -14,6 +14,7 @@ import {
   kycProfiles,
   predictionMarkets,
   tableEvents,
+  userAssetBalances,
   userWallets,
   users,
 } from "../../database/src/index";
@@ -25,6 +26,7 @@ import {
   joinHoldemTable,
   startHoldemTableHand,
 } from "../../backend/src/modules/holdem/service";
+import { HOLDEM_CASUAL_ASSET_CODE } from "../../backend/src/modules/holdem/service-shared";
 import {
   getCurrentEffectiveLegalDocuments,
   recordLegalAcceptancesInTransaction,
@@ -105,6 +107,28 @@ async function upsertE2eUser(spec: { email: string; phone: string }) {
         bonusBalance: "500.00",
         lockedBalance: "0.00",
         wageredAmount: "0.00",
+        updatedAt: now,
+      },
+    });
+
+  await db
+    .insert(userAssetBalances)
+    .values({
+      userId: user.id,
+      assetCode: HOLDEM_CASUAL_ASSET_CODE,
+      availableBalance: "500.00",
+      lockedBalance: "0.00",
+      lifetimeEarned: "500.00",
+      lifetimeSpent: "0.00",
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: [userAssetBalances.userId, userAssetBalances.assetCode],
+      set: {
+        availableBalance: "500.00",
+        lockedBalance: "0.00",
+        lifetimeEarned: "500.00",
+        lifetimeSpent: "0.00",
         updatedAt: now,
       },
     });

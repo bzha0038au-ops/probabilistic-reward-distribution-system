@@ -157,11 +157,18 @@ export declare function createPrizeEngineClient(runtime: PrizeEngineRuntime): {
                 } | null | undefined;
                 serverNonce?: string | null | undefined;
                 epsilon?: number | null | undefined;
+                temperature?: number | null | undefined;
                 decision?: "explore" | "exploit" | null | undefined;
                 selectionDigest?: string | null | undefined;
                 candidateCount?: number | null | undefined;
                 selectedArmId?: number | null | undefined;
                 selectedArmKind?: "miss" | "prize" | null | undefined;
+                selectedArmScore?: number | null | undefined;
+                selectedArmProbability?: number | null | undefined;
+                priorAlpha?: number | null | undefined;
+                priorBeta?: number | null | undefined;
+                priorStrength?: number | null | undefined;
+                scoreNormalizationMax?: number | null | undefined;
             } | null;
             playerId: number;
             prize?: {

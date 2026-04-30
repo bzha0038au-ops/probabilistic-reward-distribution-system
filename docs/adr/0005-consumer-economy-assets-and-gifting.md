@@ -90,6 +90,10 @@ Checkpoint date: `2026-04-30`
 - Batch 2 is complete in-repo: `/wallet`, `GET /economy/ledger`,
   `GET /gift-energy`, `GET /gifts`, and `POST /gifts` are live, with the
   legacy wallet response still preserved as a compatibility surface.
+- Web account surfaces now treat the wallet as an economy-only container:
+  legacy browser top-up, withdrawal, bank-card, and crypto payout routes are
+  no longer exposed through the consumer web BFF, and the wallet route reads
+  assetized balances as its primary display source.
 - Batch 3 is implementation-complete in-repo but not yet fully validated
   against live store sandboxes.
 

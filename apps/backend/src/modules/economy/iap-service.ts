@@ -94,6 +94,7 @@ const FINAL_STATUSES = new Set<StorePurchaseStatus>([
   'revoked',
   'reversed',
 ]);
+const LOCAL_STUB_VERIFICATION_MODE = 'local_stub';
 
 const withExecutor = async <T>(
   executor: DbExecutor,
@@ -144,6 +145,12 @@ const mergeRecords = (
   ...(base ?? {}),
   ...(extra ?? {}),
 });
+
+const isManualApprovalRequiredMetadata = (
+  value: Record<string, unknown> | null | undefined
+) =>
+  value?.manualApprovalRequired === true ||
+  readTrimmedString(value?.verificationMode) === LOCAL_STUB_VERIFICATION_MODE;
 
 const serializeIapProduct = (product: IapProductRow) => ({
   id: product.id,
@@ -210,9 +217,17 @@ const serializeStorePurchaseReceipt = (receipt: StorePurchaseReceiptRow) => ({
 });
 
 const ensureStubVerificationAvailable = () => {
-  if (getConfig().nodeEnv === 'production') {
+  const config = getConfig();
+
+  if (config.nodeEnv === 'production') {
     throw serviceUnavailableError(
       'Store purchase verification is not configured for production.'
+    );
+  }
+
+  if (!config.iapLocalStubVerificationEnabled) {
+    throw serviceUnavailableError(
+      'Store purchase verification is not configured. Local stub verification is disabled for this environment.'
     );
   }
 };
@@ -1204,6 +1219,10 @@ const syncOrderWithVerifiedReceipt = async (
   }
 ) => {
   const { audit, order, product, verifiedReceipt } = payload;
+  const orderMetadata = toRecord(order.metadata);
+  const requiresManualApproval =
+    isManualApprovalRequiredMetadata(orderMetadata) ||
+    isManualApprovalRequiredMetadata(verifiedReceipt.metadata);
 
   await updateLatestReceiptForOrder(executor, order.id, {
     rawPayload: verifiedReceipt.rawPayload,
@@ -1217,6 +1236,22 @@ const syncOrderWithVerifiedReceipt = async (
         metadata: {
           verification: verifiedReceipt.metadata,
         },
+      });
+    }
+
+    if (requiresManualApproval && !FINAL_STATUSES.has(order.status)) {
+      return updateStorePurchaseOrder(executor, order, {
+        externalOrderId: verifiedReceipt.externalOrderId ?? order.externalOrderId,
+        metadata: {
+          verification: verifiedReceipt.metadata,
+          verificationMode: readTrimmedString(
+            verifiedReceipt.metadata.verificationMode
+          ),
+          manualApprovalRequired: true,
+          manualApprovalState: 'pending',
+          manualApprovalReason: 'local_stub_verification',
+        },
+        status: 'verified',
       });
     }
 
@@ -1357,129 +1392,153 @@ export async function verifyIapPurchase(
         throw conflictError('IAP product is not active.');
       }
 
-    if (product.deliveryType === 'voucher' && payload.request.recipientUserId) {
-      throw unprocessableEntityError(
-        'Voucher purchases cannot specify a recipient user.'
+      const requiresManualApproval = isManualApprovalRequiredMetadata(
+        verifiedReceipt.metadata
       );
-    }
 
-    if (product.deliveryType === 'gift_pack' && !payload.request.recipientUserId) {
-      throw unprocessableEntityError(
-        'Gift pack purchases require a recipient user.'
-      );
-    }
-
-    if (
-      product.deliveryType === 'gift_pack' &&
-      payload.request.recipientUserId === payload.userId
-    ) {
-      throw conflictError('Gift pack recipient must be a different user.');
-    }
-
-    const requestFingerprint = buildRequestFingerprint({
-      userId: payload.userId,
-      recipientUserId: payload.request.recipientUserId ?? null,
-      sku: payload.request.sku.trim(),
-      storeChannel: payload.request.storeChannel,
-      externalTransactionId: verifiedReceipt.externalTransactionId,
-      purchaseToken: verifiedReceipt.purchaseToken,
-      externalOrderId: verifiedReceipt.externalOrderId,
-    });
-
-    const [existingOrder] = await tx
-      .select()
-      .from(storePurchaseOrders)
-      .where(eq(storePurchaseOrders.idempotencyKey, idempotencyKey))
-      .limit(1);
-
-    const audit = resolveAuditContext({
-      ...payload.audit,
-      idempotencyKey,
-    });
-
-    if (existingOrder) {
-      assertExistingOrderMatchesFingerprint(existingOrder, requestFingerprint);
-      const syncedOrder = await syncOrderWithVerifiedReceipt(tx, {
-        audit,
-        order: existingOrder,
-        product,
-        verifiedReceipt,
-      });
-      return loadPurchaseSnapshot(tx, syncedOrder, true);
-    }
-
-    const existingReceipt = await findExistingReceipt(tx, {
-      storeChannel: payload.request.storeChannel,
-      externalTransactionId: verifiedReceipt.externalTransactionId,
-      purchaseToken: verifiedReceipt.purchaseToken,
-    });
-    if (existingReceipt) {
-      const [receiptOrder] = await tx
-        .select()
-        .from(storePurchaseOrders)
-        .where(eq(storePurchaseOrders.id, existingReceipt.orderId))
-        .limit(1);
-
-      if (!receiptOrder) {
-        throw persistenceError('Store purchase order not found for receipt.');
+      if (product.deliveryType === 'voucher' && payload.request.recipientUserId) {
+        throw unprocessableEntityError(
+          'Voucher purchases cannot specify a recipient user.'
+        );
       }
 
       if (
-        receiptOrder.userId !== payload.userId ||
-        receiptOrder.iapProductId !== product.id ||
-        (receiptOrder.recipientUserId ?? null) !==
-          (payload.request.recipientUserId ?? null)
+        product.deliveryType === 'gift_pack' &&
+        !payload.request.recipientUserId
       ) {
-        throw conflictError('Store purchase receipt already processed.');
+        throw unprocessableEntityError(
+          'Gift pack purchases require a recipient user.'
+        );
       }
 
-      const syncedOrder = await syncOrderWithVerifiedReceipt(tx, {
-        audit,
-        order: receiptOrder,
-        product,
-        verifiedReceipt,
-      });
-      return loadPurchaseSnapshot(tx, syncedOrder, true);
-    }
+      if (
+        product.deliveryType === 'gift_pack' &&
+        payload.request.recipientUserId === payload.userId
+      ) {
+        throw conflictError('Gift pack recipient must be a different user.');
+      }
 
-    if (verifiedReceipt.storeState !== 'purchased') {
-      throw conflictError(getStateConflictMessage(verifiedReceipt.storeState));
-    }
-
-    await ensureUserAssetBalances(payload.userId, tx);
-
-    const orderMetadata = {
-      ...(audit.metadata ?? {}),
-      requestFingerprint,
-      requestSku: payload.request.sku.trim(),
-      verificationMode: verifiedReceipt.metadata.verificationMode,
-    };
-
-    const [createdOrder] = await tx
-      .insert(storePurchaseOrders)
-      .values({
+      const requestFingerprint = buildRequestFingerprint({
         userId: payload.userId,
         recipientUserId: payload.request.recipientUserId ?? null,
-        iapProductId: product.id,
+        sku: payload.request.sku.trim(),
         storeChannel: payload.request.storeChannel,
-        status: 'created',
-        idempotencyKey,
+        externalTransactionId: verifiedReceipt.externalTransactionId,
+        purchaseToken: verifiedReceipt.purchaseToken,
         externalOrderId: verifiedReceipt.externalOrderId,
-        sourceApp: audit.sourceApp,
-        deviceFingerprint: audit.deviceFingerprint,
-        requestId: audit.requestId,
-        metadata: orderMetadata,
-      })
-      .returning();
+      });
 
-    await tx.insert(storePurchaseReceipts).values({
-      orderId: createdOrder.id,
-      storeChannel: payload.request.storeChannel,
-      externalTransactionId: verifiedReceipt.externalTransactionId,
-      purchaseToken: verifiedReceipt.purchaseToken,
-      rawPayload: verifiedReceipt.rawPayload,
-      metadata: verifiedReceipt.metadata,
-    });
+      const [existingOrder] = await tx
+        .select()
+        .from(storePurchaseOrders)
+        .where(eq(storePurchaseOrders.idempotencyKey, idempotencyKey))
+        .limit(1);
+
+      const audit = resolveAuditContext({
+        ...payload.audit,
+        idempotencyKey,
+      });
+
+      if (existingOrder) {
+        assertExistingOrderMatchesFingerprint(existingOrder, requestFingerprint);
+        const syncedOrder = await syncOrderWithVerifiedReceipt(tx, {
+          audit,
+          order: existingOrder,
+          product,
+          verifiedReceipt,
+        });
+        return loadPurchaseSnapshot(tx, syncedOrder, true);
+      }
+
+      const existingReceipt = await findExistingReceipt(tx, {
+        storeChannel: payload.request.storeChannel,
+        externalTransactionId: verifiedReceipt.externalTransactionId,
+        purchaseToken: verifiedReceipt.purchaseToken,
+      });
+      if (existingReceipt) {
+        const [receiptOrder] = await tx
+          .select()
+          .from(storePurchaseOrders)
+          .where(eq(storePurchaseOrders.id, existingReceipt.orderId))
+          .limit(1);
+
+        if (!receiptOrder) {
+          throw persistenceError('Store purchase order not found for receipt.');
+        }
+
+        if (
+          receiptOrder.userId !== payload.userId ||
+          receiptOrder.iapProductId !== product.id ||
+          (receiptOrder.recipientUserId ?? null) !==
+            (payload.request.recipientUserId ?? null)
+        ) {
+          throw conflictError('Store purchase receipt already processed.');
+        }
+
+        const syncedOrder = await syncOrderWithVerifiedReceipt(tx, {
+          audit,
+          order: receiptOrder,
+          product,
+          verifiedReceipt,
+        });
+        return loadPurchaseSnapshot(tx, syncedOrder, true);
+      }
+
+      if (verifiedReceipt.storeState !== 'purchased') {
+        throw conflictError(getStateConflictMessage(verifiedReceipt.storeState));
+      }
+
+      await ensureUserAssetBalances(payload.userId, tx);
+
+      const orderMetadata = {
+        ...(audit.metadata ?? {}),
+        requestFingerprint,
+        requestSku: payload.request.sku.trim(),
+        verificationMode: verifiedReceipt.metadata.verificationMode,
+        ...(requiresManualApproval
+          ? {
+              manualApprovalRequired: true,
+              manualApprovalState: 'pending',
+              manualApprovalReason: 'local_stub_verification',
+            }
+          : {}),
+      };
+
+      const [createdOrder] = await tx
+        .insert(storePurchaseOrders)
+        .values({
+          userId: payload.userId,
+          recipientUserId: payload.request.recipientUserId ?? null,
+          iapProductId: product.id,
+          storeChannel: payload.request.storeChannel,
+          status: requiresManualApproval ? 'verified' : 'created',
+          idempotencyKey,
+          externalOrderId: verifiedReceipt.externalOrderId,
+          sourceApp: audit.sourceApp,
+          deviceFingerprint: audit.deviceFingerprint,
+          requestId: audit.requestId,
+          metadata: orderMetadata,
+        })
+        .returning();
+
+      await tx.insert(storePurchaseReceipts).values({
+        orderId: createdOrder.id,
+        storeChannel: payload.request.storeChannel,
+        externalTransactionId: verifiedReceipt.externalTransactionId,
+        purchaseToken: verifiedReceipt.purchaseToken,
+        rawPayload: verifiedReceipt.rawPayload,
+        metadata: requiresManualApproval
+          ? mergeRecords(verifiedReceipt.metadata, {
+              manualApprovalRequired: true,
+              manualApprovalState: 'pending',
+              manualApprovalReason: 'local_stub_verification',
+            })
+          : verifiedReceipt.metadata,
+      });
+
+      if (requiresManualApproval) {
+        return loadPurchaseSnapshot(tx, createdOrder, false);
+      }
 
       const { order: fulfilledOrder, credited: fulfillment } =
         await fulfillStorePurchaseOrder(tx, {
@@ -1625,6 +1684,39 @@ export async function replayStorePurchaseOrderFulfillment(
       ...payload.audit,
       idempotencyKey: `admin_replay_store_purchase_order:${order.id}`,
     });
+    const orderMetadata = toRecord(order.metadata);
+
+    if (
+      isManualApprovalRequiredMetadata(orderMetadata) &&
+      order.status !== 'fulfilled' &&
+      !FINAL_STATUSES.has(order.status)
+    ) {
+      const { order: fulfilledOrder } = await fulfillStorePurchaseOrder(tx, {
+        audit,
+        order,
+        product,
+        verifiedReceipt,
+      });
+      const approvedOrder = await updateStorePurchaseOrder(tx, fulfilledOrder, {
+        metadata: {
+          manualApprovalRequired: true,
+          manualApprovalState: 'approved',
+          manualApprovalApprovedAt: new Date().toISOString(),
+          manualApprovalApprovedByActorType: audit.actorType,
+          manualApprovalApprovedByActorId: audit.actorId,
+        },
+      });
+
+      if (product.deliveryType === 'gift_pack') {
+        recordGiftPackDelivered({
+          storeChannel: product.storeChannel,
+          mode: 'restore',
+        });
+      }
+
+      return loadPurchaseSnapshot(tx, approvedOrder, false);
+    }
+
     const restoredOrder = await restoreStorePurchaseOrder(tx, {
       audit,
       order,

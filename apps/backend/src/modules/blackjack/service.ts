@@ -87,8 +87,6 @@ import { BLACKJACK_ROUND_TYPE } from "../hand-history/round-id";
 
 export { drawBlackjackDeck, scoreBlackjackCards } from "./game";
 
-const DUAL_BET_EXECUTION_COUNT = 2;
-
 const resolveBlackjackPlayModeOutcome = (
   status: BlackjackGameStatus,
 ): PlayModeOutcome => {

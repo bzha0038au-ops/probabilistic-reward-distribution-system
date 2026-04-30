@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS "prediction_market_appeals" (
   CONSTRAINT "prediction_market_appeals_market_id_prediction_markets_id_fk"
     FOREIGN KEY ("market_id") REFERENCES "public"."prediction_markets"("id")
     ON DELETE cascade ON UPDATE no action,
-  CONSTRAINT "prediction_market_appeals_oracle_binding_id_prediction_market_oracles_id_fk"
+  CONSTRAINT "prediction_market_appeals_oracle_binding_fk"
     FOREIGN KEY ("oracle_binding_id") REFERENCES "public"."prediction_market_oracles"("id")
     ON DELETE set null ON UPDATE no action,
   CONSTRAINT "prediction_market_appeals_resolved_by_admin_id_admins_id_fk"

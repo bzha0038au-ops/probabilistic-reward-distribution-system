@@ -116,31 +116,42 @@ package / directory was that command in?" during incidents.
 
 ## Production Standard
 
-This repo now ships the repo-owned backup scheduler, backup readability
-verification, restore-drill automation, and evidence format. Production is only
-ready when the following are configured outside the repo and referenced by the
-workflow:
+This repo ships backup scheduling, backup readability verification,
+restore-drill helpers, and evidence templates. That support is not the same as
+completing the production controls themselves.
 
-- managed PostgreSQL snapshots plus point-in-time recovery or WAL archiving
-- `BACKUP_ALERT_WEBHOOK_URL`
-- `DEPLOY_TG_BOT_TOKEN` and `DEPLOY_TG_PAGE_CHAT_ID`
-- `DEPLOY_TG_DIGEST_CHAT_ID` for non-paging backup verification results
-- `PRIMARY_ONCALL`, `SECONDARY_ONCALL`, `BACKUP_OWNER`,
-  `RESTORE_APPROVER`, and `RELEASE_APPROVER`
-- `OFFSITE_STORAGE_URI` and `BACKUP_ENCRYPTION_PASSPHRASE`
-- `BACKUP_ARCHIVE_S3_URI` plus optional `BACKUP_ARCHIVE_CROSS_REGION_S3_URI`
-- `POSTGRES_PITR_ENABLED`, `POSTGRES_PITR_STRATEGY`,
-  `POSTGRES_PITR_RPO_MINUTES`, `POSTGRES_WAL_ARCHIVE_ENABLED`, and
-  `POSTGRES_WAL_ARCHIVE_URI`
+Writing the documentation in the repo does not complete the control. Production
+controls still depend on implementation, validation, and retained evidence in
+the external environment. The deployment environment owners must configure and
+operate the following controls outside the repo before production can be
+considered ready:
+
+- managed PostgreSQL snapshots plus point-in-time recovery or WAL archiving,
+  with tested retention, restore targets, and documented RPO expectations
+- live `BACKUP_ALERT_WEBHOOK_URL`, `DEPLOY_TG_BOT_TOKEN`,
+  `DEPLOY_TG_PAGE_CHAT_ID`, and `DEPLOY_TG_DIGEST_CHAT_ID` integrations that
+  route to the real paging and non-paging destinations
+- an active on-call and approval rotation covering `PRIMARY_ONCALL`,
+  `SECONDARY_ONCALL`, `BACKUP_OWNER`, `RESTORE_APPROVER`, and
+  `RELEASE_APPROVER`
+- live offsite backup storage configured through `OFFSITE_STORAGE_URI`,
+  `BACKUP_ENCRYPTION_PASSPHRASE`, `BACKUP_ARCHIVE_S3_URI`, and optional
+  `BACKUP_ARCHIVE_CROSS_REGION_S3_URI`
+- deployment/runtime configuration for `POSTGRES_PITR_ENABLED`,
+  `POSTGRES_PITR_STRATEGY`, `POSTGRES_PITR_RPO_MINUTES`,
+  `POSTGRES_WAL_ARCHIVE_ENABLED`, and `POSTGRES_WAL_ARCHIVE_URI`, backed by
+  actual provider-side PITR/WAL setup
 - alert routing for readiness failures, 5xx spikes, draw error rate, withdraw
-  stuck, and queue backlog growth
+  stuck, queue backlog growth, and host disk/filesystem pressure
+- CDN/WAF coverage in front of the reverse proxy, including the required origin
+  restrictions and ruleset ownership in the edge platform
+- host patch management, security update cadence, and disk/filesystem alerting
+  on the deployment host
 - a committed restore drill report under `docs/operations/evidence/` from the
-  last 45 days
+  last 45 days, backed by the actual recovery exercise output
 - a committed secret-rotation drill summary under `docs/operations/evidence/`
   from the last 90 days
 - an up-to-date [`dr-drills.md`](./dr-drills.md) ledger proving repeated
   successful restores
 - a secret-rotation drill completed within the last 90 days, with command
   transcript captured in the change record
-- CDN/WAF coverage in front of the reverse proxy
-- patch management plus disk/filesystem alerting on the deployment host

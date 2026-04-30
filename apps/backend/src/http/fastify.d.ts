@@ -3,6 +3,7 @@ import '@fastify/websocket';
 import 'fastify';
 
 import type { ProjectApiAuth } from '../modules/saas/service';
+import type { PrizeEngineExecutionLease } from '../modules/saas/prize-engine-governor';
 import type { KycTier } from '@reward/shared-types/kyc';
 import type { RealtimeService } from '../realtime/service';
 import type { AuthenticatedAdmin } from '../shared/admin-session';
@@ -31,5 +32,6 @@ declare module 'fastify' {
       breakGlassVerified?: boolean;
     };
     prizeEngineProject?: ProjectApiAuth;
+    prizeEngineExecutionLease?: PrizeEngineExecutionLease;
   }
 }

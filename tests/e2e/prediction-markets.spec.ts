@@ -178,6 +178,26 @@ const seedWalletBalance = async (userId: number, withdrawableBalance: string) =>
       wagered_amount = excluded.wagered_amount,
       updated_at = now()
   `;
+
+  await sql`
+    insert into user_asset_balances (
+      user_id,
+      asset_code,
+      available_balance,
+      locked_balance,
+      lifetime_earned,
+      lifetime_spent
+    )
+    values (${userId}, 'B_LUCK', ${withdrawableBalance}, '0.00', ${withdrawableBalance}, '0.00')
+    on conflict (user_id, asset_code)
+    do update
+    set
+      available_balance = excluded.available_balance,
+      locked_balance = excluded.locked_balance,
+      lifetime_earned = excluded.lifetime_earned,
+      lifetime_spent = excluded.lifetime_spent,
+      updated_at = now()
+  `;
 };
 
 const seedPredictionMarket = async () => {

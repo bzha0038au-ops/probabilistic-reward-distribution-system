@@ -23,7 +23,6 @@ export default async function ProtectedAppLayout({
     { href: '/app', label: t('common.dashboard') },
     { href: '/app/rewards', label: t('app.navRewards') },
     { href: '/app/wallet', label: t('app.navWallet') },
-    { href: '/app/payments', label: t('app.navPayments') },
     { href: '/app/verification', label: 'KYC' },
     { href: '/app/security', label: t('app.navSecurity') },
     { href: '/app/notifications', label: t('app.navNotifications') },

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 
+import { runDatabaseMigrations } from '../../apps/database/src/migration-runner';
 import postgres, { type Sql } from 'postgres';
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
@@ -257,6 +258,24 @@ export const createFrontendEnv = (payload: {
   AUTH_URL: payload.appBaseUrl,
   NEXTAUTH_URL: payload.appBaseUrl,
   ...(payload.nextDistDir ? { NEXT_DIST_DIR: payload.nextDistDir } : {}),
+});
+
+export const createSaasPortalEnv = (payload: {
+  port: number;
+  apiBaseUrl: string;
+  appBaseUrl: string;
+}) => ({
+  NODE_ENV: 'development',
+  PORT: String(payload.port),
+  API_BASE_URL: payload.apiBaseUrl,
+  NEXT_PUBLIC_API_BASE_URL: payload.apiBaseUrl,
+  NEXT_PUBLIC_ENGINE_BASE_URL: payload.apiBaseUrl,
+  AUTH_SECRET: backendTestSecrets.authSecret,
+  NEXTAUTH_SECRET: backendTestSecrets.authSecret,
+  USER_JWT_SECRET: backendTestSecrets.userJwtSecret,
+  AUTH_TRUST_HOST: 'true',
+  AUTH_URL: payload.appBaseUrl,
+  NEXTAUTH_URL: payload.appBaseUrl,
 });
 
 export const createAdminEnv = (payload: {
@@ -521,16 +540,7 @@ export async function startTestDatabase(profile: string): Promise<TestDatabase> 
         await adminSql.end({ timeout: 5 }).catch(() => undefined);
       }
 
-      await runCommand(
-        'pnpm',
-        ['--dir', 'apps/database', 'exec', 'drizzle-kit', 'migrate'],
-        {
-          env: {
-            DATABASE_URL: databaseUrl,
-            POSTGRES_URL: databaseUrl,
-          },
-        },
-      );
+      await runDatabaseMigrations({ databaseUrl });
       await applyLegacyTestSchemaShims(databaseUrl);
       await assertRequiredTestSchemaTables(databaseUrl);
     } catch (error) {
@@ -583,16 +593,7 @@ export async function startTestDatabase(profile: string): Promise<TestDatabase> 
   const safeDatabaseUrl = `postgresql://${username}:***@${host}:${port}/${TEST_DATABASE_NAME}`;
 
   try {
-    await runCommand(
-      'pnpm',
-      ['--dir', 'apps/database', 'exec', 'drizzle-kit', 'migrate'],
-      {
-        env: {
-          DATABASE_URL: databaseUrl,
-          POSTGRES_URL: databaseUrl,
-        },
-      },
-    );
+    await runDatabaseMigrations({ databaseUrl });
     await applyLegacyTestSchemaShims(databaseUrl);
     await assertRequiredTestSchemaTables(databaseUrl);
   } catch (error) {

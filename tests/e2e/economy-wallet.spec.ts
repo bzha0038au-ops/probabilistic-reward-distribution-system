@@ -297,7 +297,7 @@ test('web wallet shows economy assets, gift packs, and can send a B luck gift', 
   await page.goto('/app/wallet');
   await expect(page.getByText('Economy wallet', { exact: true })).toBeVisible();
   await expect(page.getByText('Gift packs', { exact: true })).toBeVisible();
-  await expect(page.getByText('Web view only')).toBeVisible();
+  await expect(page.getByText('Web view only', { exact: true }).first()).toBeVisible();
 
   await page.locator('#gift-receiver-user-id').fill(String(receiverUser!.id));
   await page.locator('#gift-amount').fill('5');

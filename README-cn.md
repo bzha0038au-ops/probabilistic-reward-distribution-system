@@ -153,7 +153,13 @@ pnpm db:seed:manual
 pnpm db:seed:saas-portal-demo
 pnpm test
 pnpm test:integration
+pnpm test:integration:payments-drill
 pnpm test:e2e
+pnpm test:e2e:portal
+pnpm test:e2e:mobile:prepare
+pnpm test:e2e:mobile
+pnpm guard:migration-discipline
+pnpm guard:surface-file-budgets
 pnpm test:load
 pnpm test:load:mutations
 pnpm build

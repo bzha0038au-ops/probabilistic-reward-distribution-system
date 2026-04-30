@@ -1069,7 +1069,15 @@ BEGIN
     DROP TABLE public.round_events_legacy;
   END IF;
 
-  DROP TRIGGER IF EXISTS round_events_uniqueness_guard ON public.round_events;
+  IF EXISTS (
+    SELECT 1
+    FROM pg_trigger
+    WHERE tgrelid = 'public.round_events'::regclass
+      AND tgname = 'round_events_uniqueness_guard'
+      AND NOT tgisinternal
+  ) THEN
+    DROP TRIGGER round_events_uniqueness_guard ON public.round_events;
+  END IF;
   CREATE TRIGGER round_events_uniqueness_guard
     BEFORE INSERT OR UPDATE OF round_type, round_entity_id, table_round_id, event_index
     ON public.round_events
@@ -1344,7 +1352,15 @@ BEGIN
     DROP TABLE public.saas_usage_events_legacy;
   END IF;
 
-  DROP TRIGGER IF EXISTS saas_usage_events_reference_guard ON public.saas_usage_events;
+  IF EXISTS (
+    SELECT 1
+    FROM pg_trigger
+    WHERE tgrelid = 'public.saas_usage_events'::regclass
+      AND tgname = 'saas_usage_events_reference_guard'
+      AND NOT tgisinternal
+  ) THEN
+    DROP TRIGGER saas_usage_events_reference_guard ON public.saas_usage_events;
+  END IF;
   CREATE TRIGGER saas_usage_events_reference_guard
     BEFORE INSERT OR UPDATE OF event_type, reference_type, reference_id
     ON public.saas_usage_events

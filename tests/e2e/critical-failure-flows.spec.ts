@@ -441,14 +441,28 @@ const seedWalletBalance = async (userId: number, withdrawableBalance: string) =>
   });
 };
 
-const createBankCardFromPage = async (page: Page, cardholderName: string) => {
-  await page.getByLabel('Cardholder name').fill(cardholderName);
-  await page.getByLabel('Bank name').fill('Playwright Bank');
-  await page.getByLabel('Card brand').fill('Visa');
-  await page.getByLabel('Last 4 digits').fill('4242');
-  await page.getByRole('button', { name: 'Save bank card' }).click();
-  await expect(page.getByTestId('dashboard-notice')).toHaveText('Bank card saved.');
-  await expect(page.locator('#payout-card')).not.toHaveValue('');
+const seedBluckBalance = async (userId: number, availableBalance: string) => {
+  await sql`
+    insert into user_asset_balances (
+      user_id,
+      asset_code,
+      available_balance,
+      locked_balance,
+      lifetime_earned,
+      lifetime_spent
+    )
+    values
+      (${userId}, 'B_LUCK', ${availableBalance}, '0.00', ${availableBalance}, '0.00'),
+      (${userId}, 'IAP_VOUCHER', '0.00', '0.00', '0.00', '0.00')
+    on conflict (user_id, asset_code)
+    do update
+    set
+      available_balance = excluded.available_balance,
+      locked_balance = excluded.locked_balance,
+      lifetime_earned = excluded.lifetime_earned,
+      lifetime_spent = excluded.lifetime_spent,
+      updated_at = now()
+  `;
 };
 
 test.describe.configure({ mode: 'serial' });
@@ -457,32 +471,120 @@ test.afterAll(async () => {
   await sql.end({ timeout: 5 });
 });
 
-test('payments remain KYC-locked until phone verification is completed', async ({
+test('wallet no longer requests the retired transactions endpoint', async ({
   page,
 }) => {
   const now = Date.now();
-  const email = `kyc-locked-${now}@example.com`;
+  const email = `legacy-transactions-${now}@example.com`;
+  const password = 'Password123!';
+
+  await registerAndSignInUser(page, { email, password });
+  const userId = await lookupUserId(email);
+  await seedWalletBalance(userId, '25.00');
+  await seedBluckBalance(userId, '25.00');
+
+  let legacyTransactionsRequested = false;
+  await page.route('**/api/backend/transactions**', async (route) => {
+    legacyTransactionsRequested = true;
+    await route.fulfill({
+      status: 404,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: false,
+        error: { message: 'Not found.', code: 'NOT_FOUND' },
+      }),
+    });
+  });
+
+  await page.goto('/app/wallet');
+  await expect(page.getByTestId('wallet-current-balance')).toHaveText('25.00');
+  await page.waitForTimeout(250);
+
+  await page.getByTestId('wallet-refresh-button').click();
+  await expect(page.getByTestId('wallet-current-balance')).toHaveText('25.00');
+  await page.waitForTimeout(250);
+
+  expect(legacyTransactionsRequested).toBe(false);
+});
+
+test('legacy payments route redirects to wallet and browser bff rejects retired finance endpoints', async ({
+  page,
+}) => {
+  const now = Date.now();
+  const email = `legacy-payments-${now}@example.com`;
   const password = 'Password123!';
 
   await registerAndSignInUser(page, { email, password });
   await page.goto('/app/payments');
+  await expect(page).toHaveURL(/\/app\/wallet$/);
+  await expect(page.getByText('Economy wallet', { exact: true })).toBeVisible();
 
-  await expect(
-    page.getByText(
-      'Bank cards and withdrawals unlock after both email and phone verification.',
-    ),
-  ).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Save bank card' })).toBeDisabled();
-  await expect(
-    page.getByRole('button', { name: 'Request withdrawal', exact: true }),
-  ).toBeDisabled();
+  const blocked = await page.evaluate(async () => {
+    const [topUps, withdrawals, transactions] = await Promise.all([
+      fetch('/api/backend/top-ups', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          amount: '10.00',
+          referenceId: 'legacy-top-up',
+        }),
+      }),
+      fetch('/api/backend/withdrawals', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          amount: '10.00',
+          bankCardId: 1,
+        }),
+      }),
+      fetch('/api/backend/transactions?limit=8'),
+    ]);
+
+    return Promise.all(
+      [topUps, withdrawals, transactions].map(async (response) => ({
+        status: response.status,
+        body: await response.json(),
+      })),
+    );
+  });
+
+  for (const response of blocked) {
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual({
+      ok: false,
+      error: {
+        message: 'Not found.',
+        code: 'NOT_FOUND',
+      },
+    });
+  }
+});
+
+test('phone-verified users with approved kyc still stay on wallet and cannot hit retired finance endpoints', async ({
+  page,
+}) => {
+  const now = Date.now();
+  const email = `legacy-after-phone-${now}@example.com`;
+  const password = 'Password123!';
+  const phone = `+61492${String(now).slice(-6)}`;
+
+  await registerAndSignInUser(page, { email, password });
+  const userId = await lookupUserId(email);
+  await unlockFinanceForUser(userId, phone);
+  await seedApprovedKycTier2(userId);
+  await seedWalletBalance(userId, '80.00');
+  await seedBluckBalance(userId, '80.00');
+
+  await page.goto('/app/payments');
+  await expect(page).toHaveURL(/\/app\/wallet$/);
+  await expect(page.getByTestId('wallet-current-balance')).toHaveText('80.00');
 
   const blocked = await page.evaluate(async () => {
     const response = await fetch('/api/backend/withdrawals', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        amount: '10.00',
+        amount: '20.00',
         bankCardId: 1,
       }),
     });
@@ -493,138 +595,14 @@ test('payments remain KYC-locked until phone verification is completed', async (
     };
   });
 
-  expect(blocked.status).toBe(403);
-  expect(blocked.body).toMatchObject({
+  expect(blocked.status).toBe(404);
+  expect(blocked.body).toEqual({
     ok: false,
     error: {
-      message: 'Phone verification required.',
+      message: 'Not found.',
+      code: 'NOT_FOUND',
     },
   });
-});
-
-test('frozen users are blocked from submitting withdrawals from the browser', async ({
-  page,
-}) => {
-  test.setTimeout(90_000);
-
-  const now = Date.now();
-  const email = `freeze-user-${now}@example.com`;
-  const password = 'Password123!';
-  const phone = `+61491${String(now).slice(-6)}`;
-  const adminEmail = `freeze-admin-${now}@example.com`;
-  const adminPassword = 'AdminPassword123!';
-
-  await registerAndSignInUser(page, { email, password });
-  const userId = await lookupUserId(email);
-  await unlockFinanceForUser(userId, phone);
-  await seedWalletBalance(userId, '60.00');
-
-  await page.goto('/app/payments');
-  await createBankCardFromPage(page, 'Frozen User');
-
-  await registerAdminAccount(adminEmail, adminPassword);
-  const adminSession = await enableAdminMfa(adminEmail, adminPassword);
-
-  await adminRequest({
-    path: '/admin/freeze-records',
-    token: adminSession.token,
-    method: 'POST',
-    totpCode: generateTotpCode(adminSession.secret),
-    body: {
-      userId,
-      reason: 'manual_admin',
-    },
-  });
-
-  await page.getByLabel('Withdrawal amount', { exact: true }).fill('20.00');
-  await page
-    .getByRole('button', { name: 'Request withdrawal', exact: true })
-    .click();
-
-  await expect(page.getByTestId('dashboard-error')).toHaveText('Unauthorized');
-});
-
-test('rejected withdrawals surface rejected status and release the locked funds', async ({
-  page,
-}) => {
-  test.setTimeout(120_000);
-
-  const now = Date.now();
-  const email = `reject-user-${now}@example.com`;
-  const password = 'Password123!';
-  const phone = `+61492${String(now).slice(-6)}`;
-  const adminMakerEmail = `reject-admin-maker-${now}@example.com`;
-  const adminMakerPassword = 'AdminPassword123!';
-  const adminCheckerEmail = `reject-admin-checker-${now}@example.com`;
-  const adminCheckerPassword = 'AdminPassword123!';
-
-  await registerAndSignInUser(page, { email, password });
-  const userId = await lookupUserId(email);
-  await unlockFinanceForUser(userId, phone);
-  await seedApprovedKycTier2(userId);
-  await seedWalletBalance(userId, '80.00');
-
-  await page.goto('/app/payments');
-  await createBankCardFromPage(page, 'Rejected User');
-
-  await page.getByLabel('Withdrawal amount', { exact: true }).fill('30.00');
-  await page
-    .getByRole('button', { name: 'Request withdrawal', exact: true })
-    .click();
-  await expect(page.getByTestId('dashboard-notice')).toHaveText(
-    'Withdrawal request submitted. Funds are reserved while approval and payout progress.',
-  );
-
-  const withdrawal = await waitForRecord(
-    async () => {
-      const [row] = await sql<Array<{ id: number }>>`
-        select id
-        from withdrawals
-        where user_id = ${userId}
-        order by id desc
-        limit 1
-      `;
-
-      return row ?? null;
-    },
-    'withdrawal request',
-  );
-
-  await registerAdminAccount(adminMakerEmail, adminMakerPassword);
-  const adminMakerSession = await enableAdminMfa(
-    adminMakerEmail,
-    adminMakerPassword,
-  );
-  await registerAdminAccount(adminCheckerEmail, adminCheckerPassword);
-  const adminCheckerSession = await enableAdminMfa(
-    adminCheckerEmail,
-    adminCheckerPassword,
-  );
-
-  await adminRequest({
-    path: `/admin/withdrawals/${withdrawal.id}/reject`,
-    token: adminMakerSession.token,
-    method: 'PATCH',
-    totpCode: generateTotpCode(adminMakerSession.secret),
-    body: {
-      operatorNote: 'maker rejected withdrawal',
-    },
-  });
-  await adminRequest({
-    path: `/admin/withdrawals/${withdrawal.id}/reject`,
-    token: adminCheckerSession.token,
-    method: 'PATCH',
-    totpCode: generateTotpCode(adminCheckerSession.secret),
-    body: {
-      operatorNote: 'checker rejected withdrawal',
-    },
-  });
-
-  await page.reload();
-  await expect(page.getByText('Rejected', { exact: true })).toBeVisible();
-
-  await page.goto('/app/wallet');
-  await expect(page.getByTestId('wallet-current-balance')).toHaveText('80.00');
 });
 
 test('wallet refresh recovers cleanly after a temporary backend disconnect', async ({
@@ -637,6 +615,7 @@ test('wallet refresh recovers cleanly after a temporary backend disconnect', asy
   await registerAndSignInUser(page, { email, password });
   const userId = await lookupUserId(email);
   await seedWalletBalance(userId, '25.00');
+  await seedBluckBalance(userId, '25.00');
 
   await page.goto('/app/wallet');
   await expect(page.getByTestId('wallet-current-balance')).toHaveText('25.00');
@@ -653,6 +632,7 @@ test('wallet refresh recovers cleanly after a temporary backend disconnect', asy
   await page.unroute('**/api/backend/wallet', disconnectWalletRoute);
 
   await seedWalletBalance(userId, '45.00');
+  await seedBluckBalance(userId, '45.00');
   await page.getByTestId('wallet-refresh-button').click();
 
   await expect(page.getByTestId('dashboard-error')).toBeHidden();

@@ -25,12 +25,17 @@ import {
   recordPrizeEngineUsageEvent,
   revealPrizeEngineFairnessSeed,
 } from "../../modules/saas/service";
+import { PRIZE_ENGINE_WRITE_SCOPE_ALIASES } from "../../modules/saas/prize-engine-domain";
 import { recordSaasStatusApiRequest } from "../../modules/saas-status/service";
 import {
   mergePrizeEngineAgentSignals,
   consumePrizeEngineApiRateLimit,
   runPrizeEngineAntiExploitPipeline,
 } from "../../modules/saas/prize-engine-rate-limit";
+import {
+  enterPrizeEngineExecutionGovernor,
+  readPrizeEngineGovernorRetryAfterSeconds,
+} from "../../modules/saas/prize-engine-governor";
 import { recordAuthEvent } from "../../modules/audit/service";
 import { getConfig } from "../../shared/config";
 import { createRateLimiter } from "../../shared/rate-limit";
@@ -398,6 +403,50 @@ const enforcePrizeEngineAgentControl = async (
   }
 };
 
+const enforcePrizeEngineExecutionGovernor = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+) => {
+  const project = request.prizeEngineProject;
+  const scope = resolvePrizeEngineScopeFromRoute(request);
+  if (
+    !project ||
+    !scope ||
+    !PRIZE_ENGINE_WRITE_SCOPE_ALIASES.includes(scope)
+  ) {
+    return;
+  }
+
+  try {
+    request.prizeEngineExecutionLease = await enterPrizeEngineExecutionGovernor(
+      project,
+    );
+  } catch (error) {
+    const retryAfterSeconds =
+      readPrizeEngineGovernorRetryAfterSeconds(error);
+    if (retryAfterSeconds) {
+      reply.header("Retry-After", String(retryAfterSeconds));
+    }
+    return sendErrorForException(
+      reply,
+      error,
+      "Prize engine admission control rejected request.",
+    );
+  }
+};
+
+const releasePrizeEngineExecutionGovernorLease = async (
+  request: FastifyRequest,
+) => {
+  const lease = request.prizeEngineExecutionLease;
+  if (!lease) {
+    return;
+  }
+
+  request.prizeEngineExecutionLease = undefined;
+  await lease.release();
+};
+
 const applyPrizeEngineEnvironmentHeaders = (
   reply: FastifyReply,
   environment: "sandbox" | "live",
@@ -503,12 +552,31 @@ export async function registerPrizeEngineRoutes(app: AppInstance) {
     protectedRoutes.addHook("preHandler", requirePrizeEngineProjectGuard);
     protectedRoutes.addHook("preHandler", enforcePrizeEngineAgentControl);
     protectedRoutes.addHook("preHandler", enforcePrizeEngineProjectRateLimit);
+    protectedRoutes.addHook("preHandler", enforcePrizeEngineExecutionGovernor);
     protectedRoutes.addHook("onSend", async (request, reply, payload) => {
       const environment = request.prizeEngineProject?.environment;
       if (environment) {
         applyPrizeEngineEnvironmentHeaders(reply, environment);
       }
+      if (request.prizeEngineExecutionLease) {
+        reply.header(
+          "X-Prize-Engine-Queue-Wait-Ms",
+          String(request.prizeEngineExecutionLease.queuedMs),
+        );
+      }
       return payload;
+    });
+    protectedRoutes.addHook("onResponse", async (request) => {
+      await releasePrizeEngineExecutionGovernorLease(request);
+    });
+    protectedRoutes.addHook("onError", async (request) => {
+      await releasePrizeEngineExecutionGovernorLease(request);
+    });
+    protectedRoutes.addHook("onTimeout", async (request) => {
+      await releasePrizeEngineExecutionGovernorLease(request);
+    });
+    protectedRoutes.addHook("onRequestAbort", async (request) => {
+      await releasePrizeEngineExecutionGovernorLease(request);
     });
     protectedRoutes.addHook("onResponse", async (request, reply) => {
       const project = request.prizeEngineProject;

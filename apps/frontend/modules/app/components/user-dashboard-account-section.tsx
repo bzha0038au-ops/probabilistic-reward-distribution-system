@@ -30,7 +30,6 @@ type UserDashboardAccountSectionProps = {
   copy: UserDashboardCopy;
   controller: AccountSectionController;
   emailVerified: boolean;
-  financeUnlocked: boolean;
   phoneVerified: boolean;
   showAccountRoutes: boolean;
   showGameplayRoutes: boolean;
@@ -41,7 +40,6 @@ export function UserDashboardAccountSection({
   copy: c,
   controller,
   emailVerified,
-  financeUnlocked,
   phoneVerified,
   showAccountRoutes,
   showGameplayRoutes,
@@ -69,9 +67,6 @@ export function UserDashboardAccountSection({
               </Badge>
               <Badge variant={badgeVariant(emailVerified)}>
                 {emailVerified ? c.drawUnlocked : c.drawLocked}
-              </Badge>
-              <Badge variant={badgeVariant(financeUnlocked)}>
-                {financeUnlocked ? c.financeUnlocked : c.financeLocked}
               </Badge>
             </div>
 
@@ -234,14 +229,6 @@ export function UserDashboardAccountSection({
                 description={c.walletRouteDescription}
                 openLabel={c.walletRouteOpen}
                 statusLabel={c.walletRouteStatus}
-              />
-              <GameplayRouteCard
-                href="/app/payments"
-                title={c.paymentsRouteTitle}
-                description={c.paymentsRouteDescription}
-                openLabel={c.paymentsRouteOpen}
-                statusLabel={financeUnlocked ? c.financeUnlocked : c.paymentsRouteStatus}
-                lockedNote={!financeUnlocked ? c.financeLocked : null}
               />
               <GameplayRouteCard
                 href="/app/security"

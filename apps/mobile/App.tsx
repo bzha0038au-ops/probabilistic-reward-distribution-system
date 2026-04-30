@@ -149,7 +149,7 @@ function resolveCommunityMutationNotice(
   return kind === "thread" ? copy.createSuccess : copy.replySuccess;
 }
 
-function NativeApp() {
+export function NativeApp() {
   const [screen, setScreen] = useState<ScreenMode>("login");
   const [appRoute, setAppRoute] = useState<AppRoute>("home");
   const [message, setMessage] = useState<string | null>(null);
@@ -465,7 +465,10 @@ function NativeApp() {
   const syncPushRegistration = useCallback(async () => {
     const registration = await registerForPushNotifications();
     if (!registration.token || !registration.platform) {
-      if (__DEV__) {
+      const expectedDevSkipReason =
+        registration.reason?.startsWith("simulator_not_supported:") ?? false;
+
+      if (__DEV__ && !expectedDevSkipReason) {
         console.warn(
           "[push] Skipping device registration:",
           registration.reason ?? "push_registration_failed",

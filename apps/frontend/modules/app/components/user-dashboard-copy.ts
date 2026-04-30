@@ -4,7 +4,7 @@ export const userDashboardCopy = {
   en: {
     accountTitle: 'Account readiness',
     accountDescription:
-      'Unlock draw, payouts, and security self-service from one place.',
+      'Unlock draw, economy visibility, and security self-service from one place.',
     emailVerified: 'Email verified',
     emailPending: 'Email verification required',
     phoneVerified: 'Phone verified',
@@ -16,7 +16,7 @@ export const userDashboardCopy = {
       'Gameplay moved off the dashboard. Launch each mode from its own route and keep the account center focused on wallet, rewards, and security.',
     accountRoutesTitle: 'Account routes',
     accountRoutesDescription:
-      'Move funding, payouts, rewards, and session controls onto their own route containers instead of stacking every workflow into one page.',
+      'Move economy, rewards, and session controls onto their own route containers instead of stacking every workflow into one page.',
     routeLockedHint:
       'You can open the page now, but email verification is still required before placing a draw or bet.',
     gachaTitle: 'Slot Machine',
@@ -42,14 +42,14 @@ export const userDashboardCopy = {
     fairnessStatus: 'Public proof',
     rewardsRouteTitle: 'Reward center',
     rewardsRouteDescription:
-      'Review missions, claim bonuses, and keep progression separate from wallet and payout operations.',
+      'Review missions, claim bonuses, and keep progression separate from the economy wallet and security controls.',
     rewardsRouteOpen: 'Open reward center',
     rewardsRouteStatus: 'Mission hub',
-    walletRouteTitle: 'Wallet operations',
+    walletRouteTitle: 'Economy wallet',
     walletRouteDescription:
-      'Handle fiat top-ups, crypto deposit claims, and ledger review from a dedicated wallet container.',
-    walletRouteOpen: 'Open wallet operations',
-    walletRouteStatus: 'Ledger live',
+      'Review asset balances, gifting activity, and the read-only gift pack catalog from a dedicated wallet container.',
+    walletRouteOpen: 'Open economy wallet',
+    walletRouteStatus: 'Economy live',
     paymentsRouteTitle: 'Payout operations',
     paymentsRouteDescription:
       'Manage payout cards, crypto destinations, and withdrawal requests on a dedicated payments route.',
@@ -65,9 +65,9 @@ export const userDashboardCopy = {
       'Upload identity documents, track review state, and see which tier unlocks gameplay or withdrawals.',
     verificationRouteOpen: 'Open KYC verification',
     verificationRouteStatus: 'Identity tier',
-    financeUnlocked: 'Payout tools enabled',
+    financeUnlocked: 'Higher-trust actions enabled',
     financeLocked:
-      'Bank cards and withdrawals unlock after both email and phone verification.',
+      'Phone verification is required before higher-trust account actions.',
     sendEmail: 'Send verification email',
     phoneLabel: 'Phone number',
     phonePlaceholder: '+61 4xx xxx xxx',
@@ -78,11 +78,12 @@ export const userDashboardCopy = {
     verificationEmailSent:
       'Verification email requested. Check the inbox on file if the account still needs verification.',
     phoneCodeSent: 'Verification code sent. Enter the SMS code to finish setup.',
-    phoneVerifiedNotice: 'Phone verified. Withdrawal tools are now available.',
-    walletTitle: 'Wallet and top-ups',
+    phoneVerifiedNotice:
+      'Phone verified. Higher-trust account actions are now available.',
+    walletTitle: 'Economy wallet',
     walletDescription:
-      'Balance visibility, pending deposits, and the notes users need before funding.',
-    currentBalance: 'Current balance',
+      'Asset balances, gifting activity, and the read-only gift pack surface for web.',
+    currentBalance: 'Available B luck',
     topUpAmount: 'Top-up amount',
     referenceId: 'Reference ID',
     referencePlaceholder: 'Optional remittance or payment reference',
@@ -149,7 +150,7 @@ export const userDashboardCopy = {
     noCryptoWithdrawals: 'No crypto withdrawals yet.',
     transactionsTitle: 'Ledger activity',
     transactionsDescription:
-      'Immutable balance movements from draws, deposits, and payout operations.',
+      'Immutable B luck economy balance movements for web wallet activity.',
     noTransactions: 'No ledger entries yet.',
     sessionsTitle: 'Active sessions',
     sessionsDescription: 'Review active devices and revoke access if needed.',
@@ -179,7 +180,7 @@ export const userDashboardCopy = {
     retry: 'Retry',
     rewardClaimed: 'Reward claimed. Mission progress and bonus balance refreshed.',
     verificationBanner:
-      'Email verification unlocks draws. Phone verification unlocks bank cards and withdrawals.',
+      'Email verification unlocks draws. Phone verification protects higher-trust account actions.',
     verified: 'Verified',
     pending: 'Pending',
     topUpSectionLabel:
@@ -189,7 +190,7 @@ export const userDashboardCopy = {
   },
   'zh-CN': {
     accountTitle: '账户可用状态',
-    accountDescription: '把抽奖、出款和安全自助入口收进一个用户中心里。',
+    accountDescription: '把抽奖、经济资产可见性和安全自助入口收进一个用户中心里。',
     emailVerified: '邮箱已验证',
     emailPending: '需要完成邮箱验证',
     phoneVerified: '手机号已验证',
@@ -201,7 +202,7 @@ export const userDashboardCopy = {
       '玩法已经从首页拆出去。账户首页只保留钱包、奖励和安全能力，具体玩法走各自独立路由。',
     accountRoutesTitle: '账户路由',
     accountRoutesDescription:
-      '把充值、提现、奖励和会话控制拆成独立 route container，不再继续堆在一个页面里。',
+      '把经济钱包、奖励和会话控制拆成独立 route container，不再继续堆在一个页面里。',
     routeLockedHint: '你现在可以先打开页面，但在邮箱验证完成前，抽卡和下注仍然会被拦截。',
     gachaTitle: '老虎机',
     gachaDescription:
@@ -224,14 +225,14 @@ export const userDashboardCopy = {
     fairnessStatus: '公开证明',
     rewardsRouteTitle: '奖励中心',
     rewardsRouteDescription:
-      '把任务进度和奖励领取独立成页，不再和钱包、提现流程混在一起。',
+      '把任务进度和奖励领取独立成页，不再和经济钱包或安全控制混在一起。',
     rewardsRouteOpen: '打开奖励中心',
     rewardsRouteStatus: '任务中心',
-    walletRouteTitle: '钱包操作',
+    walletRouteTitle: '经济钱包',
     walletRouteDescription:
-      '把法币充值、加密充值认领和账本流水放到独立的钱包容器页。',
-    walletRouteOpen: '打开钱包操作',
-    walletRouteStatus: '账本在线',
+      '把资产余额、送礼活动和只读礼物包目录放到独立的钱包容器页。',
+    walletRouteOpen: '打开经济钱包',
+    walletRouteStatus: '经济体系在线',
     paymentsRouteTitle: '出款操作',
     paymentsRouteDescription:
       '把银行卡、加密收款地址和提现申请放到独立的支付路由。',
@@ -247,8 +248,8 @@ export const userDashboardCopy = {
       '上传实名材料、跟踪审核状态，并查看当前等级解锁了哪些玩法与提现能力。',
     verificationRouteOpen: '打开 KYC 页面',
     verificationRouteStatus: '身份等级',
-    financeUnlocked: '出款工具已解锁',
-    financeLocked: '银行卡和提现都需要邮箱、手机号双验证后才能使用。',
+    financeUnlocked: '高信任操作已解锁',
+    financeLocked: '更高信任级别的账户操作需要先完成手机号验证。',
     sendEmail: '发送验证邮件',
     phoneLabel: '手机号',
     phonePlaceholder: '+86 13800138000',
@@ -258,10 +259,10 @@ export const userDashboardCopy = {
     confirmPhone: '确认手机号',
     verificationEmailSent: '验证邮件已重新发起。如果账号还未验证，请检查当前绑定邮箱。',
     phoneCodeSent: '验证码已发送，请输入短信中的 6 位验证码完成绑定。',
-    phoneVerifiedNotice: '手机号验证完成，提现工具已可用。',
-    walletTitle: '钱包与充值',
-    walletDescription: '展示当前余额、充值申请，以及用户需要知道的账本说明。',
-    currentBalance: '当前余额',
+    phoneVerifiedNotice: '手机号验证完成，更高信任级别的账户操作现已可用。',
+    walletTitle: '经济钱包',
+    walletDescription: 'Web 侧仅保留资产余额、送礼活动和礼物包只读展示。',
+    currentBalance: '当前 B luck',
     topUpAmount: '充值金额',
     referenceId: '参考单号',
     referencePlaceholder: '可选，填写转账流水或支付参考号',
@@ -324,7 +325,7 @@ export const userDashboardCopy = {
     recentCryptoWithdrawals: '最近加密提现',
     noCryptoWithdrawals: '还没有加密提现申请。',
     transactionsTitle: '账本流水',
-    transactionsDescription: '展示抽奖、充值和提现相关的不可变余额流水。',
+    transactionsDescription: '展示 Web 钱包可见的 B luck 经济账本不可变余额流水。',
     noTransactions: '还没有账本流水。',
     sessionsTitle: '活跃会话',
     sessionsDescription: '查看当前活跃设备，并在需要时撤销访问。',
@@ -353,7 +354,7 @@ export const userDashboardCopy = {
     loadFailed: '加载用户中心数据失败。',
     retry: '重试',
     rewardClaimed: '奖励已领取，任务进度和奖励余额已刷新。',
-    verificationBanner: '邮箱验证会解锁抽奖，手机号验证会解锁银行卡和提现。',
+    verificationBanner: '邮箱验证会解锁抽奖；手机号验证会保护更高信任级别的账户操作。',
     verified: '已验证',
     pending: '待处理',
     topUpSectionLabel: '充值会按 requested、provider pending、settled、credited 的顺序推进，真正入账前不会改余额。',

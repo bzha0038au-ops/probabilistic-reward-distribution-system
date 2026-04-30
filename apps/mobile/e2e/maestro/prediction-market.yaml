@@ -28,21 +28,32 @@ appId: ${REWARD_MOBILE_APP_ID}
     direction: DOWN
 - tapOn:
     id: prediction-market-card-mobile-maestro-e2e-market
+    waitUntilVisible: true
+    retryTapIfNoChange: true
 - scrollUntilVisible:
     element:
       id: prediction-market-outcome-card-up
     direction: DOWN
+    centerElement: true
 - tapOn:
     id: prediction-market-outcome-card-up
+    waitUntilVisible: true
+    retryTapIfNoChange: true
 - scrollUntilVisible:
     element:
       id: prediction-market-place-position-button
     direction: DOWN
+    centerElement: true
 - tapOn:
     id: prediction-market-place-position-button
+    waitUntilVisible: true
+    retryTapIfNoChange: true
 - scrollUntilVisible:
     element:
       id: prediction-market-position-card-up
     direction: DOWN
+    timeout: 60000
+    speed: 80
+    visibilityPercentage: 20
 - assertVisible:
     id: prediction-market-position-card-up

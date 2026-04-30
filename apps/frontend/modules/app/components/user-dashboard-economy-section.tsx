@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import type {
   EconomyLedgerEntryRecord,
   GiftEnergyAccountRecord,
@@ -8,6 +8,7 @@ import type {
   GiftTransferRecord,
 } from "@reward/shared-types/economy";
 import type { WalletBalanceResponse } from "@reward/shared-types/user";
+import type { Locale } from "@/lib/i18n/messages";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,9 +16,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { browserUserApiClient } from "@/lib/api/user-client";
+import { formatUserDashboardActivityType } from "./user-dashboard-utils";
 
 type EconomySectionProps = {
-  locale: string;
+  locale: Locale;
   wallet: WalletBalanceResponse | null;
   formatAmount: (value: string | number | null | undefined) => string;
   formatDateTime: (value: string | Date | null | undefined) => string;
@@ -78,31 +80,6 @@ const assetLabels = {
   IAP_VOUCHER: "Voucher",
 } as const;
 
-const readLedgerLabel = (locale: string, entryType: string) => {
-  const zh = locale === "zh-CN";
-
-  if (
-    entryType.includes("refund") ||
-    entryType.includes("revoke") ||
-    entryType.includes("reversal")
-  ) {
-    return zh ? "退款回滚" : "Refund reversal";
-  }
-  if (entryType.includes("gift_send")) {
-    return zh ? "赠送" : "Gift sent";
-  }
-  if (entryType.includes("gift_receive") || entryType.includes("gift_pack")) {
-    return zh ? "收礼" : "Gift received";
-  }
-  if (entryType.includes("purchase")) {
-    return zh ? "购买" : "Purchase";
-  }
-  if (entryType.includes("spend") || entryType.includes("debit")) {
-    return zh ? "消耗" : "Spend";
-  }
-  return zh ? "获得" : "Earned";
-};
-
 export function UserDashboardEconomySection(props: EconomySectionProps) {
   const c = copy[props.locale as keyof typeof copy] ?? copy.en;
   const [giftEnergy, setGiftEnergy] = useState<GiftEnergyAccountRecord | null>(null);
@@ -117,7 +94,7 @@ export function UserDashboardEconomySection(props: EconomySectionProps) {
 
   const assets = props.wallet?.assets ?? [];
 
-  const loadEconomy = async () => {
+  const loadEconomy = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -141,11 +118,11 @@ export function UserDashboardEconomySection(props: EconomySectionProps) {
     }
 
     setLoading(false);
-  };
+  }, [c.loading]);
 
   useEffect(() => {
     void loadEconomy();
-  }, []);
+  }, [loadEconomy]);
 
   const handleSendGift = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -343,7 +320,10 @@ export function UserDashboardEconomySection(props: EconomySectionProps) {
                 >
                   <div className="flex items-center justify-between gap-3">
                     <span className="font-medium">
-                      {readLedgerLabel(props.locale, entry.entryType)}
+                      {formatUserDashboardActivityType(
+                        props.locale,
+                        entry.entryType,
+                      )}
                     </span>
                     <span>{props.formatAmount(entry.amount)}</span>
                   </div>

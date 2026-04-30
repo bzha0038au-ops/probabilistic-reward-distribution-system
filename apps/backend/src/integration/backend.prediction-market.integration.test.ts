@@ -16,11 +16,13 @@ import {
 } from "./integration-test-support";
 import {
   adminActions,
+  economyLedgerEntries,
   ledgerEntries,
   predictionMarketAppeals,
   predictionMarketOracles,
   predictionMarkets,
   predictionPositions,
+  userAssetBalances,
   userWallets,
 } from "@reward/database";
 import { and, asc, eq } from "@reward/database/orm";
@@ -74,12 +76,28 @@ const seedMarketAdmin = async (email: string) => {
 
 const seedMarketUser = async (params: {
   email: string;
+  marketAssetBalance?: string;
   withdrawableBalance?: string;
 }) => {
   const user = await seedUserWithWallet({
     email: params.email,
-    withdrawableBalance: params.withdrawableBalance ?? "100.00",
+    withdrawableBalance: params.withdrawableBalance ?? "0.00",
   });
+  await getDb()
+    .update(userAssetBalances)
+    .set({
+      availableBalance: params.marketAssetBalance ?? "100.00",
+      lockedBalance: "0.00",
+      lifetimeEarned: params.marketAssetBalance ?? "100.00",
+      lifetimeSpent: "0.00",
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(userAssetBalances.userId, user.id),
+        eq(userAssetBalances.assetCode, "B_LUCK"),
+      ),
+    );
   await verifyUserContacts(user.id, { email: true });
   const { token } = await getCreateUserSessionToken()({
     userId: user.id,
@@ -263,7 +281,7 @@ const findMarketSummary = (
   return market;
 };
 
-const getWalletSnapshot = async (userId: number) => {
+const getLegacyWalletSnapshot = async (userId: number) => {
   const [wallet] = await getDb()
     .select({
       userId: userWallets.userId,
@@ -281,7 +299,48 @@ const getWalletSnapshot = async (userId: number) => {
   return wallet;
 };
 
-const listMarketLedgerEntries = async (marketId: number) =>
+const getBluckSnapshot = async (userId: number) => {
+  const [asset] = await getDb()
+    .select({
+      userId: userAssetBalances.userId,
+      availableBalance: userAssetBalances.availableBalance,
+      lockedBalance: userAssetBalances.lockedBalance,
+    })
+    .from(userAssetBalances)
+    .where(
+      and(
+        eq(userAssetBalances.userId, userId),
+        eq(userAssetBalances.assetCode, "B_LUCK"),
+      ),
+    );
+
+  expect(asset).toBeDefined();
+  if (!asset) {
+    throw new Error(`B_LUCK balance missing for user ${userId}.`);
+  }
+
+  return asset;
+};
+
+const listMarketEconomyEntries = async (marketId: number) =>
+  getDb()
+    .select({
+      userId: economyLedgerEntries.userId,
+      assetCode: economyLedgerEntries.assetCode,
+      entryType: economyLedgerEntries.entryType,
+      amount: economyLedgerEntries.amount,
+    })
+    .from(economyLedgerEntries)
+    .where(
+      and(
+        eq(economyLedgerEntries.referenceType, "prediction_market"),
+        eq(economyLedgerEntries.referenceId, marketId),
+        eq(economyLedgerEntries.assetCode, "B_LUCK"),
+      ),
+    )
+    .orderBy(asc(economyLedgerEntries.id));
+
+const listMarketHouseLedgerEntries = async (marketId: number) =>
   getDb()
     .select({
       userId: ledgerEntries.userId,
@@ -427,26 +486,32 @@ describeIntegrationSuite("backend prediction market integration", () => {
       },
     });
 
-    expect(await getWalletSnapshot(alice.user.id)).toEqual({
+    expect(await getLegacyWalletSnapshot(alice.user.id)).toEqual({
       userId: alice.user.id,
-      withdrawableBalance: "100.00",
+      withdrawableBalance: "0.00",
+      lockedBalance: "0.00",
+    });
+    expect(await getBluckSnapshot(alice.user.id)).toEqual({
+      userId: alice.user.id,
+      availableBalance: "100.00",
       lockedBalance: "0.00",
     });
 
-    expect(await listMarketLedgerEntries(market.id)).toEqual([
+    expect(await listMarketEconomyEntries(market.id)).toEqual([
       {
         userId: alice.user.id,
-        houseAccountId: null,
+        assetCode: "B_LUCK",
         entryType: "prediction_market_stake",
         amount: "-25.00",
       },
       {
         userId: alice.user.id,
-        houseAccountId: null,
+        assetCode: "B_LUCK",
         entryType: "prediction_market_sell",
         amount: "25.00",
       },
     ]);
+    expect(await listMarketHouseLedgerEntries(market.id)).toEqual([]);
 
     expect(await listMarketPositions(market.id)).toEqual([
       {
@@ -656,53 +721,70 @@ describeIntegrationSuite("backend prediction market integration", () => {
       ],
     });
 
-    expect(await getWalletSnapshot(alice.user.id)).toEqual({
+    expect(await getLegacyWalletSnapshot(alice.user.id)).toEqual({
       userId: alice.user.id,
-      withdrawableBalance: "105.63",
+      withdrawableBalance: "0.00",
       lockedBalance: "0.00",
     });
-    expect(await getWalletSnapshot(bob.user.id)).toEqual({
+    expect(await getLegacyWalletSnapshot(bob.user.id)).toEqual({
       userId: bob.user.id,
-      withdrawableBalance: "101.87",
+      withdrawableBalance: "0.00",
       lockedBalance: "0.00",
     });
-    expect(await getWalletSnapshot(carol.user.id)).toEqual({
+    expect(await getLegacyWalletSnapshot(carol.user.id)).toEqual({
       userId: carol.user.id,
-      withdrawableBalance: "90.00",
+      withdrawableBalance: "0.00",
+      lockedBalance: "0.00",
+    });
+    expect(await getBluckSnapshot(alice.user.id)).toEqual({
+      userId: alice.user.id,
+      availableBalance: "105.63",
+      lockedBalance: "0.00",
+    });
+    expect(await getBluckSnapshot(bob.user.id)).toEqual({
+      userId: bob.user.id,
+      availableBalance: "101.87",
+      lockedBalance: "0.00",
+    });
+    expect(await getBluckSnapshot(carol.user.id)).toEqual({
+      userId: carol.user.id,
+      availableBalance: "90.00",
       lockedBalance: "0.00",
     });
 
-    expect(await listMarketLedgerEntries(market.id)).toEqual([
+    expect(await listMarketEconomyEntries(market.id)).toEqual([
       {
         userId: alice.user.id,
-        houseAccountId: null,
+        assetCode: "B_LUCK",
         entryType: "prediction_market_stake",
         amount: "-30.00",
       },
       {
         userId: bob.user.id,
-        houseAccountId: null,
+        assetCode: "B_LUCK",
         entryType: "prediction_market_stake",
         amount: "-10.00",
       },
       {
         userId: carol.user.id,
-        houseAccountId: null,
+        assetCode: "B_LUCK",
         entryType: "prediction_market_stake",
         amount: "-10.00",
       },
       {
         userId: alice.user.id,
-        houseAccountId: null,
+        assetCode: "B_LUCK",
         entryType: "prediction_market_payout",
         amount: "35.63",
       },
       {
         userId: bob.user.id,
-        houseAccountId: null,
+        assetCode: "B_LUCK",
         entryType: "prediction_market_payout",
         amount: "11.87",
       },
+    ]);
+    expect(await listMarketHouseLedgerEntries(market.id)).toEqual([
       {
         userId: null,
         houseAccountId: 1,
@@ -872,43 +954,54 @@ describeIntegrationSuite("backend prediction market integration", () => {
       ],
     });
 
-    expect(await getWalletSnapshot(alice.user.id)).toEqual({
+    expect(await getLegacyWalletSnapshot(alice.user.id)).toEqual({
       userId: alice.user.id,
-      withdrawableBalance: "100.00",
+      withdrawableBalance: "0.00",
       lockedBalance: "0.00",
     });
-    expect(await getWalletSnapshot(bob.user.id)).toEqual({
+    expect(await getLegacyWalletSnapshot(bob.user.id)).toEqual({
       userId: bob.user.id,
-      withdrawableBalance: "100.00",
+      withdrawableBalance: "0.00",
+      lockedBalance: "0.00",
+    });
+    expect(await getBluckSnapshot(alice.user.id)).toEqual({
+      userId: alice.user.id,
+      availableBalance: "100.00",
+      lockedBalance: "0.00",
+    });
+    expect(await getBluckSnapshot(bob.user.id)).toEqual({
+      userId: bob.user.id,
+      availableBalance: "100.00",
       lockedBalance: "0.00",
     });
 
-    expect(await listMarketLedgerEntries(market.id)).toEqual([
+    expect(await listMarketEconomyEntries(market.id)).toEqual([
       {
         userId: alice.user.id,
-        houseAccountId: null,
+        assetCode: "B_LUCK",
         entryType: "prediction_market_stake",
         amount: "-12.50",
       },
       {
         userId: bob.user.id,
-        houseAccountId: null,
+        assetCode: "B_LUCK",
         entryType: "prediction_market_stake",
         amount: "-7.50",
       },
       {
         userId: alice.user.id,
-        houseAccountId: null,
+        assetCode: "B_LUCK",
         entryType: "prediction_market_refund",
         amount: "12.50",
       },
       {
         userId: bob.user.id,
-        houseAccountId: null,
+        assetCode: "B_LUCK",
         entryType: "prediction_market_refund",
         amount: "7.50",
       },
     ]);
+    expect(await listMarketHouseLedgerEntries(market.id)).toEqual([]);
 
     expect(await listMarketPositions(market.id)).toEqual([
       {
@@ -1056,43 +1149,54 @@ describeIntegrationSuite("backend prediction market integration", () => {
       ],
     });
 
-    expect(await getWalletSnapshot(alice.user.id)).toEqual({
+    expect(await getLegacyWalletSnapshot(alice.user.id)).toEqual({
       userId: alice.user.id,
-      withdrawableBalance: "100.00",
+      withdrawableBalance: "0.00",
       lockedBalance: "0.00",
     });
-    expect(await getWalletSnapshot(bob.user.id)).toEqual({
+    expect(await getLegacyWalletSnapshot(bob.user.id)).toEqual({
       userId: bob.user.id,
-      withdrawableBalance: "100.00",
+      withdrawableBalance: "0.00",
+      lockedBalance: "0.00",
+    });
+    expect(await getBluckSnapshot(alice.user.id)).toEqual({
+      userId: alice.user.id,
+      availableBalance: "100.00",
+      lockedBalance: "0.00",
+    });
+    expect(await getBluckSnapshot(bob.user.id)).toEqual({
+      userId: bob.user.id,
+      availableBalance: "100.00",
       lockedBalance: "0.00",
     });
 
-    expect(await listMarketLedgerEntries(market.id)).toEqual([
+    expect(await listMarketEconomyEntries(market.id)).toEqual([
       {
         userId: alice.user.id,
-        houseAccountId: null,
+        assetCode: "B_LUCK",
         entryType: "prediction_market_stake",
         amount: "-9.00",
       },
       {
         userId: bob.user.id,
-        houseAccountId: null,
+        assetCode: "B_LUCK",
         entryType: "prediction_market_stake",
         amount: "-11.00",
       },
       {
         userId: alice.user.id,
-        houseAccountId: null,
+        assetCode: "B_LUCK",
         entryType: "prediction_market_refund",
         amount: "9.00",
       },
       {
         userId: bob.user.id,
-        houseAccountId: null,
+        assetCode: "B_LUCK",
         entryType: "prediction_market_refund",
         amount: "11.00",
       },
     ]);
+    expect(await listMarketHouseLedgerEntries(market.id)).toEqual([]);
 
     expect(await listMarketPositions(market.id)).toEqual([
       {
@@ -1170,7 +1274,8 @@ describeIntegrationSuite("backend prediction market integration", () => {
       status: "cancelled",
       totalPoolAmount: "0.00",
     });
-    expect(await listMarketLedgerEntries(draftMarket.id)).toEqual([]);
+    expect(await listMarketEconomyEntries(draftMarket.id)).toEqual([]);
+    expect(await listMarketHouseLedgerEntries(draftMarket.id)).toEqual([]);
     expect(await listMarketPositions(draftMarket.id)).toEqual([]);
 
     const lockedUser = await seedMarketUser({
@@ -1209,11 +1314,31 @@ describeIntegrationSuite("backend prediction market integration", () => {
       status: "cancelled",
       totalPoolAmount: "15.00",
     });
-    expect(await getWalletSnapshot(lockedUser.user.id)).toEqual({
+    expect(await getLegacyWalletSnapshot(lockedUser.user.id)).toEqual({
       userId: lockedUser.user.id,
-      withdrawableBalance: "100.00",
+      withdrawableBalance: "0.00",
       lockedBalance: "0.00",
     });
+    expect(await getBluckSnapshot(lockedUser.user.id)).toEqual({
+      userId: lockedUser.user.id,
+      availableBalance: "100.00",
+      lockedBalance: "0.00",
+    });
+    expect(await listMarketEconomyEntries(lockedMarket.id)).toEqual([
+      {
+        userId: lockedUser.user.id,
+        assetCode: "B_LUCK",
+        entryType: "prediction_market_stake",
+        amount: "-15.00",
+      },
+      {
+        userId: lockedUser.user.id,
+        assetCode: "B_LUCK",
+        entryType: "prediction_market_refund",
+        amount: "15.00",
+      },
+    ]);
+    expect(await listMarketHouseLedgerEntries(lockedMarket.id)).toEqual([]);
     expect(await listMarketPositions(lockedMarket.id)).toEqual([
       {
         userId: lockedUser.user.id,

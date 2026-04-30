@@ -1,4 +1,5 @@
 import {
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -197,10 +198,7 @@ export const predictionMarketAppeals = pgTable(
     marketId: integer("market_id")
       .notNull()
       .references(() => predictionMarkets.id, { onDelete: "cascade" }),
-    oracleBindingId: integer("oracle_binding_id").references(
-      () => predictionMarketOracles.id,
-      { onDelete: "set null" },
-    ),
+    oracleBindingId: integer("oracle_binding_id"),
     resolvedByAdminId: integer("resolved_by_admin_id").references(
       () => admins.id,
       { onDelete: "set null" },
@@ -238,6 +236,11 @@ export const predictionMarketAppeals = pgTable(
       .defaultNow(),
   },
   (table) => ({
+    oracleBindingFk: foreignKey({
+      name: "prediction_market_appeals_oracle_binding_fk",
+      columns: [table.oracleBindingId],
+      foreignColumns: [predictionMarketOracles.id],
+    }).onDelete("set null"),
     appealKeyUnique: uniqueIndex("prediction_market_appeals_key_unique").on(
       table.appealKey,
     ),

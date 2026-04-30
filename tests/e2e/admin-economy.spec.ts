@@ -554,11 +554,8 @@ test('admin economy page can reverse a fulfilled voucher order with step-up mfa'
     },
   });
 
-  expect(purchase.order.status).toBe('fulfilled');
-  expect(purchase.fulfillment).toMatchObject({
-    assetCode: 'IAP_VOUCHER',
-    amount: '12.50',
-  });
+  expect(purchase.order.status).toBe('verified');
+  expect(purchase.fulfillment).toBeNull();
 
   await page.goto(`${adminOrigin}/login`);
   await page.getByLabel('Email').fill(adminEmail);
@@ -576,17 +573,73 @@ test('admin economy page can reverse a fulfilled voucher order with step-up mfa'
   const orderCard = page.getByTestId(`economy-order-${purchase.order.id}`);
   await expect(orderCard).toBeVisible();
   await expect(orderCard).toContainText(sku);
-  await expect(orderCard).toContainText('fulfilled');
+  await expect(orderCard).toContainText('verified');
 
-  const stepUpCode = generateTotpCode(adminSession.secret);
-  await page.getByTestId('economy-step-up-code').fill(stepUpCode);
+  const replayStepUpCode = generateTotpCode(adminSession.secret);
+  await page.getByTestId('economy-step-up-code').fill(replayStepUpCode);
 
+  const replayForm = page.getByTestId(
+    `economy-order-replay-form-${purchase.order.id}`,
+  );
+  await expect(
+    replayForm.locator('input[type="hidden"][name="totpCode"]'),
+  ).toHaveValue(replayStepUpCode);
+  await replayForm.getByRole('button', { name: 'Approve' }).click();
+
+  await expect(
+    page.getByText(`Order #${purchase.order.id} fulfillment replayed.`, {
+      exact: true,
+    }),
+  ).toBeVisible();
+
+  const fulfilledOrder = await waitForRecord(
+    async () => {
+      const [row] = await sql<
+        Array<{ id: number; status: string; user_id: number }>
+      >`
+        select id, status, user_id
+        from store_purchase_orders
+        where id = ${purchase.order.id}
+          and status = 'fulfilled'
+        limit 1
+      `;
+      return row ?? null;
+    },
+    'fulfilled store purchase order',
+  );
+
+  expect(fulfilledOrder).toMatchObject({
+    id: purchase.order.id,
+    status: 'fulfilled',
+    user_id: user!.id,
+  });
+
+  const fulfilledVoucherBalance = await waitForRecord(
+    async () => {
+      const [row] = await sql<
+        Array<{ available_balance: string }>
+      >`
+        select available_balance
+        from user_asset_balances
+        where user_id = ${user!.id}
+          and asset_code = 'IAP_VOUCHER'
+        limit 1
+      `;
+      return row?.available_balance === '12.50' ? row : null;
+    },
+    'fulfilled voucher balance',
+  );
+
+  expect(fulfilledVoucherBalance.available_balance).toBe('12.50');
+
+  const reverseStepUpCode = generateTotpCode(adminSession.secret);
+  await page.getByTestId('economy-step-up-code').fill(reverseStepUpCode);
   const reverseForm = page.getByTestId(
     `economy-order-reverse-form-${purchase.order.id}`,
   );
   await expect(
     reverseForm.locator('input[type="hidden"][name="totpCode"]'),
-  ).toHaveValue(stepUpCode);
+  ).toHaveValue(reverseStepUpCode);
   await reverseForm.locator('select[name="targetStatus"]').selectOption('refunded');
   await reverseForm.locator('input[name="reason"]').fill('playwright_manual_refund');
   await reverseForm.getByRole('button', { name: 'Reverse' }).click();

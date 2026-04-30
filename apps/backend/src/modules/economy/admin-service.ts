@@ -51,6 +51,11 @@ const resolveValidDate = (value: Date | string | null | undefined) => {
   return Number.isNaN(next.getTime()) ? null : next;
 };
 
+const toRecord = (value: unknown) =>
+  typeof value === 'object' && value !== null
+    ? (value as Record<string, unknown>)
+    : null;
+
 export async function getAdminEconomyOverview() {
   const [assetTotalsResult, giftSummaryResult, energySummaryResult, orderStatusResult] =
     await Promise.all([
@@ -115,6 +120,7 @@ export async function getAdminEconomyOverview() {
         recipientUserId: storePurchaseOrders.recipientUserId,
         status: storePurchaseOrders.status,
         storeChannel: storePurchaseOrders.storeChannel,
+        metadata: storePurchaseOrders.metadata,
         createdAt: storePurchaseOrders.createdAt,
         updatedAt: storePurchaseOrders.updatedAt,
         sku: iapProducts.sku,
@@ -196,6 +202,7 @@ export async function getAdminEconomyOverview() {
     })),
     recentOrders: recentOrders.map((order) => ({
       ...order,
+      metadata: toRecord(order.metadata),
       createdAt: resolveValidDate(order.createdAt),
       updatedAt: resolveValidDate(order.updatedAt),
     })),

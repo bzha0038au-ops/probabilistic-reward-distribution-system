@@ -297,19 +297,6 @@ const waitForHoldemTable = async (params: {
   throw new Error(`Timed out waiting for holdem table ${params.tableId}.`);
 };
 
-const readUserWalletSnapshot = async (userId: number) => {
-  const [wallet] = await getDb()
-    .select({
-      withdrawableBalance: userWallets.withdrawableBalance,
-      bonusBalance: userWallets.bonusBalance,
-      lockedBalance: userWallets.lockedBalance,
-    })
-    .from(userWallets)
-    .where(eq(userWallets.userId, userId))
-    .limit(1);
-  return expectPresent(wallet);
-};
-
 const readUserBluckSnapshot = async (userId: number) => {
   const [asset] = await getDb()
     .select({

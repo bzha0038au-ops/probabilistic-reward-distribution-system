@@ -15,24 +15,16 @@ const browserRouteExpectations = [
   ["POST", USER_API_ROUTES.communityThreads],
   ["GET", "/community/threads/12"],
   ["POST", "/community/threads/12/posts"],
-  ["GET", "/transactions"],
+  ["GET", USER_API_ROUTES.economyLedger],
+  ["GET", USER_API_ROUTES.giftEnergy],
+  ["GET", USER_API_ROUTES.gifts],
+  ["POST", USER_API_ROUTES.gifts],
+  ["GET", USER_API_ROUTES.giftPackCatalog],
   ["GET", "/experiments/reward-copy/variant"],
   ["GET", "/kyc/profile"],
   ["POST", "/kyc/profile"],
   ["GET", "/hand-history/blackjack%3A12"],
   ["GET", "/hand-history/holdem%3A12/evidence-bundle"],
-  ["GET", "/bank-cards"],
-  ["POST", "/bank-cards"],
-  ["GET", "/crypto-deposit-channels"],
-  ["POST", "/crypto-deposits"],
-  ["GET", "/crypto-withdraw-addresses"],
-  ["POST", "/crypto-withdraw-addresses"],
-  ["PATCH", "/crypto-withdraw-addresses/42/default"],
-  ["GET", "/top-ups"],
-  ["POST", "/top-ups"],
-  ["GET", "/withdrawals"],
-  ["POST", "/withdrawals"],
-  ["POST", "/crypto-withdrawals"],
   ["POST", "/auth/phone-verification/request"],
   ["POST", "/auth/phone-verification/confirm"],
   ["GET", "/rewards/center"],
@@ -132,6 +124,46 @@ describe("api proxy helpers", () => {
       normalizedPath: "/community/threads/12/posts",
       requiresAuth: true,
       methods: ["POST"],
+      methodAllowed: true,
+    });
+
+    expect(resolveBackendProxyRoute("GET", "/economy/ledger")).toEqual({
+      matched: true,
+      normalizedPath: "/economy/ledger",
+      requiresAuth: true,
+      methods: ["GET"],
+      methodAllowed: true,
+    });
+
+    expect(resolveBackendProxyRoute("GET", "/gift-energy")).toEqual({
+      matched: true,
+      normalizedPath: "/gift-energy",
+      requiresAuth: true,
+      methods: ["GET"],
+      methodAllowed: true,
+    });
+
+    expect(resolveBackendProxyRoute("GET", "/gifts")).toEqual({
+      matched: true,
+      normalizedPath: "/gifts",
+      requiresAuth: true,
+      methods: ["GET", "POST"],
+      methodAllowed: true,
+    });
+
+    expect(resolveBackendProxyRoute("POST", "/gifts")).toEqual({
+      matched: true,
+      normalizedPath: "/gifts",
+      requiresAuth: true,
+      methods: ["GET", "POST"],
+      methodAllowed: true,
+    });
+
+    expect(resolveBackendProxyRoute("GET", "/gift-packs/catalog")).toEqual({
+      matched: true,
+      normalizedPath: "/gift-packs/catalog",
+      requiresAuth: true,
+      methods: ["GET"],
       methodAllowed: true,
     });
 
@@ -486,6 +518,33 @@ describe("api proxy helpers", () => {
     ).toEqual({
       matched: false,
       normalizedPath: "/bank-cards/abc/default",
+    });
+
+    expect(resolveBackendProxyRoute("GET", "/transactions")).toEqual({
+      matched: false,
+      normalizedPath: "/transactions",
+    });
+
+    expect(resolveBackendProxyRoute("GET", "/top-ups")).toEqual({
+      matched: false,
+      normalizedPath: "/top-ups",
+    });
+
+    expect(resolveBackendProxyRoute("POST", "/withdrawals")).toEqual({
+      matched: false,
+      normalizedPath: "/withdrawals",
+    });
+
+    expect(resolveBackendProxyRoute("POST", "/iap/purchases/verify")).toEqual({
+      matched: false,
+      normalizedPath: "/iap/purchases/verify",
+    });
+
+    expect(
+      resolveBackendProxyRoute("POST", "/gift-packs/purchase/complete"),
+    ).toEqual({
+      matched: false,
+      normalizedPath: "/gift-packs/purchase/complete",
     });
   });
 });

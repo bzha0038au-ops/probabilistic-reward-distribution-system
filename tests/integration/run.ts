@@ -11,6 +11,7 @@ const integrationSpecFiles = [
   'src/integration/backend.top-up.integration.test.ts',
   'src/integration/backend.withdraw.integration.test.ts',
   'src/integration/backend.finance.integration.test.ts',
+  'src/integration/backend.finance.drill.integration.test.ts',
   'src/integration/backend.economy.iap.integration.test.ts',
   'src/integration/backend.admin.integration.test.ts',
   'src/integration/backend.auth.integration.test.ts',

@@ -37,7 +37,7 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "saas_outbound_webhook_deliveries" ADD CONSTRAINT "saas_outbound_webhook_deliveries_webhook_id_saas_outbound_webhooks_id_fk" FOREIGN KEY ("webhook_id") REFERENCES "public"."saas_outbound_webhooks"("id") ON DELETE cascade ON UPDATE no action;
+ ALTER TABLE "saas_outbound_webhook_deliveries" ADD CONSTRAINT "saas_outbound_webhook_deliveries_webhook_fk" FOREIGN KEY ("webhook_id") REFERENCES "public"."saas_outbound_webhooks"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
@@ -49,7 +49,7 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "saas_outbound_webhook_deliveries" ADD CONSTRAINT "saas_outbound_webhook_deliveries_draw_record_id_saas_draw_records_id_fk" FOREIGN KEY ("draw_record_id") REFERENCES "public"."saas_draw_records"("id") ON DELETE set null ON UPDATE no action;
+ ALTER TABLE "saas_outbound_webhook_deliveries" ADD CONSTRAINT "saas_outbound_webhook_deliveries_draw_record_fk" FOREIGN KEY ("draw_record_id") REFERENCES "public"."saas_draw_records"("id") ON DELETE set null ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;

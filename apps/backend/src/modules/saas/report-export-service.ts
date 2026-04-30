@@ -593,9 +593,9 @@ export async function listSaasReportExportJobs(
     rows.map(async (row) => {
       const hasDownload =
         row.status === "completed" &&
-        Boolean(row.content) &&
-        Boolean(row.fileName) &&
-        Boolean(row.contentType) &&
+        row.content !== null &&
+        row.fileName !== null &&
+        row.contentType !== null &&
         (!row.expiresAt || row.expiresAt.getTime() > now);
 
       if (!hasDownload) {
@@ -632,9 +632,9 @@ export async function loadSaasReportExportDownload(token: string) {
   if (
     !job ||
     job.status !== "completed" ||
-    !job.content ||
-    !job.fileName ||
-    !job.contentType ||
+    job.content === null ||
+    job.fileName === null ||
+    job.contentType === null ||
     (job.expiresAt && job.expiresAt.getTime() <= Date.now())
   ) {
     throw notFoundError("Report export download not found.", {

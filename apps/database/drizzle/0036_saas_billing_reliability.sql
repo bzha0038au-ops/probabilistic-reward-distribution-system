@@ -30,7 +30,7 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "saas_billing_account_versions" ADD CONSTRAINT "saas_billing_account_versions_billing_account_id_saas_billing_accounts_id_fk" FOREIGN KEY ("billing_account_id") REFERENCES "public"."saas_billing_accounts"("id") ON DELETE cascade ON UPDATE no action;
+ ALTER TABLE "saas_billing_account_versions" ADD CONSTRAINT "saas_billing_account_versions_billing_account_fk" FOREIGN KEY ("billing_account_id") REFERENCES "public"."saas_billing_accounts"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
@@ -42,7 +42,7 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "saas_billing_runs" ADD CONSTRAINT "saas_billing_runs_billing_account_version_id_saas_billing_account_versions_id_fk" FOREIGN KEY ("billing_account_version_id") REFERENCES "public"."saas_billing_account_versions"("id") ON DELETE set null ON UPDATE no action;
+ ALTER TABLE "saas_billing_runs" ADD CONSTRAINT "saas_billing_runs_billing_account_version_fk" FOREIGN KEY ("billing_account_version_id") REFERENCES "public"."saas_billing_account_versions"("id") ON DELETE set null ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;

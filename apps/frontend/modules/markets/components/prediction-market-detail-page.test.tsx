@@ -5,6 +5,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { CurrentUserSessionResponse } from "@reward/shared-types/auth";
 import type { PredictionMarketDetail } from "@reward/shared-types/prediction-market";
+import type { WalletBalanceResponse } from "@reward/shared-types/user";
 import React from "react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -46,6 +47,49 @@ vi.mock("@/lib/api/user-client", () => ({
 const ok = <T,>(data: T) => ({
   ok: true as const,
   data,
+});
+
+const buildWalletResponse = ({
+  availableBalance,
+  legacyWithdrawableBalance = availableBalance,
+}: {
+  availableBalance: string;
+  legacyWithdrawableBalance?: string;
+}): WalletBalanceResponse => ({
+  balance: {
+    withdrawableBalance: legacyWithdrawableBalance,
+    bonusBalance: "0.00",
+    lockedBalance: "0.00",
+    totalBalance: legacyWithdrawableBalance,
+  },
+  assets: [
+    {
+      userId: 42,
+      assetCode: "B_LUCK",
+      availableBalance,
+      lockedBalance: "0.00",
+      lifetimeEarned: "0.00",
+      lifetimeSpent: "0.00",
+      createdAt: null,
+      updatedAt: null,
+    },
+    {
+      userId: 42,
+      assetCode: "IAP_VOUCHER",
+      availableBalance: "0.00",
+      lockedBalance: "0.00",
+      lifetimeEarned: "0.00",
+      lifetimeSpent: "0.00",
+      createdAt: null,
+      updatedAt: null,
+    },
+  ],
+  legacy: {
+    withdrawableBalance: legacyWithdrawableBalance,
+    bonusBalance: "0.00",
+    lockedBalance: "0.00",
+    totalBalance: legacyWithdrawableBalance,
+  },
 });
 
 const currentSession: CurrentUserSessionResponse = {
@@ -140,14 +184,12 @@ describe("PredictionMarketDetailPage", () => {
       ok(buildMarket()),
     );
     browserUserApiClientMock.getWalletBalance.mockResolvedValue(
-      ok({
-        balance: {
-          withdrawableBalance: "50.00",
-          bonusBalance: "0.00",
-          lockedBalance: "0.00",
-          totalBalance: "50.00",
-        },
-      }),
+      ok(
+        buildWalletResponse({
+          availableBalance: "50.00",
+          legacyWithdrawableBalance: "500.00",
+        }),
+      ),
     );
   });
 
@@ -156,11 +198,14 @@ describe("PredictionMarketDetailPage", () => {
     vi.clearAllMocks();
   });
 
-  it("blocks a buy when the entered stake exceeds wallet balance", async () => {
+  it("blocks a buy when the entered stake exceeds the market asset balance", async () => {
     const user = userEvent.setup();
     renderPredictionMarketDetailPage();
 
     await screen.findByText("BTC above 100k by June");
+    expect(screen.getByTestId("market-available-balance").textContent).toContain(
+      "50.00",
+    );
     await user.click(screen.getByTestId("market-outcome-option-yes"));
     await user.type(screen.getByLabelText("Stake amount"), "75");
     await user.click(screen.getByTestId("market-place-button"));
@@ -196,24 +241,20 @@ describe("PredictionMarketDetailPage", () => {
 
     browserUserApiClientMock.getWalletBalance
       .mockResolvedValueOnce(
-        ok({
-          balance: {
-            withdrawableBalance: "50.00",
-            bonusBalance: "0.00",
-            lockedBalance: "0.00",
-            totalBalance: "50.00",
-          },
-        }),
+        ok(
+          buildWalletResponse({
+            availableBalance: "50.00",
+            legacyWithdrawableBalance: "500.00",
+          }),
+        ),
       )
       .mockResolvedValueOnce(
-        ok({
-          balance: {
-            withdrawableBalance: "35.00",
-            bonusBalance: "0.00",
-            lockedBalance: "0.00",
-            totalBalance: "35.00",
-          },
-        }),
+        ok(
+          buildWalletResponse({
+            availableBalance: "35.00",
+            legacyWithdrawableBalance: "485.00",
+          }),
+        ),
       );
     browserUserApiClientMock.placePredictionPosition.mockResolvedValue(
       ok({
@@ -244,6 +285,9 @@ describe("PredictionMarketDetailPage", () => {
 
     expect(screen.getByTestId("market-notice").textContent).toContain(
       messages.markets.positionPlaced,
+    );
+    expect(screen.getByTestId("market-available-balance").textContent).toContain(
+      "35.00",
     );
     expect(
       (screen.getByLabelText("Stake amount") as HTMLInputElement).value,
@@ -285,24 +329,20 @@ describe("PredictionMarketDetailPage", () => {
     );
     browserUserApiClientMock.getWalletBalance
       .mockResolvedValueOnce(
-        ok({
-          balance: {
-            withdrawableBalance: "50.00",
-            bonusBalance: "0.00",
-            lockedBalance: "0.00",
-            totalBalance: "50.00",
-          },
-        }),
+        ok(
+          buildWalletResponse({
+            availableBalance: "50.00",
+            legacyWithdrawableBalance: "500.00",
+          }),
+        ),
       )
       .mockResolvedValueOnce(
-        ok({
-          balance: {
-            withdrawableBalance: "65.00",
-            bonusBalance: "0.00",
-            lockedBalance: "0.00",
-            totalBalance: "65.00",
-          },
-        }),
+        ok(
+          buildWalletResponse({
+            availableBalance: "65.00",
+            legacyWithdrawableBalance: "515.00",
+          }),
+        ),
       );
     browserUserApiClientMock.sellPredictionPosition.mockResolvedValue(
       ok({

@@ -68,6 +68,8 @@ missing external controls block the rollout instead of staying as doc debt.
 
 - For local smoke tests, start containers: `pnpm db:up`
 - Run migrations: `pnpm db:migrate`
+- Enforce migration journal + rollback headers before cutting a release:
+  `pnpm guard:migration-discipline`
 - Verify `system_config` seeded keys exist.
 - Ensure `house_account` has a single row.
 - Confirm `reward_postgres_data` and `reward_redis_data` exist on persistent
@@ -190,7 +192,13 @@ missing external controls block the rollout instead of staying as doc debt.
 
 - Run unit tests: `pnpm test`
 - Run integration tests: `pnpm test:integration`
+- Run the payment anomaly drill suite: `pnpm test:integration:payments-drill`
 - Run browser regression after installing the Playwright browser once: `pnpm test:e2e`
+- Run the SaaS portal browser regression: `pnpm test:e2e:portal`
+- Run the mobile Maestro regression on a booted device/emulator:
+  `pnpm test:e2e:mobile`
+- Enforce UI surface file budgets before merge:
+  `pnpm guard:surface-file-budgets`
 - Perform a manual draw and verify ledger entries and draw records.
 
 ## 10. Deployment path

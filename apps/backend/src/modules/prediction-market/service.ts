@@ -1,14 +1,11 @@
 import type Decimal from "decimal.js";
 import {
-  ledgerEntries,
   predictionMarketAppeals,
   predictionMarketOracles,
   predictionMarkets,
   predictionPositions,
-  userWallets,
 } from "@reward/database";
 import { and, desc, eq, inArray, sql } from "@reward/database/orm";
-import { API_ERROR_CODES } from "@reward/shared-types/api";
 import {
   type CancelPredictionMarketRequest,
   type PredictionMarketAppealAcknowledgeRequest,
@@ -57,6 +54,11 @@ import { logger } from "../../shared/logger";
 import { toDecimal, toMoneyString } from "../../shared/money";
 import { readSqlRows } from "../../shared/sql-result";
 import { parseSchema } from "../../shared/validation";
+import {
+  lockAsset,
+  settleLockedAsset,
+  unlockAsset,
+} from "../economy/service";
 import { applyHouseBankrollDelta } from "../house/service";
 import { assertKycStakeAllowed } from "../kyc/service";
 import { sendPredictionMarketSettledNotification } from "../notification/service";
@@ -72,13 +74,6 @@ type StoredAppeal = typeof predictionMarketAppeals.$inferSelect;
 type StoredMarket = typeof predictionMarkets.$inferSelect;
 type StoredOracle = typeof predictionMarketOracles.$inferSelect;
 type StoredPosition = typeof predictionPositions.$inferSelect;
-
-type LockedWalletRow = {
-  userId: number;
-  withdrawableBalance: string | number | null;
-  lockedBalance: string | number | null;
-  wageredAmount: string | number | null;
-};
 
 type LockedMarketRow = {
   id: StoredMarket["id"];
@@ -116,6 +111,8 @@ const SELL_ENTRY_TYPE = "prediction_market_sell";
 const PAYOUT_ENTRY_TYPE = "prediction_market_payout";
 const REFUND_ENTRY_TYPE = "prediction_market_refund";
 const VIG_ENTRY_TYPE = "prediction_market_vig";
+const PREDICTION_MARKET_ASSET_CODE = "B_LUCK";
+const PREDICTION_MARKET_SOURCE_APP = "backend.prediction_market";
 
 const OutcomeArraySchema = PredictionMarketOutcomeSchema.array().min(2);
 const TagsArraySchema = PredictionMarketTagsSchema;
@@ -428,6 +425,16 @@ const resolveStakeAmount = (value: string) => {
 
   return amount;
 };
+
+const buildPredictionMarketAssetAudit = (
+  metadata: Record<string, unknown>,
+) => ({
+  sourceApp: PREDICTION_MARKET_SOURCE_APP,
+  metadata: {
+    ...metadata,
+    assetCode: PREDICTION_MARKET_ASSET_CODE,
+  },
+});
 
 const toDate = (value: Date | string | null | undefined) => {
   if (!value) {
@@ -1125,29 +1132,6 @@ const resolvePredictionMarketAppealsForMarket = async (
     );
 };
 
-const ensureWalletRow = async (tx: DbTransaction, userId: number) => {
-  await tx.insert(userWallets).values({ userId }).onConflictDoNothing();
-};
-
-const lockWallet = async (
-  tx: DbTransaction,
-  userId: number,
-): Promise<LockedWalletRow | null> => {
-  await ensureWalletRow(tx, userId);
-
-  const result = await tx.execute(sql`
-    SELECT user_id AS "userId",
-           withdrawable_balance AS "withdrawableBalance",
-           locked_balance AS "lockedBalance",
-           wagered_amount AS "wageredAmount"
-    FROM ${userWallets}
-    WHERE ${userWallets.userId} = ${userId}
-    FOR UPDATE
-  `);
-
-  return readSqlRows<LockedWalletRow>(result)[0] ?? null;
-};
-
 export async function listPredictionMarkets(
   userId: number | null = null,
 ): Promise<PredictionMarketSummary[]> {
@@ -1304,34 +1288,23 @@ export async function placePredictionPosition(
 
     const stakeAmount = resolveStakeAmount(input.stakeAmount);
     await assertKycStakeAllowed(userId, toMoneyString(stakeAmount), tx);
-    const wallet = await lockWallet(tx, userId);
-    if (!wallet) {
-      throw notFoundError("User wallet not found.");
-    }
-
-    const withdrawableBefore = toDecimal(wallet.withdrawableBalance ?? 0);
-    const lockedBefore = toDecimal(wallet.lockedBalance ?? 0);
-    const wageredBefore = toDecimal(wallet.wageredAmount ?? 0);
-
-    if (withdrawableBefore.lt(stakeAmount)) {
-      throw conflictError("Insufficient balance.", {
-        code: API_ERROR_CODES.INSUFFICIENT_BALANCE,
-      });
-    }
-
-    const withdrawableAfter = withdrawableBefore.minus(stakeAmount);
-    const lockedAfter = lockedBefore.plus(stakeAmount);
-    const wageredAfter = wageredBefore.plus(stakeAmount);
-
-    await tx
-      .update(userWallets)
-      .set({
-        withdrawableBalance: toMoneyString(withdrawableAfter),
-        lockedBalance: toMoneyString(lockedAfter),
-        wageredAmount: toMoneyString(wageredAfter),
-        updatedAt: new Date(),
-      })
-      .where(eq(userWallets.userId, userId));
+    await lockAsset(
+      {
+        userId,
+        assetCode: PREDICTION_MARKET_ASSET_CODE,
+        amount: toMoneyString(stakeAmount),
+        entryType: STAKE_ENTRY_TYPE,
+        referenceType: MARKET_REFERENCE_TYPE,
+        referenceId: marketId,
+        audit: buildPredictionMarketAssetAudit({
+          roundKey: market.roundKey,
+          marketTitle: market.title,
+          outcomeKey: matchingOutcome.key,
+          outcomeLabel: matchingOutcome.label,
+        }),
+      },
+      tx,
+    );
 
     const [position] = await tx
       .insert(predictionPositions)
@@ -1363,24 +1336,6 @@ export async function placePredictionPosition(
         updatedAt: new Date(),
       })
       .where(eq(predictionMarkets.id, marketId));
-
-    await tx.insert(ledgerEntries).values({
-      userId,
-      entryType: STAKE_ENTRY_TYPE,
-      amount: toMoneyString(stakeAmount.negated()),
-      balanceBefore: toMoneyString(withdrawableBefore),
-      balanceAfter: toMoneyString(withdrawableAfter),
-      referenceType: MARKET_REFERENCE_TYPE,
-      referenceId: marketId,
-      metadata: {
-        positionId: position.id,
-        roundKey: market.roundKey,
-        outcomeKey: matchingOutcome.key,
-        outcomeLabel: matchingOutcome.label,
-        lockedBalanceBefore: toMoneyString(lockedBefore),
-        lockedBalanceAfter: toMoneyString(lockedAfter),
-      },
-    });
 
     const serializedMarket = await getSerializedMarketById(
       tx,
@@ -1427,20 +1382,7 @@ export async function sellPredictionPosition(
       throw conflictError("Prediction market position is not open.");
     }
 
-    const wallet = await lockWallet(tx, userId);
-    if (!wallet) {
-      throw notFoundError("User wallet not found.");
-    }
-
     const stakeAmount = toDecimal(position.stakeAmount ?? 0);
-    const withdrawableBefore = toDecimal(wallet.withdrawableBalance ?? 0);
-    const lockedBefore = toDecimal(wallet.lockedBalance ?? 0);
-    if (lockedBefore.lt(stakeAmount)) {
-      throw conflictError("Locked balance is insufficient.");
-    }
-
-    const withdrawableAfter = withdrawableBefore.plus(stakeAmount);
-    const lockedAfter = lockedBefore.minus(stakeAmount);
     const totalPoolAfter = toDecimal(market.totalPoolAmount ?? 0).minus(
       stakeAmount,
     );
@@ -1450,14 +1392,24 @@ export async function sellPredictionPosition(
       );
     }
 
-    await tx
-      .update(userWallets)
-      .set({
-        withdrawableBalance: toMoneyString(withdrawableAfter),
-        lockedBalance: toMoneyString(lockedAfter),
-        updatedAt: new Date(),
-      })
-      .where(eq(userWallets.userId, userId));
+    await unlockAsset(
+      {
+        userId,
+        assetCode: PREDICTION_MARKET_ASSET_CODE,
+        amount: toMoneyString(stakeAmount),
+        entryType: SELL_ENTRY_TYPE,
+        referenceType: MARKET_REFERENCE_TYPE,
+        referenceId: marketId,
+        audit: buildPredictionMarketAssetAudit({
+          positionId,
+          roundKey: market.roundKey,
+          marketTitle: market.title,
+          outcomeKey: position.outcomeKey,
+          settlementMode: "user_sell",
+        }),
+      },
+      tx,
+    );
 
     const settledAt = new Date();
     await tx
@@ -1481,23 +1433,6 @@ export async function sellPredictionPosition(
         updatedAt: settledAt,
       })
       .where(eq(predictionMarkets.id, marketId));
-
-    await tx.insert(ledgerEntries).values({
-      userId,
-      entryType: SELL_ENTRY_TYPE,
-      amount: toMoneyString(stakeAmount),
-      balanceBefore: toMoneyString(withdrawableBefore),
-      balanceAfter: toMoneyString(withdrawableAfter),
-      referenceType: MARKET_REFERENCE_TYPE,
-      referenceId: marketId,
-      metadata: {
-        positionId,
-        roundKey: market.roundKey,
-        outcomeKey: position.outcomeKey,
-        lockedBalanceBefore: toMoneyString(lockedBefore),
-        lockedBalanceAfter: toMoneyString(lockedAfter),
-      },
-    });
 
     const serializedMarket = await getSerializedMarketById(
       tx,
@@ -1635,11 +1570,6 @@ export async function settlePredictionMarket(
       (left, right) => left - right,
     );
     for (const userId of orderedUserIds) {
-      const wallet = await lockWallet(tx, userId);
-      if (!wallet) {
-        throw notFoundError("User wallet not found.");
-      }
-
       const aggregate = userAggregates.get(userId);
       if (!aggregate) {
         throw internalInvariantError(
@@ -1647,46 +1577,29 @@ export async function settlePredictionMarket(
         );
       }
 
-      const withdrawableBefore = toDecimal(wallet.withdrawableBalance ?? 0);
-      const lockedBefore = toDecimal(wallet.lockedBalance ?? 0);
-      if (lockedBefore.lt(aggregate.lockedRelease)) {
-        throw conflictError("Locked balance is insufficient.");
-      }
-
-      const withdrawableAfter = withdrawableBefore.plus(aggregate.credit);
-      const lockedAfter = lockedBefore.minus(aggregate.lockedRelease);
-
-      await tx
-        .update(userWallets)
-        .set({
-          withdrawableBalance: toMoneyString(withdrawableAfter),
-          lockedBalance: toMoneyString(lockedAfter),
-          updatedAt: new Date(),
-        })
-        .where(eq(userWallets.userId, userId));
-
-      if (aggregate.credit.gt(0) && aggregate.entryType) {
-        await tx.insert(ledgerEntries).values({
+      await settleLockedAsset(
+        {
           userId,
-          entryType: aggregate.entryType,
-          amount: toMoneyString(aggregate.credit),
-          balanceBefore: toMoneyString(withdrawableBefore),
-          balanceAfter: toMoneyString(withdrawableAfter),
+          assetCode: PREDICTION_MARKET_ASSET_CODE,
+          lockedAmount: toMoneyString(aggregate.lockedRelease),
+          payoutAmount: toMoneyString(aggregate.credit),
+          entryType: aggregate.entryType ?? PAYOUT_ENTRY_TYPE,
           referenceType: MARKET_REFERENCE_TYPE,
           referenceId: marketId,
-          metadata: {
+          audit: buildPredictionMarketAssetAudit({
             positionIds: aggregate.positionIds,
             roundKey: market.roundKey,
+            marketTitle: market.title,
             winningOutcomeKey: input.winningOutcomeKey,
             winningOutcomeLabel: matchingOutcome.label,
             vigBps: market.vigBps,
             feeAmount: settlement.feeAmount,
             payoutPoolAmount: settlement.payoutPoolAmount,
-            lockedBalanceBefore: toMoneyString(lockedBefore),
-            lockedBalanceAfter: toMoneyString(lockedAfter),
-          },
-        });
-      }
+            settlementMode: settlement.mode,
+          }),
+        },
+        tx,
+      );
     }
 
     if (settlement.mode === "payout" && toDecimal(settlement.feeAmount).gt(0)) {
@@ -1876,11 +1789,6 @@ export async function cancelPredictionMarket(
       (left, right) => left - right,
     );
     for (const userId of orderedUserIds) {
-      const wallet = await lockWallet(tx, userId);
-      if (!wallet) {
-        throw notFoundError("User wallet not found.");
-      }
-
       const aggregate = userAggregates.get(userId);
       if (!aggregate) {
         throw internalInvariantError(
@@ -1888,45 +1796,27 @@ export async function cancelPredictionMarket(
         );
       }
 
-      const withdrawableBefore = toDecimal(wallet.withdrawableBalance ?? 0);
-      const lockedBefore = toDecimal(wallet.lockedBalance ?? 0);
-      if (lockedBefore.lt(aggregate.lockedRelease)) {
-        throw conflictError("Locked balance is insufficient.");
-      }
-
-      const withdrawableAfter = withdrawableBefore.plus(aggregate.credit);
-      const lockedAfter = lockedBefore.minus(aggregate.lockedRelease);
-
-      await tx
-        .update(userWallets)
-        .set({
-          withdrawableBalance: toMoneyString(withdrawableAfter),
-          lockedBalance: toMoneyString(lockedAfter),
-          updatedAt: new Date(),
-        })
-        .where(eq(userWallets.userId, userId));
-
-      if (aggregate.credit.gt(0)) {
-        await tx.insert(ledgerEntries).values({
+      await unlockAsset(
+        {
           userId,
-          entryType: REFUND_ENTRY_TYPE,
+          assetCode: PREDICTION_MARKET_ASSET_CODE,
           amount: toMoneyString(aggregate.credit),
-          balanceBefore: toMoneyString(withdrawableBefore),
-          balanceAfter: toMoneyString(withdrawableAfter),
+          entryType: REFUND_ENTRY_TYPE,
           referenceType: MARKET_REFERENCE_TYPE,
           referenceId: marketId,
-          metadata: {
+          audit: buildPredictionMarketAssetAudit({
             positionIds: aggregate.positionIds,
             roundKey: market.roundKey,
+            marketTitle: market.title,
             marketStatusBefore: effectiveStatus,
             cancelReason: input.reason,
             cancelOracle: input.oracle ?? null,
             cancellationMetadata: input.metadata ?? null,
-            lockedBalanceBefore: toMoneyString(lockedBefore),
-            lockedBalanceAfter: toMoneyString(lockedAfter),
-          },
-        });
-      }
+            settlementMode: "cancel_refund",
+          }),
+        },
+        tx,
+      );
     }
 
     const settledAt = new Date();

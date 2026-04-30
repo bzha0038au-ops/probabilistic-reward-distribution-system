@@ -2,6 +2,7 @@ import {
   type AnyPgColumn,
   boolean,
   check,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -423,9 +424,7 @@ export const saasAgentGroupCorrelations = pgTable(
     playerId: integer("player_id")
       .notNull()
       .references(() => saasPlayers.id, { onDelete: "cascade" }),
-    drawRecordId: integer("draw_record_id")
-      .notNull()
-      .references(() => saasDrawRecords.id, { onDelete: "cascade" }),
+    drawRecordId: integer("draw_record_id").notNull(),
     groupId: varchar("group_id", { length: 128 }).notNull(),
     windowSeconds: integer("window_seconds").notNull(),
     groupDrawCountWindow: integer("group_draw_count_window")
@@ -487,6 +486,11 @@ export const saasAgentGroupCorrelations = pgTable(
       .defaultNow(),
   },
   (table) => ({
+    drawRecordFk: foreignKey({
+      name: "saas_agent_group_correlations_draw_record_fk",
+      columns: [table.drawRecordId],
+      foreignColumns: [saasDrawRecords.id],
+    }).onDelete("cascade"),
     projectGroupCreatedIdx: index(
       "saas_agent_group_corr_project_group_created_idx",
     ).on(table.projectId, table.groupId, table.createdAt),
@@ -814,9 +818,7 @@ export const saasBillingAccountVersions = pgTable(
     tenantId: integer("tenant_id")
       .notNull()
       .references(() => saasTenants.id, { onDelete: "cascade" }),
-    billingAccountId: integer("billing_account_id")
-      .notNull()
-      .references(() => saasBillingAccounts.id, { onDelete: "cascade" }),
+    billingAccountId: integer("billing_account_id").notNull(),
     planCode: varchar("plan_code", {
       length: 32,
       enum: saasBillingPlanValues,
@@ -855,6 +857,11 @@ export const saasBillingAccountVersions = pgTable(
       .defaultNow(),
   },
   (table) => ({
+    billingAccountFk: foreignKey({
+      name: "saas_billing_account_versions_billing_account_fk",
+      columns: [table.billingAccountId],
+      foreignColumns: [saasBillingAccounts.id],
+    }).onDelete("cascade"),
     accountEffectiveIdx: index(
       "saas_billing_account_versions_account_effective_idx",
     ).on(table.billingAccountId, table.effectiveAt),
@@ -871,14 +878,8 @@ export const saasBillingRuns = pgTable(
     tenantId: integer("tenant_id")
       .notNull()
       .references(() => saasTenants.id, { onDelete: "cascade" }),
-    billingAccountId: integer("billing_account_id").references(
-      () => saasBillingAccounts.id,
-      { onDelete: "set null" },
-    ),
-    billingAccountVersionId: integer("billing_account_version_id").references(
-      () => saasBillingAccountVersions.id,
-      { onDelete: "set null" },
-    ),
+    billingAccountId: integer("billing_account_id"),
+    billingAccountVersionId: integer("billing_account_version_id"),
     status: varchar("status", {
       length: 32,
       enum: saasBillingRunStatusValues,
@@ -962,6 +963,16 @@ export const saasBillingRuns = pgTable(
       .defaultNow(),
   },
   (table) => ({
+    billingAccountFk: foreignKey({
+      name: "saas_billing_runs_billing_account_fk",
+      columns: [table.billingAccountId],
+      foreignColumns: [saasBillingAccounts.id],
+    }).onDelete("set null"),
+    billingAccountVersionFk: foreignKey({
+      name: "saas_billing_runs_billing_account_version_fk",
+      columns: [table.billingAccountVersionId],
+      foreignColumns: [saasBillingAccountVersions.id],
+    }).onDelete("set null"),
     tenantPeriodUnique: uniqueIndex(
       "saas_billing_runs_tenant_period_unique",
     ).on(table.tenantId, table.periodStart, table.periodEnd),
@@ -1030,10 +1041,7 @@ export const saasBillingTopUps = pgTable(
     tenantId: integer("tenant_id")
       .notNull()
       .references(() => saasTenants.id, { onDelete: "cascade" }),
-    billingAccountId: integer("billing_account_id").references(
-      () => saasBillingAccounts.id,
-      { onDelete: "set null" },
-    ),
+    billingAccountId: integer("billing_account_id"),
     amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
     currency: varchar("currency", { length: 16 }).notNull().default("USD"),
     note: varchar("note", { length: 255 }),
@@ -1063,6 +1071,11 @@ export const saasBillingTopUps = pgTable(
       .defaultNow(),
   },
   (table) => ({
+    billingAccountFk: foreignKey({
+      name: "saas_billing_top_ups_billing_account_fk",
+      columns: [table.billingAccountId],
+      foreignColumns: [saasBillingAccounts.id],
+    }).onDelete("set null"),
     tenantCreatedIdx: index("saas_billing_top_ups_tenant_created_idx").on(
       table.tenantId,
       table.createdAt,
@@ -1521,18 +1534,11 @@ export const saasOutboundWebhookDeliveries = pgTable(
   "saas_outbound_webhook_deliveries",
   {
     id: serial("id").primaryKey(),
-    webhookId: integer("webhook_id")
-      .notNull()
-      .references(() => saasOutboundWebhooks.id, { onDelete: "cascade" }),
+    webhookId: integer("webhook_id").notNull(),
     projectId: integer("project_id")
       .notNull()
       .references(() => saasProjects.id, { onDelete: "cascade" }),
-    drawRecordId: integer("draw_record_id").references(
-      () => saasDrawRecords.id,
-      {
-        onDelete: "set null",
-      },
-    ),
+    drawRecordId: integer("draw_record_id"),
     eventType: varchar("event_type", {
       length: 64,
       enum: saasOutboundWebhookEventValues,
@@ -1562,6 +1568,16 @@ export const saasOutboundWebhookDeliveries = pgTable(
       .defaultNow(),
   },
   (table) => ({
+    webhookFk: foreignKey({
+      name: "saas_outbound_webhook_deliveries_webhook_fk",
+      columns: [table.webhookId],
+      foreignColumns: [saasOutboundWebhooks.id],
+    }).onDelete("cascade"),
+    drawRecordFk: foreignKey({
+      name: "saas_outbound_webhook_deliveries_draw_record_fk",
+      columns: [table.drawRecordId],
+      foreignColumns: [saasDrawRecords.id],
+    }).onDelete("set null"),
     webhookEventUnique: uniqueIndex(
       "saas_outbound_webhook_deliveries_webhook_event_unique",
     ).on(table.webhookId, table.eventId),
@@ -1584,12 +1600,7 @@ export const saasStripeWebhookEvents = pgTable(
     tenantId: integer("tenant_id").references(() => saasTenants.id, {
       onDelete: "set null",
     }),
-    billingRunId: integer("billing_run_id").references(
-      () => saasBillingRuns.id,
-      {
-        onDelete: "set null",
-      },
-    ),
+    billingRunId: integer("billing_run_id"),
     eventId: varchar("event_id", { length: 128 }).notNull(),
     eventType: varchar("event_type", { length: 128 }).notNull(),
     status: varchar("status", {
@@ -1614,6 +1625,11 @@ export const saasStripeWebhookEvents = pgTable(
       .defaultNow(),
   },
   (table) => ({
+    billingRunFk: foreignKey({
+      name: "saas_stripe_webhook_events_billing_run_fk",
+      columns: [table.billingRunId],
+      foreignColumns: [saasBillingRuns.id],
+    }).onDelete("set null"),
     eventIdUnique: uniqueIndex("saas_stripe_webhook_events_event_id_unique").on(
       table.eventId,
     ),

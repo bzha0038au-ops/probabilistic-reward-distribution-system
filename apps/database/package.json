@@ -6,7 +6,9 @@
   "files": [
     "dist",
     "drizzle",
+    "drizzle-baseline",
     "drizzle.config.ts",
+    "scripts",
     "src",
     "package.json",
     "tsconfig.build.json",
@@ -17,11 +19,12 @@
   "exports": {
     ".": "./src/index.ts",
     "./schema": "./src/schema.ts",
-    "./orm": "./src/orm.ts"
+    "./orm": "./src/orm.ts",
+    "./migration-runner": "./src/migration-runner.ts"
   },
   "scripts": {
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
+    "db:migrate": "tsx scripts/migrate.ts",
     "db:studio": "drizzle-kit studio",
     "build": "tsc -p tsconfig.build.json",
     "check": "tsc -p tsconfig.json --noEmit",

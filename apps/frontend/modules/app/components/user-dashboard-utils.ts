@@ -7,6 +7,71 @@ import type { Locale } from "@/lib/i18n/messages";
 
 type BadgeVariant = "default" | "destructive" | "secondary" | "outline";
 
+export function formatUserDashboardActivityType(
+  locale: Locale,
+  entryType: string,
+) {
+  const zh = locale === "zh-CN";
+
+  const labels = zh
+    ? {
+        prediction_market_stake: "预测市场下注",
+        prediction_market_sell: "预测市场卖出",
+        prediction_market_payout: "预测市场派奖",
+        prediction_market_refund: "预测市场退款",
+        gift_send: "赠送",
+        gift_receive: "收礼",
+        draw_cost: "抽奖消耗",
+        draw_reward: "抽奖奖励",
+        gamification_reward: "任务奖励",
+        deposit_credit: "充值入账",
+        deposit_reversed: "充值冲正",
+        withdraw_request: "提现申请",
+        withdraw_rejected_refund: "提现退回",
+        withdraw_reversed_refund: "提现冲正",
+        withdraw_paid: "提现打款",
+      }
+    : {
+        prediction_market_stake: "Prediction market stake",
+        prediction_market_sell: "Prediction market exit",
+        prediction_market_payout: "Prediction market payout",
+        prediction_market_refund: "Prediction market refund",
+        gift_send: "Gift sent",
+        gift_receive: "Gift received",
+        draw_cost: "Draw stake",
+        draw_reward: "Draw reward",
+        gamification_reward: "Mission reward",
+        deposit_credit: "Deposit credited",
+        deposit_reversed: "Deposit reversed",
+        withdraw_request: "Withdrawal requested",
+        withdraw_rejected_refund: "Withdrawal refunded",
+        withdraw_reversed_refund: "Withdrawal reversed",
+        withdraw_paid: "Withdrawal paid",
+      };
+
+  if (entryType in labels) {
+    return labels[entryType as keyof typeof labels];
+  }
+
+  return entryType
+    .split("_")
+    .map((part) =>
+      part.length === 0 ? part : part.charAt(0).toUpperCase() + part.slice(1),
+    )
+    .join(" ");
+}
+
+export function formatUserDashboardActivitySource(
+  locale: Locale,
+  source: "legacy" | "economy",
+) {
+  if (source === "economy") {
+    return locale === "zh-CN" ? "经济账本" : "Economy";
+  }
+
+  return locale === "zh-CN" ? "旧钱包账本" : "Legacy";
+}
+
 export function formatUserDashboardAmount(
   locale: Locale,
   value: string | number | null | undefined,

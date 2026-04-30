@@ -70,6 +70,7 @@ export type AppConfig = {
   appleIapRootCertificatesPem: string;
   appleIapEnableOnlineChecks: boolean;
   appleIapDefaultEnvironment: "sandbox" | "production";
+  iapLocalStubVerificationEnabled: boolean;
   googlePlayPackageName: string;
   googlePlayServiceAccountEmail: string;
   googlePlayServiceAccountPrivateKey: string;
@@ -584,6 +585,12 @@ const schema = {
     format: ["sandbox", "production"],
     default: "production",
     env: "APPLE_IAP_DEFAULT_ENVIRONMENT",
+  },
+  iapLocalStubVerificationEnabled: {
+    doc: "Allow local stub verification for store purchases when Apple/Google verification credentials are absent; disable this in real sandbox/staging validation environments",
+    format: Boolean,
+    default: true,
+    env: "IAP_LOCAL_STUB_VERIFICATION_ENABLED",
   },
   googlePlayPackageName: {
     doc: "Android package name used for Google Play purchase verification",

@@ -752,7 +752,7 @@ export const createHoldemTableWithMode = async (
           maxExistingSeatCount: 0,
         },
       );
-      const leftSession = await startPlayModeSession({
+      await startPlayModeSession({
         tx,
         userId,
         gameKey: "holdem",
@@ -792,7 +792,7 @@ export const createHoldemTableWithMode = async (
           maxExistingSeatCount: 1,
         },
       );
-      const rightSession = await startPlayModeSession({
+      await startPlayModeSession({
         tx,
         userId,
         gameKey: "holdem",

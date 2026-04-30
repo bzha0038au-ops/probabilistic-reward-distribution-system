@@ -20,8 +20,89 @@ import {
   itIntegration as it,
   seedUserWithWallet,
 } from './integration-test-support';
+import { replayStorePurchaseOrderFulfillment } from '../modules/economy/iap-service';
+import { resetConfig } from '../shared/config';
+
+const getResponseData = <T>(response: { json(): unknown }) =>
+  (response.json() as { data: T }).data;
+
+const approveStorePurchaseOrder = async (orderId: number) =>
+  replayStorePurchaseOrderFulfillment({
+    orderId,
+    audit: {
+      actorType: 'admin',
+      actorId: 1,
+      sourceApp: 'integration-test',
+    },
+  });
 
 describeIntegrationSuite('backend economy iap integration', () => {
+  it('rejects stub verification when local stub mode is disabled', async () => {
+    await getDb().insert(iapProducts).values({
+      sku: 'reward.ios.voucher.strict',
+      storeChannel: 'ios',
+      deliveryType: 'voucher',
+      assetCode: 'IAP_VOUCHER',
+      assetAmount: '4.00',
+      isActive: true,
+    });
+
+    const user = await seedUserWithWallet({
+      email: 'iap-strict-mode-user@example.com',
+    });
+    const { token } = await getCreateUserSessionToken()({
+      userId: user.id,
+      email: user.email,
+      role: 'user',
+    });
+
+    const previousStubFlag = process.env.IAP_LOCAL_STUB_VERIFICATION_ENABLED;
+    process.env.IAP_LOCAL_STUB_VERIFICATION_ENABLED = 'false';
+    resetConfig();
+
+    try {
+      const response = await getApp().inject({
+        method: 'POST',
+        url: '/iap/purchases/verify',
+        headers: {
+          ...buildUserAuthHeaders(token),
+          'content-type': 'application/json',
+        },
+        payload: {
+          idempotencyKey: 'iap-ios-strict-mode-1',
+          storeChannel: 'ios',
+          sku: 'reward.ios.voucher.strict',
+          receipt: {
+            externalTransactionId: 'ios-strict-mode-transaction-001',
+            rawPayload: {
+              environment: 'Sandbox',
+            },
+          },
+        },
+      });
+
+      expect(response.statusCode).toBe(503);
+      expect(response.json()).toMatchObject({
+        ok: false,
+        error: expect.objectContaining({
+          message: 'Internal server error',
+        }),
+      });
+      const orders = await getDb()
+        .select({ id: storePurchaseOrders.id })
+        .from(storePurchaseOrders)
+        .where(eq(storePurchaseOrders.userId, user.id));
+      expect(orders).toHaveLength(0);
+    } finally {
+      if (previousStubFlag === undefined) {
+        delete process.env.IAP_LOCAL_STUB_VERIFICATION_ENABLED;
+      } else {
+        process.env.IAP_LOCAL_STUB_VERIFICATION_ENABLED = previousStubFlag;
+      }
+      resetConfig();
+    }
+  });
+
   it('lists active iap products by store channel and delivery type', async () => {
     await getDb().insert(iapProducts).values([
       {
@@ -136,7 +217,7 @@ describeIntegrationSuite('backend economy iap integration', () => {
     ]);
   });
 
-  it('verifies an ios voucher purchase and fulfills IAP_VOUCHER exactly once', async () => {
+  it('verifies an ios voucher purchase, leaves local stub orders pending approval, and fulfills IAP_VOUCHER exactly once', async () => {
     await getDb().insert(iapProducts).values({
       sku: 'reward.ios.voucher.medium',
       storeChannel: 'ios',
@@ -180,7 +261,42 @@ describeIntegrationSuite('backend economy iap integration', () => {
       payload: requestPayload,
     });
     expect(firstResponse.statusCode).toBe(201);
-    expect(firstResponse.json().data).toMatchObject({
+    const firstData = getResponseData<{
+      fulfillment: null;
+      order: {
+        id: number;
+        metadata: Record<string, unknown> | null;
+        status: string;
+        storeChannel: string;
+      };
+      receipt: {
+        externalTransactionId: string | null;
+        metadata: Record<string, unknown> | null;
+      };
+      replayed: boolean;
+    }>(firstResponse);
+    expect(firstData).toMatchObject({
+      replayed: false,
+      fulfillment: null,
+      order: expect.objectContaining({
+        status: 'verified',
+        storeChannel: 'ios',
+        metadata: expect.objectContaining({
+          manualApprovalRequired: true,
+          manualApprovalState: 'pending',
+        }),
+      }),
+      receipt: expect.objectContaining({
+        externalTransactionId: 'ios-transaction-001',
+        metadata: expect.objectContaining({
+          manualApprovalRequired: true,
+          manualApprovalState: 'pending',
+        }),
+      }),
+    });
+
+    const approvalResult = await approveStorePurchaseOrder(firstData.order.id);
+    expect(approvalResult).toMatchObject({
       replayed: false,
       fulfillment: {
         assetCode: 'IAP_VOUCHER',
@@ -188,11 +304,12 @@ describeIntegrationSuite('backend economy iap integration', () => {
         replayed: false,
       },
       order: expect.objectContaining({
+        id: firstData.order.id,
         status: 'fulfilled',
-        storeChannel: 'ios',
-      }),
-      receipt: expect.objectContaining({
-        externalTransactionId: 'ios-transaction-001',
+        metadata: expect.objectContaining({
+          manualApprovalRequired: true,
+          manualApprovalState: 'approved',
+        }),
       }),
     });
 
@@ -206,7 +323,7 @@ describeIntegrationSuite('backend economy iap integration', () => {
       payload: requestPayload,
     });
     expect(replayResponse.statusCode).toBe(200);
-    expect(replayResponse.json().data).toMatchObject({
+    expect(getResponseData(replayResponse)).toMatchObject({
       replayed: true,
       fulfillment: {
         assetCode: 'IAP_VOUCHER',
@@ -281,7 +398,7 @@ describeIntegrationSuite('backend economy iap integration', () => {
     ]);
   });
 
-  it('completes a gift pack purchase and delivers B_LUCK to the recipient exactly once', async () => {
+  it('completes a gift pack purchase after manual approval and delivers B_LUCK to the recipient exactly once', async () => {
     const [product] = await getDb()
       .insert(iapProducts)
       .values({
@@ -337,7 +454,39 @@ describeIntegrationSuite('backend economy iap integration', () => {
       payload: requestPayload,
     });
     expect(firstResponse.statusCode).toBe(201);
-    expect(firstResponse.json().data).toMatchObject({
+    const firstData = getResponseData<{
+      fulfillment: null;
+      order: {
+        id: number;
+        metadata: Record<string, unknown> | null;
+        recipientUserId: number | null;
+        status: string;
+        userId: number;
+      };
+      product: {
+        deliveryType: string;
+      };
+      replayed: boolean;
+    }>(firstResponse);
+    expect(firstData).toMatchObject({
+      replayed: false,
+      fulfillment: null,
+      order: expect.objectContaining({
+        userId: purchaser.id,
+        recipientUserId: recipient.id,
+        status: 'verified',
+        metadata: expect.objectContaining({
+          manualApprovalRequired: true,
+          manualApprovalState: 'pending',
+        }),
+      }),
+      product: expect.objectContaining({
+        deliveryType: 'gift_pack',
+      }),
+    });
+
+    const approvalResult = await approveStorePurchaseOrder(firstData.order.id);
+    expect(approvalResult).toMatchObject({
       replayed: false,
       fulfillment: {
         assetCode: 'B_LUCK',
@@ -345,12 +494,12 @@ describeIntegrationSuite('backend economy iap integration', () => {
         replayed: false,
       },
       order: expect.objectContaining({
-        userId: purchaser.id,
-        recipientUserId: recipient.id,
+        id: firstData.order.id,
         status: 'fulfilled',
-      }),
-      product: expect.objectContaining({
-        deliveryType: 'gift_pack',
+        metadata: expect.objectContaining({
+          manualApprovalRequired: true,
+          manualApprovalState: 'approved',
+        }),
       }),
     });
 
@@ -364,7 +513,7 @@ describeIntegrationSuite('backend economy iap integration', () => {
       payload: requestPayload,
     });
     expect(replayResponse.statusCode).toBe(200);
-    expect(replayResponse.json().data).toMatchObject({
+    expect(getResponseData(replayResponse)).toMatchObject({
       replayed: true,
       fulfillment: {
         assetCode: 'B_LUCK',
@@ -449,6 +598,17 @@ describeIntegrationSuite('backend economy iap integration', () => {
       },
     });
     expect(firstResponse.statusCode).toBe(201);
+    expect(getResponseData(firstResponse)).toMatchObject({
+      replayed: false,
+      fulfillment: null,
+      order: expect.objectContaining({
+        status: 'verified',
+        metadata: expect.objectContaining({
+          manualApprovalRequired: true,
+          manualApprovalState: 'pending',
+        }),
+      }),
+    });
 
     const replayedReceiptResponse = await getApp().inject({
       method: 'POST',
@@ -472,14 +632,24 @@ describeIntegrationSuite('backend economy iap integration', () => {
     });
 
     expect(replayedReceiptResponse.statusCode).toBe(200);
-    expect(replayedReceiptResponse.json().data).toMatchObject({
+    expect(getResponseData(replayedReceiptResponse)).toMatchObject({
       replayed: true,
-      fulfillment: {
-        assetCode: 'IAP_VOUCHER',
-        amount: '25.00',
-        replayed: true,
-      },
+      fulfillment: null,
+      order: expect.objectContaining({
+        status: 'verified',
+      }),
     });
+
+    const [pendingOrder] = await getDb()
+      .select({
+        id: storePurchaseOrders.id,
+      })
+      .from(storePurchaseOrders)
+      .where(eq(storePurchaseOrders.userId, user.id))
+      .orderBy(asc(storePurchaseOrders.id))
+      .limit(1);
+
+    await approveStorePurchaseOrder(pendingOrder!.id);
 
     const assetRows = await getDb()
       .select({
@@ -559,6 +729,9 @@ describeIntegrationSuite('backend economy iap integration', () => {
       },
     });
     expect(verifyResponse.statusCode).toBe(201);
+    await approveStorePurchaseOrder(
+      getResponseData<{ order: { id: number } }>(verifyResponse).order.id
+    );
 
     const notificationPayload = Buffer.from(
       JSON.stringify({
@@ -675,6 +848,9 @@ describeIntegrationSuite('backend economy iap integration', () => {
       },
     });
     expect(verifyResponse.statusCode).toBe(201);
+    await approveStorePurchaseOrder(
+      getResponseData<{ order: { id: number } }>(verifyResponse).order.id
+    );
 
     await debitAsset({
       userId: user.id,
@@ -794,6 +970,9 @@ describeIntegrationSuite('backend economy iap integration', () => {
       },
     });
     expect(verifyResponse.statusCode).toBe(201);
+    await approveStorePurchaseOrder(
+      getResponseData<{ order: { id: number } }>(verifyResponse).order.id
+    );
 
     const notificationPayload = Buffer.from(
       JSON.stringify({

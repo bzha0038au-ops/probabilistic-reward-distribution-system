@@ -19,6 +19,40 @@ env -u NO_COLOR tsx tests/load/economy-smoke.ts
 env -u NO_COLOR tsx tests/e2e/run.ts --spec tests/e2e/economy-wallet.spec.ts
 ```
 
+## 真实商店沙盒联调前置条件
+
+1. `apps/mobile/app.json` 里的 `ios.bundleIdentifier` 与 `android.package`
+   必须已经替换成真实商店应用 ID，不能继续使用占位值
+   `com.anonymous.rewardmobile`。
+2. App Store Connect / Play Console 里的商品 ID 必须和仓库 seed 保持一致：
+   - `reward.ios.voucher.small|medium|large`
+   - `reward.android.voucher.small|medium|large`
+   - `reward.ios.gift-pack.rose`
+   - `reward.android.gift-pack.rose`
+3. 真实沙盒联调环境必须关闭本地 stub：
+   - `IAP_LOCAL_STUB_VERIFICATION_ENABLED=false`
+4. 后端必须配置真实验签凭据：
+   - Apple: `APPLE_IAP_*`
+   - Google: `GOOGLE_PLAY_*`
+5. Apple/Google 服务端通知通道必须先打通，再开始退款/撤销回滚联调：
+   - Apple -> `POST /iap/notifications/apple`
+   - Google RTDN -> 通过 Pub/Sub push proxy 转发到
+     `POST /iap/notifications/google`
+6. 只有真实 Apple/Google 验签成功才会自动发货；如果当前环境还在走
+   `local_stub`，订单会停在 `verified`，需要后台 Economy Operations 页面
+   手动 `Approve`。
+
+## 真实商店沙盒联调验收
+
+1. 真机拉起商品目录并能拿到真实价格，而不是只显示 catalog fallback。
+2. 购买完成后，`store_purchase_orders.status` 必须落到 `fulfilled`。
+3. 最新 `store_purchase_receipts.metadata.verificationMode` 不得为
+   `local_stub`。
+4. 点券购买必须把 `IAP_VOUCHER` 记到用户资产余额。
+5. 礼物包购买必须把 `B_LUCK` 记到接收人资产余额。
+6. Apple/Google 退款或撤销信号到达后，订单必须进入
+   `refunded/revoked/reversed` 的对应恢复路径。
+
 ## 灰度步骤
 
 1. 先执行数据库迁移，确认 `0100_economy_foundation` 已落库，`iap_products` 与 `gift_pack_catalog` 已完成 seed。

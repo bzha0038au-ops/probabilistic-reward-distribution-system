@@ -11,7 +11,7 @@ import {
   seedUserWithWallet,
   verifyUserContacts,
 } from "./integration-test-support";
-import { predictionMarkets, userWallets } from "@reward/database";
+import { predictionMarkets, userAssetBalances, userWallets } from "@reward/database";
 import { eq } from "@reward/database/orm";
 
 import {
@@ -40,6 +40,32 @@ const updateWalletBalance = async (
       updatedAt: new Date(),
     })
     .where(eq(userWallets.userId, userId));
+};
+
+const updateMarketAssetBalance = async (
+  userId: number,
+  availableBalance: string,
+) => {
+  await getDb()
+    .insert(userAssetBalances)
+    .values({
+      userId,
+      assetCode: "B_LUCK",
+      availableBalance,
+      lockedBalance: "0.00",
+      lifetimeEarned: availableBalance,
+      lifetimeSpent: "0.00",
+    })
+    .onConflictDoUpdate({
+      target: [userAssetBalances.userId, userAssetBalances.assetCode],
+      set: {
+        availableBalance,
+        lockedBalance: "0.00",
+        lifetimeEarned: availableBalance,
+        lifetimeSpent: "0.00",
+        updatedAt: new Date(),
+      },
+    });
 };
 
 const lockMarketForSettlement = async (marketId: number) => {
@@ -89,12 +115,14 @@ describeIntegrationSuite(
         const viewer = await registerUser(viewerEmail, viewerPassword);
         await verifyUserContacts(viewer.id, { email: true });
         await updateWalletBalance(viewer.id, "100.00");
+        await updateMarketAssetBalance(viewer.id, "100.00");
         const viewerSession = await loginUser(viewerEmail, viewerPassword);
 
         const counterparty = await seedUserWithWallet({
           email: "prediction-portfolio-counterparty@example.com",
           withdrawableBalance: "100.00",
         });
+        await updateMarketAssetBalance(counterparty.id, "100.00");
         await seedApprovedKycProfile(counterparty.id, "tier_1");
 
         const openMarket = await createMarket({

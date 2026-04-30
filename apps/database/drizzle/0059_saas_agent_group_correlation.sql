@@ -65,7 +65,7 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "saas_agent_group_correlations" ADD CONSTRAINT "saas_agent_group_correlations_draw_record_id_saas_draw_records_id_fk" FOREIGN KEY ("draw_record_id") REFERENCES "public"."saas_draw_records"("id") ON DELETE cascade ON UPDATE no action;
+ ALTER TABLE "saas_agent_group_correlations" ADD CONSTRAINT "saas_agent_group_correlations_draw_record_fk" FOREIGN KEY ("draw_record_id") REFERENCES "public"."saas_draw_records"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;

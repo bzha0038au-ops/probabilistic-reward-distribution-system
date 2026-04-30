@@ -40,7 +40,6 @@ import {
   kycDocuments,
   kycProfiles,
   kycReviewEvents,
-  ledgerEntries,
   missions,
   notificationDeliveries,
   payoutMethods,
@@ -3006,6 +3005,65 @@ describeIntegrationSuite('backend admin integration', () => {
 
     expect(verifyResponse.statusCode).toBe(201);
     const orderId = Number(verifyResponse.json().data.order.id);
+
+    const pendingDetailResponse = await getApp().inject({
+      method: 'GET',
+      url: `/admin/economy/orders/${orderId}`,
+      headers: buildAdminCookieHeaders(adminSession.token),
+    });
+
+    expect(pendingDetailResponse.statusCode).toBe(200);
+    expect(pendingDetailResponse.json()).toMatchObject({
+      ok: true,
+      data: {
+        order: expect.objectContaining({
+          id: orderId,
+          userId: user.id,
+          status: 'verified',
+          metadata: expect.objectContaining({
+            manualApprovalRequired: true,
+            manualApprovalState: 'pending',
+          }),
+          sku: 'reward.ios.voucher.admin-reverse',
+          deliveryType: 'voucher',
+        }),
+        receipt: expect.objectContaining({
+          externalTransactionId: 'admin-economy-reverse-transaction-1',
+        }),
+      },
+    });
+
+    const replayResponse = await getApp().inject({
+      method: 'POST',
+      url: `/admin/economy/orders/${orderId}/replay-fulfillment`,
+      headers: {
+        ...buildAdminCookieHeaders(adminSession.token),
+        'content-type': 'application/json',
+      },
+      payload: {
+        totpCode: adminSession.totpCode,
+      },
+    });
+
+    expect(replayResponse.statusCode).toBe(200);
+    expect(replayResponse.json()).toMatchObject({
+      ok: true,
+      data: {
+        order: expect.objectContaining({
+          id: orderId,
+          status: 'fulfilled',
+          metadata: expect.objectContaining({
+            manualApprovalRequired: true,
+            manualApprovalState: 'approved',
+          }),
+        }),
+        fulfillment: expect.objectContaining({
+          assetCode: 'IAP_VOUCHER',
+          amount: '12.50',
+          replayed: false,
+        }),
+      },
+    });
 
     const detailResponse = await getApp().inject({
       method: 'GET',

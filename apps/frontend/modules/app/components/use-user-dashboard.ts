@@ -6,39 +6,92 @@ import type {
   CurrentUserSessionResponse,
   User,
 } from "@reward/shared-types/auth";
-import type {
-  BankCardRecord,
-  CryptoDepositChannelRecord,
-  CryptoWithdrawAddressViewRecord,
-  DepositRecord,
-  LedgerEntryRecord,
-  WithdrawalRecord,
-} from "@reward/shared-types/finance";
+import type { EconomyLedgerEntryRecord } from "@reward/shared-types/economy";
 import type { WalletBalanceResponse } from "@reward/shared-types/user";
 import type {
   RewardCenterResponse,
   RewardMissionId,
 } from "@reward/shared-types/gamification";
 
+import { readBluckAvailableBalance } from "@/lib/economy-wallet";
 import { browserUserApiClient } from "@/lib/api/user-client";
 import { userDashboardCopy } from "./user-dashboard-copy";
 
-type BankCard = BankCardRecord;
-type CryptoDepositChannel = CryptoDepositChannelRecord;
-type CryptoWithdrawAddress = CryptoWithdrawAddressViewRecord;
-type TopUp = DepositRecord;
-type Withdrawal = WithdrawalRecord;
-type LedgerEntry = LedgerEntryRecord;
 type UserDashboardCopy =
   (typeof userDashboardCopy)[keyof typeof userDashboardCopy];
 
 type UseUserDashboardOptions = {
   initialCurrentSession: CurrentUserSessionResponse;
   copy: UserDashboardCopy;
+  view?: "overview" | "rewards" | "wallet" | "security";
 };
 
+export type UserDashboardActivityEntry = {
+  id: string;
+  entryType: string;
+  amount: string;
+  balanceBefore: string;
+  balanceAfter: string;
+  referenceType: string | null;
+  referenceId: number | null;
+  createdAt: string | Date | null | undefined;
+  source: "legacy" | "economy";
+  assetCode: string | null;
+};
+
+const ACTIVITY_LIMIT = 8;
+
+const toActivityTimestamp = (
+  value: string | Date | null | undefined,
+) => {
+  if (!value) {
+    return 0;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+};
+
+const normalizeEconomyActivityEntry = (
+  entry: EconomyLedgerEntryRecord,
+): UserDashboardActivityEntry => ({
+  id: `economy:${entry.id}`,
+  entryType: entry.entryType,
+  amount: entry.amount,
+  balanceBefore: entry.balanceBefore,
+  balanceAfter: entry.balanceAfter,
+  referenceType: entry.referenceType ?? null,
+  referenceId: entry.referenceId ?? null,
+  createdAt: entry.createdAt,
+  source: "economy",
+  assetCode: entry.assetCode ?? null,
+});
+
+const sortActivityEntries = (
+  left: UserDashboardActivityEntry,
+  right: UserDashboardActivityEntry,
+) => {
+  const timestampDifference =
+    toActivityTimestamp(right.createdAt) - toActivityTimestamp(left.createdAt);
+  if (timestampDifference !== 0) {
+    return timestampDifference;
+  }
+
+  return right.id.localeCompare(left.id);
+};
+
+const normalizeActivityEntries = (economyEntries: EconomyLedgerEntryRecord[]) =>
+  economyEntries
+    .map(normalizeEconomyActivityEntry)
+    .sort(sortActivityEntries)
+    .slice(0, ACTIVITY_LIMIT);
+
 export function useUserDashboard(options: UseUserDashboardOptions) {
-  const { initialCurrentSession, copy: c } = options;
+  const {
+    initialCurrentSession,
+    copy: c,
+    view = "overview",
+  } = options;
 
   const [currentUser, setCurrentUser] = useState<User>(
     initialCurrentSession.user,
@@ -47,17 +100,9 @@ export function useUserDashboard(options: UseUserDashboardOptions) {
     initialCurrentSession.session,
   );
   const [wallet, setWallet] = useState<WalletBalanceResponse | null>(null);
-  const [walletBalance, setWalletBalance] = useState("0");
-  const [bankCards, setBankCards] = useState<BankCard[]>([]);
-  const [cryptoDepositChannels, setCryptoDepositChannels] = useState<
-    CryptoDepositChannel[]
+  const [activityEntries, setActivityEntries] = useState<
+    UserDashboardActivityEntry[]
   >([]);
-  const [cryptoWithdrawAddresses, setCryptoWithdrawAddresses] = useState<
-    CryptoWithdrawAddress[]
-  >([]);
-  const [topUps, setTopUps] = useState<TopUp[]>([]);
-  const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
-  const [transactions, setTransactions] = useState<LedgerEntry[]>([]);
   const [rewardCenter, setRewardCenter] = useState<RewardCenterResponse | null>(
     null,
   );
@@ -67,36 +112,6 @@ export function useUserDashboard(options: UseUserDashboardOptions) {
   const [dashboardLoading, setDashboardLoading] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  const [topUpAmount, setTopUpAmount] = useState("");
-  const [topUpReferenceId, setTopUpReferenceId] = useState("");
-  const [topUpSubmitting, setTopUpSubmitting] = useState(false);
-  const [selectedCryptoChannelId, setSelectedCryptoChannelId] = useState("");
-  const [cryptoDepositAmount, setCryptoDepositAmount] = useState("");
-  const [cryptoDepositTxHash, setCryptoDepositTxHash] = useState("");
-  const [cryptoDepositFromAddress, setCryptoDepositFromAddress] = useState("");
-  const [cryptoDepositSubmitting, setCryptoDepositSubmitting] = useState(false);
-
-  const [cardholderName, setCardholderName] = useState("");
-  const [bankName, setBankName] = useState("");
-  const [cardBrand, setCardBrand] = useState("");
-  const [cardLast4, setCardLast4] = useState("");
-  const [cardSubmitting, setCardSubmitting] = useState(false);
-  const [cryptoChain, setCryptoChain] = useState("");
-  const [cryptoNetwork, setCryptoNetwork] = useState("");
-  const [cryptoToken, setCryptoToken] = useState("");
-  const [cryptoAddressValue, setCryptoAddressValue] = useState("");
-  const [cryptoAddressLabel, setCryptoAddressLabel] = useState("");
-  const [cryptoAddressSubmitting, setCryptoAddressSubmitting] = useState(false);
-
-  const [withdrawalAmount, setWithdrawalAmount] = useState("");
-  const [selectedBankCardId, setSelectedBankCardId] = useState("");
-  const [withdrawalSubmitting, setWithdrawalSubmitting] = useState(false);
-  const [cryptoWithdrawalAmount, setCryptoWithdrawalAmount] = useState("");
-  const [selectedCryptoWithdrawAddressId, setSelectedCryptoWithdrawAddressId] =
-    useState("");
-  const [cryptoWithdrawalSubmitting, setCryptoWithdrawalSubmitting] =
-    useState(false);
 
   const [phone, setPhone] = useState("");
   const [phoneCode, setPhoneCode] = useState("");
@@ -109,22 +124,19 @@ export function useUserDashboard(options: UseUserDashboardOptions) {
     useState<RewardMissionId | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
+  const needsWalletData = view === "wallet";
+  const needsActivityData = view === "wallet";
+  const needsRewardCenter = view === "rewards";
+  const needsSessions = view === "security";
+  const walletBalance = readBluckAvailableBalance(wallet);
   const emailVerified = Boolean(currentUser.emailVerifiedAt);
   const phoneVerified = Boolean(currentUser.phoneVerifiedAt);
-  const financeUnlocked = emailVerified && phoneVerified;
-  const fiatTopUps = topUps.filter(
-    (entry) => (entry.channelType ?? "fiat") === "fiat",
-  );
-  const cryptoTopUps = topUps.filter((entry) => entry.channelType === "crypto");
-  const fiatWithdrawals = withdrawals.filter(
-    (entry) => (entry.channelType ?? "fiat") === "fiat",
-  );
-  const cryptoWithdrawals = withdrawals.filter(
-    (entry) => entry.channelType === "crypto",
-  );
 
   useEffect(() => {
     void loadDashboard();
+    // Each account page mounts its own dashboard instance, so the initial load
+    // intentionally stays mount-scoped instead of tracking the local helpers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const resolveDashboardLoadError = (
@@ -151,88 +163,88 @@ export function useUserDashboard(options: UseUserDashboardOptions) {
     setError(null);
 
     try {
+      const walletPromise = needsWalletData
+        ? browserUserApiClient.getWalletBalance()
+        : Promise.resolve(null);
+      const economyLedgerPromise = needsActivityData
+        ? browserUserApiClient.getEconomyLedger({ limit: ACTIVITY_LIMIT })
+        : Promise.resolve(null);
+      const rewardCenterPromise = needsRewardCenter
+        ? browserUserApiClient.getRewardCenter()
+        : Promise.resolve(null);
+      const sessionsPromise = needsSessions
+        ? browserUserApiClient.listSessions()
+        : Promise.resolve(null);
+
       const [
         currentSessionResponse,
         walletResponse,
-        transactionsResponse,
-        bankCardsResponse,
-        cryptoChannelsResponse,
-        cryptoAddressesResponse,
-        topUpsResponse,
-        withdrawalsResponse,
+        economyLedgerResponse,
         rewardCenterResponse,
         sessionsResponse,
       ] = await Promise.all([
         browserUserApiClient.getCurrentSession(),
-        browserUserApiClient.getWalletBalance(),
-        browserUserApiClient.getTransactionHistory(8),
-        browserUserApiClient.listBankCards(),
-        browserUserApiClient.listCryptoDepositChannels(),
-        browserUserApiClient.listCryptoWithdrawAddresses(),
-        browserUserApiClient.listTopUps(5),
-        browserUserApiClient.listWithdrawals(5),
-        browserUserApiClient.getRewardCenter(),
-        browserUserApiClient.listSessions(),
+        walletPromise,
+        economyLedgerPromise,
+        rewardCenterPromise,
+        sessionsPromise,
       ]);
 
-      const failures = [
-        currentSessionResponse,
-        walletResponse,
-        transactionsResponse,
-        bankCardsResponse,
-        cryptoChannelsResponse,
-        cryptoAddressesResponse,
-        topUpsResponse,
-        withdrawalsResponse,
-        rewardCenterResponse,
-        sessionsResponse,
-      ].filter((response) => !response.ok);
+      const failures: Array<{ status?: number; error?: { message?: string } }> =
+        [];
+      const collectFailure = (
+        response:
+          | {
+              ok: boolean;
+              status?: number;
+              error?: { message?: string };
+            }
+          | null,
+      ) => {
+        if (response && !response.ok) {
+          failures.push(response);
+        }
+      };
+
+      collectFailure(currentSessionResponse);
+      collectFailure(walletResponse);
+      collectFailure(economyLedgerResponse);
+      collectFailure(rewardCenterResponse);
+      collectFailure(sessionsResponse);
 
       if (currentSessionResponse.ok) {
         setCurrentUser(currentSessionResponse.data.user);
         setCurrentSession(currentSessionResponse.data.session);
       }
 
-      if (walletResponse.ok) {
+      if (walletResponse?.ok) {
         setWallet(walletResponse.data);
-        setWalletBalance(
-          walletResponse.data.balance.withdrawableBalance ?? "0",
-        );
+      } else if (!needsWalletData) {
+        setWallet(null);
       }
 
-      if (transactionsResponse.ok) {
-        setTransactions(transactionsResponse.data);
+      if (economyLedgerResponse?.ok) {
+        setActivityEntries(normalizeActivityEntries(economyLedgerResponse.data));
+      } else if (needsActivityData) {
+        setActivityEntries([]);
+      } else if (!needsActivityData) {
+        setActivityEntries([]);
       }
 
-      if (bankCardsResponse.ok) {
-        syncBankCardSelection(bankCardsResponse.data);
-        setBankCards(bankCardsResponse.data);
-      }
-
-      if (cryptoChannelsResponse.ok) {
-        syncCryptoChannelSelection(cryptoChannelsResponse.data);
-        setCryptoDepositChannels(cryptoChannelsResponse.data);
-      }
-
-      if (cryptoAddressesResponse.ok) {
-        syncCryptoWithdrawSelection(cryptoAddressesResponse.data);
-        setCryptoWithdrawAddresses(cryptoAddressesResponse.data);
-      }
-
-      if (topUpsResponse.ok) {
-        setTopUps(topUpsResponse.data);
-      }
-
-      if (withdrawalsResponse.ok) {
-        setWithdrawals(withdrawalsResponse.data);
-      }
-
-      if (rewardCenterResponse.ok) {
+      if (rewardCenterResponse?.ok) {
         setRewardCenter(rewardCenterResponse.data);
+      } else if (!needsRewardCenter) {
+        setRewardCenter(null);
       }
 
-      if (sessionsResponse.ok) {
+      if (sessionsResponse?.ok) {
         setSessions(sessionsResponse.data.items);
+      } else if (!needsSessions) {
+        setSessions([
+          currentSessionResponse.ok
+            ? currentSessionResponse.data.session
+            : initialCurrentSession.session,
+        ]);
       }
 
       if (failures.length > 0) {
@@ -244,58 +256,6 @@ export function useUserDashboard(options: UseUserDashboardOptions) {
       setDashboardLoading(false);
       setRefreshing(false);
     }
-  }
-
-  function syncBankCardSelection(cards: BankCard[]) {
-    if (cards.length === 0) {
-      setSelectedBankCardId("");
-      return;
-    }
-
-    const currentSelection = cards.find(
-      (card) => String(card.id) === selectedBankCardId,
-    );
-    if (currentSelection) {
-      return;
-    }
-
-    const defaultCard = cards.find((card) => card.isDefault) ?? cards[0];
-    setSelectedBankCardId(String(defaultCard.id));
-  }
-
-  function syncCryptoChannelSelection(channels: CryptoDepositChannel[]) {
-    if (channels.length === 0) {
-      setSelectedCryptoChannelId("");
-      return;
-    }
-
-    const currentSelection = channels.find(
-      (channel) => String(channel.id) === selectedCryptoChannelId,
-    );
-    if (currentSelection) {
-      return;
-    }
-
-    setSelectedCryptoChannelId(String(channels[0].id));
-  }
-
-  function syncCryptoWithdrawSelection(addresses: CryptoWithdrawAddress[]) {
-    if (addresses.length === 0) {
-      setSelectedCryptoWithdrawAddressId("");
-      return;
-    }
-
-    const currentSelection = addresses.find(
-      (address) =>
-        String(address.payoutMethodId) === selectedCryptoWithdrawAddressId,
-    );
-    if (currentSelection) {
-      return;
-    }
-
-    const defaultAddress =
-      addresses.find((address) => address.isDefault) ?? addresses[0];
-    setSelectedCryptoWithdrawAddressId(String(defaultAddress.payoutMethodId));
   }
 
   function setFeedback(
@@ -394,225 +354,6 @@ export function useUserDashboard(options: UseUserDashboardOptions) {
     setPhoneConfirmSubmitting(false);
   }
 
-  async function handleCreateTopUp(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!topUpAmount.trim()) {
-      setFeedback(null, c.submitMissing);
-      return;
-    }
-
-    setTopUpSubmitting(true);
-    setFeedback(null, null);
-
-    const response = await browserUserApiClient.createTopUp({
-      amount: topUpAmount.trim(),
-      referenceId: topUpReferenceId.trim() || null,
-    });
-
-    if (!response.ok) {
-      setFeedback(null, response.error?.message ?? c.loadFailed);
-      setTopUpSubmitting(false);
-      return;
-    }
-
-    setTopUpAmount("");
-    setTopUpReferenceId("");
-    setFeedback(c.topUpCreated);
-    await loadDashboard(false);
-    setTopUpSubmitting(false);
-  }
-
-  async function handleCreateCryptoDeposit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (
-      !selectedCryptoChannelId ||
-      !cryptoDepositAmount.trim() ||
-      !cryptoDepositTxHash.trim()
-    ) {
-      setFeedback(null, c.submitMissing);
-      return;
-    }
-
-    setCryptoDepositSubmitting(true);
-    setFeedback(null, null);
-
-    const response = await browserUserApiClient.createCryptoDeposit({
-      channelId: Number(selectedCryptoChannelId),
-      amountClaimed: cryptoDepositAmount.trim(),
-      txHash: cryptoDepositTxHash.trim(),
-      fromAddress: cryptoDepositFromAddress.trim() || null,
-    });
-
-    if (!response.ok) {
-      setFeedback(null, response.error?.message ?? c.loadFailed);
-      setCryptoDepositSubmitting(false);
-      return;
-    }
-
-    setCryptoDepositAmount("");
-    setCryptoDepositTxHash("");
-    setCryptoDepositFromAddress("");
-    setFeedback(c.cryptoDepositCreated);
-    await loadDashboard(false);
-    setCryptoDepositSubmitting(false);
-  }
-
-  async function handleCreateBankCard(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!cardholderName.trim()) {
-      setFeedback(null, c.submitMissing);
-      return;
-    }
-
-    setCardSubmitting(true);
-    setFeedback(null, null);
-
-    const response = await browserUserApiClient.createBankCard({
-      cardholderName: cardholderName.trim(),
-      bankName: bankName.trim() || null,
-      brand: cardBrand.trim() || null,
-      last4: cardLast4.trim() || null,
-      isDefault: bankCards.length === 0,
-    });
-
-    if (!response.ok) {
-      setFeedback(null, response.error?.message ?? c.loadFailed);
-      setCardSubmitting(false);
-      return;
-    }
-
-    setCardholderName("");
-    setBankName("");
-    setCardBrand("");
-    setCardLast4("");
-    setFeedback(c.cardSaved);
-    await loadDashboard(false);
-    setCardSubmitting(false);
-  }
-
-  async function handleCreateCryptoWithdrawAddress(
-    event: FormEvent<HTMLFormElement>,
-  ) {
-    event.preventDefault();
-    if (!cryptoAddressValue.trim()) {
-      setFeedback(null, c.submitMissing);
-      return;
-    }
-
-    setCryptoAddressSubmitting(true);
-    setFeedback(null, null);
-
-    const response = await browserUserApiClient.createCryptoWithdrawAddress({
-      chain: cryptoChain.trim() || null,
-      network: cryptoNetwork.trim() || null,
-      token: cryptoToken.trim() || null,
-      address: cryptoAddressValue.trim(),
-      label: cryptoAddressLabel.trim() || null,
-      isDefault: cryptoWithdrawAddresses.length === 0,
-    });
-
-    if (!response.ok) {
-      setFeedback(null, response.error?.message ?? c.loadFailed);
-      setCryptoAddressSubmitting(false);
-      return;
-    }
-
-    setCryptoChain("");
-    setCryptoNetwork("");
-    setCryptoToken("");
-    setCryptoAddressValue("");
-    setCryptoAddressLabel("");
-    setFeedback(c.cryptoAddressSaved);
-    await loadDashboard(false);
-    setCryptoAddressSubmitting(false);
-  }
-
-  async function handleSetDefaultCard(bankCardId: number) {
-    setFeedback(null, null);
-
-    const response = await browserUserApiClient.setDefaultBankCard(bankCardId);
-
-    if (!response.ok) {
-      setFeedback(null, response.error?.message ?? c.loadFailed);
-      return;
-    }
-
-    setFeedback(c.defaultCardUpdated);
-    await loadDashboard(false);
-  }
-
-  async function handleSetDefaultCryptoAddress(payoutMethodId: number) {
-    setFeedback(null, null);
-
-    const response = await browserUserApiClient.setDefaultCryptoWithdrawAddress(
-      payoutMethodId,
-    );
-
-    if (!response.ok) {
-      setFeedback(null, response.error?.message ?? c.loadFailed);
-      return;
-    }
-
-    setFeedback(c.defaultCryptoAddressUpdated);
-    await loadDashboard(false);
-  }
-
-  async function handleCreateWithdrawal(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!withdrawalAmount.trim() || !selectedBankCardId) {
-      setFeedback(null, c.submitMissing);
-      return;
-    }
-
-    setWithdrawalSubmitting(true);
-    setFeedback(null, null);
-
-    const response = await browserUserApiClient.createWithdrawal({
-      amount: withdrawalAmount.trim(),
-      bankCardId: Number(selectedBankCardId),
-    });
-
-    if (!response.ok) {
-      setFeedback(null, response.error?.message ?? c.loadFailed);
-      setWithdrawalSubmitting(false);
-      return;
-    }
-
-    setWithdrawalAmount("");
-    setFeedback(c.withdrawalCreated);
-    await loadDashboard(false);
-    setWithdrawalSubmitting(false);
-  }
-
-  async function handleCreateCryptoWithdrawal(
-    event: FormEvent<HTMLFormElement>,
-  ) {
-    event.preventDefault();
-    if (!cryptoWithdrawalAmount.trim() || !selectedCryptoWithdrawAddressId) {
-      setFeedback(null, c.submitMissing);
-      return;
-    }
-
-    setCryptoWithdrawalSubmitting(true);
-    setFeedback(null, null);
-
-    const response = await browserUserApiClient.createCryptoWithdrawal({
-      amount: cryptoWithdrawalAmount.trim(),
-      payoutMethodId: Number(selectedCryptoWithdrawAddressId),
-    });
-
-    if (!response.ok) {
-      setFeedback(null, response.error?.message ?? c.loadFailed);
-      setCryptoWithdrawalSubmitting(false);
-      return;
-    }
-
-    setCryptoWithdrawalAmount("");
-    setFeedback(c.cryptoWithdrawalCreated);
-    await loadDashboard(false);
-    setCryptoWithdrawalSubmitting(false);
-  }
-
   async function handleRevokeSession(sessionId: string, current: boolean) {
     setSessionLoading(true);
     setFeedback(null, null);
@@ -655,62 +396,13 @@ export function useUserDashboard(options: UseUserDashboardOptions) {
     currentUser,
     currentSession,
     wallet,
+    activityEntries,
     walletBalance,
-    bankCards,
-    cryptoDepositChannels,
-    cryptoWithdrawAddresses,
-    topUps,
-    withdrawals,
-    transactions,
     rewardCenter,
     sessions,
     dashboardLoading,
     notice,
     error,
-    topUpAmount,
-    setTopUpAmount,
-    topUpReferenceId,
-    setTopUpReferenceId,
-    topUpSubmitting,
-    selectedCryptoChannelId,
-    setSelectedCryptoChannelId,
-    cryptoDepositAmount,
-    setCryptoDepositAmount,
-    cryptoDepositTxHash,
-    setCryptoDepositTxHash,
-    cryptoDepositFromAddress,
-    setCryptoDepositFromAddress,
-    cryptoDepositSubmitting,
-    cardholderName,
-    setCardholderName,
-    bankName,
-    setBankName,
-    cardBrand,
-    setCardBrand,
-    cardLast4,
-    setCardLast4,
-    cardSubmitting,
-    cryptoChain,
-    setCryptoChain,
-    cryptoNetwork,
-    setCryptoNetwork,
-    cryptoToken,
-    setCryptoToken,
-    cryptoAddressValue,
-    setCryptoAddressValue,
-    cryptoAddressLabel,
-    setCryptoAddressLabel,
-    cryptoAddressSubmitting,
-    withdrawalAmount,
-    setWithdrawalAmount,
-    selectedBankCardId,
-    setSelectedBankCardId,
-    withdrawalSubmitting,
-    cryptoWithdrawalAmount,
-    setCryptoWithdrawalAmount,
-    selectedCryptoWithdrawAddressId,
-    setSelectedCryptoWithdrawAddressId,
-    cryptoWithdrawalSubmitting,
     phone,
     setPhone,
     phoneCode,
@@ -723,24 +415,11 @@ export function useUserDashboard(options: UseUserDashboardOptions) {
     refreshing,
     emailVerified,
     phoneVerified,
-    financeUnlocked,
-    fiatTopUps,
-    cryptoTopUps,
-    fiatWithdrawals,
-    cryptoWithdrawals,
     handleRefresh,
     handleClaimReward,
     handleSendVerificationEmail,
     handleSendPhoneCode,
     handleConfirmPhone,
-    handleCreateTopUp,
-    handleCreateCryptoDeposit,
-    handleCreateBankCard,
-    handleCreateCryptoWithdrawAddress,
-    handleSetDefaultCard,
-    handleSetDefaultCryptoAddress,
-    handleCreateWithdrawal,
-    handleCreateCryptoWithdrawal,
     handleRevokeSession,
     handleRevokeAllSessions,
   };

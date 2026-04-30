@@ -55,7 +55,7 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "legal_document_publications" ADD CONSTRAINT "legal_document_publications_change_request_id_config_change_requests_id_fk" FOREIGN KEY ("change_request_id") REFERENCES "public"."config_change_requests"("id") ON DELETE set null ON UPDATE no action;
+ ALTER TABLE "legal_document_publications" ADD CONSTRAINT "legal_document_publications_change_request_fk" FOREIGN KEY ("change_request_id") REFERENCES "public"."config_change_requests"("id") ON DELETE set null ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
@@ -93,7 +93,7 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "legal_document_acceptances" ADD CONSTRAINT "legal_document_acceptances_publication_id_legal_document_publications_id_fk" FOREIGN KEY ("publication_id") REFERENCES "public"."legal_document_publications"("id") ON DELETE set null ON UPDATE no action;
+ ALTER TABLE "legal_document_acceptances" ADD CONSTRAINT "legal_document_acceptances_publication_fk" FOREIGN KEY ("publication_id") REFERENCES "public"."legal_document_publications"("id") ON DELETE set null ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;

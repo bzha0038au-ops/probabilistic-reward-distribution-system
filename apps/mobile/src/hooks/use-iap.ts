@@ -101,6 +101,11 @@ const trimString = (value: string | null | undefined) => {
   return nextValue === "" ? null : nextValue;
 };
 
+const toMetadataRecord = (value: unknown) =>
+  typeof value === "object" && value !== null
+    ? (value as Record<string, unknown>)
+    : null;
+
 const toUnknownErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error && error.message.trim() !== ""
     ? error.message
@@ -113,6 +118,27 @@ const toPurchaseSignature = (purchase: Purchase) =>
 
 const isPurchasedState = (purchase: Purchase) =>
   purchase.purchaseState === "purchased";
+
+const isManualApprovalPendingOrder = (value: {
+  fulfillment: {
+    amount: string;
+    assetCode: string;
+    replayed: boolean;
+  } | null;
+  order: {
+    metadata?: Record<string, unknown> | null;
+    status: string;
+  };
+}) => {
+  const metadata = toMetadataRecord(value.order.metadata);
+
+  return (
+    value.order.status === "verified" &&
+    value.fulfillment === null &&
+    metadata?.manualApprovalRequired === true &&
+    metadata?.manualApprovalState !== "approved"
+  );
+};
 
 const buildCatalogItems = (
   catalogProducts: IapProductRecord[],
@@ -475,16 +501,27 @@ export function useIap(options: UseIapOptions) {
 
         const deliveredAmount =
           response.data.fulfillment?.amount ?? response.data.product.assetAmount;
+        const awaitingManualApproval = isManualApprovalPendingOrder(
+          response.data,
+        );
         setMessage(
-          finishFailed
-            ? response.data.product.deliveryType === "gift_pack"
-              ? "Gift pack delivered. Store acknowledgement is still pending; use sync pending purchases if the transaction reappears."
-              : "Voucher delivered. Store acknowledgement is still pending; use sync pending purchases if the transaction reappears."
-            : deliveredAmount
+          awaitingManualApproval
+            ? finishFailed
               ? response.data.product.deliveryType === "gift_pack"
-                ? `Gift pack delivered: +${formatAmount(deliveredAmount)}.`
-                : `Voucher delivered: +${formatAmount(deliveredAmount)}.`
-              : "Store purchase delivered.",
+                ? "Gift pack purchase submitted and is pending manual approval. Store acknowledgement is still pending; use sync pending purchases if the transaction reappears."
+                : "Voucher purchase submitted and is pending manual approval. Store acknowledgement is still pending; use sync pending purchases if the transaction reappears."
+              : response.data.product.deliveryType === "gift_pack"
+                ? "Gift pack purchase submitted and is pending manual approval."
+                : "Voucher purchase submitted and is pending manual approval."
+            : finishFailed
+              ? response.data.product.deliveryType === "gift_pack"
+                ? "Gift pack delivered. Store acknowledgement is still pending; use sync pending purchases if the transaction reappears."
+                : "Voucher delivered. Store acknowledgement is still pending; use sync pending purchases if the transaction reappears."
+              : deliveredAmount
+                ? response.data.product.deliveryType === "gift_pack"
+                  ? `Gift pack delivered: +${formatAmount(deliveredAmount)}.`
+                  : `Voucher delivered: +${formatAmount(deliveredAmount)}.`
+                : "Store purchase delivered.",
         );
         return true;
       } finally {

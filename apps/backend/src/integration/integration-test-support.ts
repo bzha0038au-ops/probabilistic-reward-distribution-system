@@ -1,9 +1,8 @@
 import 'dotenv/config';
 
 import { and, asc, desc, eq, inArray, sql } from '@reward/database/orm';
+import { runDatabaseMigrations } from '@reward/database/migration-runner';
 import { createHash, createHmac } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
-import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, type TestOptions, vi } from 'vitest';
 import {
   adminActions,
@@ -48,6 +47,7 @@ import {
 } from '../modules/admin-permission/definitions';
 import type { KycTier } from '@reward/shared-types/kyc';
 import { getConfig } from '../shared/config';
+import { resetPrizeEngineExecutionGovernorState } from '../modules/saas/prize-engine-governor';
 import { toDecimal, toMoneyString } from '../shared/money';
 import { resetInMemoryRateLimiters } from '../shared/rate-limit';
 import { getRedis } from '../shared/redis';
@@ -168,9 +168,6 @@ vi.mock('../modules/auth/notification-service', async () => {
 const integrationDatabaseUrl = process.env.DATABASE_URL ?? process.env.POSTGRES_URL ?? '';
 const runIntegrationTests =
   process.env.RUN_INTEGRATION_TESTS === 'true' && Boolean(integrationDatabaseUrl);
-const migrationsFolder = fileURLToPath(
-  new URL('../../../database/drizzle', import.meta.url)
-);
 
 const expectPresent = <T>(value: T | null | undefined) => {
   expect(value).toBeTruthy();
@@ -297,9 +294,7 @@ const getCreateUserSessionToken = () => {
 };
 
 const ensureMigrationsApplied = async () => {
-  // Always run incremental migrations so newly added SQL files are applied even
-  // when the test database already has an older drizzle journal.
-  await migrate(getDb(), { migrationsFolder });
+  await runDatabaseMigrations({ databaseUrl: integrationDatabaseUrl });
 };
 
 const resetDatabase = async () => {
@@ -354,6 +349,7 @@ const resetSharedCaches = async () => {
   const { rateLimitRedisPrefix } = getConfig();
   await clearRedisKeysByPatterns([
     `${rateLimitRedisPrefix}:*`,
+    'prize-engine:governor:*',
     'saas:reward-envelope:*',
     'reward:draw:probability_pool:v1',
   ]);
@@ -1080,6 +1076,7 @@ export const describeIntegrationSuite = (name: string, register: () => void) => 
       resetAuthNotificationCaptures();
       await resetSharedCaches();
       resetInMemoryRateLimiters();
+      resetPrizeEngineExecutionGovernorState();
     }, INTEGRATION_HOOK_TIMEOUT_MS);
 
     afterAll(async () => {

@@ -364,6 +364,7 @@ const loadProjectState = async (
 const updateProjectStateForSettlement = async (
   tx: DbTransaction,
   params: {
+    tenantId: number;
     projectId: number;
     environment: SaaSEnvironment;
     drawCost: string;
@@ -379,6 +380,7 @@ const updateProjectStateForSettlement = async (
       ),
       updated_at = NOW()
     WHERE ${saasProjects.id} = ${params.projectId}
+      AND ${saasProjects.tenantId} = ${params.tenantId}
       AND ${saasProjects.environment} = ${params.environment}
       AND ${saasProjects.status} = 'active'
       AND (
@@ -2138,8 +2140,10 @@ export async function authenticateProjectApiKey(apiKey: string) {
       projectId: saasProjects.id,
       tenantId: saasTenants.id,
       tenantName: saasTenants.name,
+      tenantMetadata: saasTenants.metadata,
       projectSlug: saasProjects.slug,
       projectName: saasProjects.name,
+      projectMetadata: saasProjects.metadata,
       environment: saasProjects.environment,
       currency: saasProjects.currency,
       scopes: saasApiKeys.scopes,
@@ -2200,9 +2204,11 @@ export async function authenticateProjectApiKey(apiKey: string) {
   return {
     tenantId: auth.tenantId,
     tenantName: auth.tenantName,
+    tenantMetadata: normalizeMetadata(auth.tenantMetadata),
     projectId: auth.projectId,
     projectSlug: auth.projectSlug,
     projectName: auth.projectName,
+    projectMetadata: normalizeMetadata(auth.projectMetadata),
     environment: auth.environment,
     currency: auth.currency,
     apiKeyId: auth.apiKeyId,
@@ -3031,6 +3037,7 @@ const executePrizeEngineReward = async (
 
         if (decrementedPrize) {
           const winningProjectState = await updateProjectStateForSettlement(tx, {
+            tenantId: project.tenantId,
             projectId: project.id,
             environment,
             drawCost: drawCostFixed,
@@ -3073,6 +3080,7 @@ const executePrizeEngineReward = async (
           drawCost.eq(0) && rewardAmount.eq(0)
             ? await loadProjectState(tx, project.id, environment)
             : await updateProjectStateForSettlement(tx, {
+                tenantId: project.tenantId,
                 projectId: project.id,
                 environment,
                 drawCost: drawCostFixed,

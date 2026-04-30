@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { QuickEightRound } from "@reward/shared-types/quick-eight";
 import { QUICK_EIGHT_CONFIG } from "@reward/shared-types/quick-eight";
+import type { WalletBalanceResponse } from "@reward/shared-types/user";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useLocale, useTranslations } from "@/components/i18n-provider";
+import { readBluckAvailableBalance } from "@/lib/economy-wallet";
 import { browserUserApiClient } from "@/lib/api/user-client";
 import { cn } from "@/lib/utils";
 
@@ -81,6 +83,9 @@ type QuickEightPanelProps = {
 const normalizeNumbers = (numbers: number[]) =>
   [...numbers].sort((a, b) => a - b);
 
+const getQuickEightDisplayBalance = (wallet: WalletBalanceResponse) =>
+  readBluckAvailableBalance(wallet);
+
 export function QuickEightPanel({
   disabled = false,
   disabledReason = null,
@@ -103,18 +108,18 @@ export function QuickEightPanel({
     [result?.matchedNumbers],
   );
 
-  async function refreshBalance() {
+  const refreshBalance = useCallback(async () => {
     const response = await browserUserApiClient.getWalletBalance();
     if (response.ok) {
-      const withdrawableBalance = response.data.balance.withdrawableBalance;
-      setBalance(withdrawableBalance ?? "0");
-      onBalanceChange?.(withdrawableBalance ?? "0");
+      const nextBalance = getQuickEightDisplayBalance(response.data);
+      setBalance(nextBalance);
+      onBalanceChange?.(nextBalance);
     }
-  }
+  }, [onBalanceChange]);
 
   useEffect(() => {
     void refreshBalance();
-  }, []);
+  }, [refreshBalance]);
 
   function toggleNumber(number: number) {
     setSelectedNumbers((current) => {

@@ -146,6 +146,16 @@ const normalizeNonZeroAmount = (value: MoneyValue) => {
   return amount;
 };
 
+const normalizeNonNegativeAmount = (value: MoneyValue) => {
+  const amount = toDecimal(value).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+  if (!amount.isFinite() || amount.lt(0)) {
+    throw unprocessableEntityError('Amount must be 0 or greater.', {
+      code: API_ERROR_CODES.FIELD_INVALID,
+    });
+  }
+  return amount;
+};
+
 const resolveAuditContext = (input?: EconomyAuditContext | null) => {
   const store = context().getStore();
 
@@ -850,6 +860,124 @@ export async function unlockAsset(
       lockedAfter: lockedBefore.minus(amount),
       lifetimeEarnedAfter: lifetimeEarnedBefore,
       lifetimeSpentAfter: lifetimeSpentBefore,
+    };
+  });
+}
+
+export async function settleLockedAsset(
+  payload: {
+    userId: number;
+    assetCode: AssetCode;
+    lockedAmount: MoneyValue;
+    payoutAmount: MoneyValue;
+    entryType: string;
+    referenceType?: string | null;
+    referenceId?: number | null;
+    audit?: EconomyAuditContext | null;
+  },
+  executor: DbExecutor = db
+) {
+  return withExecutor(executor, async (tx) => {
+    const audit = resolveAuditContext(payload.audit);
+    const shouldPersistLedgerEntry =
+      toDecimal(payload.payoutAmount).toDecimalPlaces(2, Decimal.ROUND_HALF_UP).gt(0);
+    const existing =
+      shouldPersistLedgerEntry && audit.idempotencyKey
+        ? await findIdempotentLedgerEntry(
+            tx,
+            payload.userId,
+            payload.assetCode,
+            audit.idempotencyKey
+          )
+        : null;
+
+    if (existing) {
+      const lockedSnapshot = readLockedSnapshot(existing.metadata);
+      return {
+        userId: payload.userId,
+        assetCode: payload.assetCode,
+        amount: toMoneyString(existing.amount),
+        availableBefore: toMoneyString(existing.balance_before),
+        availableAfter: toMoneyString(existing.balance_after),
+        lockedBefore: lockedSnapshot.lockedBefore,
+        lockedAfter: lockedSnapshot.lockedAfter,
+        replayed: true,
+      };
+    }
+
+    const lockedAmount = normalizePositiveAmount(payload.lockedAmount);
+    const payoutAmount = normalizeNonNegativeAmount(payload.payoutAmount);
+    const row = await lockUserAssetBalance(tx, payload.userId, payload.assetCode);
+    const availableBefore = toDecimal(row.available_balance ?? 0);
+    const lockedBefore = toDecimal(row.locked_balance ?? 0);
+    const lifetimeEarnedBefore = toDecimal(row.lifetime_earned ?? 0);
+    const lifetimeSpentBefore = toDecimal(row.lifetime_spent ?? 0);
+
+    if (lockedBefore.lt(lockedAmount)) {
+      throw conflictError('Insufficient locked asset balance.', {
+        code: API_ERROR_CODES.INSUFFICIENT_BALANCE,
+      });
+    }
+
+    const availableAfter = availableBefore.plus(payoutAmount);
+    const lockedAfter = lockedBefore.minus(lockedAmount);
+    const realizedEarned = payoutAmount.gt(lockedAmount)
+      ? payoutAmount.minus(lockedAmount)
+      : toDecimal(0);
+    const realizedSpent = lockedAmount.gt(payoutAmount)
+      ? lockedAmount.minus(payoutAmount)
+      : toDecimal(0);
+
+    await tx
+      .update(userAssetBalances)
+      .set({
+        availableBalance: toMoneyString(availableAfter),
+        lockedBalance: toMoneyString(lockedAfter),
+        lifetimeEarned: toMoneyString(lifetimeEarnedBefore.plus(realizedEarned)),
+        lifetimeSpent: toMoneyString(lifetimeSpentBefore.plus(realizedSpent)),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(userAssetBalances.userId, payload.userId),
+          eq(userAssetBalances.assetCode, payload.assetCode)
+        )
+      );
+
+    if (payoutAmount.gt(0)) {
+      await insertEconomyLedgerEntries(tx, {
+        userId: payload.userId,
+        assetCode: payload.assetCode,
+        entryType: payload.entryType,
+        amount: toMoneyString(payoutAmount),
+        balanceBefore: toMoneyString(availableBefore),
+        balanceAfter: toMoneyString(availableAfter),
+        referenceType: payload.referenceType ?? null,
+        referenceId: payload.referenceId ?? null,
+        actorType: audit.actorType,
+        actorId: audit.actorId,
+        sourceApp: audit.sourceApp,
+        deviceFingerprint: audit.deviceFingerprint,
+        requestId: audit.requestId,
+        idempotencyKey: audit.idempotencyKey,
+        metadata: toLockedSnapshot(lockedBefore, lockedAfter, {
+          ...(audit.metadata ?? {}),
+          lockedAmount: toMoneyString(lockedAmount),
+          realizedEarned: toMoneyString(realizedEarned),
+          realizedSpent: toMoneyString(realizedSpent),
+        }),
+      });
+    }
+
+    return {
+      userId: payload.userId,
+      assetCode: payload.assetCode,
+      amount: toMoneyString(payoutAmount),
+      availableBefore: toMoneyString(availableBefore),
+      availableAfter: toMoneyString(availableAfter),
+      lockedBefore: toMoneyString(lockedBefore),
+      lockedAfter: toMoneyString(lockedAfter),
+      replayed: false,
     };
   });
 }

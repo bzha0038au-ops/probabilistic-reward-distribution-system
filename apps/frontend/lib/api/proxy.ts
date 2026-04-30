@@ -50,11 +50,7 @@ const ALLOWED_BROWSER_ROUTES: readonly AllowedRoute[] = [
   exactRoute(USER_API_ROUTES.economyLedger, ["GET"], true),
   exactRoute(USER_API_ROUTES.giftEnergy, ["GET"], true),
   exactRoute(USER_API_ROUTES.gifts, ["GET", "POST"], true),
-  exactRoute(USER_API_ROUTES.iapProducts, ["GET"], true),
-  exactRoute(USER_API_ROUTES.iapPurchasesVerify, ["POST"], true),
   exactRoute(USER_API_ROUTES.giftPackCatalog, ["GET"], true),
-  exactRoute(USER_API_ROUTES.giftPackPurchaseComplete, ["POST"], true),
-  exactRoute(USER_API_ROUTES.transactions, ["GET"], true),
   exactRoute(USER_API_ROUTES.notifications, ["GET"], true),
   exactRoute(USER_API_ROUTES.notificationSummary, ["GET"], true),
   childRoute(USER_API_ROUTES.notifications, "/\\d+/read", ["POST"], true),
@@ -106,20 +102,6 @@ const ALLOWED_BROWSER_ROUTES: readonly AllowedRoute[] = [
   exactRoute(USER_API_ROUTES.quickEight, ["POST"], true),
   exactRoute(USER_API_ROUTES.draw, ["POST"], true),
   exactRoute(USER_API_ROUTES.drawPlay, ["POST"], true),
-  exactRoute(USER_API_ROUTES.bankCards, ["GET", "POST"], true),
-  childRoute(USER_API_ROUTES.bankCards, "/\\d+/default", ["PATCH"], true),
-  exactRoute(USER_API_ROUTES.cryptoDepositChannels, ["GET"], true),
-  exactRoute(USER_API_ROUTES.cryptoDeposits, ["POST"], true),
-  exactRoute(USER_API_ROUTES.cryptoWithdrawAddresses, ["GET", "POST"], true),
-  childRoute(
-    USER_API_ROUTES.cryptoWithdrawAddresses,
-    "/\\d+/default",
-    ["PATCH"],
-    true,
-  ),
-  exactRoute(USER_API_ROUTES.topUps, ["GET", "POST"], true),
-  exactRoute(USER_API_ROUTES.withdrawals, ["GET", "POST"], true),
-  exactRoute(USER_API_ROUTES.cryptoWithdrawals, ["POST"], true),
 ] as const;
 
 export const normalizeBackendPath = (path: string) => {

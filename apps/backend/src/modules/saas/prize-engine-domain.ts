@@ -52,9 +52,11 @@ export type ProjectAgentPolicy = {
 export type ProjectApiAuth = {
   tenantId: number;
   tenantName: string;
+  tenantMetadata: Record<string, unknown> | null;
   projectId: number;
   projectSlug: string;
   projectName: string;
+  projectMetadata: Record<string, unknown> | null;
   environment: "sandbox" | "live";
   currency: string;
   apiKeyId: number;

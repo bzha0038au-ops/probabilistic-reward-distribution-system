@@ -1,5 +1,5 @@
-import { UserDashboardPage } from '@/modules/app/components/user-dashboard-page';
+import { redirect } from 'next/navigation';
 
 export default function PaymentsPage() {
-  return <UserDashboardPage view="payments" />;
+  redirect('/app/wallet');
 }

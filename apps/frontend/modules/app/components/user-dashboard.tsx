@@ -12,7 +12,6 @@ import { RewardCenter } from "@/modules/app/components/reward-center";
 import { UserDashboardAccountSection } from "./user-dashboard-account-section";
 import { UserDashboardActivitySection } from "./user-dashboard-activity-section";
 import { userDashboardCopy } from "./user-dashboard-copy";
-import { UserDashboardPaymentsSection } from "./user-dashboard-payments-section";
 import { useFeedbackToast } from "./use-feedback-toast";
 import { useUserDashboard } from "./use-user-dashboard";
 import { UserDashboardWalletSection } from "./user-dashboard-wallet-section";
@@ -26,7 +25,6 @@ export type UserDashboardView =
   | "overview"
   | "rewards"
   | "wallet"
-  | "payments"
   | "security";
 
 type UserDashboardProps = {
@@ -44,6 +42,7 @@ export function UserDashboard({
   const controller = useUserDashboard({
     initialCurrentSession,
     copy: c,
+    view,
   });
   const {
     dashboardLoading,
@@ -54,7 +53,6 @@ export function UserDashboard({
     error,
     emailVerified,
     phoneVerified,
-    financeUnlocked,
     handleClaimReward,
   } = controller;
 
@@ -71,8 +69,6 @@ export function UserDashboard({
   const showAccountRoutes = view === "overview";
   const showRewards = view === "rewards";
   const showWalletSection = view === "wallet";
-  const showPaymentsSection = view === "payments";
-  const showTransactionsSection = view === "wallet";
   const showSessionsSection = view === "security";
 
   useFeedbackToast({
@@ -125,7 +121,6 @@ export function UserDashboard({
           copy={c}
           controller={controller}
           emailVerified={emailVerified}
-          financeUnlocked={financeUnlocked}
           phoneVerified={phoneVerified}
           showAccountRoutes={showAccountRoutes}
           showGameplayRoutes={showGameplayRoutes}
@@ -142,49 +137,26 @@ export function UserDashboard({
         />
       ) : null}
 
-      {showWalletSection || showPaymentsSection ? (
-        <section
-          className={`grid gap-6 ${
-            showWalletSection && showPaymentsSection
-              ? "xl:grid-cols-[0.95fr,1.05fr]"
-              : "xl:grid-cols-1"
-          }`}
-        >
-          {showWalletSection ? (
-            <UserDashboardWalletSection
-              controller={controller}
-              copy={c}
-              locale={locale}
-              formatAmount={formatAmount}
-              formatDateTime={formatDateTime}
-              formatStatus={formatStatus}
-              t={t}
-            />
-          ) : null}
-
-          {showPaymentsSection ? (
-            <UserDashboardPaymentsSection
-              controller={controller}
-              copy={c}
-              financeUnlocked={financeUnlocked}
-              formatAmount={formatAmount}
-              formatDateTime={formatDateTime}
-              formatStatus={formatStatus}
-              t={t}
-            />
-          ) : null}
+      {showWalletSection ? (
+        <section className="grid gap-6 xl:grid-cols-1">
+          <UserDashboardWalletSection
+            controller={controller}
+            copy={c}
+            locale={locale}
+            formatAmount={formatAmount}
+            formatDateTime={formatDateTime}
+            loadingLabel={t("common.loading")}
+          />
         </section>
       ) : null}
 
-      {showTransactionsSection || showSessionsSection ? (
+      {showSessionsSection ? (
         <UserDashboardActivitySection
           controller={controller}
           copy={c}
-          formatAmount={formatAmount}
           formatDateTime={formatDateTime}
           formatStatus={formatStatus}
           showSessionsSection={showSessionsSection}
-          showTransactionsSection={showTransactionsSection}
           t={t}
         />
       ) : null}

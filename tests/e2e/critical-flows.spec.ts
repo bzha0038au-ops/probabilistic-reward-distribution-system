@@ -452,37 +452,209 @@ const seedGuaranteedPrize = async () => {
   `;
 };
 
+const seedWalletBalance = async (userId: number, withdrawableBalance: string) => {
+  const seededWageredAmount = '1000.00';
+
+  await sql.begin(async (tx) => {
+    await tx`
+      insert into user_wallets (
+        user_id,
+        withdrawable_balance,
+        bonus_balance,
+        locked_balance,
+        wagered_amount
+      )
+      values (${userId}, ${withdrawableBalance}, '0.00', '0.00', ${seededWageredAmount})
+      on conflict (user_id)
+      do update
+      set
+        withdrawable_balance = excluded.withdrawable_balance,
+        bonus_balance = excluded.bonus_balance,
+        locked_balance = excluded.locked_balance,
+        wagered_amount = excluded.wagered_amount,
+        updated_at = now()
+    `;
+
+    await tx`
+      delete from ledger_entries
+      where user_id = ${userId}
+        and reference_type = 'e2e_seed'
+    `;
+
+    await tx`
+      insert into ledger_entries (
+        user_id,
+        type,
+        amount,
+        balance_before,
+        balance_after,
+        reference_type,
+        metadata
+      )
+      values
+        (
+          ${userId},
+          'deposit_credit',
+          (${withdrawableBalance}::numeric + ${seededWageredAmount}::numeric),
+          '0.00',
+          (${withdrawableBalance}::numeric + ${seededWageredAmount}::numeric),
+          'e2e_seed',
+          jsonb_build_object('reason', 'e2e_seed', 'seedBalanceType', 'withdrawable')
+        ),
+        (
+          ${userId},
+          'draw_cost',
+          (-1 * ${seededWageredAmount}::numeric),
+          (${withdrawableBalance}::numeric + ${seededWageredAmount}::numeric),
+          ${withdrawableBalance}::numeric,
+          'e2e_seed',
+          jsonb_build_object('reason', 'e2e_seed', 'seedBalanceType', 'wagered')
+        )
+    `;
+  });
+};
+
+const seedEconomyWalletState = async (payload: {
+  senderUserId: number;
+  receiverUserId: number;
+  senderBluckBalance: string;
+}) => {
+  await sql`
+    insert into user_asset_balances (
+      user_id,
+      asset_code,
+      available_balance,
+      locked_balance,
+      lifetime_earned,
+      lifetime_spent
+    )
+    values
+      (${payload.senderUserId}, 'B_LUCK', ${payload.senderBluckBalance}, '0.00', ${payload.senderBluckBalance}, '0.00'),
+      (${payload.senderUserId}, 'IAP_VOUCHER', '0.00', '0.00', '0.00', '0.00'),
+      (${payload.receiverUserId}, 'B_LUCK', '0.00', '0.00', '0.00', '0.00'),
+      (${payload.receiverUserId}, 'IAP_VOUCHER', '0.00', '0.00', '0.00', '0.00')
+    on conflict (user_id, asset_code)
+    do update
+    set
+      available_balance = excluded.available_balance,
+      locked_balance = excluded.locked_balance,
+      lifetime_earned = excluded.lifetime_earned,
+      lifetime_spent = excluded.lifetime_spent,
+      updated_at = now()
+  `;
+
+  await sql`
+    insert into gift_energy_accounts (
+      user_id,
+      current_energy,
+      max_energy,
+      refill_policy,
+      last_refill_at
+    )
+    values (
+      ${payload.senderUserId},
+      10,
+      10,
+      ${{
+        type: 'daily_reset',
+        intervalHours: 24,
+        refillAmount: 10,
+      }},
+      now()
+    )
+    on conflict (user_id)
+    do update
+    set
+      current_energy = excluded.current_energy,
+      max_energy = excluded.max_energy,
+      refill_policy = excluded.refill_policy,
+      last_refill_at = excluded.last_refill_at,
+      updated_at = now()
+  `;
+
+  await sql`
+    with seeded_product as (
+      insert into iap_products (
+        sku,
+        store_channel,
+        delivery_type,
+        asset_code,
+        asset_amount,
+        delivery_content,
+        is_active,
+        metadata
+      )
+      values (
+        'reward.ios.gift-pack.critical-rose',
+        'ios',
+        'gift_pack',
+        null,
+        null,
+        '{}'::jsonb,
+        true,
+        ${{
+          seedSource: 'critical_flows_e2e',
+          title: 'Critical flow rose gift pack',
+        }}
+      )
+      on conflict (sku, store_channel)
+      do update
+      set
+        is_active = true,
+        metadata = excluded.metadata,
+        updated_at = now()
+      returning id
+    )
+    insert into gift_pack_catalog (
+      code,
+      iap_product_id,
+      reward_asset_code,
+      reward_amount,
+      delivery_content,
+      is_active,
+      metadata
+    )
+    select
+      'critical_rose_small_ios',
+      id,
+      'B_LUCK',
+      '18.00',
+      '{}'::jsonb,
+      true,
+      ${{
+        seedSource: 'critical_flows_e2e',
+      }}
+    from seeded_product
+    on conflict (code)
+    do update
+    set
+      iap_product_id = excluded.iap_product_id,
+      reward_asset_code = excluded.reward_asset_code,
+      reward_amount = excluded.reward_amount,
+      is_active = true,
+      metadata = excluded.metadata,
+      updated_at = now()
+  `;
+};
+
 test.describe.configure({ mode: 'serial' });
 
 test.afterAll(async () => {
   await sql.end({ timeout: 5 });
 });
 
-test('user main flow covers deposit approval, draw, phone verification, and withdrawal review', async ({
+test('user main flow covers draw, phone verification, payments redirect, and economy gifting', async ({
   page,
 }) => {
   test.setTimeout(120_000);
 
   const now = Date.now();
   const email = `critical-user-${now}@example.com`;
+  const receiverEmail = `critical-receiver-${now}@example.com`;
   const password = 'Password123!';
   const phone = `+61490${String(now).slice(-6)}`;
-  const adminMakerEmail = `critical-admin-maker-${now}@example.com`;
-  const adminMakerPassword = 'AdminPassword123!';
-  const adminCheckerEmail = `critical-admin-checker-${now}@example.com`;
-  const adminCheckerPassword = 'AdminPassword123!';
 
   await seedGuaranteedPrize();
-  await registerAdminAccount(adminMakerEmail, adminMakerPassword);
-  const adminMakerSession = await enableAdminMfa(
-    adminMakerEmail,
-    adminMakerPassword,
-  );
-  await registerAdminAccount(adminCheckerEmail, adminCheckerPassword);
-  const adminCheckerSession = await enableAdminMfa(
-    adminCheckerEmail,
-    adminCheckerPassword,
-  );
 
   await page.goto('/register');
   await page.getByLabel('Email Address').fill(email);
@@ -509,6 +681,32 @@ test('user main flow covers deposit approval, draw, phone verification, and with
   await expect(page.getByText('Account readiness')).toBeVisible();
 
   const userSession = await createUserSession(email, password);
+  await expectOk<{ email: string }>('/auth/register', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      email: receiverEmail,
+      password,
+      birthDate: TEST_BIRTH_DATE,
+    }),
+  });
+  const receiverVerification = await waitForNotificationPayload({
+    kind: 'email_verification',
+    recipient: receiverEmail,
+  });
+  const receiverVerificationToken = new URL(
+    String(receiverVerification.verificationUrl ?? ''),
+  ).searchParams.get('token');
+
+  expect(receiverVerificationToken).toBeTruthy();
+
+  await expectOk('/auth/email-verification/confirm', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      token: receiverVerificationToken,
+    }),
+  });
 
   const [user] = await sql<Array<{ id: number }>>`
     select id
@@ -521,83 +719,48 @@ test('user main flow covers deposit approval, draw, phone verification, and with
     throw new Error(`Missing user for ${email}.`);
   }
 
+  const [receiverUser] = await sql<Array<{ id: number }>>`
+    select id
+    from users
+    where email = ${receiverEmail}
+    limit 1
+  `;
+
+  if (!receiverUser) {
+    throw new Error(`Missing receiver for ${receiverEmail}.`);
+  }
+
   await seedApprovedKycTier(user.id, 'tier_1');
+  await seedWalletBalance(user.id, '100.00');
+  await seedEconomyWalletState({
+    senderUserId: user.id,
+    receiverUserId: receiverUser.id,
+    senderBluckBalance: '40.00',
+  });
 
   await page.goto('/app/wallet');
-  await page.getByLabel('Top-up amount').fill('100.00');
-  await page.getByLabel('Reference ID').fill('deposit-ref-001');
-  await page.getByRole('button', { name: 'Create top-up request' }).click();
-  await expect(page.getByTestId('dashboard-notice')).toHaveText(
-    'Top-up request submitted. The order will move through provider settlement before crediting the wallet.',
-  );
-
-  const deposit = await waitForRecord(
-    async () => {
-      const [row] = await sql<Array<{ id: number }>>`
-        select id
-        from deposits
-        where user_id = ${user.id}
-        order by id desc
-        limit 1
-      `;
-      return row ?? null;
-    },
-    'top-up record',
-  );
-
-  const depositReview = {
-    operatorNote: 'receipt matched',
-    settlementReference: 'dep-e2e-001',
-    processingChannel: 'manual_bank',
-  };
-
-  await adminRequest({
-    path: `/admin/deposits/${deposit.id}/provider-pending`,
-    token: adminMakerSession.token,
-    method: 'PATCH',
-    totpCode: generateTotpCode(adminMakerSession.secret),
-    body: depositReview,
-  });
-  await adminRequest({
-    path: `/admin/deposits/${deposit.id}/provider-succeeded`,
-    token: adminMakerSession.token,
-    method: 'PATCH',
-    totpCode: generateTotpCode(adminMakerSession.secret),
-    body: depositReview,
-  });
-  await adminRequest({
-    path: `/admin/deposits/${deposit.id}/provider-succeeded`,
-    token: adminCheckerSession.token,
-    method: 'PATCH',
-    totpCode: generateTotpCode(adminCheckerSession.secret),
-    body: depositReview,
-  });
-  await adminRequest({
-    path: `/admin/deposits/${deposit.id}/credit`,
-    token: adminMakerSession.token,
-    method: 'PATCH',
-    totpCode: generateTotpCode(adminMakerSession.secret),
-    body: depositReview,
-  });
-  await adminRequest({
-    path: `/admin/deposits/${deposit.id}/credit`,
-    token: adminCheckerSession.token,
-    method: 'PATCH',
-    totpCode: generateTotpCode(adminCheckerSession.secret),
-    body: depositReview,
-  });
-
-  await page.reload();
-  await expect(page.getByText('Current balance')).toBeVisible();
-  await expect(page.getByText('100.00').first()).toBeVisible();
+  await expect(page.getByText('Economy wallet', { exact: true })).toBeVisible();
+  await expect(page.getByText('Gift packs', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('wallet-current-balance')).toHaveText('40.00');
 
   await page.goto('/app/slot');
   await page.getByRole('button', { name: /^Spin / }).first().click();
   await expect(page.getByText('Won').first()).toBeVisible();
 
-  await page.goto('/app/wallet');
-  await expect(page.getByText('Current balance')).toBeVisible();
-  await expect(page.getByText('90.00').first()).toBeVisible();
+  const fundedWallet = await waitForRecord(
+    async () => {
+      const [row] = await sql<Array<{ withdrawable_balance: string }>>`
+        select withdrawable_balance
+        from user_wallets
+        where user_id = ${user.id}
+        limit 1
+      `;
+      return row?.withdrawable_balance === '90.00' ? row : null;
+    },
+    'post-draw withdrawable balance',
+  );
+
+  expect(fundedWallet.withdrawable_balance).toBe('90.00');
 
   await page.goto('/app/security');
   await page.getByLabel('Phone number').fill(phone);
@@ -609,161 +772,37 @@ test('user main flow covers deposit approval, draw, phone verification, and with
   await page.getByLabel('SMS code').fill(String(phoneNotification.code ?? ''));
   await page.getByRole('button', { name: 'Confirm phone' }).click();
   await expect(page.getByTestId('dashboard-notice')).toHaveText(
-    'Phone verified. Withdrawal tools are now available.',
+    /Phone verified\./,
   );
-
-  await seedApprovedKycTier(user.id, 'tier_2');
 
   await page.goto('/app/payments');
-  await page.getByLabel('Cardholder name').fill('Reward User');
-  await page.getByLabel('Bank name').fill('Playwright Bank');
-  await page.getByLabel('Card brand').fill('Visa');
-  await page.getByLabel('Last 4 digits').fill('4242');
-  await page.getByRole('button', { name: 'Save bank card' }).click();
-  await expect(page.getByTestId('dashboard-notice')).toHaveText(
-    'Bank card saved.',
-  );
+  await expect(page).toHaveURL(/\/app\/wallet$/);
+  await expect(page.getByText('Economy wallet', { exact: true })).toBeVisible();
+  await expect(page.getByText('Web view only')).toBeVisible();
 
-  await page.getByLabel('Withdrawal amount', { exact: true }).fill('40.00');
-  await page
-    .getByRole('button', { name: 'Request withdrawal', exact: true })
-    .click();
-  await expect(page.getByTestId('dashboard-notice')).toHaveText(
-    'Withdrawal request submitted. Funds are reserved while approval and payout progress.',
-  );
+  await page.locator('#gift-receiver-user-id').fill(String(receiverUser.id));
+  await page.locator('#gift-amount').fill('5');
+  await page.getByRole('button', { name: 'Send gift' }).click();
 
-  const firstWithdrawal = await waitForRecord(
+  await expect(
+    page.getByText(`#${user.id} → #${receiverUser.id}`),
+  ).toBeVisible();
+
+  const receiverBalance = await waitForRecord(
     async () => {
-      const [row] = await sql<Array<{ id: number }>>`
-        select id
-        from withdrawals
-        where user_id = ${user.id}
-        order by id desc
+      const [row] = await sql<Array<{ available_balance: string }>>`
+        select available_balance
+        from user_asset_balances
+        where user_id = ${receiverUser.id}
+          and asset_code = 'B_LUCK'
         limit 1
       `;
-      return row ?? null;
+      return row?.available_balance === '5.00' ? row : null;
     },
-    'first withdrawal',
+    'receiver B luck balance',
   );
 
-  await adminRequest({
-    path: `/admin/withdrawals/${firstWithdrawal.id}/approve`,
-    token: adminMakerSession.token,
-    method: 'PATCH',
-    totpCode: generateTotpCode(adminMakerSession.secret),
-    breakGlassCode: ADMIN_BREAK_GLASS_CODE,
-    body: {
-      operatorNote: 'kyc passed',
-    },
-  });
-  await adminRequest({
-    path: `/admin/withdrawals/${firstWithdrawal.id}/provider-submit`,
-    token: adminMakerSession.token,
-    method: 'PATCH',
-    totpCode: generateTotpCode(adminMakerSession.secret),
-    body: {
-      operatorNote: 'submitted to bank',
-      settlementReference: 'wd-e2e-001',
-      processingChannel: 'manual_bank',
-    },
-  });
-  await adminRequest({
-    path: `/admin/withdrawals/${firstWithdrawal.id}/provider-processing`,
-    token: adminMakerSession.token,
-    method: 'PATCH',
-    totpCode: generateTotpCode(adminMakerSession.secret),
-    body: {
-      operatorNote: 'bank transfer in progress',
-      settlementReference: 'wd-e2e-001',
-      processingChannel: 'manual_bank',
-    },
-  });
-  await adminRequest({
-    path: `/admin/withdrawals/${firstWithdrawal.id}/pay`,
-    token: adminMakerSession.token,
-    method: 'PATCH',
-    totpCode: generateTotpCode(adminMakerSession.secret),
-    body: {
-      operatorNote: 'maker pay review',
-      settlementReference: 'wd-e2e-001',
-      processingChannel: 'manual_bank',
-    },
-  });
-  await adminRequest({
-    path: `/admin/withdrawals/${firstWithdrawal.id}/pay`,
-    token: adminCheckerSession.token,
-    method: 'PATCH',
-    totpCode: generateTotpCode(adminCheckerSession.secret),
-    body: {
-      operatorNote: 'checker pay review',
-      settlementReference: 'wd-e2e-001',
-      processingChannel: 'manual_bank',
-    },
-  });
-
-  await page.reload();
-
-  await page.getByLabel('Withdrawal amount', { exact: true }).fill('20.00');
-  await page
-    .getByRole('button', { name: 'Request withdrawal', exact: true })
-    .click();
-
-  const secondWithdrawal = await waitForRecord(
-    async () => {
-      const [row] = await sql<Array<{ id: number }>>`
-        select id
-        from withdrawals
-        where user_id = ${user.id}
-          and id > ${firstWithdrawal.id}
-        order by id desc
-        limit 1
-      `;
-      return row ?? null;
-    },
-    'second withdrawal',
-  );
-
-  await adminRequest({
-    path: `/admin/withdrawals/${secondWithdrawal.id}/reject`,
-    token: adminMakerSession.token,
-    method: 'PATCH',
-    totpCode: generateTotpCode(adminMakerSession.secret),
-    body: {
-      operatorNote: 'manual review rejected by maker',
-    },
-  });
-  await adminRequest({
-    path: `/admin/withdrawals/${secondWithdrawal.id}/reject`,
-    token: adminCheckerSession.token,
-    method: 'PATCH',
-    totpCode: generateTotpCode(adminCheckerSession.secret),
-    body: {
-      operatorNote: 'manual review rejected by checker',
-    },
-  });
-
-  const [finalWallet] = await sql<
-    Array<{ withdrawable_balance: string; locked_balance: string }>
-  >`
-    select withdrawable_balance, locked_balance
-    from user_wallets
-    where user_id = ${user.id}
-    limit 1
-  `;
-
-  expect(finalWallet).toEqual({
-    withdrawable_balance: '50.00',
-    locked_balance: '0.00',
-  });
-
-  const statuses = await sql<Array<{ status: string }>>`
-    select status
-    from withdrawals
-    where user_id = ${user.id}
-    order by id asc
-  `;
-
-  expect(statuses.map((item) => item.status)).toEqual(['paid', 'rejected']);
+  expect(receiverBalance.available_balance).toBe('5.00');
   expect(userSession.user.id).toBe(user.id);
 });
 

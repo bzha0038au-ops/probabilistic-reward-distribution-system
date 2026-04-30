@@ -6,8 +6,8 @@
     "dev:turbo": "rm -rf .next-dev && next dev --turbo --hostname localhost --port 3003",
     "build": "rm -rf .next-dev && next build",
     "start": "next start -H 0.0.0.0 -p 3003",
-    "lint": "next lint",
-    "check": "next lint"
+    "lint": "eslint --ext .js,.jsx,.ts,.tsx --no-error-on-unmatched-pattern app components lib pages src",
+    "check": "eslint --ext .js,.jsx,.ts,.tsx --no-error-on-unmatched-pattern app components lib pages src"
   },
   "dependencies": {
     "@reward/shared-types": "workspace:*",

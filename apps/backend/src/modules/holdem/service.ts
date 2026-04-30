@@ -2,15 +2,10 @@ import { randomUUID } from "node:crypto";
 import Decimal from "decimal.js";
 import { z } from "zod";
 import { API_ERROR_CODES } from "@reward/shared-types/api";
-import type { DealerEvent } from "@reward/shared-types/dealer";
-import type { AssetCode } from "@reward/shared-types/economy";
 import {
-  handHistories,
   holdemTableMessages,
   holdemTableSeats,
   holdemTables,
-  ledgerEntries,
-  tableEvents,
   userWallets,
   users,
 } from "@reward/database";
@@ -18,8 +13,6 @@ import { and, asc, desc, eq, isNotNull, lte, or, sql } from "@reward/database/or
 import {
   buildHoldemRealtimeTableTopic,
   HOLDEM_CONFIG,
-  HOLDEM_DEFAULT_CASUAL_MAX_SEATS,
-  HOLDEM_MAX_BOT_PLAYERS,
   HOLDEM_TABLE_MESSAGE_LIMIT,
   type HoldemAction,
   type HoldemCreateTableRequest,
@@ -32,9 +25,6 @@ import {
   type HoldemTableResponse,
   type HoldemTableType,
   type HoldemTablesResponse,
-  type HoldemTournamentCreateConfig,
-  type HoldemTournamentPayout,
-  type HoldemTournamentStanding,
 } from "@reward/shared-types/holdem";
 import {
   PlayModeSnapshotSchema,
@@ -53,17 +43,7 @@ import { logger } from "../../shared/logger";
 import { toDecimal, toMoneyString } from "../../shared/money";
 import { hashPassword } from "../auth/password";
 import { ensureFairnessSeed } from "../fairness/service";
-import { appendRoundEvents } from "../hand-history/service";
-import { HOLDEM_ROUND_TYPE, buildRoundId } from "../hand-history/round-id";
 import {
-  adjustLockedAsset,
-  lockAsset,
-  unlockAsset,
-} from "../economy/service";
-import { applyHouseBankrollDelta, applyPrizePoolDelta } from "../house/service";
-import {
-  appendDealerFeedEvent,
-  buildDealerEvent,
   maybeGenerateDealerLanguageEvent,
   publishDealerRealtimeToTopic,
 } from "../dealer-bot/service";
@@ -95,24 +75,19 @@ import {
 } from "../play-mode/service";
 import { applySettledPlayModePayoutPolicy } from "../play-mode/deferred-payouts";
 import {
-  buildHoldemRealtimeFanout,
   publishHoldemRealtimeTableMessage,
   publishHoldemRealtimeUpdate,
-  type HoldemRealtimeFanout,
 } from "./realtime";
 import {
-  applyRakeToSettledState,
   actOnHoldemSeat,
   actOnHoldemTable,
   canUserLeaveTable,
   clearTableAfterCashout,
   resolveHoldemActionAvailability,
   resolveHoldemTimeoutAction,
-  serializeHoldemRealtimeTable,
   serializeHoldemTable,
   serializeHoldemTableSummary,
   startHoldemHand,
-  type HoldemAppliedRake,
   type HoldemRakePolicy,
 } from "./engine";
 import {
@@ -124,12 +99,58 @@ import {
   isBotSeat,
   parseSqlRows,
   resolveSeatPresenceState,
-  resolveSeatDisplayName,
   toHoldemTableMessage,
   toJsonbLiteral,
   toTableState,
   type HoldemTableState,
 } from "./model";
+import {
+  HOLDEM_REFERENCE_TYPE,
+  assertBotSeatMutationAllowed,
+  assertBuyInWithinRange,
+  assertHoldemBotTableInvariant,
+  buildHoldemRiskTableId,
+  buildHoldemRoundId,
+  buildHoldemTableRef,
+  cloneTableState,
+  countHoldemActiveSeats,
+  countBotSeats,
+  countHumanSeats,
+  ensureTournamentMetadata,
+  getPendingActorSeat,
+  isCashTableType,
+  isTournamentTable,
+  parseAmount,
+  resolveCreateBotCount,
+  resolveHoldemCreateMaxSeats,
+  resolveHoldemCreateTableType,
+  resolveHoldemFundingSource,
+  resolveTournamentStartingStackAmount,
+  syncTournamentStandings,
+  type HoldemTableEventInput,
+  type LockedWalletRow,
+  type PersistedHoldemTableEvent,
+} from "./service-shared";
+import {
+  appendTableEvents,
+  buildHoldemDealerEvent,
+  buildRealtimeUpdate,
+  createHoldemHandHistory,
+  persistHoldemDealerEvents,
+  persistHoldemTransition,
+  publishHoldemDealerTransition,
+  recordHandStartedEvents,
+  resolveHoldemDealerPromptPace,
+  type HoldemPersistedTransition,
+} from "./hand-events";
+import {
+  applyBuyInToWallet,
+  applyTournamentBuyInToWallet,
+  removeSeatAndCashOut,
+  removeTournamentSeatAndRefund,
+  settlePendingSeatCashOuts,
+  syncSettledLockedBalances,
+} from "./wallet-settlement";
 import { evaluateBestHoldemHand } from "./evaluator";
 
 const LockedWalletRowSchema = z.object({
@@ -140,18 +161,12 @@ const LockedWalletRowSchema = z.object({
 });
 
 const LockedWalletRowsSchema = z.array(LockedWalletRowSchema);
-
-type LockedWalletRow = z.infer<typeof LockedWalletRowSchema>;
-
-const HOLDEM_REFERENCE_TYPE = "holdem_table";
-const HOLDEM_CASUAL_ASSET_CODE: AssetCode = "B_LUCK";
 const DEFAULT_HOLDEM_RAKE_BPS = 500;
 const DEFAULT_HOLDEM_RAKE_CAP_AMOUNT = "8.00";
 const DEFAULT_HOLDEM_RAKE_NO_FLOP_NO_DROP = true;
 const DEFAULT_HOLDEM_DISCONNECT_GRACE_SECONDS = 30;
 const DEFAULT_HOLDEM_SEAT_LEASE_SECONDS = 300;
 const DEFAULT_HOLDEM_TIME_BANK_MS = 30_000;
-const DEFAULT_HOLDEM_TOURNAMENT_STARTING_STACK_AMOUNT = "1000.00";
 const HOLDEM_BOT_BEHAVIOR_VERSION = "casual-v1";
 const HOLD_EM_BOT_RUNNER_MAX_ACTIONS = 24;
 const HOLD_EM_BOT_NAME_POOL = [
@@ -179,8 +194,6 @@ type HoldemSeatPresencePolicy = {
   seatLeaseSeconds: number;
 };
 
-type HoldemTableFundingSource = "withdrawable" | "bonus";
-
 type HoldemTimeBankPolicy = {
   defaultTimeBankMs: number;
 };
@@ -205,20 +218,6 @@ export async function awaitHoldemAsyncWorkForTests() {
 }
 
 const defaultTableName = () => `Hold'em ${new Date().toISOString().slice(11, 19)}`;
-
-const parseAmount = (value: string, label: string) => {
-  let amount;
-  try {
-    amount = toDecimal(value);
-  } catch {
-    throw badRequestError(`Invalid ${label} amount.`);
-  }
-
-  if (!amount.isFinite() || amount.lte(0) || amount.decimalPlaces() > 2) {
-    throw badRequestError(`Invalid ${label} amount.`);
-  }
-  return amount;
-};
 
 const HoldemPlayModeSessionMetadataSchema = z.object({
   baseBuyInAmount: z.string().optional(),
@@ -422,120 +421,6 @@ const settleHoldemPlayModeSessionIfPresent = async (params: {
   );
 };
 
-type HoldemTournamentMetadata = NonNullable<
-  HoldemTableState["metadata"]["tournament"]
->;
-type HoldemSeatTournamentMetadata = NonNullable<
-  HoldemTableState["seats"][number]["metadata"]["tournament"]
->;
-
-const isTournamentTable = (state: Pick<HoldemTableState, "metadata">) =>
-  state.metadata.tableType === "tournament";
-
-const isCashTableType = (tableType: HoldemTableType) => tableType === "cash";
-
-const isCasualTableType = (tableType: HoldemTableType) => tableType === "casual";
-
-const ensureTournamentMetadata = (
-  state: Pick<HoldemTableState, "metadata">,
-): HoldemTournamentMetadata => {
-  const tournament = state.metadata.tournament;
-  if (!isTournamentTable(state) || !tournament) {
-    throw conflictError("This holdem table is not a tournament.");
-  }
-
-  return tournament;
-};
-
-const resolveHoldemCreateTableType = (
-  params: Pick<HoldemCreateTableRequest, "tableType">,
-): HoldemTableType => params.tableType ?? "cash";
-
-const resolveHoldemCreateMaxSeats = (
-  params: Pick<HoldemCreateTableRequest, "tableType" | "maxSeats">,
-) =>
-  params.maxSeats ??
-  (isCasualTableType(resolveHoldemCreateTableType(params))
-    ? HOLDEM_DEFAULT_CASUAL_MAX_SEATS
-    : HOLDEM_CONFIG.maxSeats);
-
-const resolveHoldemFundingSource = (
-  tableType: HoldemTableType,
-): HoldemTableFundingSource =>
-  isCasualTableType(tableType) ? "bonus" : "withdrawable";
-
-const usesHoldemEarnedAsset = (balanceType: HoldemTableFundingSource) =>
-  balanceType === "bonus";
-
-const resolveTournamentStartingStackAmount = (
-  config?: HoldemTournamentCreateConfig,
-) =>
-  toMoneyString(
-    parseAmount(
-      config?.startingStackAmount ?? DEFAULT_HOLDEM_TOURNAMENT_STARTING_STACK_AMOUNT,
-      "tournament starting stack",
-    ),
-  );
-
-const resolveTournamentPayoutPlaces = (
-  registeredCount: number,
-  requestedPayoutPlaces?: number | null,
-) => {
-  const safeRegisteredCount = Math.max(0, registeredCount);
-  if (safeRegisteredCount <= 1) {
-    return 1;
-  }
-
-  const defaultPlaces =
-    safeRegisteredCount <= 2 ? 1 : safeRegisteredCount <= 5 ? 2 : 3;
-  const requested = requestedPayoutPlaces ?? defaultPlaces;
-  return Math.max(1, Math.min(safeRegisteredCount, 3, requested));
-};
-
-const getTournamentPayoutRatios = (payoutPlaces: number) => {
-  const safePayoutPlaces = Math.max(1, Math.min(3, Math.floor(payoutPlaces)));
-  switch (safePayoutPlaces) {
-    case 1:
-      return [10_000];
-    case 2:
-      return [6_500, 3_500];
-    default:
-      return [5_000, 3_000, 2_000];
-  }
-};
-
-const distributeTournamentPayouts = (
-  prizePoolAmount: string,
-  payoutPlaces: number,
-) => {
-  const total = toDecimal(prizePoolAmount);
-  const basisPoints = getTournamentPayoutRatios(payoutPlaces);
-  let remaining = total;
-
-  return basisPoints.map((ratio, index) => {
-    const amount =
-      index === basisPoints.length - 1
-        ? remaining
-        : total
-            .mul(ratio)
-            .div(10_000)
-            .toDecimalPlaces(2, Decimal.ROUND_DOWN);
-    remaining = remaining.minus(amount);
-    return toMoneyString(amount);
-  });
-};
-
-const ensureSeatTournamentMetadata = (
-  seat: HoldemTableState["seats"][number],
-): HoldemSeatTournamentMetadata => {
-  const tournament = seat.metadata.tournament;
-  if (!tournament) {
-    throw conflictError("Tournament seat metadata is missing.");
-  }
-
-  return tournament;
-};
-
 const resolveHoldemBotDisplayName = (
   existingBotCount: number,
   seatIndex: number,
@@ -570,294 +455,6 @@ const createHoldemBotUser = async (tx: DbTransaction, displayName: string) => {
   await tx.insert(userWallets).values({ userId: user.id }).onConflictDoNothing();
   return user;
 };
-
-const upsertTournamentStanding = (
-  tournament: HoldemTournamentMetadata,
-  standing: HoldemTournamentStanding,
-) => {
-  const existingIndex = tournament.standings.findIndex(
-    (entry) => entry.userId === standing.userId,
-  );
-  if (existingIndex >= 0) {
-    tournament.standings[existingIndex] = standing;
-    return;
-  }
-
-  tournament.standings.push(standing);
-};
-
-const buildTournamentStandingForSeat = (
-  seat: HoldemTableState["seats"][number],
-): HoldemTournamentStanding => {
-  const tournamentSeat = ensureSeatTournamentMetadata(seat);
-  return {
-    userId: seat.userId,
-    displayName: resolveSeatDisplayName(
-      seat.userId,
-      seat.userEmail,
-      seat.metadata,
-    ),
-    seatIndex: seat.seatIndex,
-    stackAmount: toMoneyString(seat.stackAmount),
-    active: toDecimal(seat.stackAmount).gt(0) && tournamentSeat.finishingPlace === null,
-    finishingPlace: tournamentSeat.finishingPlace,
-    eliminatedAt: tournamentSeat.eliminatedAt,
-    prizeAmount: tournamentSeat.prizeAmount,
-  };
-};
-
-const sortTournamentStandings = (standings: HoldemTournamentStanding[]) =>
-  standings.sort((left, right) => {
-    if (left.active !== right.active) {
-      return left.active ? -1 : 1;
-    }
-
-    if (left.active && right.active) {
-      const stackComparison = toDecimal(right.stackAmount).cmp(left.stackAmount);
-      if (stackComparison !== 0) {
-        return stackComparison;
-      }
-      return (left.seatIndex ?? 0) - (right.seatIndex ?? 0);
-    }
-
-    if (
-      left.finishingPlace !== null &&
-      right.finishingPlace !== null &&
-      left.finishingPlace !== right.finishingPlace
-    ) {
-      return left.finishingPlace - right.finishingPlace;
-    }
-
-    return (left.seatIndex ?? 0) - (right.seatIndex ?? 0);
-  });
-
-const syncTournamentStandings = (state: HoldemTableState) => {
-  if (!isTournamentTable(state)) {
-    return;
-  }
-
-  const tournament = ensureTournamentMetadata(state);
-  for (const seat of state.seats) {
-    upsertTournamentStanding(tournament, buildTournamentStandingForSeat(seat));
-  }
-  sortTournamentStandings(tournament.standings);
-  tournament.registeredCount = tournament.standings.length;
-  tournament.prizePoolAmount = toMoneyString(
-    toDecimal(tournament.buyInAmount).mul(tournament.registeredCount),
-  );
-  tournament.payoutPlaces = resolveTournamentPayoutPlaces(
-    tournament.registeredCount,
-    tournament.payoutPlaces,
-  );
-};
-
-const removeTournamentStanding = (
-  state: HoldemTableState,
-  userId: number,
-) => {
-  if (!isTournamentTable(state)) {
-    return;
-  }
-
-  const tournament = ensureTournamentMetadata(state);
-  tournament.standings = tournament.standings.filter(
-    (entry) => entry.userId !== userId,
-  );
-  tournament.registeredCount = tournament.standings.length;
-  tournament.prizePoolAmount = toMoneyString(
-    toDecimal(tournament.buyInAmount).mul(tournament.registeredCount),
-  );
-  if (tournament.registeredCount <= 0) {
-    tournament.payoutPlaces = null;
-    return;
-  }
-
-  tournament.payoutPlaces = resolveTournamentPayoutPlaces(
-    tournament.registeredCount,
-    tournament.payoutPlaces,
-  );
-};
-
-const assertBuyInWithinRange = (
-  amount: ReturnType<typeof toDecimal>,
-  state?: Pick<HoldemTableState, "minimumBuyIn" | "maximumBuyIn">,
-) => {
-  const minimum = toDecimal(state?.minimumBuyIn ?? HOLDEM_CONFIG.minimumBuyIn);
-  const maximum = toDecimal(state?.maximumBuyIn ?? HOLDEM_CONFIG.maximumBuyIn);
-  if (amount.lt(minimum) || amount.gt(maximum)) {
-    throw conflictError("Buy-in amount is outside the allowed range.");
-  }
-};
-
-type HoldemEventActor = "player" | "dealer" | "system";
-type HoldemHandEventInput = {
-  type: string;
-  actor: HoldemEventActor;
-  userId?: number | null;
-  payload?: Record<string, unknown> | null;
-};
-type HoldemTableEventInput = {
-  eventType: string;
-  actor: HoldemEventActor;
-  userId?: number | null;
-  seatIndex?: number | null;
-  handHistoryId?: number | null;
-  phase?: string | null;
-  payload?: Record<string, unknown> | null;
-};
-type PersistedHoldemTableEvent = {
-  eventType: string;
-  actor: HoldemEventActor;
-  userId: number | null;
-  seatIndex: number | null;
-  handHistoryId: number | null;
-  phase: string | null;
-  payload: Record<string, unknown>;
-  eventIndex: number;
-  createdAt: Date;
-};
-
-const cloneTableState = (state: HoldemTableState): HoldemTableState =>
-  JSON.parse(JSON.stringify(state)) as HoldemTableState;
-
-const isSettledHoldemState = (state: HoldemTableState) =>
-  state.status === "waiting" && state.metadata.stage === "showdown";
-
-const buildHoldemRoundId = (handHistoryId: number) =>
-  buildRoundId({
-    roundType: HOLDEM_ROUND_TYPE,
-    roundEntityId: handHistoryId,
-  });
-
-const buildHoldemRiskTableId = (tableId: number) => `holdem:${tableId}`;
-const buildHoldemTableRef = (tableId: number) => `holdem:${tableId}`;
-
-const countHumanSeats = (state: HoldemTableState) =>
-  state.seats.filter((seat) => !isBotSeat(seat)).length;
-
-const countBotSeats = (state: HoldemTableState) =>
-  state.seats.filter((seat) => isBotSeat(seat)).length;
-
-const assertHoldemBotTableInvariant = (state: HoldemTableState) => {
-  if (countBotSeats(state) === 0) {
-    return;
-  }
-
-  if (state.metadata.tableType !== "casual") {
-    throw internalInvariantError("Seat-level holdem bots are only allowed on casual tables.");
-  }
-};
-
-const resolveCreateBotCount = (
-  params: Pick<HoldemCreateTableRequest, "botCount" | "maxSeats" | "tableType">,
-) => {
-  const requested = params.botCount ?? 0;
-  if (requested <= 0) {
-    return 0;
-  }
-  const tableType = params.tableType ?? "cash";
-  if (tableType !== "casual") {
-    throw badRequestError("Seat-level bots are only available on casual holdem tables.");
-  }
-  return requested;
-};
-
-const assertBotSeatMutationAllowed = (params: {
-  state: HoldemTableState;
-  requestedCount: number;
-}) => {
-  assertHoldemBotTableInvariant(params.state);
-  if (params.state.metadata.tableType !== "casual") {
-    throw conflictError("Seat-level bots are only available on casual holdem tables.");
-  }
-  if (params.state.status !== "waiting") {
-    throw conflictError("Add or remove holdem bots only while the table is waiting.");
-  }
-  if (params.requestedCount < 1 || params.requestedCount > HOLDEM_MAX_BOT_PLAYERS) {
-    throw badRequestError("Invalid holdem bot seat count.");
-  }
-  if (countHumanSeats(params.state) <= 0) {
-    throw conflictError("At least one human seat is required before adding holdem bots.");
-  }
-  const openSeatCount = Math.max(0, params.state.maxSeats - params.state.seats.length);
-  if (params.requestedCount > openSeatCount) {
-    throw conflictError("Not enough open seats remain for the requested holdem bots.");
-  }
-};
-
-const countHoldemActiveSeats = (state: HoldemTableState) =>
-  state.seats.filter((seat) => seat.status === "active").length;
-
-const resolveSettledHoldemEventType = (state: HoldemTableState) =>
-  state.metadata.revealedSeatIndexes.length > 1 ||
-  (state.metadata.revealedSeatIndexes.length === 1 &&
-    state.metadata.resolvedPots.length === 0)
-    ? "showdown_resolved"
-    : "hand_won_by_fold";
-
-const resolveHoldemDealerPromptPace = (params: {
-  state: HoldemTableState;
-  seat: HoldemTableState["seats"][number];
-}) => {
-  if (countHoldemActiveSeats(params.state) <= 2) {
-    return "expedite" as const;
-  }
-
-  return params.seat.metadata.timeBankRemainingMs <= 10_000
-    ? ("expedite" as const)
-    : ("normal" as const);
-};
-
-const mapDealerEventToHoldemEventType = (event: DealerEvent) => {
-  switch (event.kind) {
-    case "action":
-      return "dealer_action";
-    case "message":
-      return "dealer_message";
-    case "pace_hint":
-      return "dealer_pace_hint";
-  }
-};
-
-const appendDealerEventsToHoldemState = (
-  state: HoldemTableState,
-  events: DealerEvent[],
-) => {
-  for (const event of events) {
-    state.metadata.dealerEvents = appendDealerFeedEvent(
-      state.metadata.dealerEvents,
-      event,
-    );
-  }
-};
-
-const buildHoldemDealerEvent = (params: {
-  state: HoldemTableState;
-  handHistoryId: number;
-  kind: DealerEvent["kind"];
-  actionCode?: string | null;
-  pace?: DealerEvent["pace"];
-  phase?: string | null;
-  seatIndex?: number | null;
-  text: string;
-  metadata?: Record<string, unknown> | null;
-  source?: DealerEvent["source"];
-}) =>
-  buildDealerEvent({
-    kind: params.kind,
-    source: params.source ?? "rule",
-    gameType: "holdem",
-    tableId: params.state.id,
-    tableRef: buildHoldemTableRef(params.state.id),
-    roundId: buildHoldemRoundId(params.handHistoryId),
-    referenceId: params.handHistoryId,
-    phase: params.phase ?? params.state.metadata.stage,
-    seatIndex: params.seatIndex ?? null,
-    actionCode: params.actionCode ?? null,
-    pace: params.pace ?? null,
-    text: params.text,
-    metadata: params.metadata ?? null,
-  });
 
 const listHoldemActiveParticipantUserIds = (state: HoldemTableState) =>
   state.seats
@@ -1125,363 +722,6 @@ const buildPresenceResponse = (
   };
 };
 
-const buildRealtimeUpdate = (params: {
-  state: HoldemTableState;
-  tableEvents: PersistedHoldemTableEvent[];
-  action?: HoldemAction | null;
-  timedOut?: boolean;
-}): HoldemRealtimeFanout => {
-  const latestEvent =
-    params.tableEvents[params.tableEvents.length - 1] ?? null;
-  const handHistoryId =
-    latestEvent?.handHistoryId ?? getActiveHandHistoryId(params.state) ?? null;
-
-  return buildHoldemRealtimeFanout({
-    state: params.state,
-    update: {
-      table: serializeHoldemRealtimeTable(params.state),
-      handHistoryId,
-      roundId: handHistoryId ? buildHoldemRoundId(handHistoryId) : null,
-      actorSeatIndex: latestEvent?.seatIndex ?? null,
-      action: params.action ?? null,
-      timedOut: params.timedOut === true,
-      eventTypes: params.tableEvents.map((event) => event.eventType),
-    },
-  });
-};
-
-const buildContributionMap = (state: HoldemTableState) =>
-  new Map(
-    state.seats.map((seat) => [
-      seat.seatIndex,
-      toDecimal(seat.totalCommittedAmount),
-    ] as const),
-  );
-
-const buildParticipantSummaries = (params: {
-  state: HoldemTableState;
-  stackBeforeByUserId: Map<number, ReturnType<typeof toDecimal>>;
-  contributionBySeatIndex?: Map<number, ReturnType<typeof toDecimal>>;
-}) =>
-  params.state.seats
-    .slice()
-    .sort((left, right) => left.seatIndex - right.seatIndex)
-    .map((seat) => {
-      const stackBefore =
-        params.stackBeforeByUserId.get(seat.userId) ?? toDecimal(seat.stackAmount);
-      const stackAfter = toDecimal(seat.stackAmount);
-      const contributionAmount =
-        params.contributionBySeatIndex?.get(seat.seatIndex) ??
-        toDecimal(seat.totalCommittedAmount);
-      const payoutFloor = stackBefore.minus(contributionAmount);
-      const payoutAmount = stackAfter.gt(payoutFloor)
-        ? stackAfter.minus(payoutFloor)
-        : toDecimal(0);
-
-      return {
-        seatIndex: seat.seatIndex,
-        userId: seat.userId,
-        displayName: resolveSeatDisplayName(
-          seat.userId,
-          seat.userEmail,
-          seat.metadata,
-        ),
-        contributionAmount: toMoneyString(contributionAmount),
-        payoutAmount: toMoneyString(payoutAmount),
-        stackBefore: toMoneyString(stackBefore),
-        stackAfter: toMoneyString(stackAfter),
-        winner: seat.metadata.winner,
-        status: seat.status,
-        holeCards: seat.holeCards,
-        bestHand: seat.metadata.bestHand,
-        lastAction: seat.lastAction,
-      };
-    });
-
-const buildHoldemHandSummary = (params: {
-  state: HoldemTableState;
-  stackBeforeByUserId: Map<number, ReturnType<typeof toDecimal>>;
-  contributionBySeatIndex?: Map<number, ReturnType<typeof toDecimal>>;
-}) => ({
-  gameType: "holdem",
-  tableId: params.state.id,
-  tableName: params.state.name,
-  handNumber: params.state.metadata.handNumber,
-  status: isSettledHoldemState(params.state) ? "settled" : params.state.status,
-  stage: params.state.metadata.stage,
-  blinds: {
-    smallBlind: toMoneyString(params.state.smallBlind),
-    bigBlind: toMoneyString(params.state.bigBlind),
-  },
-  dealerSeatIndex: params.state.metadata.dealerSeatIndex,
-  smallBlindSeatIndex: params.state.metadata.smallBlindSeatIndex,
-  bigBlindSeatIndex: params.state.metadata.bigBlindSeatIndex,
-  pendingActorSeatIndex: params.state.metadata.pendingActorSeatIndex,
-  boardCards: params.state.metadata.communityCards,
-  revealedSeatIndexes: params.state.metadata.revealedSeatIndexes,
-  winnerSeatIndexes: params.state.metadata.winnerSeatIndexes,
-  totalRakeAmount: toMoneyString(resolveTotalRakeAmount(params.state)),
-  pots:
-    params.state.metadata.resolvedPots.length > 0
-      ? params.state.metadata.resolvedPots
-      : null,
-  participants: buildParticipantSummaries(params),
-});
-
-const resolveTotalRakeAmount = (state: HoldemTableState) =>
-  state.metadata.resolvedPots.reduce(
-    (sum, pot) => sum.plus(pot.rakeAmount ?? "0.00"),
-    toDecimal(0),
-  );
-
-const getActiveHandHistoryId = (state: HoldemTableState) =>
-  state.metadata.activeHandHistoryId;
-
-const appendTableEvents = async (params: {
-  tx: DbTransaction;
-  tableId: number;
-  events: HoldemTableEventInput[];
-}) => {
-  const { tx } = params;
-  if (params.events.length === 0) {
-    return [] satisfies PersistedHoldemTableEvent[];
-  }
-
-  const [row] = await tx
-    .select({
-      maxEventIndex: sql<number>`coalesce(max(${tableEvents.eventIndex}), -1)`,
-    })
-    .from(tableEvents)
-    .where(
-      and(
-        eq(tableEvents.tableType, "holdem"),
-        eq(tableEvents.tableId, params.tableId),
-      ),
-    );
-  const nextEventIndex = Number(row?.maxEventIndex ?? -1) + 1;
-  const createdAt = new Date();
-  const values = params.events.map((event, index) => ({
-    tableType: "holdem" as const,
-    tableId: params.tableId,
-    seatIndex: event.seatIndex ?? null,
-    userId: event.userId ?? null,
-    handHistoryId: event.handHistoryId ?? null,
-    phase: event.phase ?? null,
-    eventIndex: nextEventIndex + index,
-    eventType: event.eventType,
-    actor: event.actor,
-    payload: event.payload ?? {},
-    createdAt,
-  }));
-
-  await tx.insert(tableEvents).values(values);
-
-  return values.map((event) => ({
-    eventType: event.eventType,
-    actor: event.actor,
-    userId: event.userId,
-    seatIndex: event.seatIndex,
-    handHistoryId: event.handHistoryId,
-    phase: event.phase,
-    payload: event.payload as Record<string, unknown>,
-    eventIndex: event.eventIndex,
-    createdAt: event.createdAt,
-  }));
-};
-
-const createHoldemHandHistory = async (params: {
-  tx: DbTransaction;
-  state: HoldemTableState;
-  startedByUserId: number;
-  stackBeforeByUserId: Map<number, ReturnType<typeof toDecimal>>;
-}) => {
-  const { tx, state } = params;
-  const now = new Date();
-  const [createdHandHistory] = await tx
-    .insert(handHistories)
-    .values({
-      roundType: HOLDEM_ROUND_TYPE,
-      gameType: "holdem",
-      tableId: state.id,
-      referenceId: state.id,
-      primaryUserId: params.startedByUserId,
-      participantUserIds: state.seats.map((seat) => seat.userId),
-      handNumber: state.metadata.handNumber,
-      status: "active",
-      summary: buildHoldemHandSummary({
-        state,
-        stackBeforeByUserId: params.stackBeforeByUserId,
-      }),
-      fairness: state.metadata.fairness,
-      startedAt: now,
-      settledAt: null,
-      updatedAt: now,
-    })
-    .returning({
-      id: handHistories.id,
-    });
-
-  if (!createdHandHistory) {
-    throw conflictError("Failed to create holdem hand history.");
-  }
-
-  state.metadata.activeHandHistoryId = createdHandHistory.id;
-  return createdHandHistory.id;
-};
-
-const loadHoldemHandHistoryOwnerUserId = async (
-  tx: DbTransaction,
-  handHistoryId: number,
-) => {
-  const [row] = await tx
-    .select({
-      primaryUserId: handHistories.primaryUserId,
-    })
-    .from(handHistories)
-    .where(eq(handHistories.id, handHistoryId))
-    .limit(1);
-
-  if (!row?.primaryUserId) {
-    throw internalInvariantError("Holdem hand history owner is missing.");
-  }
-
-  return row.primaryUserId;
-};
-
-const syncHoldemHandHistory = async (params: {
-  tx: DbTransaction;
-  state: HoldemTableState;
-  handHistoryId: number;
-  stackBeforeByUserId: Map<number, ReturnType<typeof toDecimal>>;
-  contributionBySeatIndex?: Map<number, ReturnType<typeof toDecimal>>;
-}) => {
-  const nextRoundId = buildHoldemRoundId(params.handHistoryId);
-  if (
-    isSettledHoldemState(params.state) &&
-    params.state.metadata.recentHands[0]?.handNumber === params.state.metadata.handNumber
-  ) {
-    params.state.metadata.recentHands[0].roundId = nextRoundId;
-  }
-
-  const settled = isSettledHoldemState(params.state);
-  await params.tx
-    .update(handHistories)
-    .set({
-      status: settled ? "settled" : "active",
-      summary: buildHoldemHandSummary({
-        state: params.state,
-        stackBeforeByUserId: params.stackBeforeByUserId,
-        contributionBySeatIndex: params.contributionBySeatIndex,
-      }),
-      fairness: params.state.metadata.fairness,
-      settledAt: settled ? new Date() : null,
-      updatedAt: new Date(),
-    })
-    .where(eq(handHistories.id, params.handHistoryId));
-
-  if (settled) {
-    params.state.metadata.activeHandHistoryId = null;
-  }
-};
-
-const buildTurnStartedEvent = (
-  state: HoldemTableState,
-): HoldemHandEventInput | null => {
-  const pendingActorSeat = getPendingActorSeat(state);
-  if (!pendingActorSeat) {
-    return null;
-  }
-
-  return {
-    type: "turn_started",
-    actor: "system" as const,
-    userId: pendingActorSeat.userId,
-    payload: {
-      handNumber: state.metadata.handNumber,
-      stage: state.metadata.stage,
-      seatIndex: pendingActorSeat.seatIndex,
-      userId: pendingActorSeat.userId,
-      turnDeadlineAt: pendingActorSeat.turnDeadlineAt,
-      turnTimeBankStartsAt: state.metadata.turnTimeBankStartsAt,
-      timeBankRemainingMs: pendingActorSeat.metadata.timeBankRemainingMs,
-    },
-  };
-};
-
-const appendHoldemHandEvents = async (params: {
-  tx: DbTransaction;
-  handHistoryId: number;
-  historyUserId: number;
-  tableId: number;
-  phase: string | null;
-  events: HoldemHandEventInput[];
-}) => {
-  if (params.events.length === 0) {
-    return;
-  }
-
-  await appendRoundEvents(params.tx, {
-    roundType: HOLDEM_ROUND_TYPE,
-    roundEntityId: params.handHistoryId,
-    userId: params.historyUserId,
-    events: params.events.map((event) => ({
-      type: event.type,
-      actor: event.actor,
-      payload: {
-        tableId: params.tableId,
-        handHistoryId: params.handHistoryId,
-        phase: params.phase,
-        ...event.payload,
-      },
-      userId: event.userId ?? null,
-    })),
-  });
-};
-
-const persistHoldemDealerEvents = async (params: {
-  tx: DbTransaction;
-  state: HoldemTableState;
-  handHistoryId: number;
-  historyUserId: number;
-  phase: string | null;
-  events: DealerEvent[];
-}) => {
-  if (params.events.length === 0) {
-    return [] satisfies PersistedHoldemTableEvent[];
-  }
-
-  appendDealerEventsToHoldemState(params.state, params.events);
-  await appendHoldemHandEvents({
-    tx: params.tx,
-    handHistoryId: params.handHistoryId,
-    historyUserId: params.historyUserId,
-    tableId: params.state.id,
-    phase: params.phase,
-    events: params.events.map((event) => ({
-      type: mapDealerEventToHoldemEventType(event),
-      actor: "dealer" as const,
-      payload: {
-        dealerEvent: event,
-      },
-    })),
-  });
-
-  return appendTableEvents({
-    tx: params.tx,
-    tableId: params.state.id,
-    events: params.events.map((event) => ({
-      eventType: mapDealerEventToHoldemEventType(event),
-      actor: "dealer" as const,
-      handHistoryId: params.handHistoryId,
-      phase: params.phase,
-      seatIndex: event.seatIndex ?? null,
-      payload: {
-        dealerEvent: event,
-      },
-    })),
-  });
-};
-
 const emitAsyncHoldemDealerLanguageEvent = (params: {
   tableId: number;
   handHistoryId: number;
@@ -1544,768 +784,38 @@ const emitAsyncHoldemDealerLanguageEvent = (params: {
   trackHoldemAsyncTask(task);
 };
 
-const buildHoldemTransitionDealerEvents = (params: {
-  beforeState: HoldemTableState;
-  afterState: HoldemTableState;
-  handHistoryId: number;
-  action?: HoldemAction;
-  timedOut?: boolean;
-  timeBankConsumedMs?: number;
-}) => {
-  const events: DealerEvent[] = [];
-  const beforeBoardCount = params.beforeState.metadata.communityCards.length;
-  const afterBoardCount = params.afterState.metadata.communityCards.length;
-  const beforeStage = params.beforeState.metadata.stage;
-  const afterStage = params.afterState.metadata.stage;
-
-  if (
-    params.timedOut &&
-    params.action &&
-    params.beforeState.metadata.pendingActorSeatIndex !== null
-  ) {
-    events.push(
-      buildHoldemDealerEvent({
-        state: params.afterState,
-        handHistoryId: params.handHistoryId,
-        kind: "action",
-        actionCode: "timeout_forced_action",
-        seatIndex: params.beforeState.metadata.pendingActorSeatIndex,
-        text: `Seat #${params.beforeState.metadata.pendingActorSeatIndex + 1} timed out. Dealer applies ${params.action}.`,
-        metadata: {
-          action: params.action,
-          timeBankConsumedMs: params.timeBankConsumedMs ?? 0,
-        },
-      }),
-    );
-  }
-
-  if (afterStage !== null && beforeStage !== afterStage) {
-    events.push(
-      buildHoldemDealerEvent({
-        state: params.afterState,
-        handHistoryId: params.handHistoryId,
-        kind: "action",
-        actionCode: "stage_opened",
-        text: `Dealer opens the ${afterStage}.`,
-        metadata: {
-          fromStage: beforeStage,
-          stage: afterStage,
-        },
-      }),
-    );
-  }
-
-  if (
-    afterStage !== null &&
-    afterBoardCount > beforeBoardCount
-  ) {
-    const newCards = params.afterState.metadata.communityCards
-      .slice(beforeBoardCount)
-      .map((card) => `${card.rank}${card.suit[0]?.toUpperCase() ?? ""}`);
-    events.push(
-      buildHoldemDealerEvent({
-        state: params.afterState,
-        handHistoryId: params.handHistoryId,
-        kind: "action",
-        actionCode: "board_revealed",
-        text: `Dealer reveals ${newCards.join(" ")} on the ${params.afterState.metadata.stage}.`,
-        metadata: {
-          boardCards: params.afterState.metadata.communityCards,
-        },
-      }),
-    );
-  } else if (beforeStage !== afterStage) {
-    events.push(
-      buildHoldemDealerEvent({
-        state: params.afterState,
-        handHistoryId: params.handHistoryId,
-        kind: "pace_hint",
-        actionCode: "phase_resolving",
-        pace: "pause",
-        text: "Dealer is resolving the street before action reopens.",
-        metadata: {
-          fromStage: beforeStage,
-          stage: afterStage,
-        },
-      }),
-    );
-  }
-
-  if (isSettledHoldemState(params.afterState)) {
-    events.push(
-      buildHoldemDealerEvent({
-        state: params.afterState,
-        handHistoryId: params.handHistoryId,
-        kind: "action",
-        actionCode: "hand_settled",
-        text: `Pot awarded to seat${params.afterState.metadata.winnerSeatIndexes.length === 1 ? "" : "s"} ${params.afterState.metadata.winnerSeatIndexes
-          .map((seatIndex) => `#${seatIndex + 1}`)
-          .join(", ")}.`,
-        metadata: {
-          winnerSeatIndexes: params.afterState.metadata.winnerSeatIndexes,
-        },
-      }),
-    );
-    events.push(
-      buildHoldemDealerEvent({
-        state: params.afterState,
-        handHistoryId: params.handHistoryId,
-        kind: "pace_hint",
-        actionCode: "settlement_pause",
-        pace: "pause",
-        text: "Dealer is settling the pot before the next hand.",
-      }),
-    );
-  } else {
-    const nextSeat = getPendingActorSeat(params.afterState);
-    if (nextSeat) {
-      events.push(
-        buildHoldemDealerEvent({
-          state: params.afterState,
-          handHistoryId: params.handHistoryId,
-          kind: "pace_hint",
-          actionCode: "prompt_next_actor",
-          pace: resolveHoldemDealerPromptPace({
-            state: params.afterState,
-            seat: nextSeat,
-          }),
-          seatIndex: nextSeat.seatIndex,
-          text:
-            countHoldemActiveSeats(params.afterState) <= 2
-              ? `Short-handed table. Action is on seat #${nextSeat.seatIndex + 1}.`
-              : `Action is on seat #${nextSeat.seatIndex + 1}.`,
-          metadata: {
-            turnDeadlineAt: nextSeat.turnDeadlineAt,
-          },
-        }),
-      );
-    }
-  }
-
-  return events;
-};
-
-const publishHoldemDealerTransition = (
+const publishPersistedHoldemDealerTransition = (
   tableId: number,
-  transition: {
-    dealerEvents: DealerEvent[];
-    dealerLanguageTask:
-      | {
-          scenario: string;
-          summary: Record<string, unknown>;
-        }
-      | null;
-    fanout: HoldemRealtimeFanout;
-    handHistoryId: number;
-    historyUserId: number;
-    phase: string | null;
-  },
-) => {
-  publishHoldemRealtimeUpdate(transition.fanout);
-  for (const dealerEvent of transition.dealerEvents) {
-    publishDealerRealtimeToTopic(
-      buildHoldemRealtimeTableTopic(tableId),
-      dealerEvent,
-    );
-  }
-
-  if (!transition.dealerLanguageTask) {
-    return;
-  }
-
-  emitAsyncHoldemDealerLanguageEvent({
+  transition: HoldemPersistedTransition,
+) =>
+  publishHoldemDealerTransition({
     tableId,
-    handHistoryId: transition.handHistoryId,
-    historyUserId: transition.historyUserId,
-    phase: transition.phase,
-    scenario: transition.dealerLanguageTask.scenario,
-    summary: transition.dealerLanguageTask.summary,
-  });
-};
-
-const recordHandStartedEvents = async (params: {
-  tx: DbTransaction;
-  state: HoldemTableState;
-  handHistoryId: number;
-  historyUserId: number;
-}) => {
-  const participants = params.state.seats
-    .slice()
-    .sort((left, right) => left.seatIndex - right.seatIndex)
-    .map((seat) => ({
-      seatIndex: seat.seatIndex,
-      userId: seat.userId,
-      displayName: resolveSeatDisplayName(
-        seat.userId,
-        seat.userEmail,
-        seat.metadata,
-      ),
-    }));
-  const blindSeats = params.state.seats.filter(
-    (seat) => seat.lastAction === "Small blind" || seat.lastAction === "Big blind",
-  );
-  const events: HoldemHandEventInput[] = [
-    {
-      type: "hand_started",
-      actor: "system" as const,
-      payload: {
-        roundId: buildHoldemRoundId(params.handHistoryId),
-        handNumber: params.state.metadata.handNumber,
-        tableName: params.state.name,
-        dealerSeatIndex: params.state.metadata.dealerSeatIndex,
-        smallBlindSeatIndex: params.state.metadata.smallBlindSeatIndex,
-        bigBlindSeatIndex: params.state.metadata.bigBlindSeatIndex,
-        fairness: params.state.metadata.fairness,
-        participants,
-      },
-    },
-    {
-      type: "hole_cards_dealt",
-      actor: "dealer" as const,
-      payload: {
-        handNumber: params.state.metadata.handNumber,
-        seats: params.state.seats.map((seat) => ({
-          seatIndex: seat.seatIndex,
-          userId: seat.userId,
-          holeCards: seat.holeCards,
-        })),
-      },
-    },
-    ...blindSeats.map((seat) => ({
-      type:
-        seat.lastAction === "Small blind"
-          ? "small_blind_posted"
-          : "big_blind_posted",
-      actor: "player" as const,
-      userId: seat.userId,
-      payload: {
-        handNumber: params.state.metadata.handNumber,
-        seatIndex: seat.seatIndex,
-        userId: seat.userId,
-        amount: seat.committedAmount,
-        stackAmount: seat.stackAmount,
-      },
-    })),
-  ];
-
-  const turnEvent = buildTurnStartedEvent(params.state);
-  if (turnEvent) {
-    events.push(turnEvent);
-  }
-
-  await appendHoldemHandEvents({
-    tx: params.tx,
-    handHistoryId: params.handHistoryId,
-    historyUserId: params.historyUserId,
-    tableId: params.state.id,
-    phase: params.state.metadata.stage,
-    events,
-  });
-};
-
-const recordHandTransitionEvents = async (params: {
-  tx: DbTransaction;
-  beforeState: HoldemTableState;
-  afterState: HoldemTableState;
-  handHistoryId: number;
-  historyUserId: number;
-  action: HoldemAction;
-  actingUserId: number | null;
-  timedOut?: boolean;
-  timeBankConsumedMs?: number;
-}) => {
-  const actorSeat =
-    params.beforeState.seats.find((seat) => seat.userId === params.actingUserId) ?? null;
-  const actingSeatAfter =
-    actorSeat === null
-      ? null
-      : params.afterState.seats.find(
-          (seat) => seat.seatIndex === actorSeat.seatIndex,
-        ) ?? null;
-  const events: Array<{
-    type: string;
-    actor: HoldemEventActor;
-    userId?: number | null;
-    payload?: Record<string, unknown> | null;
-  }> = [];
-
-  if (params.timedOut && actorSeat) {
-    events.push({
-      type: "turn_timed_out",
-      actor: "system",
-      userId: actorSeat.userId,
-      payload: {
-        handNumber: params.afterState.metadata.handNumber,
-        stage: params.beforeState.metadata.stage,
-        seatIndex: actorSeat.seatIndex,
-        userId: actorSeat.userId,
-        timeoutAction: params.action,
-        turnDeadlineAt: actorSeat.turnDeadlineAt,
-        turnTimeBankStartsAt: params.beforeState.metadata.turnTimeBankStartsAt,
-        timeBankConsumedMs: params.timeBankConsumedMs ?? 0,
-        timeBankRemainingMs: actingSeatAfter?.metadata.timeBankRemainingMs ?? 0,
-      },
-    });
-  }
-
-  if (actorSeat) {
-    events.push({
-      type: "player_acted",
-      actor: "player",
-      userId: actorSeat.userId,
-      payload: {
-        handNumber: params.afterState.metadata.handNumber,
-        stage: params.beforeState.metadata.stage,
-        seatIndex: actorSeat.seatIndex,
-        userId: actorSeat.userId,
-        action: params.action,
-        resultingStatus: actingSeatAfter?.status ?? null,
-        stackAmount: actingSeatAfter?.stackAmount ?? actorSeat.stackAmount,
-        committedAmount:
-          actingSeatAfter?.committedAmount ?? actorSeat.committedAmount,
-        totalCommittedAmount:
-          actingSeatAfter?.totalCommittedAmount ?? actorSeat.totalCommittedAmount,
-        lastAction: actingSeatAfter?.lastAction ?? actorSeat.lastAction,
-        turnDeadlineAt: actorSeat.turnDeadlineAt,
-        turnTimeBankStartsAt: params.beforeState.metadata.turnTimeBankStartsAt,
-        timeBankConsumedMs: params.timeBankConsumedMs ?? 0,
-        timeBankRemainingMs: actingSeatAfter?.metadata.timeBankRemainingMs ?? 0,
-      },
-    });
-  }
-
-  const beforeBoardCount = params.beforeState.metadata.communityCards.length;
-  const afterBoardCount = params.afterState.metadata.communityCards.length;
-  if (
-    params.afterState.metadata.stage &&
-    afterBoardCount > beforeBoardCount
-  ) {
-    events.push({
-      type: "board_revealed",
-      actor: "dealer",
-      payload: {
-        handNumber: params.afterState.metadata.handNumber,
-        stage: params.afterState.metadata.stage,
-        newCards: params.afterState.metadata.communityCards.slice(beforeBoardCount),
-        boardCards: params.afterState.metadata.communityCards,
-      },
-    });
-  }
-
-  const fairnessRevealSeed = params.afterState.metadata.fairness?.revealSeed;
-  if (
-    typeof fairnessRevealSeed === "string" &&
-    fairnessRevealSeed.length > 0 &&
-    params.beforeState.metadata.fairness?.revealSeed !== fairnessRevealSeed
-  ) {
-    events.push({
-      type: "fairness_revealed",
-      actor: "system",
-      payload: {
-        roundId: buildHoldemRoundId(params.handHistoryId),
-        handNumber: params.afterState.metadata.handNumber,
-        fairness: params.afterState.metadata.fairness,
-      },
-    });
-  }
-
-  if (isSettledHoldemState(params.afterState)) {
-    const roundId = buildHoldemRoundId(params.handHistoryId);
-    events.push({
-      type: resolveSettledHoldemEventType(params.afterState),
-      actor: "system",
-      payload: {
-        roundId,
-        handNumber: params.afterState.metadata.handNumber,
-        stage: params.afterState.metadata.stage,
-        boardCards: params.afterState.metadata.communityCards,
-        winnerSeatIndexes: params.afterState.metadata.winnerSeatIndexes,
-        revealedSeatIndexes: params.afterState.metadata.revealedSeatIndexes,
-        pots: params.afterState.metadata.resolvedPots,
-        totalRakeAmount: toMoneyString(resolveTotalRakeAmount(params.afterState)),
-        participants: buildParticipantSummaries({
-          state: params.afterState,
-          stackBeforeByUserId: new Map(
-            params.beforeState.seats.map((seat) => [
-              seat.userId,
-              toDecimal(seat.stackAmount).plus(
-                toDecimal(seat.totalCommittedAmount),
-              ),
-            ] as const),
-          ),
-          contributionBySeatIndex: buildContributionMap(params.beforeState),
-        }),
-      },
-    });
-    events.push({
-      type: "hand_settled",
-      actor: "system",
-      payload: {
-        roundId,
-        handNumber: params.afterState.metadata.handNumber,
-        winnerSeatIndexes: params.afterState.metadata.winnerSeatIndexes,
-        pots: params.afterState.metadata.resolvedPots,
-        totalRakeAmount: toMoneyString(resolveTotalRakeAmount(params.afterState)),
-      },
-    });
-  } else {
-    const turnEvent = buildTurnStartedEvent(params.afterState);
-    if (turnEvent) {
-      events.push(turnEvent);
-    }
-  }
-
-  await appendHoldemHandEvents({
-    tx: params.tx,
-    handHistoryId: params.handHistoryId,
-    historyUserId: params.historyUserId,
-    tableId: params.afterState.id,
-    phase: params.afterState.metadata.stage,
-    events,
-  });
-};
-
-const recordTableTransitionEvents = async (params: {
-  tx: DbTransaction;
-  beforeState: HoldemTableState;
-  afterState: HoldemTableState;
-  handHistoryId: number;
-  action: HoldemAction;
-  actingUserId: number | null;
-  timedOut?: boolean;
-  timeBankConsumedMs?: number;
-}) => {
-  const actorSeat =
-    params.beforeState.seats.find((seat) => seat.userId === params.actingUserId) ??
-    null;
-  const actingSeatAfter =
-    actorSeat === null
-      ? null
-      : params.afterState.seats.find(
-          (seat) => seat.seatIndex === actorSeat.seatIndex,
-        ) ?? null;
-  const events: HoldemTableEventInput[] = [];
-
-  if (params.timedOut && actorSeat) {
-    events.push({
-      eventType: "turn_timed_out",
-      actor: "system",
-      userId: actorSeat.userId,
-      seatIndex: actorSeat.seatIndex,
-      handHistoryId: params.handHistoryId,
-      phase: params.beforeState.metadata.stage,
-      payload: {
-        roundId: buildHoldemRoundId(params.handHistoryId),
-        handNumber: params.afterState.metadata.handNumber,
-        action: params.action,
-        turnDeadlineAt: actorSeat.turnDeadlineAt,
-        turnTimeBankStartsAt: params.beforeState.metadata.turnTimeBankStartsAt,
-        timeBankConsumedMs: params.timeBankConsumedMs ?? 0,
-        timeBankRemainingMs: actingSeatAfter?.metadata.timeBankRemainingMs ?? 0,
-      },
-    });
-  }
-
-  if (actorSeat) {
-    events.push({
-      eventType: "player_acted",
-      actor: params.timedOut ? "system" : "player",
-      userId: actorSeat.userId,
-      seatIndex: actorSeat.seatIndex,
-      handHistoryId: params.handHistoryId,
-      phase: params.beforeState.metadata.stage,
-      payload: {
-        roundId: buildHoldemRoundId(params.handHistoryId),
-        handNumber: params.afterState.metadata.handNumber,
-        stage: params.beforeState.metadata.stage,
-        action: params.action,
-        stackAmount: actingSeatAfter?.stackAmount ?? actorSeat.stackAmount,
-        committedAmount:
-          actingSeatAfter?.committedAmount ?? actorSeat.committedAmount,
-        totalCommittedAmount:
-          actingSeatAfter?.totalCommittedAmount ?? actorSeat.totalCommittedAmount,
-        lastAction: actingSeatAfter?.lastAction ?? actorSeat.lastAction,
-        turnDeadlineAt: actorSeat.turnDeadlineAt,
-        turnTimeBankStartsAt: params.beforeState.metadata.turnTimeBankStartsAt,
-        timeBankConsumedMs: params.timeBankConsumedMs ?? 0,
-        timeBankRemainingMs: actingSeatAfter?.metadata.timeBankRemainingMs ?? 0,
-      },
-    });
-  }
-
-  const beforeBoardCount = params.beforeState.metadata.communityCards.length;
-  const afterBoardCount = params.afterState.metadata.communityCards.length;
-  if (
-    params.afterState.metadata.stage !== null &&
-    afterBoardCount > beforeBoardCount
-  ) {
-    events.push({
-      eventType: "board_revealed",
-      actor: "dealer",
-      handHistoryId: params.handHistoryId,
-      phase: params.afterState.metadata.stage,
-      payload: {
-        roundId: buildHoldemRoundId(params.handHistoryId),
-        handNumber: params.afterState.metadata.handNumber,
-        stage: params.afterState.metadata.stage,
-        newCards: params.afterState.metadata.communityCards.slice(beforeBoardCount),
-        boardCards: params.afterState.metadata.communityCards,
-      },
-    });
-  }
-
-  const fairnessRevealSeed = params.afterState.metadata.fairness?.revealSeed;
-  if (
-    typeof fairnessRevealSeed === "string" &&
-    fairnessRevealSeed.length > 0 &&
-    params.beforeState.metadata.fairness?.revealSeed !== fairnessRevealSeed
-  ) {
-    events.push({
-      eventType: "fairness_revealed",
-      actor: "system",
-      handHistoryId: params.handHistoryId,
-      phase: params.afterState.metadata.stage,
-      payload: {
-        roundId: buildHoldemRoundId(params.handHistoryId),
-        handNumber: params.afterState.metadata.handNumber,
-        fairness: params.afterState.metadata.fairness,
-      },
-    });
-  }
-
-  if (isSettledHoldemState(params.afterState)) {
-    events.push({
-      eventType: resolveSettledHoldemEventType(params.afterState),
-      actor: "system",
-      handHistoryId: params.handHistoryId,
-      phase: params.afterState.metadata.stage,
-      payload: {
-        roundId: buildHoldemRoundId(params.handHistoryId),
-        handNumber: params.afterState.metadata.handNumber,
-        winnerSeatIndexes: params.afterState.metadata.winnerSeatIndexes,
-        revealedSeatIndexes: params.afterState.metadata.revealedSeatIndexes,
-        boardCards: params.afterState.metadata.communityCards,
-        totalRakeAmount: toMoneyString(resolveTotalRakeAmount(params.afterState)),
-      },
-    });
-    events.push({
-      eventType: "hand_settled",
-      actor: "system",
-      handHistoryId: params.handHistoryId,
-      phase: params.afterState.metadata.stage,
-      payload: {
-        roundId: buildHoldemRoundId(params.handHistoryId),
-        handNumber: params.afterState.metadata.handNumber,
-        winnerSeatIndexes: params.afterState.metadata.winnerSeatIndexes,
-        pots: params.afterState.metadata.resolvedPots,
-        totalRakeAmount: toMoneyString(resolveTotalRakeAmount(params.afterState)),
-      },
-    });
-  } else {
-    const nextSeat = getPendingActorSeat(params.afterState);
-    if (nextSeat) {
-      events.push({
-        eventType: "turn_started",
-        actor: "system",
-        userId: nextSeat.userId,
-        seatIndex: nextSeat.seatIndex,
-        handHistoryId: params.handHistoryId,
-        phase: params.afterState.metadata.stage,
-        payload: {
-          roundId: buildHoldemRoundId(params.handHistoryId),
-          handNumber: params.afterState.metadata.handNumber,
-          stage: params.afterState.metadata.stage,
-          turnDeadlineAt: nextSeat.turnDeadlineAt,
-          turnTimeBankStartsAt: params.afterState.metadata.turnTimeBankStartsAt,
-          timeBankRemainingMs: nextSeat.metadata.timeBankRemainingMs,
-        },
-      });
-    }
-  }
-
-  return appendTableEvents({
-    tx: params.tx,
-    tableId: params.afterState.id,
-    events,
-  });
-};
-
-const persistHoldemTransition = async (params: {
-  tx: DbTransaction;
-  beforeState: HoldemTableState;
-  afterState: HoldemTableState;
-  previousStacks: Map<number, ReturnType<typeof toDecimal>>;
-  lockedWallets: Map<number, LockedWalletRow>;
-  action: HoldemAction;
-  actingUserId: number | null;
-  timedOut?: boolean;
-  timeBankConsumedMs?: number;
-}) => {
-  const handHistoryId =
-    getActiveHandHistoryId(params.beforeState) ??
-    getActiveHandHistoryId(params.afterState);
-  if (!handHistoryId) {
-    throw conflictError("Holdem hand history is missing for the active hand.");
-  }
-
-  const contributionBySeatIndex = buildContributionMap(params.beforeState);
-  const historyUserId = await loadHoldemHandHistoryOwnerUserId(
-    params.tx,
-    handHistoryId,
-  );
-  const grossSettledState = isSettledHoldemState(params.afterState)
-    ? cloneTableState(params.afterState)
-    : null;
-  const appliedRakePolicy = isSettledHoldemState(params.afterState)
-    ? await resolveHoldemRakePolicySnapshot(params.tx, params.afterState)
-    : null;
-  const appliedRake = appliedRakePolicy
-    ? applyRakeToSettledState(params.afterState, appliedRakePolicy)
-    : null;
-  syncHoldemTurnDeadlines(params.afterState);
-
-  await recordHandTransitionEvents({
-    tx: params.tx,
-    beforeState: params.beforeState,
-    afterState: params.afterState,
-    handHistoryId,
-    historyUserId,
-    action: params.action,
-    actingUserId: params.actingUserId,
-    timedOut: params.timedOut,
-    timeBankConsumedMs: params.timeBankConsumedMs,
+    transition,
+    publishHoldemRealtimeUpdate,
+    publishDealerRealtimeToTopic,
+    emitAsyncHoldemDealerLanguageEvent,
   });
 
-  await syncHoldemHandHistory({
-    tx: params.tx,
-    state: params.afterState,
-    handHistoryId,
-    stackBeforeByUserId: params.previousStacks,
-    contributionBySeatIndex,
+const persistHoldemTransitionWithDeps = (
+  params: Omit<
+    Parameters<typeof persistHoldemTransition>[0],
+    | "loadLockedWalletRows"
+    | "settleHoldemPlayModeSessionIfPresent"
+    | "removeBotSeats"
+    | "persistTableState"
+    | "syncHoldemTurnDeadlines"
+    | "resolveHoldemRakePolicySnapshot"
+  >,
+) =>
+  persistHoldemTransition({
+    ...params,
+    loadLockedWalletRows,
+    settleHoldemPlayModeSessionIfPresent,
+    removeBotSeats,
+    persistTableState,
+    syncHoldemTurnDeadlines,
+    resolveHoldemRakePolicySnapshot,
   });
-  let persistedTableEvents: PersistedHoldemTableEvent[] =
-    await recordTableTransitionEvents({
-    tx: params.tx,
-    beforeState: params.beforeState,
-    afterState: params.afterState,
-    handHistoryId,
-    action: params.action,
-    actingUserId: params.actingUserId,
-    timedOut: params.timedOut,
-    timeBankConsumedMs: params.timeBankConsumedMs,
-  });
-  const dealerRuleEvents = buildHoldemTransitionDealerEvents({
-    beforeState: params.beforeState,
-    afterState: params.afterState,
-    handHistoryId,
-    action: params.action,
-    timedOut: params.timedOut,
-    timeBankConsumedMs: params.timeBankConsumedMs,
-  });
-  const dealerTableEvents = await persistHoldemDealerEvents({
-    tx: params.tx,
-    state: params.afterState,
-    handHistoryId,
-    historyUserId,
-    phase: params.afterState.metadata.stage,
-    events: dealerRuleEvents,
-  });
-  persistedTableEvents = [...persistedTableEvents, ...dealerTableEvents];
-
-  if (!isTournamentTable(params.afterState)) {
-    await syncSettledLockedBalances({
-      tx: params.tx,
-      state: params.afterState,
-      grossSettledState,
-      appliedRake,
-      lockedWallets: params.lockedWallets,
-      previousStacks: params.previousStacks,
-      handHistoryId,
-    });
-  }
-  if (isSettledHoldemState(params.afterState) && isTournamentTable(params.afterState)) {
-    const tournamentEvents = await settleTournamentAfterHand({
-      tx: params.tx,
-      state: params.afterState,
-      wallets: params.lockedWallets,
-      previousStacks: params.previousStacks,
-    });
-    persistedTableEvents = [...persistedTableEvents, ...tournamentEvents];
-  }
-  const autoCashOuts = isTournamentTable(params.afterState)
-    ? []
-    : await settlePendingSeatCashOuts({
-        tx: params.tx,
-        state: params.afterState,
-        lockedWallets: params.lockedWallets,
-      });
-  if (autoCashOuts.length > 0) {
-    const autoCashOutEvents = await appendTableEvents({
-      tx: params.tx,
-      tableId: params.afterState.id,
-      events: autoCashOuts.map((entry) => ({
-        eventType: "seat_auto_cashed_out",
-        actor: "system" as const,
-        userId: entry.userId,
-        seatIndex: entry.seatIndex,
-        payload: {
-          tableName: params.afterState.name,
-          cashOutAmount: entry.cashOutAmount,
-          remainingSeatCount: params.afterState.seats.length,
-        },
-      })),
-    });
-    persistedTableEvents = [...persistedTableEvents, ...autoCashOutEvents];
-  }
-  if (countHumanSeats(params.afterState) === 0) {
-    await removeBotSeats({
-      tx: params.tx,
-      state: params.afterState,
-      predicate: () => true,
-    });
-  }
-  await persistTableState(params.tx, params.afterState);
-
-  const beforeBoardCount = params.beforeState.metadata.communityCards.length;
-  const afterBoardCount = params.afterState.metadata.communityCards.length;
-  const dealerLanguageTask =
-    afterBoardCount > beforeBoardCount
-      ? {
-          scenario: "holdem_board_revealed",
-          summary: {
-            handNumber: params.afterState.metadata.handNumber,
-            stage: params.afterState.metadata.stage,
-            newBoardCards: params.afterState.metadata.communityCards.slice(
-              beforeBoardCount,
-            ),
-            boardCards: params.afterState.metadata.communityCards,
-          },
-        }
-      : isSettledHoldemState(params.afterState)
-        ? {
-            scenario: "holdem_hand_settled",
-            summary: {
-              handNumber: params.afterState.metadata.handNumber,
-              winnerSeatIndexes: params.afterState.metadata.winnerSeatIndexes,
-              boardCards: params.afterState.metadata.communityCards,
-            },
-          }
-        : null;
-
-  return {
-    dealerEvents: dealerRuleEvents,
-    dealerLanguageTask,
-    fanout: buildRealtimeUpdate({
-      state: params.afterState,
-      tableEvents: persistedTableEvents,
-      action: params.action,
-      timedOut: params.timedOut,
-    }),
-    handHistoryId,
-    historyUserId,
-    phase: params.afterState.metadata.stage,
-  };
-};
 
 const clearHoldemTurnState = (state: HoldemTableState) => {
   state.metadata.turnStartedAt = null;
@@ -2315,13 +825,6 @@ const clearHoldemTurnState = (state: HoldemTableState) => {
     seat.turnDeadlineAt = null;
   }
 };
-
-const getPendingActorSeat = (state: HoldemTableState) =>
-  state.metadata.pendingActorSeatIndex === null
-    ? null
-    : state.seats.find(
-        (seat) => seat.seatIndex === state.metadata.pendingActorSeatIndex,
-      ) ?? null;
 
 const resolveActiveTurnTimeBankSnapshot = (state: HoldemTableState) => {
   const pendingSeat =
@@ -2737,7 +1240,7 @@ const runAutomatedHoldemBotTurns = async (tableId: number) => {
             const beforeState = cloneTableState(state);
             const timeout = processExpiredHoldemTurn(state, new Date());
             if (timeout) {
-              return persistHoldemTransition({
+              return persistHoldemTransitionWithDeps({
                 tx,
                 beforeState,
                 afterState: state,
@@ -2759,7 +1262,7 @@ const runAutomatedHoldemBotTurns = async (tableId: number) => {
               action: decision.action,
               amount: decision.amount,
             });
-            return persistHoldemTransition({
+            return persistHoldemTransitionWithDeps({
               tx,
               beforeState,
               afterState: state,
@@ -2774,7 +1277,7 @@ const runAutomatedHoldemBotTurns = async (tableId: number) => {
             break;
           }
 
-          publishHoldemDealerTransition(tableId, transition);
+          publishPersistedHoldemDealerTransition(tableId, transition);
         }
       } catch (error) {
         logger.warning("holdem bot runner failed", {
@@ -3205,963 +1708,6 @@ export const persistTableState = async (
   }
 };
 
-const applyBuyInToWallet = async (params: {
-  tx: DbTransaction;
-  wallet: LockedWalletRow;
-  amount: ReturnType<typeof toDecimal>;
-  tableId: number;
-  tableName: string;
-  seatIndex: number;
-  tableType: HoldemTableType;
-  balanceType: HoldemTableFundingSource;
-}) => {
-  const {
-    tx,
-    wallet,
-    amount,
-    tableId,
-    tableName,
-    seatIndex,
-    tableType,
-    balanceType,
-  } = params;
-  if (usesHoldemEarnedAsset(balanceType)) {
-    const assetResult = await lockAsset(
-      {
-        userId: wallet.userId,
-        assetCode: HOLDEM_CASUAL_ASSET_CODE,
-        amount: toMoneyString(amount),
-        entryType: "holdem_buy_in",
-        referenceType: HOLDEM_REFERENCE_TYPE,
-        referenceId: tableId,
-        audit: {
-          sourceApp: "backend.holdem",
-          metadata: {
-            balanceType,
-            assetCode: HOLDEM_CASUAL_ASSET_CODE,
-            tableName,
-            seatIndex,
-            tableType,
-          },
-        },
-      },
-      tx,
-    );
-
-    wallet.bonusBalance = assetResult.availableAfter;
-    wallet.lockedBalance = assetResult.lockedAfter;
-    return;
-  }
-
-  const withdrawableBefore = toDecimal(wallet.withdrawableBalance);
-  const lockedBefore = toDecimal(wallet.lockedBalance);
-  const sourceBefore = withdrawableBefore;
-  if (sourceBefore.lt(amount)) {
-    throw conflictError("Insufficient withdrawable balance.");
-  }
-  const withdrawableAfter = withdrawableBefore.minus(amount);
-  const lockedAfter = lockedBefore.plus(amount);
-
-  await tx
-    .update(userWallets)
-    .set({
-      withdrawableBalance: toMoneyString(withdrawableAfter),
-      lockedBalance: toMoneyString(lockedAfter),
-      updatedAt: new Date(),
-    })
-    .where(eq(userWallets.userId, wallet.userId));
-
-  await tx.insert(ledgerEntries).values({
-    userId: wallet.userId,
-    entryType: "holdem_buy_in",
-    amount: toMoneyString(amount.negated()),
-    balanceBefore: toMoneyString(sourceBefore),
-    balanceAfter: toMoneyString(withdrawableAfter),
-    referenceType: HOLDEM_REFERENCE_TYPE,
-    referenceId: tableId,
-    metadata: {
-      balanceType,
-      lockedBefore: toMoneyString(lockedBefore),
-      lockedAfter: toMoneyString(lockedAfter),
-      tableName,
-      seatIndex,
-      tableType,
-    },
-  });
-
-  wallet.withdrawableBalance = toMoneyString(withdrawableAfter);
-  wallet.lockedBalance = toMoneyString(lockedAfter);
-};
-
-const applyTournamentWithdrawableDelta = async (params: {
-  tx: DbTransaction;
-  wallet: LockedWalletRow;
-  delta: ReturnType<typeof toDecimal>;
-  entryType:
-    | "holdem_tournament_buy_in"
-    | "holdem_tournament_refund"
-    | "holdem_tournament_payout";
-  tableId: number;
-  tableName: string;
-  seatIndex: number | null;
-  metadata?: Record<string, unknown>;
-}) => {
-  const withdrawableBefore = toDecimal(params.wallet.withdrawableBalance);
-  const withdrawableAfter = withdrawableBefore.plus(params.delta);
-  if (withdrawableAfter.lt(0)) {
-    throw conflictError("Insufficient withdrawable balance.");
-  }
-
-  await params.tx
-    .update(userWallets)
-    .set({
-      withdrawableBalance: toMoneyString(withdrawableAfter),
-      updatedAt: new Date(),
-    })
-    .where(eq(userWallets.userId, params.wallet.userId));
-
-  await params.tx.insert(ledgerEntries).values({
-    userId: params.wallet.userId,
-    entryType: params.entryType,
-    amount: toMoneyString(params.delta),
-    balanceBefore: toMoneyString(withdrawableBefore),
-    balanceAfter: toMoneyString(withdrawableAfter),
-    referenceType: HOLDEM_REFERENCE_TYPE,
-    referenceId: params.tableId,
-    metadata: {
-      balanceType: "withdrawable",
-      tableName: params.tableName,
-      seatIndex: params.seatIndex,
-      ...(params.metadata ?? {}),
-    },
-  });
-
-  params.wallet.withdrawableBalance = toMoneyString(withdrawableAfter);
-};
-
-const applyTournamentRefundToWallet = async (params: {
-  tx: DbTransaction;
-  wallet: LockedWalletRow;
-  amount: ReturnType<typeof toDecimal>;
-  tableId: number;
-  tableName: string;
-  seatIndex: number;
-}) => {
-  await applyTournamentWithdrawableDelta({
-    tx: params.tx,
-    wallet: params.wallet,
-    delta: params.amount,
-    entryType: "holdem_tournament_refund",
-    tableId: params.tableId,
-    tableName: params.tableName,
-    seatIndex: params.seatIndex,
-  });
-  await applyPrizePoolDelta(params.tx, params.amount.negated(), {
-    entryType: "holdem_tournament_pool_refund",
-    referenceType: HOLDEM_REFERENCE_TYPE,
-    referenceId: params.tableId,
-    metadata: {
-      tableName: params.tableName,
-      seatIndex: params.seatIndex,
-      tableType: "tournament",
-    },
-  });
-};
-
-const applyTournamentBuyInToWallet = async (params: {
-  tx: DbTransaction;
-  wallet: LockedWalletRow;
-  amount: ReturnType<typeof toDecimal>;
-  tableId: number;
-  tableName: string;
-  seatIndex: number;
-}) => {
-  await applyTournamentWithdrawableDelta({
-    tx: params.tx,
-    wallet: params.wallet,
-    delta: params.amount.negated(),
-    entryType: "holdem_tournament_buy_in",
-    tableId: params.tableId,
-    tableName: params.tableName,
-    seatIndex: params.seatIndex,
-  });
-  await applyPrizePoolDelta(params.tx, params.amount, {
-    entryType: "holdem_tournament_pool_buy_in",
-    referenceType: HOLDEM_REFERENCE_TYPE,
-    referenceId: params.tableId,
-    metadata: {
-      tableName: params.tableName,
-      seatIndex: params.seatIndex,
-      tableType: "tournament",
-    },
-  });
-};
-
-const applyTournamentPayoutToWallet = async (params: {
-  tx: DbTransaction;
-  wallet: LockedWalletRow;
-  amount: ReturnType<typeof toDecimal>;
-  tableId: number;
-  tableName: string;
-  seatIndex: number | null;
-  place: number;
-}) => {
-  if (params.amount.lte(0)) {
-    return;
-  }
-
-  await applyTournamentWithdrawableDelta({
-    tx: params.tx,
-    wallet: params.wallet,
-    delta: params.amount,
-    entryType: "holdem_tournament_payout",
-    tableId: params.tableId,
-    tableName: params.tableName,
-    seatIndex: params.seatIndex,
-    metadata: {
-      place: params.place,
-    },
-  });
-  await applyPrizePoolDelta(params.tx, params.amount.negated(), {
-    entryType: "holdem_tournament_pool_payout",
-    referenceType: HOLDEM_REFERENCE_TYPE,
-    referenceId: params.tableId,
-    metadata: {
-      tableName: params.tableName,
-      seatIndex: params.seatIndex,
-      tableType: "tournament",
-      place: params.place,
-    },
-  });
-};
-
-const applyCashOutToWallet = async (params: {
-  tx: DbTransaction;
-  wallet: LockedWalletRow;
-  amount: ReturnType<typeof toDecimal>;
-  tableId: number;
-  tableName: string;
-  seatIndex: number;
-  tableType: HoldemTableType;
-  balanceType: HoldemTableFundingSource;
-}) => {
-  const {
-    tx,
-    wallet,
-    amount,
-    tableId,
-    tableName,
-    seatIndex,
-    tableType,
-    balanceType,
-  } = params;
-  if (amount.lte(0)) {
-    return;
-  }
-  if (usesHoldemEarnedAsset(balanceType)) {
-    const assetResult = await unlockAsset(
-      {
-        userId: wallet.userId,
-        assetCode: HOLDEM_CASUAL_ASSET_CODE,
-        amount: toMoneyString(amount),
-        entryType: "holdem_cash_out",
-        referenceType: HOLDEM_REFERENCE_TYPE,
-        referenceId: tableId,
-        audit: {
-          sourceApp: "backend.holdem",
-          metadata: {
-            balanceType,
-            assetCode: HOLDEM_CASUAL_ASSET_CODE,
-            tableName,
-            seatIndex,
-            tableType,
-          },
-        },
-      },
-      tx,
-    );
-
-    wallet.bonusBalance = assetResult.availableAfter;
-    wallet.lockedBalance = assetResult.lockedAfter;
-    return;
-  }
-
-  const withdrawableBefore = toDecimal(wallet.withdrawableBalance);
-  const lockedBefore = toDecimal(wallet.lockedBalance);
-  if (lockedBefore.lt(amount)) {
-    throw conflictError("Locked balance is lower than the table stack.");
-  }
-  const withdrawableAfter = withdrawableBefore.plus(amount);
-  const lockedAfter = lockedBefore.minus(amount);
-
-  await tx
-    .update(userWallets)
-    .set({
-      withdrawableBalance: toMoneyString(withdrawableAfter),
-      lockedBalance: toMoneyString(lockedAfter),
-      updatedAt: new Date(),
-    })
-    .where(eq(userWallets.userId, wallet.userId));
-
-  await tx.insert(ledgerEntries).values({
-    userId: wallet.userId,
-    entryType: "holdem_cash_out",
-    amount: toMoneyString(amount),
-    balanceBefore: toMoneyString(withdrawableBefore),
-    balanceAfter: toMoneyString(withdrawableAfter),
-    referenceType: HOLDEM_REFERENCE_TYPE,
-    referenceId: tableId,
-    metadata: {
-      balanceType,
-      lockedBefore: toMoneyString(lockedBefore),
-      lockedAfter: toMoneyString(lockedAfter),
-      tableName,
-      seatIndex,
-      tableType,
-    },
-  });
-
-  wallet.withdrawableBalance = toMoneyString(withdrawableAfter);
-  wallet.lockedBalance = toMoneyString(lockedAfter);
-};
-
-const removeSeatAndCashOut = async (params: {
-  tx: DbTransaction;
-  state: HoldemTableState;
-  seatUserId: number;
-  lockedWallets: Map<number, LockedWalletRow>;
-}) => {
-  const seat = params.state.seats.find((entry) => entry.userId === params.seatUserId) ?? null;
-  if (!seat) {
-    throw conflictError("You are not seated at this holdem table.");
-  }
-  if (isBotSeat(seat)) {
-    throw conflictError("Bot seats cannot use human cash-out flows.");
-  }
-
-  const wallet = params.lockedWallets.get(seat.userId);
-  if (!wallet) {
-    throw notFoundError("Wallet not found.");
-  }
-
-  const stackAmount = toDecimal(seat.stackAmount);
-  await params.tx.delete(holdemTableSeats).where(eq(holdemTableSeats.id, seat.id));
-  await applyCashOutToWallet({
-    tx: params.tx,
-    wallet,
-    amount: stackAmount,
-    tableId: params.state.id,
-    tableName: params.state.name,
-    seatIndex: seat.seatIndex,
-    tableType: params.state.metadata.tableType,
-    balanceType: resolveHoldemFundingSource(params.state.metadata.tableType),
-  });
-  await settleHoldemPlayModeSessionIfPresent({
-    tx: params.tx,
-    userId: seat.userId,
-    tableId: params.state.id,
-    cashOutAmount: stackAmount,
-    balanceType: resolveHoldemFundingSource(params.state.metadata.tableType),
-  });
-
-  params.state.seats = params.state.seats.filter((entry) => entry.id !== seat.id);
-  clearTableAfterCashout(params.state);
-  if (params.state.status === "waiting") {
-    params.state.metadata.activeHandHistoryId = null;
-  }
-
-  return {
-    seat,
-    stackAmount,
-  };
-};
-
-const removeTournamentSeatAndRefund = async (params: {
-  tx: DbTransaction;
-  state: HoldemTableState;
-  seatUserId: number;
-  wallets: Map<number, LockedWalletRow>;
-}) => {
-  ensureTournamentMetadata(params.state);
-  const seat = params.state.seats.find((entry) => entry.userId === params.seatUserId) ?? null;
-  if (!seat) {
-    throw conflictError("You are not seated at this holdem tournament.");
-  }
-
-  const wallet = params.wallets.get(seat.userId);
-  if (!wallet) {
-    throw notFoundError("Wallet not found.");
-  }
-
-  const seatTournament = ensureSeatTournamentMetadata(seat);
-  const refundAmount = toDecimal(seatTournament.entryBuyInAmount);
-
-  await params.tx.delete(holdemTableSeats).where(eq(holdemTableSeats.id, seat.id));
-  await applyTournamentRefundToWallet({
-    tx: params.tx,
-    wallet,
-    amount: refundAmount,
-    tableId: params.state.id,
-    tableName: params.state.name,
-    seatIndex: seat.seatIndex,
-  });
-  await settleHoldemPlayModeSessionIfPresent({
-    tx: params.tx,
-    userId: seat.userId,
-    tableId: params.state.id,
-    cashOutAmount: refundAmount,
-    balanceType: "withdrawable",
-  });
-
-  params.state.seats = params.state.seats.filter((entry) => entry.id !== seat.id);
-  removeTournamentStanding(params.state, seat.userId);
-
-  return {
-    seat,
-    refundAmount,
-  };
-};
-
-const buildTournamentPayoutPlan = (state: HoldemTableState) => {
-  const tournament = ensureTournamentMetadata(state);
-  const payoutPlaces = resolveTournamentPayoutPlaces(
-    tournament.registeredCount,
-    tournament.payoutPlaces,
-  );
-  tournament.payoutPlaces = payoutPlaces;
-
-  return distributeTournamentPayouts(
-    tournament.prizePoolAmount,
-    payoutPlaces,
-  ).map((amount, index) => ({
-    place: index + 1,
-    amount,
-  }));
-};
-
-const upsertTournamentPayout = (
-  tournament: HoldemTournamentMetadata,
-  payout: HoldemTournamentPayout,
-) => {
-  const existingIndex = tournament.payouts.findIndex(
-    (entry) => entry.place === payout.place,
-  );
-  if (existingIndex >= 0) {
-    tournament.payouts[existingIndex] = payout;
-    return;
-  }
-
-  tournament.payouts.push(payout);
-  tournament.payouts.sort((left, right) => left.place - right.place);
-};
-
-const findTournamentStandingByPlace = (
-  tournament: HoldemTournamentMetadata,
-  place: number,
-) =>
-  tournament.standings.find((entry) => entry.finishingPlace === place) ?? null;
-
-const settleTournamentAfterHand = async (params: {
-  tx: DbTransaction;
-  state: HoldemTableState;
-  wallets: Map<number, LockedWalletRow>;
-  previousStacks: Map<number, ReturnType<typeof toDecimal>>;
-}) => {
-  const tournament = ensureTournamentMetadata(params.state);
-  const awardedAt = new Date();
-  const bustedSeats = params.state.seats
-    .filter((seat) => {
-      const seatTournament = ensureSeatTournamentMetadata(seat);
-      return (
-        toDecimal(seat.stackAmount).lte(0) &&
-        seatTournament.finishingPlace === null
-      );
-    })
-    .sort((left, right) => {
-      const leftPreviousStack = params.previousStacks.get(left.userId) ?? toDecimal(0);
-      const rightPreviousStack =
-        params.previousStacks.get(right.userId) ?? toDecimal(0);
-      const stackComparison = leftPreviousStack.cmp(rightPreviousStack);
-      if (stackComparison !== 0) {
-        return stackComparison;
-      }
-
-      return left.seatIndex - right.seatIndex;
-    });
-
-  const activeSeats = params.state.seats.filter((seat) => {
-    const seatTournament = ensureSeatTournamentMetadata(seat);
-    return (
-      toDecimal(seat.stackAmount).gt(0) &&
-      seatTournament.finishingPlace === null
-    );
-  });
-
-  if (bustedSeats.length === 0) {
-    syncTournamentStandings(params.state);
-    return [];
-  }
-
-  const tournamentEvents: HoldemTableEventInput[] = [];
-  let finishingPlace = activeSeats.length + bustedSeats.length;
-  for (const seat of bustedSeats) {
-    const seatTournament = ensureSeatTournamentMetadata(seat);
-    seatTournament.finishingPlace = finishingPlace;
-    seatTournament.eliminatedAt = awardedAt;
-    seatTournament.prizeAmount = null;
-    upsertTournamentStanding(
-      tournament,
-      buildTournamentStandingForSeat(seat),
-    );
-    tournamentEvents.push({
-      eventType: "tournament_player_eliminated",
-      actor: "system",
-      userId: seat.userId,
-      seatIndex: seat.seatIndex,
-      payload: {
-        tableName: params.state.name,
-        handNumber: params.state.metadata.handNumber,
-        finishingPlace,
-      },
-    });
-    finishingPlace -= 1;
-  }
-
-  if (activeSeats.length <= 1) {
-    const championSeat = activeSeats[0] ?? null;
-    if (!championSeat) {
-      throw internalInvariantError(
-        "Holdem tournament settled without an active champion seat.",
-      );
-    }
-
-    const championTournament = ensureSeatTournamentMetadata(championSeat);
-    championTournament.finishingPlace = 1;
-    championTournament.prizeAmount = null;
-    upsertTournamentStanding(
-      tournament,
-      buildTournamentStandingForSeat(championSeat),
-    );
-
-    const payoutPlan = buildTournamentPayoutPlan(params.state);
-    const payoutRecipients = payoutPlan
-      .map((entry) => {
-        const standing = findTournamentStandingByPlace(tournament, entry.place);
-        return standing
-          ? {
-              standing,
-              place: entry.place,
-              amount: entry.amount,
-            }
-          : null;
-      })
-      .filter(
-        (
-          entry,
-        ): entry is {
-          standing: HoldemTournamentStanding;
-          place: number;
-          amount: string;
-        } => entry !== null,
-      );
-    const missingWalletUserIds = payoutRecipients
-      .map((entry) => entry.standing.userId)
-      .filter(
-        (userId): userId is number =>
-          userId !== null && Number.isInteger(userId) && !params.wallets.has(userId),
-      );
-    if (missingWalletUserIds.length > 0) {
-      const additionalWallets = await loadLockedWalletRows(
-        params.tx,
-        missingWalletUserIds,
-      );
-      for (const [userId, wallet] of additionalWallets.entries()) {
-        params.wallets.set(userId, wallet);
-      }
-    }
-
-    tournament.payouts = [];
-    for (const payoutRecipient of payoutRecipients) {
-      payoutRecipient.standing.prizeAmount = payoutRecipient.amount;
-      const currentSeat =
-        params.state.seats.find(
-          (seat) => seat.userId === payoutRecipient.standing.userId,
-        ) ?? null;
-      if (currentSeat) {
-        const currentSeatTournament = ensureSeatTournamentMetadata(currentSeat);
-        currentSeatTournament.prizeAmount = payoutRecipient.amount;
-      }
-
-      if (payoutRecipient.standing.userId !== null) {
-        const wallet = params.wallets.get(payoutRecipient.standing.userId);
-        if (!wallet) {
-          throw notFoundError("Wallet not found.");
-        }
-
-        await applyTournamentPayoutToWallet({
-          tx: params.tx,
-          wallet,
-          amount: toDecimal(payoutRecipient.amount),
-          tableId: params.state.id,
-          tableName: params.state.name,
-          seatIndex: payoutRecipient.standing.seatIndex,
-          place: payoutRecipient.place,
-        });
-      }
-
-      upsertTournamentPayout(tournament, {
-        place: payoutRecipient.place,
-        userId: payoutRecipient.standing.userId,
-        displayName: payoutRecipient.standing.displayName,
-        amount: payoutRecipient.amount,
-        awardedAt,
-      });
-      tournamentEvents.push({
-        eventType: "tournament_payout_awarded",
-        actor: "system",
-        userId: payoutRecipient.standing.userId,
-        seatIndex: payoutRecipient.standing.seatIndex,
-        payload: {
-          tableName: params.state.name,
-          handNumber: params.state.metadata.handNumber,
-          place: payoutRecipient.place,
-          amount: payoutRecipient.amount,
-        },
-      });
-    }
-
-    for (const standing of tournament.standings) {
-      if (standing.userId === null) {
-        continue;
-      }
-
-      await settleHoldemPlayModeSessionIfPresent({
-        tx: params.tx,
-        userId: standing.userId,
-        tableId: params.state.id,
-        cashOutAmount: toDecimal(standing.prizeAmount ?? 0),
-        balanceType: "withdrawable",
-      });
-    }
-
-    for (const seat of [...params.state.seats]) {
-      await params.tx
-        .delete(holdemTableSeats)
-        .where(eq(holdemTableSeats.id, seat.id));
-    }
-    params.state.seats = [];
-    clearTableAfterCashout(params.state);
-    tournament.status = "completed";
-    tournament.completedAt = awardedAt;
-    syncTournamentStandings(params.state);
-    tournamentEvents.push({
-      eventType: "tournament_completed",
-      actor: "system",
-      payload: {
-        tableName: params.state.name,
-        prizePoolAmount: tournament.prizePoolAmount,
-        payoutPlaces: tournament.payoutPlaces,
-      },
-    });
-
-    return appendTableEvents({
-      tx: params.tx,
-      tableId: params.state.id,
-      events: tournamentEvents,
-    });
-  }
-
-  for (const seat of bustedSeats) {
-    await params.tx
-      .delete(holdemTableSeats)
-      .where(eq(holdemTableSeats.id, seat.id));
-  }
-  const bustedSeatIds = new Set(bustedSeats.map((seat) => seat.id));
-  params.state.seats = params.state.seats.filter(
-    (seat) => !bustedSeatIds.has(seat.id),
-  );
-  tournament.completedAt = null;
-  syncTournamentStandings(params.state);
-
-  return appendTableEvents({
-    tx: params.tx,
-    tableId: params.state.id,
-    events: tournamentEvents,
-  });
-};
-
-const settlePendingSeatCashOuts = async (params: {
-  tx: DbTransaction;
-  state: HoldemTableState;
-  lockedWallets: Map<number, LockedWalletRow>;
-}) => {
-  const autoCashOuts: Array<{
-    seatIndex: number;
-    userId: number;
-    cashOutAmount: string;
-  }> = [];
-
-  for (const seat of [...params.state.seats]) {
-    if (isBotSeat(seat)) {
-      if (toDecimal(seat.stackAmount).lte(0)) {
-        await removeBotSeats({
-          tx: params.tx,
-          state: params.state,
-          predicate: (entry) => entry.id === seat.id,
-        });
-      }
-      continue;
-    }
-
-    if (!seat.autoCashOutPending || !canUserLeaveTable(params.state, seat.userId)) {
-      continue;
-    }
-
-    const { seat: removedSeat, stackAmount } = await removeSeatAndCashOut({
-      tx: params.tx,
-      state: params.state,
-      seatUserId: seat.userId,
-      lockedWallets: params.lockedWallets,
-    });
-    autoCashOuts.push({
-      seatIndex: removedSeat.seatIndex,
-      userId: removedSeat.userId,
-      cashOutAmount: toMoneyString(stackAmount),
-    });
-  }
-
-  return autoCashOuts;
-};
-
-const syncSettledLockedBalances = async (params: {
-  tx: DbTransaction;
-  state: HoldemTableState;
-  grossSettledState?: HoldemTableState | null;
-  appliedRake?: HoldemAppliedRake | null;
-  lockedWallets: Map<number, LockedWalletRow>;
-  previousStacks: Map<number, ReturnType<typeof toDecimal>>;
-  handHistoryId?: number | null;
-}) => {
-  const {
-    tx,
-    state,
-    grossSettledState,
-    appliedRake,
-    lockedWallets,
-    previousStacks,
-    handHistoryId,
-  } = params;
-  const roundId = handHistoryId ? buildHoldemRoundId(handHistoryId) : null;
-  const balanceType = resolveHoldemFundingSource(state.metadata.tableType);
-  const rakeBySeatIndex = new Map(
-    (appliedRake?.seatRakeAmounts ?? []).map((entry) => [
-      entry.seatIndex,
-      toDecimal(entry.amount),
-    ] as const),
-  );
-  for (const seat of state.seats) {
-    if (isBotSeat(seat)) {
-      continue;
-    }
-
-    const previousStack = previousStacks.get(seat.userId) ?? toDecimal(0);
-    const grossSeat =
-      grossSettledState?.seats.find((entry) => entry.seatIndex === seat.seatIndex) ?? seat;
-    const grossDelta = toDecimal(grossSeat.stackAmount).minus(previousStack);
-    const rakeAmount = rakeBySeatIndex.get(seat.seatIndex) ?? toDecimal(0);
-    const nextStack = toDecimal(seat.stackAmount);
-    const netDelta = nextStack.minus(previousStack);
-    if (netDelta.eq(0) && rakeAmount.eq(0) && grossDelta.eq(0)) {
-      continue;
-    }
-
-    const wallet = lockedWallets.get(seat.userId);
-    if (!wallet) {
-      throw notFoundError("Wallet not found for seated holdem user.");
-    }
-    if (usesHoldemEarnedAsset(balanceType)) {
-      if (grossDelta.eq(0) === false) {
-        const grossResult = await adjustLockedAsset(
-          {
-            userId: seat.userId,
-            assetCode: HOLDEM_CASUAL_ASSET_CODE,
-            amount: toMoneyString(grossDelta),
-            entryType: "holdem_hand_result",
-            referenceType: HOLDEM_REFERENCE_TYPE,
-            referenceId: state.id,
-            audit: {
-              sourceApp: "backend.holdem",
-              metadata: {
-                balanceType: "locked",
-                assetCode: HOLDEM_CASUAL_ASSET_CODE,
-                handNumber: state.metadata.handNumber,
-                handHistoryId,
-                roundId,
-                tableName: state.name,
-                tableType: state.metadata.tableType,
-              },
-            },
-          },
-          tx,
-        );
-
-        wallet.bonusBalance = grossResult.availableAfter;
-        wallet.lockedBalance = grossResult.lockedAfter;
-      }
-
-      if (rakeAmount.gt(0)) {
-        const rakeResult = await adjustLockedAsset(
-          {
-            userId: seat.userId,
-            assetCode: HOLDEM_CASUAL_ASSET_CODE,
-            amount: toMoneyString(rakeAmount.negated()),
-            entryType: "holdem_rake",
-            referenceType: HOLDEM_REFERENCE_TYPE,
-            referenceId: state.id,
-            audit: {
-              sourceApp: "backend.holdem",
-              metadata: {
-                balanceType: "locked",
-                assetCode: HOLDEM_CASUAL_ASSET_CODE,
-                handNumber: state.metadata.handNumber,
-                handHistoryId,
-                roundId,
-                tableName: state.name,
-                tableType: state.metadata.tableType,
-              },
-            },
-          },
-          tx,
-        );
-
-        wallet.bonusBalance = rakeResult.availableAfter;
-        wallet.lockedBalance = rakeResult.lockedAfter;
-      }
-
-      continue;
-    }
-
-    let lockedBefore = toDecimal(wallet.lockedBalance);
-
-    if (grossDelta.eq(0) === false) {
-      const lockedAfterGross = lockedBefore.plus(grossDelta);
-      if (lockedAfterGross.lt(0)) {
-        throw conflictError(
-          "Locked balance drifted below zero during holdem settlement.",
-        );
-      }
-
-      await tx
-        .update(userWallets)
-        .set({
-          lockedBalance: toMoneyString(lockedAfterGross),
-          updatedAt: new Date(),
-        })
-        .where(eq(userWallets.userId, seat.userId));
-
-      await tx.insert(ledgerEntries).values({
-        userId: seat.userId,
-        entryType: "holdem_hand_result",
-        amount: toMoneyString(grossDelta),
-        balanceBefore: toMoneyString(lockedBefore),
-        balanceAfter: toMoneyString(lockedAfterGross),
-        referenceType: HOLDEM_REFERENCE_TYPE,
-        referenceId: state.id,
-        metadata: {
-          balanceType: "locked",
-          handNumber: state.metadata.handNumber,
-          handHistoryId,
-          roundId,
-          tableName: state.name,
-          tableType: state.metadata.tableType,
-        },
-      });
-
-      lockedBefore = lockedAfterGross;
-    }
-
-    if (rakeAmount.gt(0)) {
-      const lockedAfterRake = lockedBefore.minus(rakeAmount);
-      if (lockedAfterRake.lt(0)) {
-        throw conflictError("Locked balance drifted below zero after holdem rake.");
-      }
-
-      await tx
-        .update(userWallets)
-        .set({
-          lockedBalance: toMoneyString(lockedAfterRake),
-          updatedAt: new Date(),
-        })
-        .where(eq(userWallets.userId, seat.userId));
-
-      await tx.insert(ledgerEntries).values({
-        userId: seat.userId,
-        entryType: "holdem_rake",
-        amount: toMoneyString(rakeAmount.negated()),
-        balanceBefore: toMoneyString(lockedBefore),
-        balanceAfter: toMoneyString(lockedAfterRake),
-        referenceType: HOLDEM_REFERENCE_TYPE,
-        referenceId: state.id,
-        metadata: {
-          balanceType: "locked",
-          handNumber: state.metadata.handNumber,
-          handHistoryId,
-          roundId,
-          tableName: state.name,
-          tableType: state.metadata.tableType,
-        },
-      });
-
-      lockedBefore = lockedAfterRake;
-    }
-
-    wallet.lockedBalance = toMoneyString(lockedBefore);
-  }
-
-  const botNetDelta = state.seats.reduce((total, seat) => {
-    if (!isBotSeat(seat)) {
-      return total;
-    }
-
-    const previousStack = previousStacks.get(seat.userId) ?? toDecimal(0);
-    return total.plus(toDecimal(seat.stackAmount).minus(previousStack));
-  }, toDecimal(0));
-
-  if (botNetDelta.eq(0) === false) {
-    await applyHouseBankrollDelta(tx, botNetDelta, {
-      entryType: "holdem_bot_bankroll_result",
-      referenceType: HOLDEM_REFERENCE_TYPE,
-      referenceId: state.id,
-      metadata: {
-        handNumber: state.metadata.handNumber,
-        handHistoryId,
-        roundId,
-        tableName: state.name,
-        tableType: state.metadata.tableType,
-        botSeatCount: countBotSeats(state),
-      },
-    });
-  }
-
-  if (
-    appliedRake &&
-    toDecimal(appliedRake.totalRakeAmount).gt(0)
-  ) {
-    await applyHouseBankrollDelta(tx, appliedRake.totalRakeAmount, {
-      entryType: "holdem_rake",
-      referenceType: HOLDEM_REFERENCE_TYPE,
-      referenceId: state.id,
-      metadata: {
-        handNumber: state.metadata.handNumber,
-        handHistoryId,
-        roundId,
-        tableName: state.name,
-        tableType: state.metadata.tableType,
-      },
-    });
-  }
-};
-
 const loadSerializedTable = async (
   executor: DbExecutor,
   userId: number,
@@ -4271,7 +1817,7 @@ export async function processExpiredHoldemTurnForTable(tableId: number) {
     const actingUserId =
       beforeState.seats.find((seat) => seat.seatIndex === timeout.seatIndex)?.userId ??
       null;
-    const transition = await persistHoldemTransition({
+    const transition = await persistHoldemTransitionWithDeps({
       tx,
       beforeState,
       afterState: state,
@@ -4289,7 +1835,7 @@ export async function processExpiredHoldemTurnForTable(tableId: number) {
   });
 
   if (result?.transition) {
-    publishHoldemDealerTransition(tableId, result.transition);
+    publishPersistedHoldemDealerTransition(tableId, result.transition);
     scheduleAutomatedHoldemBotTurns(tableId);
   }
 
@@ -4387,6 +1933,8 @@ export async function processExpiredHoldemPresenceForTable(tableId: number) {
           tx,
           state,
           lockedWallets,
+          removeBotSeats,
+          settleHoldemPlayModeSessionIfPresent,
         })
       : [];
     if (countHumanSeats(state) === 0) {
@@ -5251,6 +2799,7 @@ export async function leaveHoldemTable(
         state,
         seatUserId: userId,
         wallets: lockedWallets,
+        settleHoldemPlayModeSessionIfPresent,
       });
       exitAmount = toMoneyString(refundAmount);
       await persistTableState(tx, state);
@@ -5264,6 +2813,7 @@ export async function leaveHoldemTable(
         state,
         seatUserId: userId,
         lockedWallets,
+        settleHoldemPlayModeSessionIfPresent,
       });
       exitAmount = toMoneyString(stackAmount);
       await tx
@@ -5545,7 +3095,7 @@ export async function actOnHoldem(
       const actingUserId =
         beforeState.seats.find((seat) => seat.seatIndex === timeout.seatIndex)
           ?.userId ?? null;
-      const transition = await persistHoldemTransition({
+      const transition = await persistHoldemTransitionWithDeps({
         tx,
         beforeState,
         afterState: state,
@@ -5575,7 +3125,7 @@ export async function actOnHoldem(
     });
     applySeatPresenceTouch(state, userId, presencePolicy);
 
-    const transition = await persistHoldemTransition({
+    const transition = await persistHoldemTransitionWithDeps({
       tx,
       beforeState,
       afterState: state,
@@ -5594,7 +3144,7 @@ export async function actOnHoldem(
     };
   });
 
-  publishHoldemDealerTransition(tableId, result.transition);
+  publishPersistedHoldemDealerTransition(tableId, result.transition);
   scheduleAutomatedHoldemBotTurns(tableId);
   if (result.kind === "timeout") {
     throw conflictError("Holdem turn timed out and the default action was applied.", {

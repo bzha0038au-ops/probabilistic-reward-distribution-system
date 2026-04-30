@@ -36,6 +36,10 @@ import {
   seedAdminAccount,
 } from "./integration-test-support";
 import { afterEach, vi } from "vitest";
+import {
+  enterPrizeEngineExecutionGovernor,
+  resetPrizeEngineExecutionGovernorState,
+} from "../modules/saas/prize-engine-governor";
 import { runSaasOutboundWebhookDeliveryCycle } from "../modules/saas/service";
 
 const DEFAULT_SCOPES = [
@@ -50,6 +54,7 @@ let prizeEngineFixtureCounter = 1;
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  resetPrizeEngineExecutionGovernorState();
 });
 
 const hashApiKey = (value: string) =>
@@ -874,6 +879,76 @@ describeIntegrationSuite("backend prize engine integration", () => {
         code: "REWARD_ENVELOPE_LIMIT_EXCEEDED",
       },
     });
+  });
+
+  it("rejects reward writes when the project execution queue is saturated", async () => {
+    const seededProject = await seedPrizeEngineProject("project-busy", {
+      scopes: DEFAULT_SCOPES,
+    });
+    await seedProjectPrize({
+      projectId: seededProject.project.id,
+      name: "Busy Prize",
+      rewardAmount: "3.00",
+      stock: 10,
+      weight: 1,
+    });
+
+    const projectMetadata = {
+      prizeEngineExecution: {
+        maxConcurrency: 1,
+        queueDepth: 0,
+        queueWaitMs: 0,
+      },
+    };
+
+    await getDb()
+      .update(saasProjects)
+      .set({
+        metadata: projectMetadata,
+      })
+      .where(eq(saasProjects.id, seededProject.project.id));
+
+    const activeLease = await enterPrizeEngineExecutionGovernor({
+      tenantId: seededProject.tenant.id,
+      projectId: seededProject.project.id,
+      tenantMetadata: null,
+      projectMetadata,
+    });
+
+    try {
+      const response = await getApp().inject({
+        method: "POST",
+        url: prizeEngineUrl("/v1/engine/rewards", seededProject.project.environment),
+        headers: {
+          authorization: `Bearer ${seededProject.apiKey}`,
+          "x-agent-id": "busy-agent",
+        },
+        payload: {
+          environment: seededProject.project.environment,
+          idempotencyKey: "busy-agent:reward:1",
+          agent: {
+            agentId: "busy-agent",
+            status: "active",
+          },
+          behavior: {
+            actionType: "engagement.reward",
+            score: 1,
+            risk: 0.1,
+          },
+        },
+      });
+
+      expect(response.statusCode).toBe(429);
+      expect(response.headers["retry-after"]).toBeTruthy();
+      expect(response.json()).toMatchObject({
+        ok: false,
+        error: {
+          code: "PROJECT_CONCURRENCY_LIMIT_EXCEEDED",
+        },
+      });
+    } finally {
+      await activeLease.release();
+    }
   });
 
   it("updates project reward envelopes through the admin route and invalidates cached config", async () => {

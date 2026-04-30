@@ -247,8 +247,20 @@ BEGIN
 END
 $$;
 
-DROP TRIGGER IF EXISTS saas_billing_run_external_sync_transition_guard
-  ON "saas_billing_runs";
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM pg_trigger
+    WHERE tgrelid = 'public.saas_billing_runs'::regclass
+      AND tgname = 'saas_billing_run_external_sync_transition_guard'
+      AND NOT tgisinternal
+  ) THEN
+    DROP TRIGGER saas_billing_run_external_sync_transition_guard
+      ON "saas_billing_runs";
+  END IF;
+END
+$$;
 
 CREATE TRIGGER saas_billing_run_external_sync_transition_guard
 BEFORE UPDATE ON "saas_billing_runs"

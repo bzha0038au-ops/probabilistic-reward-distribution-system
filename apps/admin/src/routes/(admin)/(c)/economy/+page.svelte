@@ -39,6 +39,7 @@
         recipientUserId: number | null
         status: string
         storeChannel: string
+        metadata: Record<string, unknown> | null
         sku: string
         deliveryType: string
         createdAt: string | Date | null
@@ -71,6 +72,14 @@
     if (Number.isNaN(parsed.getTime())) return "—"
     return parsed.toLocaleString()
   }
+
+  const isManualApprovalPending = (order: {
+    metadata: Record<string, unknown> | null
+    status: string
+  }) =>
+    order.status === "verified" &&
+    order.metadata?.manualApprovalRequired === true &&
+    order.metadata?.manualApprovalState !== "approved"
 </script>
 
 <div class="space-y-6">
@@ -199,6 +208,11 @@
                         · recipient #{order.recipientUserId}
                       {/if}
                     </p>
+                    {#if isManualApprovalPending(order)}
+                      <p class="text-xs font-medium text-amber-600">
+                        Pending manual approval
+                      </p>
+                    {/if}
                     <p class="text-xs text-slate-400">{formatDate(order.createdAt)}</p>
                   </div>
                   <div class="flex flex-wrap gap-2">
@@ -210,7 +224,7 @@
                       <input type="hidden" name="orderId" value={order.id} />
                       <input type="hidden" name="totpCode" value={stepUpCode} />
                       <button class="btn btn-sm btn-outline" type="submit">
-                        Replay
+                        {isManualApprovalPending(order) ? "Approve" : "Replay"}
                       </button>
                     </form>
                     <form

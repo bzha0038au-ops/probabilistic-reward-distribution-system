@@ -56,14 +56,79 @@ BEGIN
 END
 $$;
 --> statement-breakpoint
-ALTER TABLE "aml_checks"
-  ADD COLUMN IF NOT EXISTS "provider_payload" jsonb,
-  ADD COLUMN IF NOT EXISTS "review_status" "aml_review_status",
-  ADD COLUMN IF NOT EXISTS "reviewed_by_admin_id" integer,
-  ADD COLUMN IF NOT EXISTS "reviewed_at" timestamp with time zone,
-  ADD COLUMN IF NOT EXISTS "review_notes" text,
-  ADD COLUMN IF NOT EXISTS "escalated_at" timestamp with time zone,
-  ADD COLUMN IF NOT EXISTS "sla_due_at" timestamp with time zone;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_attribute
+    WHERE attrelid = 'public.aml_checks'::regclass
+      AND attname = 'provider_payload'
+      AND NOT attisdropped
+  ) THEN
+    ALTER TABLE "aml_checks" ADD COLUMN "provider_payload" jsonb;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_attribute
+    WHERE attrelid = 'public.aml_checks'::regclass
+      AND attname = 'review_status'
+      AND NOT attisdropped
+  ) THEN
+    ALTER TABLE "aml_checks" ADD COLUMN "review_status" "aml_review_status";
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_attribute
+    WHERE attrelid = 'public.aml_checks'::regclass
+      AND attname = 'reviewed_by_admin_id'
+      AND NOT attisdropped
+  ) THEN
+    ALTER TABLE "aml_checks" ADD COLUMN "reviewed_by_admin_id" integer;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_attribute
+    WHERE attrelid = 'public.aml_checks'::regclass
+      AND attname = 'reviewed_at'
+      AND NOT attisdropped
+  ) THEN
+    ALTER TABLE "aml_checks" ADD COLUMN "reviewed_at" timestamp with time zone;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_attribute
+    WHERE attrelid = 'public.aml_checks'::regclass
+      AND attname = 'review_notes'
+      AND NOT attisdropped
+  ) THEN
+    ALTER TABLE "aml_checks" ADD COLUMN "review_notes" text;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_attribute
+    WHERE attrelid = 'public.aml_checks'::regclass
+      AND attname = 'escalated_at'
+      AND NOT attisdropped
+  ) THEN
+    ALTER TABLE "aml_checks" ADD COLUMN "escalated_at" timestamp with time zone;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_attribute
+    WHERE attrelid = 'public.aml_checks'::regclass
+      AND attname = 'sla_due_at'
+      AND NOT attisdropped
+  ) THEN
+    ALTER TABLE "aml_checks" ADD COLUMN "sla_due_at" timestamp with time zone;
+  END IF;
+END
+$$;
 --> statement-breakpoint
 UPDATE "aml_checks"
 SET "result" = 'hit'

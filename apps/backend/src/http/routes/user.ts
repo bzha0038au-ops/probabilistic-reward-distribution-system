@@ -536,7 +536,8 @@ export async function registerUserRoutes(app: AppInstance) {
         },
       });
 
-      const { replayed: _replayed, ...record } = transfer;
+      const record = { ...transfer };
+      Reflect.deleteProperty(record, "replayed");
       return sendSuccess(reply, record, 201);
     });
 

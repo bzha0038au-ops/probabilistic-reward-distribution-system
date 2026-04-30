@@ -165,11 +165,6 @@ export const resolveRequestedPlayMode = (params: {
     };
   }
 
-  const appliedMultiplier = clampMultiplier(
-    storedSnapshot.nextMultiplier,
-    baseMultiplier,
-  );
-
   return {
     ...storedSnapshot,
     type,

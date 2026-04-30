@@ -30,8 +30,20 @@ CREATE TABLE IF NOT EXISTS "holdem_table_seats" (
   "updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-ALTER TABLE "holdem_table_seats"
-  ADD COLUMN IF NOT EXISTS "turn_deadline_at" timestamp with time zone;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_attribute
+    WHERE attrelid = 'public.holdem_table_seats'::regclass
+      AND attname = 'turn_deadline_at'
+      AND NOT attisdropped
+  ) THEN
+    ALTER TABLE "holdem_table_seats"
+      ADD COLUMN "turn_deadline_at" timestamp with time zone;
+  END IF;
+END
+$$;
 --> statement-breakpoint
 DO $$ BEGIN
  ALTER TABLE "holdem_table_seats" ADD CONSTRAINT "holdem_table_seats_table_id_holdem_tables_id_fk" FOREIGN KEY ("table_id") REFERENCES "public"."holdem_tables"("id") ON DELETE cascade ON UPDATE no action;

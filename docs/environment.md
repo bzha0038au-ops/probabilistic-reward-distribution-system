@@ -60,6 +60,12 @@ variables before the app starts.
 - `APPLE_IAP_ENABLE_ONLINE_CHECKS` (optional; defaults to `true`)
 - `APPLE_IAP_DEFAULT_ENVIRONMENT` (optional; defaults to `production`; use
   `sandbox` for local StoreKit sandbox-only setups)
+- `IAP_LOCAL_STUB_VERIFICATION_ENABLED`
+  (optional; defaults to `true`; set to `false` in real sandbox/staging QA so
+  `/iap/purchases/verify` and `/gift-packs/purchase/complete` fail fast unless
+  Apple/Google verification credentials are actually configured. When it stays
+  `true`, local stub purchases only create pending manual-approval orders and
+  do not auto-fulfill assets.)
 - `GOOGLE_PLAY_PACKAGE_NAME`, `GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL`
   (required in production to enable Android Publisher purchase verification)
 - `GOOGLE_PLAY_SERVICE_ACCOUNT_PRIVATE_KEY`
