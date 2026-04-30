@@ -193,6 +193,18 @@ groups:
           description: Failed SaaS billing runs or retry-exhausted SaaS Stripe webhooks indicate tenants may not have been charged.
           runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/runbooks/RewardBackendSaasBillingCollectionAtRisk.md
 
+      - alert: RewardBackendDbPartitionRotationMissed
+        expr: reward_backend_db_partition_horizon_months_missing > 0
+        for: 2h
+        labels:
+          severity: ticket
+          service: reward-backend
+          component: postgres
+        annotations:
+          summary: Reward backend monthly partition rotation is incomplete
+          description: Managed parent table {{ $labels.parent_table }} is missing one or more active current-or-future monthly partitions from the configured horizon. Fix the partition maintenance worker before write-path failures or slow scans appear at the next month boundary.
+          runbook_url: https://github.com/bzha0038au-ops/probabilistic-reward-distribution-system/blob/main/docs/operations/runbooks/RewardBackendDbPartitionRotationMissed.md
+
       - alert: RewardBackendSaasPayoutDistributionBreached
         expr: reward_backend_saas_distribution_snapshot_breach > 0
         for: 15m

@@ -53,6 +53,7 @@ const {
     saasBillingWebhookLockTimeoutMs: 120_000,
     saasBillingAutomationEnabled: true,
     saasBillingAutomationBatchSize: 100,
+    dbPartitionMaintenanceFutureMonths: 3,
   },
   getNotificationDeliverySummary: vi.fn(),
   getPendingAmlMetrics: vi.fn(async (): Promise<PendingAmlMetrics> => ({
@@ -164,6 +165,7 @@ vi.mock('../modules/saas/distribution-monitoring', () => ({
 import {
   buildLivenessReport,
   buildReadinessReport,
+  computeDbPartitionHorizonCoverage,
   recordRealtimePublishDuration,
   recordRealtimeReceiveLatency,
   recordPaymentOutboundIdempotencyConflict,
@@ -195,6 +197,7 @@ describe('observability', () => {
     config.saasBillingWebhookLockTimeoutMs = 120_000;
     config.saasBillingAutomationEnabled = true;
     config.saasBillingAutomationBatchSize = 100;
+    config.dbPartitionMaintenanceFutureMonths = 3;
     getPaymentCapabilitySummary.mockImplementation(() => ({
       operatingMode: config.paymentOperatingMode,
       automatedExecutionRequested: config.paymentOperatingMode === 'automated',
@@ -509,6 +512,9 @@ describe('observability', () => {
     expect(metrics).toContain('reward_backend_saas_webhook_events_total');
     expect(metrics).toContain('reward_backend_saas_webhook_oldest_ready_age_seconds');
     expect(metrics).toContain('reward_backend_saas_webhook_retry_exhausted_total');
+    expect(metrics).toContain('reward_backend_db_partition_horizon_months_expected');
+    expect(metrics).toContain('reward_backend_db_partition_horizon_months_available');
+    expect(metrics).toContain('reward_backend_db_partition_horizon_months_missing');
     expect(metrics).toContain('reward_backend_saas_distribution_snapshot_draws_total');
     expect(metrics).toContain(
       'reward_backend_saas_distribution_snapshot_expected_payout_sum'
@@ -521,6 +527,54 @@ describe('observability', () => {
     );
     expect(metrics).toContain('project_slug="alpha-project"');
     expect(metrics).toContain('reason="ev_deviation"');
+  });
+
+  it('reports missing active monthly partitions across the configured horizon', async () => {
+    const coverage = computeDbPartitionHorizonCoverage(
+      [
+        {
+          parentTable: 'ledger_entries',
+          partitionName: 'ledger_entries_p209912',
+        },
+        {
+          parentTable: 'ledger_entries',
+          partitionName: 'ledger_entries_p210001',
+        },
+        {
+          parentTable: 'round_events',
+          partitionName: 'round_events_p209912',
+        },
+        {
+          parentTable: 'round_events',
+          partitionName: 'round_events_p210001',
+        },
+        {
+          parentTable: 'round_events',
+          partitionName: 'round_events_p210002',
+        },
+        {
+          parentTable: 'round_events',
+          partitionName: 'round_events_p210003',
+        },
+      ],
+      {
+        futureMonths: 3,
+        now: new Date('2099-12-15T08:00:00.000Z'),
+      }
+    );
+
+    expect(coverage).toContainEqual({
+      parentTable: 'ledger_entries',
+      expectedMonths: 4,
+      availableMonths: 2,
+      missingMonths: 2,
+    });
+    expect(coverage).toContainEqual({
+      parentTable: 'round_events',
+      expectedMonths: 4,
+      availableMonths: 4,
+      missingMonths: 0,
+    });
   });
 
   it('records payment runtime counters for Prometheus alerts', async () => {

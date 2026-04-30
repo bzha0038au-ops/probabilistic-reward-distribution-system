@@ -278,6 +278,16 @@ export const createSaasPortalEnv = (payload: {
   NEXTAUTH_URL: payload.appBaseUrl,
 });
 
+export const createSaasStatusEnv = (payload: {
+  port: number;
+  apiBaseUrl: string;
+}) => ({
+  NODE_ENV: 'development',
+  PORT: String(payload.port),
+  API_BASE_URL: payload.apiBaseUrl,
+  NEXT_PUBLIC_API_BASE_URL: payload.apiBaseUrl,
+});
+
 export const createAdminEnv = (payload: {
   apiBaseUrl: string;
   adminBaseUrl: string;

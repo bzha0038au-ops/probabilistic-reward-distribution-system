@@ -212,6 +212,20 @@ services:
     networks:
       - data
 
+  db-partition-maintenance-worker:
+    <<: *app-defaults
+    image: ${BACKEND_IMAGE:-reward-system/backend}:${IMAGE_TAG:-latest}
+    command: ["pnpm", "--dir", "apps/backend", "start:worker:db-partition-maintenance"]
+    env_file:
+      - ./.env.d/backend.env
+    volumes:
+      - ./.secrets:/run/secrets:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - data
+
   frontend:
     <<: *app-defaults
     image: ${FRONTEND_IMAGE:-reward-system/frontend}:${IMAGE_TAG:-latest}

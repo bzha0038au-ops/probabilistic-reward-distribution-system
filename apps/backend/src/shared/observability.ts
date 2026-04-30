@@ -105,6 +105,9 @@ type ObservabilityState = {
   saasWebhookEventsGauge: Gauge<'status'>;
   saasWebhookOldestReadyAgeSeconds: Gauge;
   saasWebhookRetryExhaustedTotal: Gauge;
+  dbPartitionHorizonMonthsExpectedGauge: Gauge<'parent_table'>;
+  dbPartitionHorizonMonthsAvailableGauge: Gauge<'parent_table'>;
+  dbPartitionHorizonMonthsMissingGauge: Gauge<'parent_table'>;
   saasDistributionDrawsGauge: Gauge<
     'project_id' | 'project_slug' | 'environment' | 'window'
   >;
@@ -175,6 +178,18 @@ const paymentWebhookSignatureStatuses = [
   'failed',
   'skipped',
 ] as const;
+const managedDbPartitionParentTables = [
+  'ledger_entries',
+  'saas_usage_events',
+  'round_events',
+  'admin_actions',
+] as const;
+type ManagedDbPartitionParentTable =
+  (typeof managedDbPartitionParentTables)[number];
+type DbPartitionCoverageRow = {
+  parentTable: string;
+  partitionName: string;
+};
 const stripeApiStatusFamilies = [
   '2xx',
   '4xx',
@@ -395,6 +410,24 @@ const getObservabilityState = () => {
       help: 'Count of failed SaaS Stripe webhook events that have reached the retry exhaustion alert threshold.',
       registers: [registry],
     }),
+    dbPartitionHorizonMonthsExpectedGauge: new Gauge({
+      name: 'reward_backend_db_partition_horizon_months_expected',
+      help: 'Expected count of active current-plus-future monthly partitions kept online for each managed parent table.',
+      labelNames: ['parent_table'] as const,
+      registers: [registry],
+    }),
+    dbPartitionHorizonMonthsAvailableGauge: new Gauge({
+      name: 'reward_backend_db_partition_horizon_months_available',
+      help: 'Count of active current-plus-future monthly partitions currently present in the public schema for each managed parent table.',
+      labelNames: ['parent_table'] as const,
+      registers: [registry],
+    }),
+    dbPartitionHorizonMonthsMissingGauge: new Gauge({
+      name: 'reward_backend_db_partition_horizon_months_missing',
+      help: 'Count of missing active current-plus-future monthly partitions for each managed parent table.',
+      labelNames: ['parent_table'] as const,
+      registers: [registry],
+    }),
     saasDistributionDrawsGauge: new Gauge({
       name: 'reward_backend_saas_distribution_snapshot_draws_total',
       help: 'Count of draws captured in the current rolling payout-distribution snapshot for each project and window.',
@@ -507,6 +540,68 @@ const getUptimeSeconds = () => Number(process.uptime().toFixed(3));
 
 const readMetricValue = (value: unknown, fallback = noMetricValue) =>
   typeof value === 'string' && value.trim() !== '' ? value.trim() : fallback;
+
+const startOfUtcMonth = (value: Date) =>
+  new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), 1, 0, 0, 0, 0));
+
+const addUtcMonths = (value: Date, months: number) =>
+  new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth() + months, 1, 0, 0, 0, 0));
+
+const formatPartitionMonthKey = (value: Date) =>
+  `${value.getUTCFullYear()}${String(value.getUTCMonth() + 1).padStart(2, '0')}`;
+
+export const computeDbPartitionHorizonCoverage = (
+  rows: DbPartitionCoverageRow[],
+  options: {
+    futureMonths: number;
+    now?: Date;
+  }
+) => {
+  const futureMonths = Math.max(0, options.futureMonths);
+  const expectedMonths = futureMonths + 1;
+  const currentMonth = startOfUtcMonth(options.now ?? new Date());
+  const availableMonthsByTable = new Map<ManagedDbPartitionParentTable, Set<string>>();
+
+  for (const table of managedDbPartitionParentTables) {
+    availableMonthsByTable.set(table, new Set<string>());
+  }
+
+  for (const row of rows) {
+    const table = row.parentTable as ManagedDbPartitionParentTable;
+    const months = availableMonthsByTable.get(table);
+    if (!months) {
+      continue;
+    }
+
+    const match = row.partitionName.match(new RegExp(`^${table}_p(\\d{6})$`));
+    if (!match) {
+      continue;
+    }
+
+    months.add(match[1]);
+  }
+
+  return managedDbPartitionParentTables.map((table) => {
+    const availableMonths = availableMonthsByTable.get(table) ?? new Set<string>();
+    let availableCount = 0;
+
+    for (let offset = 0; offset <= futureMonths; offset += 1) {
+      const requiredMonth = formatPartitionMonthKey(
+        addUtcMonths(currentMonth, offset)
+      );
+      if (availableMonths.has(requiredMonth)) {
+        availableCount += 1;
+      }
+    }
+
+    return {
+      parentTable: table,
+      expectedMonths,
+      availableMonths: availableCount,
+      missingMonths: Math.max(0, expectedMonths - availableCount),
+    };
+  });
+};
 
 const getRouteLabel = (request: FastifyRequest) =>
   request.routeOptions?.url ?? 'unmatched';
@@ -945,6 +1040,61 @@ const refreshSaasBillingMetrics = async () => {
   saasWebhookRetryExhaustedTotal.set(Number(retryExhaustedRow?.count ?? 0));
 };
 
+const refreshDbPartitionMaintenanceMetrics = async () => {
+  const {
+    dbPartitionHorizonMonthsExpectedGauge,
+    dbPartitionHorizonMonthsAvailableGauge,
+    dbPartitionHorizonMonthsMissingGauge,
+  } = getObservabilityState();
+  const config = getConfig();
+  const futureMonths = Math.max(0, config.dbPartitionMaintenanceFutureMonths);
+
+  dbPartitionHorizonMonthsExpectedGauge.reset();
+  dbPartitionHorizonMonthsAvailableGauge.reset();
+  dbPartitionHorizonMonthsMissingGauge.reset();
+
+  const result = await client`
+    SELECT
+      parent_cls.relname AS "parentTable",
+      child_cls.relname AS "partitionName"
+    FROM pg_inherits AS inh
+    INNER JOIN pg_class AS parent_cls
+      ON parent_cls.oid = inh.inhparent
+    INNER JOIN pg_namespace AS parent_ns
+      ON parent_ns.oid = parent_cls.relnamespace
+    INNER JOIN pg_class AS child_cls
+      ON child_cls.oid = inh.inhrelid
+    INNER JOIN pg_namespace AS child_ns
+      ON child_ns.oid = child_cls.relnamespace
+    WHERE parent_ns.nspname = 'public'
+      AND child_ns.nspname = 'public'
+      AND parent_cls.relname IN (${client(managedDbPartitionParentTables)})
+    ORDER BY parent_cls.relname, child_cls.relname
+  `;
+  const rows = readSqlRows<{
+    parentTable: string;
+    partitionName: string;
+  }>(result);
+  const coverage = computeDbPartitionHorizonCoverage(rows, {
+    futureMonths,
+  });
+
+  for (const table of coverage) {
+    dbPartitionHorizonMonthsExpectedGauge.set(
+      { parent_table: table.parentTable },
+      table.expectedMonths
+    );
+    dbPartitionHorizonMonthsAvailableGauge.set(
+      { parent_table: table.parentTable },
+      table.availableMonths
+    );
+    dbPartitionHorizonMonthsMissingGauge.set(
+      { parent_table: table.parentTable },
+      table.missingMonths
+    );
+  }
+};
+
 const refreshSaasDistributionMetrics = async () => {
   const {
     saasDistributionDrawsGauge,
@@ -1237,6 +1387,7 @@ export const refreshOperationalMetrics = async () => {
     await refreshPaymentReconciliationMetrics();
     await refreshPaymentOutboundMetrics();
     await refreshSaasBillingMetrics();
+    await refreshDbPartitionMaintenanceMetrics();
     await refreshSaasDistributionMetrics();
   } catch (error) {
     logger.warning('failed to refresh observability operational metrics', {

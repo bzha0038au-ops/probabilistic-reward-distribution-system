@@ -181,6 +181,9 @@ Current metrics include:
 - `reward_backend_saas_webhook_events_total`
 - `reward_backend_saas_webhook_oldest_ready_age_seconds`
 - `reward_backend_saas_webhook_retry_exhausted_total`
+- `reward_backend_db_partition_horizon_months_expected`
+- `reward_backend_db_partition_horizon_months_available`
+- `reward_backend_db_partition_horizon_months_missing`
 - `reward_backend_saas_distribution_snapshot_draws_total`
 - `reward_backend_saas_distribution_snapshot_tracked_draws_total`
 - `reward_backend_saas_distribution_snapshot_tracking_coverage_ratio`
@@ -224,6 +227,7 @@ The minimum production dashboard should show:
 - outbound payment queue state and idempotency conflicts
 - Stripe rate-limit / 5xx failures and retry backlog
 - failed SaaS billing runs and retry-exhausted SaaS webhooks
+- missing active current-plus-future monthly partitions for managed append-only tables
 - SaaS payout-distribution snapshot draw counts, EV drift, bucket drift, and breach state by project/window
 - PostgreSQL data volume usage, Redis maxmemory usage, and registry storage usage
 - current `reward_backend_build_info` release / commit
@@ -246,6 +250,7 @@ The minimum production alert set should cover:
 - outbound idempotency conflicts
 - Stripe rate-limit / 5xx degradation
 - failed SaaS billing runs and retry-exhausted SaaS webhooks
+- partition rotation misses across managed append-only tables
 - SaaS payout-distribution breach windows
 - PostgreSQL data volume thresholds at 70% / 85% / 95%
 - Redis memory thresholds at 70% / 85% / 95%

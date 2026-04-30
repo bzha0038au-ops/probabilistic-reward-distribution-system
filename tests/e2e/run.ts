@@ -6,6 +6,7 @@ import {
   createBackendEnv,
   createFrontendEnv,
   createSaasPortalEnv,
+  createSaasStatusEnv,
   findFreePort,
   repoRoot,
   runCommand,
@@ -23,8 +24,10 @@ const criticalE2eSpecs = [
 
 const saasWebhookSpec = 'tests/e2e/saas-webhook.spec.ts';
 const portalSpec = 'tests/e2e/saas-portal.spec.ts';
+const saasStatusSpec = 'tests/e2e/saas-status.spec.ts';
 const fullBackendE2eSpecs = [saasWebhookSpec];
 const portalE2eSpecs = [portalSpec];
+const saasStatusE2eSpecs = [saasStatusSpec];
 
 const warmUpHttp = async (
   url: string,
@@ -84,6 +87,7 @@ const warmUpFrontend = async (baseUrl: string) => {
     '/app/payments',
     '/app/security',
     '/app/slot',
+    '/app/quick-eight',
     '/app/holdem',
     '/app/markets',
   ]) {
@@ -133,11 +137,19 @@ async function main() {
     !runCriticalOnly &&
     requestedSpecPaths.length > 0 &&
     requestedSpecPaths.every((specPath) => portalE2eSpecs.includes(specPath));
+  const requiresSaasStatus =
+    runsFullSuite ||
+    requestedSpecPaths.some((specPath) => saasStatusE2eSpecs.includes(specPath));
+  const runSaasStatusOnlySpec =
+    !runCriticalOnly &&
+    requestedSpecPaths.length > 0 &&
+    requestedSpecPaths.every((specPath) => saasStatusE2eSpecs.includes(specPath));
   const useMinimalBackend = !requiresFullBackend;
   const database = await startTestDatabase('e2e');
   const backendPort = await findFreePort();
   const frontendPort = await findFreePort();
   const portalPort = await findFreePort();
+  const saasStatusPort = await findFreePort();
   const adminPort = await findFreePort();
   const frontendDistDir = `.next-e2e-${frontendPort}`;
   const frontendTsconfigPath = `${repoRoot}/apps/frontend/tsconfig.json`;
@@ -145,11 +157,13 @@ async function main() {
   const backendBaseUrl = `http://127.0.0.1:${backendPort}`;
   const frontendBaseUrl = `http://127.0.0.1:${frontendPort}`;
   const portalBaseUrl = `http://127.0.0.1:${portalPort}`;
+  const saasStatusBaseUrl = `http://127.0.0.1:${saasStatusPort}`;
   const adminBaseUrl = `http://127.0.0.1:${adminPort}`;
 
   let backend: Awaited<ReturnType<typeof startService>> | null = null;
   let frontend: Awaited<ReturnType<typeof startService>> | null = null;
   let portal: Awaited<ReturnType<typeof startService>> | null = null;
+  let saasStatus: Awaited<ReturnType<typeof startService>> | null = null;
   let admin: Awaited<ReturnType<typeof startService>> | null = null;
   let saasBillingWorker:
     | Awaited<ReturnType<typeof startBackgroundProcess>>
@@ -230,7 +244,11 @@ async function main() {
       },
     );
 
-    if (!runAdminOnlySaasWebhookSpec && !runPortalOnlySpec) {
+    if (
+      !runAdminOnlySaasWebhookSpec &&
+      !runPortalOnlySpec &&
+      !runSaasStatusOnlySpec
+    ) {
       originalFrontendTsconfig = await readFile(frontendTsconfigPath, 'utf8');
       const frontendTsconfig = JSON.parse(originalFrontendTsconfig) as {
         include?: string[];
@@ -304,6 +322,33 @@ async function main() {
       );
     }
 
+    if (requiresSaasStatus) {
+      saasStatus = await startService(
+        'pnpm',
+        [
+          '--dir',
+          'apps/saas-status',
+          'exec',
+          'next',
+          'dev',
+          '--hostname',
+          '127.0.0.1',
+          '--port',
+          String(saasStatusPort),
+        ],
+        {
+          env: createSaasStatusEnv({
+            port: saasStatusPort,
+            apiBaseUrl: backendBaseUrl,
+          }),
+          healthUrl: `${saasStatusBaseUrl}/`,
+          startupTimeoutMs: 240_000,
+        },
+      );
+
+      await warmUpHttp(`${saasStatusBaseUrl}/`);
+    }
+
     admin = await startService(
       'pnpm',
       [
@@ -342,16 +387,20 @@ async function main() {
             ? adminBaseUrl
             : runPortalOnlySpec
               ? portalBaseUrl
+              : runSaasStatusOnlySpec
+                ? saasStatusBaseUrl
               : frontendBaseUrl,
           PLAYWRIGHT_API_BASE_URL: backendBaseUrl,
           PLAYWRIGHT_ADMIN_BASE_URL: adminBaseUrl,
           PLAYWRIGHT_PORTAL_BASE_URL: portalBaseUrl,
+          PLAYWRIGHT_SAAS_STATUS_BASE_URL: saasStatusBaseUrl,
           TEST_DATABASE_URL: database.databaseUrl,
         },
       },
     );
   } finally {
     await admin?.stop().catch(() => undefined);
+    await saasStatus?.stop().catch(() => undefined);
     await portal?.stop().catch(() => undefined);
     await frontend?.stop().catch(() => undefined);
     await holdemTimeoutWorker?.stop().catch(() => undefined);

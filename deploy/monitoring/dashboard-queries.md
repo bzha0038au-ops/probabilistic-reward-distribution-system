@@ -97,6 +97,15 @@ Use these PromQL queries to build the minimum production dashboard.
 - Retry-exhausted SaaS webhooks:
   `reward_backend_saas_webhook_retry_exhausted_total`
 
+## Partition Maintenance
+
+- Expected current-plus-future monthly partitions by parent table:
+  `reward_backend_db_partition_horizon_months_expected`
+- Available current-plus-future monthly partitions by parent table:
+  `reward_backend_db_partition_horizon_months_available`
+- Missing current-plus-future monthly partitions by parent table:
+  `reward_backend_db_partition_horizon_months_missing`
+
 ## Release Tracking
 
 - Current deployed release / commit:
