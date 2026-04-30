@@ -19,6 +19,166 @@ type ControlCenterLoadEvent = {
   locals: App.Locals
 }
 
+const SYSTEM_CONFIG_STRING_FIELD_DEFAULTS = {
+  poolBalance: "0",
+  drawCost: "0",
+  weightJitterPct: "0",
+  bonusUnlockWagerRatio: "1",
+  authFailureWindowMinutes: "15",
+  authFailureFreezeThreshold: "8",
+  adminFailureFreezeThreshold: "5",
+  blackjackMinStake: "1",
+  blackjackMaxStake: "100",
+  blackjackWinPayoutMultiplier: "2",
+  blackjackPushPayoutMultiplier: "1",
+  blackjackNaturalPayoutMultiplier: "2.5",
+} as const
+
+const SYSTEM_CONFIG_BOOLEAN_FIELDS = [
+  "maintenanceMode",
+  "registrationEnabled",
+  "loginEnabled",
+  "drawEnabled",
+  "paymentDepositEnabled",
+  "paymentWithdrawEnabled",
+  "antiAbuseAutoFreezeEnabled",
+  "withdrawRiskNewCardFirstWithdrawalReviewEnabled",
+  "weightJitterEnabled",
+  "bonusAutoReleaseEnabled",
+  "blackjackDealerHitsSoft17",
+  "blackjackDoubleDownAllowed",
+  "blackjackSplitAcesAllowed",
+  "blackjackHitSplitAcesAllowed",
+  "blackjackResplitAllowed",
+  "blackjackSplitTenValueCardsAllowed",
+] as const
+
+const SYSTEM_CONFIG_INTEGER_FIELD_DEFAULTS = {
+  blackjackMaxSplitHands: 4,
+} as const
+
+type SystemConfigStringField = keyof typeof SYSTEM_CONFIG_STRING_FIELD_DEFAULTS
+type SystemConfigBooleanField = (typeof SYSTEM_CONFIG_BOOLEAN_FIELDS)[number]
+type SystemConfigIntegerField = keyof typeof SYSTEM_CONFIG_INTEGER_FIELD_DEFAULTS
+
+const readConfigStringValue = (
+  config: Record<string, unknown> | null,
+  key: SystemConfigStringField,
+) => {
+  const value = config ? Reflect.get(config, key) : null
+  if (value === null || value === undefined || value === "") {
+    return SYSTEM_CONFIG_STRING_FIELD_DEFAULTS[key]
+  }
+  return String(value)
+}
+
+const readConfigBooleanValue = (
+  config: Record<string, unknown> | null,
+  key: SystemConfigBooleanField,
+) => Boolean(config ? Reflect.get(config, key) : false)
+
+const readConfigIntegerValue = (
+  config: Record<string, unknown> | null,
+  key: SystemConfigIntegerField,
+) => {
+  const value = config ? Reflect.get(config, key) : null
+  const parsed = typeof value === "number" ? value : Number(value)
+  if (!Number.isFinite(parsed)) {
+    return SYSTEM_CONFIG_INTEGER_FIELD_DEFAULTS[key]
+  }
+  return Math.trunc(parsed)
+}
+
+const buildSystemConfigDraftPayload = (
+  formData: FormData,
+  currentConfig: Record<string, unknown> | null,
+) => {
+  const nextStringValues = {
+    poolBalance: toNumberString(formData.get("poolBalance")),
+    drawCost: toNumberString(formData.get("drawCost")),
+    weightJitterPct: toNumberString(formData.get("weightJitterPct")),
+    bonusUnlockWagerRatio: toNumberString(formData.get("bonusUnlockWagerRatio")),
+    authFailureWindowMinutes: toNumberString(
+      formData.get("authFailureWindowMinutes"),
+    ),
+    authFailureFreezeThreshold: toNumberString(
+      formData.get("authFailureFreezeThreshold"),
+    ),
+    adminFailureFreezeThreshold: toNumberString(
+      formData.get("adminFailureFreezeThreshold"),
+    ),
+    blackjackMinStake: toNumberString(formData.get("blackjackMinStake"), "1"),
+    blackjackMaxStake: toNumberString(formData.get("blackjackMaxStake"), "100"),
+    blackjackWinPayoutMultiplier: toNumberString(
+      formData.get("blackjackWinPayoutMultiplier"),
+      "2",
+    ),
+    blackjackPushPayoutMultiplier: toNumberString(
+      formData.get("blackjackPushPayoutMultiplier"),
+      "1",
+    ),
+    blackjackNaturalPayoutMultiplier: toNumberString(
+      formData.get("blackjackNaturalPayoutMultiplier"),
+      "2.5",
+    ),
+  } satisfies Record<SystemConfigStringField, string>
+
+  const nextBooleanValues = {
+    maintenanceMode: formData.get("maintenanceMode") === "on",
+    registrationEnabled: formData.get("registrationEnabled") === "on",
+    loginEnabled: formData.get("loginEnabled") === "on",
+    drawEnabled: formData.get("drawEnabled") === "on",
+    paymentDepositEnabled: formData.get("paymentDepositEnabled") === "on",
+    paymentWithdrawEnabled: formData.get("paymentWithdrawEnabled") === "on",
+    antiAbuseAutoFreezeEnabled:
+      formData.get("antiAbuseAutoFreezeEnabled") === "on",
+    withdrawRiskNewCardFirstWithdrawalReviewEnabled:
+      formData.get("withdrawRiskNewCardFirstWithdrawalReviewEnabled") === "on",
+    weightJitterEnabled: formData.get("weightJitterEnabled") === "on",
+    bonusAutoReleaseEnabled: formData.get("bonusAutoReleaseEnabled") === "on",
+    blackjackDealerHitsSoft17: formData.get("blackjackDealerHitsSoft17") === "on",
+    blackjackDoubleDownAllowed: formData.get("blackjackDoubleDownAllowed") === "on",
+    blackjackSplitAcesAllowed: formData.get("blackjackSplitAcesAllowed") === "on",
+    blackjackHitSplitAcesAllowed:
+      formData.get("blackjackHitSplitAcesAllowed") === "on",
+    blackjackResplitAllowed: formData.get("blackjackResplitAllowed") === "on",
+    blackjackSplitTenValueCardsAllowed:
+      formData.get("blackjackSplitTenValueCardsAllowed") === "on",
+  } satisfies Record<SystemConfigBooleanField, boolean>
+
+  const nextIntegerValues = {
+    blackjackMaxSplitHands:
+      parseOptionalNumber(formData.get("blackjackMaxSplitHands")) ?? 4,
+  } satisfies Record<SystemConfigIntegerField, number>
+
+  const payload: Record<string, string | number | boolean> = {}
+
+  for (const key of Object.keys(nextStringValues) as SystemConfigStringField[]) {
+    const nextValue = nextStringValues[key]
+    if (nextValue !== readConfigStringValue(currentConfig, key)) {
+      payload[key] = nextValue
+    }
+  }
+
+  for (const key of SYSTEM_CONFIG_BOOLEAN_FIELDS) {
+    const nextValue = nextBooleanValues[key]
+    if (nextValue !== readConfigBooleanValue(currentConfig, key)) {
+      payload[key] = nextValue
+    }
+  }
+
+  for (const key of Object.keys(
+    nextIntegerValues,
+  ) as SystemConfigIntegerField[]) {
+    const nextValue = nextIntegerValues[key]
+    if (nextValue !== readConfigIntegerValue(currentConfig, key)) {
+      payload[key] = nextValue
+    }
+  }
+
+  return payload
+}
+
 const toNumberString = (value: FormDataEntryValue | null, fallback = "0") => {
   if (typeof value !== "string") return fallback
   return value.trim() === "" ? fallback : value
@@ -233,64 +393,32 @@ export const controlCenterActions = {
   },
   configDraft: async ({ request, fetch, cookies }) => {
     const formData = await request.formData()
+    const controlCenterResponse = await apiRequest<ControlCenterResponse>(
+      fetch,
+      cookies,
+      "/admin/control-center",
+    )
 
-    const payload = {
-      poolBalance: toNumberString(formData.get("poolBalance")),
-      drawCost: toNumberString(formData.get("drawCost")),
-      maintenanceMode: formData.get("maintenanceMode") === "on",
-      registrationEnabled: formData.get("registrationEnabled") === "on",
-      loginEnabled: formData.get("loginEnabled") === "on",
-      drawEnabled: formData.get("drawEnabled") === "on",
-      paymentDepositEnabled: formData.get("paymentDepositEnabled") === "on",
-      paymentWithdrawEnabled: formData.get("paymentWithdrawEnabled") === "on",
-      antiAbuseAutoFreezeEnabled:
-        formData.get("antiAbuseAutoFreezeEnabled") === "on",
-      withdrawRiskNewCardFirstWithdrawalReviewEnabled:
-        formData.get("withdrawRiskNewCardFirstWithdrawalReviewEnabled") ===
-        "on",
-      weightJitterEnabled: formData.get("weightJitterEnabled") === "on",
-      weightJitterPct: toNumberString(formData.get("weightJitterPct")),
-      bonusAutoReleaseEnabled: formData.get("bonusAutoReleaseEnabled") === "on",
-      bonusUnlockWagerRatio: toNumberString(
-        formData.get("bonusUnlockWagerRatio"),
-      ),
-      authFailureWindowMinutes: toNumberString(
-        formData.get("authFailureWindowMinutes"),
-      ),
-      authFailureFreezeThreshold: toNumberString(
-        formData.get("authFailureFreezeThreshold"),
-      ),
-      adminFailureFreezeThreshold: toNumberString(
-        formData.get("adminFailureFreezeThreshold"),
-      ),
-      blackjackMinStake: toNumberString(formData.get("blackjackMinStake"), "1"),
-      blackjackMaxStake: toNumberString(formData.get("blackjackMaxStake"), "100"),
-      blackjackWinPayoutMultiplier: toNumberString(
-        formData.get("blackjackWinPayoutMultiplier"),
-        "2",
-      ),
-      blackjackPushPayoutMultiplier: toNumberString(
-        formData.get("blackjackPushPayoutMultiplier"),
-        "1",
-      ),
-      blackjackNaturalPayoutMultiplier: toNumberString(
-        formData.get("blackjackNaturalPayoutMultiplier"),
-        "2.5",
-      ),
-      blackjackDealerHitsSoft17:
-        formData.get("blackjackDealerHitsSoft17") === "on",
-      blackjackDoubleDownAllowed:
-        formData.get("blackjackDoubleDownAllowed") === "on",
-      blackjackSplitAcesAllowed:
-        formData.get("blackjackSplitAcesAllowed") === "on",
-      blackjackHitSplitAcesAllowed:
-        formData.get("blackjackHitSplitAcesAllowed") === "on",
-      blackjackResplitAllowed: formData.get("blackjackResplitAllowed") === "on",
-      blackjackMaxSplitHands:
-        parseOptionalNumber(formData.get("blackjackMaxSplitHands")) ?? 4,
-      blackjackSplitTenValueCardsAllowed:
-        formData.get("blackjackSplitTenValueCardsAllowed") === "on",
-      reason: parseOptionalString(formData.get("changeReason")),
+    if (!controlCenterResponse.ok) {
+      return fail(controlCenterResponse.status, {
+        error:
+          controlCenterResponse.error?.message ??
+          "Failed to load current config before creating draft.",
+      })
+    }
+
+    const payload = buildSystemConfigDraftPayload(
+      formData,
+      controlCenterResponse.data?.systemConfig ?? null,
+    )
+    const reason = parseOptionalString(formData.get("changeReason"))
+    if (reason) {
+      payload.reason = reason
+    }
+    if (Object.keys(payload).length === (reason ? 1 : 0)) {
+      return fail(400, {
+        error: "No config changes detected.",
+      })
     }
 
     const response = await apiRequest(

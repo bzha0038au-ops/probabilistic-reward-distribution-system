@@ -2734,6 +2734,49 @@ describeIntegrationSuite('backend admin integration', () => {
     });
   });
 
+  it('engine permission routes preserve the current admin session during self scope edits', async () => {
+    const email = 'engine-scope-self@example.com';
+    const { admin, password } = await seedAdminAccount({
+      email,
+      displayName: 'Engine Scope Self',
+    });
+
+    await grantAdminPermissions(admin.id, CONFIG_ADMIN_PERMISSION_KEYS);
+    const adminSession = await enrollAdminMfa({
+      email,
+      password,
+    });
+
+    const updateResponse = await getApp().inject({
+      method: 'PUT',
+      url: `/admin/engine/permissions/${admin.id}`,
+      headers: buildAdminCookieHeaders(adminSession.token),
+      payload: {
+        scopeKeys: ['engine:*', 'b:billing'],
+        confirmationText: `APPLY ENGINE SCOPES ${admin.id}`,
+        totpCode: adminSession.totpCode,
+      },
+    });
+
+    expect(updateResponse.statusCode).toBe(200);
+
+    const followUpOverviewResponse = await getApp().inject({
+      method: 'GET',
+      url: '/admin/engine/permissions',
+      headers: buildAdminCookieHeaders(adminSession.token),
+    });
+
+    expect(followUpOverviewResponse.statusCode).toBe(200);
+    expect(followUpOverviewResponse.json().data).toMatchObject({
+      admins: expect.arrayContaining([
+        expect.objectContaining({
+          adminId: admin.id,
+          managedScopes: ['engine:*', 'b:billing'],
+        }),
+      ]),
+    });
+  });
+
   it('rejects prediction market creates when explicit rule fields are missing or invalid', async () => {
     const { admin, password } = await seedAdminAccount({
       email: 'prediction-market-admin@example.com',

@@ -33,15 +33,22 @@ const flows = [
   },
 ];
 
+const MAESTRO_RETRY_LIMIT = 2;
+
 for (const flow of flows) {
   if (flow.prepare) {
     run(pnpmCommand, ["e2e:prepare"], { cwd: appDir });
   }
 
   resetMaestroDriver();
-  run(maestroCommand, ["test", "-e", `REWARD_MOBILE_APP_ID=${appId}`, flow.file], {
-    cwd: appDir,
-  });
+  runWithRetry(
+    flow.name,
+    maestroCommand,
+    ["test", "-e", `REWARD_MOBILE_APP_ID=${appId}`, flow.file],
+    {
+      cwd: appDir,
+    },
+  );
 }
 
 function resetMaestroDriver() {
@@ -85,6 +92,28 @@ function run(command, args, options = {}) {
   if (result.status !== 0) {
     process.exit(result.status ?? 1);
   }
+}
+
+function runWithRetry(name, command, args, options = {}) {
+  for (let attempt = 1; attempt <= MAESTRO_RETRY_LIMIT; attempt += 1) {
+    if (attempt > 1) {
+      console.warn(`Retrying Maestro flow "${name}" (${attempt}/${MAESTRO_RETRY_LIMIT})...`);
+      resetMaestroDriver();
+    }
+
+    printCommand(command, args, options.cwd);
+    const result = spawnSync(command, args, {
+      stdio: "inherit",
+      cwd: options.cwd || appDir,
+      env: process.env,
+    });
+
+    if (result.status === 0) {
+      return;
+    }
+  }
+
+  process.exit(1);
 }
 
 function runOptional(command, args, options = {}) {

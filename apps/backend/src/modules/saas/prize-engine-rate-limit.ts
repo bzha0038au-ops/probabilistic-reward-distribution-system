@@ -120,6 +120,10 @@ const ANTI_EXPLOIT_SCORE_BY_SEVERITY: Record<AntiExploitSeverity, number> = {
   critical: 90,
 };
 
+const POSTGRES_DEADLOCK_SQLSTATE = "40P01";
+const ANTI_EXPLOIT_DEADLOCK_RETRY_LIMIT = 3;
+const ANTI_EXPLOIT_DEADLOCK_RETRY_DELAY_MS = 10;
+
 const ANTI_EXPLOIT_SEVERITY_RANK: Record<AntiExploitSeverity, number> = {
   low: 0,
   medium: 1,
@@ -453,6 +457,27 @@ const resolveRiskIdentity = (context: AntiExploitContext) => {
     hint: summarizeOpaqueValue(context.payload.player.playerId),
   };
 };
+
+const readDatabaseErrorCode = (error: unknown) => {
+  if (
+    typeof error !== "object" ||
+    error === null ||
+    !("code" in error) ||
+    typeof error.code !== "string"
+  ) {
+    return null;
+  }
+
+  return error.code;
+};
+
+const waitForRetryDelay = (attempt: number) =>
+  new Promise<void>((resolve) => {
+    setTimeout(
+      resolve,
+      attempt * ANTI_EXPLOIT_DEADLOCK_RETRY_DELAY_MS,
+    );
+  });
 
 export const normalizePrizeEngineAgentSignals = (
   value?: PrizeEngineAgentSignalInput | Partial<PrizeEngineResolvedAgentSignals> | null,
@@ -885,146 +910,164 @@ const persistAntiExploitHits = async (
     severeHitCount > 0 && Boolean(context.auth.agentId);
   const now = new Date();
 
-  await db.transaction(async (tx) => {
-    await tx.insert(auditEvents).values(
-      hits.map((hit) => ({
-        tenantId: context.auth.tenantId,
-        projectId: context.auth.projectId,
-        apiKeyId: context.auth.apiKeyId,
-        agentId: context.auth.agentId,
-        playerExternalId: context.payload.player.playerId,
-        eventType: "anti_exploit_hit" as const,
-        severity: hit.severity,
-        plugin: hit.plugin,
-        identityType: identity.type,
-        identityValueHash: identity.valueHash,
-        identityHint: identity.hint,
-        ip: context.ip,
-        userAgent: context.userAgent,
-        metadata: {
-          route: context.requestPath,
-          method: context.requestMethod,
-          riskEnvelope: context.payload.riskEnvelope ?? null,
-          trace: context.trace,
-          hit: hit.metadata,
-        },
-      })),
-    );
-
-    await tx
-      .insert(agentRiskState)
-      .values({
-        tenantId: context.auth.tenantId,
-        projectId: context.auth.projectId,
-        apiKeyId: context.auth.apiKeyId,
-        agentId: context.auth.agentId,
-        playerExternalId: context.payload.player.playerId,
-        identityType: identity.type,
-        identityValueHash: identity.valueHash,
-        identityHint: identity.hint,
-        riskScore: scoreDelta,
-        hitCount: hits.length,
-        severeHitCount,
-        lastSeverity: highestSeverityHit.severity,
-        lastPlugin: highestSeverityHit.plugin,
-        lastReason: highestSeverityHit.reason,
-        metadata: {
-          route: context.requestPath,
-          method: context.requestMethod,
-          trace: context.trace,
-          hits: hits.map((hit) => ({
-            plugin: hit.plugin,
+  for (
+    let attempt = 1;
+    attempt <= ANTI_EXPLOIT_DEADLOCK_RETRY_LIMIT;
+    attempt += 1
+  ) {
+    try {
+      await db.transaction(async (tx) => {
+        await tx.insert(auditEvents).values(
+          hits.map((hit) => ({
+            tenantId: context.auth.tenantId,
+            projectId: context.auth.projectId,
+            apiKeyId: context.auth.apiKeyId,
+            agentId: context.auth.agentId,
+            playerExternalId: context.payload.player.playerId,
+            eventType: "anti_exploit_hit" as const,
             severity: hit.severity,
-            reason: hit.reason,
-            metadata: hit.metadata,
+            plugin: hit.plugin,
+            identityType: identity.type,
+            identityValueHash: identity.valueHash,
+            identityHint: identity.hint,
+            ip: context.ip,
+            userAgent: context.userAgent,
+            metadata: {
+              route: context.requestPath,
+              method: context.requestMethod,
+              riskEnvelope: context.payload.riskEnvelope ?? null,
+              trace: context.trace,
+              hit: hit.metadata,
+            },
           })),
-        },
-        firstHitAt: now,
-        lastHitAt: now,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .onConflictDoUpdate({
-        target: [
-          agentRiskState.projectId,
-          agentRiskState.identityType,
-          agentRiskState.identityValueHash,
-        ],
-        set: {
+        );
+
+        await tx
+          .insert(agentRiskState)
+          .values({
+            tenantId: context.auth.tenantId,
+            projectId: context.auth.projectId,
+            apiKeyId: context.auth.apiKeyId,
+            agentId: context.auth.agentId,
+            playerExternalId: context.payload.player.playerId,
+            identityType: identity.type,
+            identityValueHash: identity.valueHash,
+            identityHint: identity.hint,
+            riskScore: scoreDelta,
+            hitCount: hits.length,
+            severeHitCount,
+            lastSeverity: highestSeverityHit.severity,
+            lastPlugin: highestSeverityHit.plugin,
+            lastReason: highestSeverityHit.reason,
+            metadata: {
+              route: context.requestPath,
+              method: context.requestMethod,
+              trace: context.trace,
+              hits: hits.map((hit) => ({
+                plugin: hit.plugin,
+                severity: hit.severity,
+                reason: hit.reason,
+                metadata: hit.metadata,
+              })),
+            },
+            firstHitAt: now,
+            lastHitAt: now,
+            createdAt: now,
+            updatedAt: now,
+          })
+          .onConflictDoUpdate({
+            target: [
+              agentRiskState.projectId,
+              agentRiskState.identityType,
+              agentRiskState.identityValueHash,
+            ],
+            set: {
+              apiKeyId: context.auth.apiKeyId,
+              agentId: context.auth.agentId,
+              playerExternalId: context.payload.player.playerId,
+              riskScore: sql`${agentRiskState.riskScore} + ${scoreDelta}`,
+              hitCount: sql`${agentRiskState.hitCount} + ${hits.length}`,
+              severeHitCount: sql`${agentRiskState.severeHitCount} + ${severeHitCount}`,
+              lastSeverity: highestSeverityHit.severity,
+              lastPlugin: highestSeverityHit.plugin,
+              lastReason: highestSeverityHit.reason,
+              metadata: {
+                route: context.requestPath,
+                method: context.requestMethod,
+                trace: context.trace,
+                hits: hits.map((hit) => ({
+                  plugin: hit.plugin,
+                  severity: hit.severity,
+                  reason: hit.reason,
+                  metadata: hit.metadata,
+                })),
+              },
+              lastHitAt: now,
+              updatedAt: now,
+            },
+          });
+
+        if (!shouldApplyBlocklist || !context.auth.agentId) {
+          return;
+        }
+
+        await tx
+          .insert(agentBlocklist)
+          .values({
+            tenantId: context.auth.tenantId,
+            agentId: context.auth.agentId,
+            mode: "blocked",
+            reason: blocklistReason,
+            budgetMultiplier: null,
+            createdByAdminId: null,
+            createdAt: now,
+            updatedAt: now,
+          })
+          .onConflictDoUpdate({
+            target: [agentBlocklist.tenantId, agentBlocklist.agentId],
+            set: {
+              mode: "blocked",
+              reason: blocklistReason,
+              budgetMultiplier: null,
+              updatedAt: now,
+            },
+          });
+
+        await tx.insert(auditEvents).values({
+          tenantId: context.auth.tenantId,
+          projectId: context.auth.projectId,
           apiKeyId: context.auth.apiKeyId,
           agentId: context.auth.agentId,
           playerExternalId: context.payload.player.playerId,
-          riskScore: sql`${agentRiskState.riskScore} + ${scoreDelta}`,
-          hitCount: sql`${agentRiskState.hitCount} + ${hits.length}`,
-          severeHitCount: sql`${agentRiskState.severeHitCount} + ${severeHitCount}`,
-          lastSeverity: highestSeverityHit.severity,
-          lastPlugin: highestSeverityHit.plugin,
-          lastReason: highestSeverityHit.reason,
+          eventType: "agent_blocklist_applied" as const,
+          severity: highestSeverityHit.severity,
+          plugin: highestSeverityHit.plugin,
+          identityType: identity.type,
+          identityValueHash: identity.valueHash,
+          identityHint: identity.hint,
+          ip: context.ip,
+          userAgent: context.userAgent,
           metadata: {
             route: context.requestPath,
             method: context.requestMethod,
+            blocklistReason,
+            severeHitCount,
             trace: context.trace,
-            hits: hits.map((hit) => ({
-              plugin: hit.plugin,
-              severity: hit.severity,
-              reason: hit.reason,
-              metadata: hit.metadata,
-            })),
           },
-          lastHitAt: now,
-          updatedAt: now,
-        },
+        });
       });
 
-    if (!shouldApplyBlocklist || !context.auth.agentId) {
       return;
+    } catch (error) {
+      const isDeadlock =
+        readDatabaseErrorCode(error) === POSTGRES_DEADLOCK_SQLSTATE;
+      if (!isDeadlock || attempt === ANTI_EXPLOIT_DEADLOCK_RETRY_LIMIT) {
+        throw error;
+      }
+
+      await waitForRetryDelay(attempt);
     }
-
-    await tx
-      .insert(agentBlocklist)
-      .values({
-        tenantId: context.auth.tenantId,
-        agentId: context.auth.agentId,
-        mode: "blocked",
-        reason: blocklistReason,
-        budgetMultiplier: null,
-        createdByAdminId: null,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .onConflictDoUpdate({
-        target: [agentBlocklist.tenantId, agentBlocklist.agentId],
-        set: {
-          mode: "blocked",
-          reason: blocklistReason,
-          budgetMultiplier: null,
-          updatedAt: now,
-        },
-      });
-
-    await tx.insert(auditEvents).values({
-      tenantId: context.auth.tenantId,
-      projectId: context.auth.projectId,
-      apiKeyId: context.auth.apiKeyId,
-      agentId: context.auth.agentId,
-      playerExternalId: context.payload.player.playerId,
-      eventType: "agent_blocklist_applied" as const,
-      severity: highestSeverityHit.severity,
-      plugin: highestSeverityHit.plugin,
-      identityType: identity.type,
-      identityValueHash: identity.valueHash,
-      identityHint: identity.hint,
-      ip: context.ip,
-      userAgent: context.userAgent,
-      metadata: {
-        route: context.requestPath,
-        method: context.requestMethod,
-        blocklistReason,
-        severeHitCount,
-        trace: context.trace,
-      },
-    });
-  });
+  }
 };
 
 export const peekPrizeEngineApiRateLimitUsage = async (

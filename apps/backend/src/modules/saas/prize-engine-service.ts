@@ -1437,6 +1437,9 @@ const runPrizeEngineSideEffectInBackground = (
   });
 };
 
+const shouldInlinePrizeEngineSideEffects =
+  process.env.RUN_INTEGRATION_TESTS === "true";
+
 const shouldAwaitPrizeEngineUsageEvent = (
   payload: PrizeEngineUsageEventPayload,
 ) =>
@@ -1482,37 +1485,45 @@ const runPrizeEngineRewardPostCommitWork = async (
   }
 
   if (work.drawRecordSnapshot) {
-    runPrizeEngineSideEffectInBackground(
-      "draw_record_snapshot",
-      {
-        drawRecordId: work.drawRecordSnapshot.drawRecordId,
-        tenantId: work.usageEventPayload.tenantId,
-        projectId: work.usageEventPayload.projectId,
-      },
-      async () => {
-        await updatePrizeEngineDrawRecordSnapshot(work.drawRecordSnapshot!);
-      },
+    const snapshotTask = updatePrizeEngineDrawRecordSnapshot(
+      work.drawRecordSnapshot,
     );
+    if (shouldInlinePrizeEngineSideEffects) {
+      awaitedTasks.push(snapshotTask);
+    } else {
+      void snapshotTask.catch((error) => {
+        logger.warning("prize engine post-commit side effect failed", {
+          sideEffect: "draw_record_snapshot",
+          drawRecordId: work.drawRecordSnapshot?.drawRecordId,
+          tenantId: work.usageEventPayload.tenantId,
+          projectId: work.usageEventPayload.projectId,
+          err: error,
+        });
+      });
+    }
   }
 
   if (shouldAwaitPrizeEngineUsageEvent(work.usageEventPayload)) {
     awaitedTasks.push(recordPrizeEngineUsageEvent(work.usageEventPayload));
   } else {
-    runPrizeEngineSideEffectInBackground(
-      "usage_event",
-      {
-        tenantId: work.usageEventPayload.tenantId,
-        projectId: work.usageEventPayload.projectId,
-        apiKeyId: work.usageEventPayload.apiKeyId,
-        environment: work.usageEventPayload.environment,
-        eventType: work.usageEventPayload.eventType,
-        referenceType: work.usageEventPayload.referenceType ?? null,
-        referenceId: work.usageEventPayload.referenceId ?? null,
-      },
-      async () => {
-        await recordPrizeEngineUsageEvent(work.usageEventPayload);
-      },
-    );
+    const usageEventTask = recordPrizeEngineUsageEvent(work.usageEventPayload);
+    if (shouldInlinePrizeEngineSideEffects) {
+      awaitedTasks.push(usageEventTask);
+    } else {
+      void usageEventTask.catch((error) => {
+        logger.warning("prize engine post-commit side effect failed", {
+          sideEffect: "usage_event",
+          tenantId: work.usageEventPayload.tenantId,
+          projectId: work.usageEventPayload.projectId,
+          apiKeyId: work.usageEventPayload.apiKeyId,
+          environment: work.usageEventPayload.environment,
+          eventType: work.usageEventPayload.eventType,
+          referenceType: work.usageEventPayload.referenceType ?? null,
+          referenceId: work.usageEventPayload.referenceId ?? null,
+          err: error,
+        });
+      });
+    }
   }
 
   if (awaitedTasks.length === 0) {
@@ -3510,24 +3521,33 @@ export async function createPrizeEngineReward(params: {
     antiExploitTrace,
   });
 
-  runPrizeEngineSideEffectInBackground(
-    "tenant_onboarding_finalize",
-    {
-      tenantId: auth.tenantId,
-      projectId: auth.projectId,
+  if (shouldInlinePrizeEngineSideEffects) {
+    await markTenantOnboardedAfterSuccess({
+      auth,
       environment,
       activityType: "reward",
       subjectId: payload.agent.agentId,
-    },
-    async () => {
-      await markTenantOnboardedAfterSuccess({
-        auth,
+    });
+  } else {
+    runPrizeEngineSideEffectInBackground(
+      "tenant_onboarding_finalize",
+      {
+        tenantId: auth.tenantId,
+        projectId: auth.projectId,
         environment,
         activityType: "reward",
         subjectId: payload.agent.agentId,
-      });
-    },
-  );
+      },
+      async () => {
+        await markTenantOnboardedAfterSuccess({
+          auth,
+          environment,
+          activityType: "reward",
+          subjectId: payload.agent.agentId,
+        });
+      },
+    );
+  }
 
   return result.response;
 }
@@ -3589,24 +3609,33 @@ export async function createPrizeEngineDraw(params: {
     antiExploitTrace,
   });
 
-  runPrizeEngineSideEffectInBackground(
-    "tenant_onboarding_finalize",
-    {
-      tenantId: auth.tenantId,
-      projectId: auth.projectId,
+  if (shouldInlinePrizeEngineSideEffects) {
+    await markTenantOnboardedAfterSuccess({
+      auth,
       environment,
       activityType: rewardContext ? "reward" : "draw",
       subjectId: rewardContext?.agent.agentId ?? payload.player.playerId,
-    },
-    async () => {
-      await markTenantOnboardedAfterSuccess({
-        auth,
+    });
+  } else {
+    runPrizeEngineSideEffectInBackground(
+      "tenant_onboarding_finalize",
+      {
+        tenantId: auth.tenantId,
+        projectId: auth.projectId,
         environment,
         activityType: rewardContext ? "reward" : "draw",
         subjectId: rewardContext?.agent.agentId ?? payload.player.playerId,
-      });
-    },
-  );
+      },
+      async () => {
+        await markTenantOnboardedAfterSuccess({
+          auth,
+          environment,
+          activityType: rewardContext ? "reward" : "draw",
+          subjectId: rewardContext?.agent.agentId ?? payload.player.playerId,
+        });
+      },
+    );
+  }
 
   if (rewardContext) {
     return result.response;

@@ -78,7 +78,46 @@ describe("admin page server", () => {
   })
 
   it("creates a system config draft instead of patching production directly", async () => {
-    apiRequest.mockResolvedValue({ ok: true, data: { id: 12 } })
+    apiRequest
+      .mockResolvedValueOnce({
+        ok: true,
+        data: {
+          systemConfig: {
+            poolBalance: "1000",
+            drawCost: "9",
+            maintenanceMode: false,
+            registrationEnabled: false,
+            loginEnabled: false,
+            drawEnabled: false,
+            paymentDepositEnabled: false,
+            paymentWithdrawEnabled: false,
+            antiAbuseAutoFreezeEnabled: false,
+            withdrawRiskNewCardFirstWithdrawalReviewEnabled: false,
+            weightJitterEnabled: false,
+            weightJitterPct: "0.05",
+            bonusAutoReleaseEnabled: false,
+            bonusUnlockWagerRatio: "1",
+            authFailureWindowMinutes: "15",
+            authFailureFreezeThreshold: "8",
+            adminFailureFreezeThreshold: "5",
+            blackjackMinStake: "1",
+            blackjackMaxStake: "100",
+            blackjackWinPayoutMultiplier: "2",
+            blackjackPushPayoutMultiplier: "1",
+            blackjackNaturalPayoutMultiplier: "2.5",
+            blackjackDealerHitsSoft17: false,
+            blackjackDoubleDownAllowed: false,
+            blackjackSplitAcesAllowed: false,
+            blackjackHitSplitAcesAllowed: false,
+            blackjackResplitAllowed: false,
+            blackjackMaxSplitHands: 4,
+            blackjackSplitTenValueCardsAllowed: false,
+          },
+          providers: [],
+          changeRequests: [],
+        },
+      })
+      .mockResolvedValueOnce({ ok: true, data: { id: 12 } })
 
     const result = await actions.configDraft({
       request: makeRequest({
@@ -95,7 +134,14 @@ describe("admin page server", () => {
       cookies: {},
     } as never)
 
-    expect(apiRequest).toHaveBeenCalledWith(
+    expect(apiRequest).toHaveBeenNthCalledWith(
+      1,
+      expect.any(Function),
+      {},
+      "/admin/control-center",
+    )
+    expect(apiRequest).toHaveBeenNthCalledWith(
+      2,
       expect.any(Function),
       {},
       "/admin/control-center/system-config/drafts",
@@ -103,35 +149,7 @@ describe("admin page server", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          poolBalance: "1000",
           drawCost: "10",
-          maintenanceMode: false,
-          registrationEnabled: false,
-          loginEnabled: false,
-          drawEnabled: false,
-          paymentDepositEnabled: false,
-          paymentWithdrawEnabled: false,
-          antiAbuseAutoFreezeEnabled: false,
-          withdrawRiskNewCardFirstWithdrawalReviewEnabled: false,
-          weightJitterEnabled: false,
-          weightJitterPct: "0.05",
-          bonusAutoReleaseEnabled: false,
-          bonusUnlockWagerRatio: "1",
-          authFailureWindowMinutes: "15",
-          authFailureFreezeThreshold: "8",
-          adminFailureFreezeThreshold: "5",
-          blackjackMinStake: "1",
-          blackjackMaxStake: "100",
-          blackjackWinPayoutMultiplier: "2",
-          blackjackPushPayoutMultiplier: "1",
-          blackjackNaturalPayoutMultiplier: "2.5",
-          blackjackDealerHitsSoft17: false,
-          blackjackDoubleDownAllowed: false,
-          blackjackSplitAcesAllowed: false,
-          blackjackHitSplitAcesAllowed: false,
-          blackjackResplitAllowed: false,
-          blackjackMaxSplitHands: 4,
-          blackjackSplitTenValueCardsAllowed: false,
           reason: "tighten payout controls",
         }),
       },

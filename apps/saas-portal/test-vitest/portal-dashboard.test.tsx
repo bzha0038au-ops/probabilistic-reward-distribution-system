@@ -353,11 +353,44 @@ describe("PortalDashboard", () => {
     expect(portalDashboardMocks.router.replace).toHaveBeenCalledWith(
       "/portal/docs?tenant=77&project=88&invite=invite-1&billingSetup=ready",
     );
-    expect(portalDashboardMocks.router.refresh).toHaveBeenCalledTimes(1);
+    expect(portalDashboardMocks.router.refresh).not.toHaveBeenCalled();
     expect(portalDashboardMocks.shellProps).toMatchObject({
       currentProjectId: 101,
       currentTenantId: 10,
       inviteToken: "invite-1",
+    });
+  });
+
+  it("resolves the active scope from live search params before server props catch up", async () => {
+    portalDashboardMocks.usePathname.mockReturnValue("/portal/docs");
+    portalDashboardMocks.useSearchParams.mockReturnValue(
+      new URLSearchParams("tenant=10&project=102&invite=invite-1&billingSetup=ready"),
+    );
+
+    renderTestComponent(
+      <PortalDashboard
+        billingSetupStatus="ready"
+        billingInsights={null}
+        error={null}
+        inviteToken="invite-1"
+        overview={createOverview() as never}
+        reportExports={[]}
+        reportsError={null}
+        requestedProjectId={101}
+        requestedTenantId={10}
+        view="docs"
+      />,
+    );
+
+    await flushEffects();
+
+    expect(portalDashboardMocks.shellProps).toMatchObject({
+      currentProjectId: 102,
+      currentTenantId: 10,
+    });
+    expect(portalDashboardMocks.viewContentProps).toMatchObject({
+      currentProjectId: 102,
+      currentTenantId: 10,
     });
   });
 
@@ -556,6 +589,9 @@ describe("PortalDashboard", () => {
 
   it("issues project API keys with scope and expiry payloads, then refreshes the dashboard", async () => {
     portalDashboardMocks.usePathname.mockReturnValue("/portal/keys");
+    portalDashboardMocks.useSearchParams.mockReturnValue(
+      new URLSearchParams("tenant=10&project=102&invite=invite-1&billingSetup=ready"),
+    );
     fetchMock.mockResolvedValue({
       json: async () => ({
         ok: true,
@@ -633,6 +669,9 @@ describe("PortalDashboard", () => {
 
   it("issues a sandbox starter key and routes the portal back onto the sandbox project", async () => {
     portalDashboardMocks.usePathname.mockReturnValue("/portal/keys");
+    portalDashboardMocks.useSearchParams.mockReturnValue(
+      new URLSearchParams("tenant=10&project=102&invite=invite-1&billingSetup=ready"),
+    );
     fetchMock.mockResolvedValue({
       json: async () => ({
         ok: true,
@@ -698,11 +737,91 @@ describe("PortalDashboard", () => {
     expect(portalDashboardMocks.router.replace).toHaveBeenCalledWith(
       "/portal/keys?tenant=10&project=101&invite=invite-1&billingSetup=ready",
     );
-    expect(portalDashboardMocks.router.refresh).toHaveBeenCalledTimes(1);
+    expect(portalDashboardMocks.router.refresh).not.toHaveBeenCalled();
+  });
+
+  it("focuses the sandbox project from docs when the current project is not already sandbox", async () => {
+    portalDashboardMocks.usePathname.mockReturnValue("/portal/docs");
+    portalDashboardMocks.useSearchParams.mockReturnValue(
+      new URLSearchParams("tenant=10&project=102&invite=invite-1&billingSetup=ready"),
+    );
+
+    renderTestComponent(
+      <PortalDashboard
+        billingSetupStatus="ready"
+        billingInsights={null}
+        error={null}
+        inviteToken="invite-1"
+        overview={createOverview() as never}
+        reportExports={[]}
+        reportsError={null}
+        requestedProjectId={102}
+        requestedTenantId={10}
+        view="docs"
+      />,
+    );
+
+    await flushEffects();
+    portalDashboardMocks.router.refresh.mockClear();
+    portalDashboardMocks.router.replace.mockClear();
+
+    await act(async () => {
+      (portalDashboardMocks.viewContentProps?.handleSelectSandboxProject as () => void)();
+    });
+
+    expect(portalDashboardMocks.router.replace).toHaveBeenCalledWith(
+      "/portal/docs?tenant=10&project=101&invite=invite-1&billingSetup=ready",
+    );
+    expect(portalDashboardMocks.router.refresh).not.toHaveBeenCalled();
+    expect(portalDashboardMocks.shellProps).toMatchObject({
+      banner: {
+        message: "Sandbox project selected.",
+        tone: "success",
+      },
+    });
+  });
+
+  it("does not reroute when the sandbox project is already selected", async () => {
+    portalDashboardMocks.usePathname.mockReturnValue("/portal/docs");
+
+    renderTestComponent(
+      <PortalDashboard
+        billingSetupStatus="ready"
+        billingInsights={null}
+        error={null}
+        inviteToken="invite-1"
+        overview={createOverview() as never}
+        reportExports={[]}
+        reportsError={null}
+        requestedProjectId={101}
+        requestedTenantId={10}
+        view="docs"
+      />,
+    );
+
+    await flushEffects();
+    portalDashboardMocks.router.refresh.mockClear();
+    portalDashboardMocks.router.replace.mockClear();
+
+    await act(async () => {
+      (portalDashboardMocks.viewContentProps?.handleSelectSandboxProject as () => void)();
+    });
+
+    expect(portalDashboardMocks.router.replace).not.toHaveBeenCalled();
+    expect(portalDashboardMocks.router.refresh).not.toHaveBeenCalled();
+    expect(portalDashboardMocks.shellProps).toMatchObject({
+      banner: {
+        message: "Sandbox project already selected.",
+        tone: "success",
+      },
+    });
   });
 
   it("rotates and revokes project keys through the portal mutation handlers", async () => {
     portalDashboardMocks.usePathname.mockReturnValue("/portal/keys");
+    portalDashboardMocks.useSearchParams.mockReturnValue(
+      new URLSearchParams("tenant=10&project=102&invite=invite-1&billingSetup=ready"),
+    );
     renderTestComponent(
       <PortalDashboard
         billingSetupStatus="ready"
@@ -798,8 +917,110 @@ describe("PortalDashboard", () => {
     expect(portalDashboardMocks.router.refresh).toHaveBeenCalledTimes(1);
   });
 
+  it("ignores duplicate key issue submits while the first mutation is still in flight", async () => {
+    portalDashboardMocks.usePathname.mockReturnValue("/portal/keys");
+    portalDashboardMocks.useSearchParams.mockReturnValue(
+      new URLSearchParams("tenant=10&project=102&invite=invite-1&billingSetup=ready"),
+    );
+    let resolveFetch:
+      | ((value: {
+          json: () => Promise<{
+            ok: true;
+            data: {
+              apiKey: string;
+              id: number;
+              label: string;
+              projectId: number;
+              scopes: string[];
+            };
+          }>;
+          ok: true;
+          status: 200;
+        }) => void)
+      | null = null;
+
+    fetchMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        }),
+    );
+
+    renderTestComponent(
+      <PortalDashboard
+        billingSetupStatus="ready"
+        billingInsights={null}
+        error={null}
+        inviteToken="invite-1"
+        overview={createOverview() as never}
+        reportExports={[]}
+        reportsError={null}
+        requestedProjectId={102}
+        requestedTenantId={10}
+        view="keys"
+      />,
+    );
+
+    await flushEffects();
+
+    const form = createForm({
+      label: "Ops key",
+      scopes: ["reward:write", "ledger:read"],
+      expiresAt: "2026-05-30T18:00",
+    });
+    const handleIssueKey = portalDashboardMocks.viewContentProps
+      ?.handleIssueKey as (
+      event: React.FormEvent<HTMLFormElement>,
+    ) => Promise<void>;
+
+    let firstSubmit: Promise<void>;
+    let secondSubmit: Promise<void>;
+    await act(async () => {
+      firstSubmit = handleIssueKey({
+        currentTarget: form,
+        preventDefault() {},
+      } as React.FormEvent<HTMLFormElement>);
+      secondSubmit = handleIssueKey({
+        currentTarget: form,
+        preventDefault() {},
+      } as React.FormEvent<HTMLFormElement>);
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      resolveFetch?.({
+        json: async () => ({
+          ok: true,
+          data: {
+            apiKey: "live-secret-key",
+            id: 21,
+            label: "Ops key",
+            projectId: 102,
+            scopes: ["reward:write", "ledger:read"],
+          },
+        }),
+        ok: true,
+        status: 200,
+      });
+
+      await Promise.all([firstSubmit, secondSubmit]);
+    });
+
+    expect(portalDashboardMocks.shellProps).toMatchObject({
+      banner: {
+        message: "API key issued.",
+        tone: "success",
+      },
+      issuedKey: expect.objectContaining({
+        apiKey: "live-secret-key",
+      }),
+    });
+  });
+
   it("creates, updates, and archives prizes with project-scoped payloads", async () => {
     portalDashboardMocks.usePathname.mockReturnValue("/portal/prizes");
+    portalDashboardMocks.useSearchParams.mockReturnValue(
+      new URLSearchParams("tenant=10&project=102&invite=invite-1&billingSetup=ready"),
+    );
     renderTestComponent(
       <PortalDashboard
         billingSetupStatus="ready"
@@ -1126,7 +1347,7 @@ describe("PortalDashboard", () => {
     expect(portalDashboardMocks.router.replace).toHaveBeenCalledWith(
       "/portal?tenant=77&project=701&billingSetup=ready",
     );
-    expect(portalDashboardMocks.router.refresh).toHaveBeenCalledTimes(1);
+    expect(portalDashboardMocks.router.refresh).not.toHaveBeenCalled();
     expect(portalDashboardMocks.shellProps).toMatchObject({
       banner: {
         message: "Workspace created. Your sandbox starter key is ready.",
@@ -1511,7 +1732,7 @@ describe("PortalDashboard", () => {
     expect(portalDashboardMocks.router.replace).toHaveBeenCalledWith(
       "/portal/tenants?tenant=10&project=101&billingSetup=ready",
     );
-    expect(portalDashboardMocks.router.refresh).toHaveBeenCalledTimes(1);
+    expect(portalDashboardMocks.router.refresh).not.toHaveBeenCalled();
     expect(portalDashboardMocks.shellProps).toMatchObject({
       banner: {
         message: "Tenant invite accepted.",

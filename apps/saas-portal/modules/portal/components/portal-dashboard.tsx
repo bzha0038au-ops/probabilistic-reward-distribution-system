@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useTransition, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { API_ERROR_CODES } from "@reward/shared-types/api";
 import type {
@@ -22,6 +22,7 @@ import { buildLegalPath, buildLoginPath } from "@/lib/navigation";
 import {
   buildPortalHref,
   portalRouteMeta,
+  readPositiveInt,
   resolvePortalSelection,
   type PortalView,
 } from "@/modules/portal/lib/portal";
@@ -123,13 +124,17 @@ export function PortalDashboard({
   const searchParams = useSearchParams();
   const [isHydrated, setIsHydrated] = useState(false);
   const [banner, setBanner] = useState<MutationBanner>(null);
+  const [isMutating, setIsMutating] = useState(false);
   const [issuedKey, setIssuedKey] = useState<SaasApiKeyIssue | null>(null);
   const [rotatedKey, setRotatedKey] = useState<SaasApiKeyRotation | null>(null);
   const [createdInvite, setCreatedInvite] =
     useState<SaasTenantInviteDelivery | null>(null);
   const [snippetLanguage, setSnippetLanguage] =
     useState<SnippetLanguage>("typescript");
-  const [isPending, startTransition] = useTransition();
+  const [isNavigating, startNavigation] = useTransition();
+  const mutationInFlightRef = useRef(false);
+  const liveRequestedTenantId = readPositiveInt(searchParams.get("tenant"));
+  const liveRequestedProjectId = readPositiveInt(searchParams.get("project"));
 
   const {
     agentControls,
@@ -154,7 +159,11 @@ export function PortalDashboard({
     sandboxProjectPrizes,
     tenantEntries,
     tenantProjects,
-  } = resolvePortalSelection(overview, requestedTenantId, requestedProjectId);
+  } = resolvePortalSelection(
+    overview,
+    liveRequestedTenantId ?? requestedTenantId,
+    liveRequestedProjectId ?? requestedProjectId,
+  );
   const overviewUiCopy = overview?.uiCopy.overview ?? defaultSaasOverviewUiCopy.overview;
 
   const visibleReportExports = reportExports ?? [];
@@ -207,15 +216,13 @@ export function PortalDashboard({
     }
 
     const timer = window.setTimeout(() => {
-      startTransition(() => {
-        router.refresh();
-      });
+      router.refresh();
     }, 5_000);
 
     return () => {
       window.clearTimeout(timer);
     };
-  }, [hasPendingReportExports, router, startTransition, view]);
+  }, [hasPendingReportExports, router, view]);
 
   const currentViewMeta = portalRouteMeta[view];
   const currentBudgetPolicy = currentTenant?.billing?.budgetPolicy ?? null;
@@ -223,24 +230,29 @@ export function PortalDashboard({
     billingInsights?.currency ?? currentTenant?.billing?.currency ?? "USD";
 
   const refreshOverview = () => {
-    startTransition(() => {
-      router.refresh();
+    router.refresh();
+  };
+
+  const navigateToView = (nextView: PortalView, nextState: typeof currentHrefState) => {
+    const href = buildPortalHref(nextView, nextState);
+    if (href === currentRoute) {
+      return false;
+    }
+
+    startNavigation(() => {
+      router.replace(href);
     });
+    return true;
   };
 
   const navigateWithScope = (
     nextTenantId: number | null,
     nextProjectId: number | null,
   ) => {
-    startTransition(() => {
-      router.replace(
-        buildPortalHref(view, {
-          ...currentHrefState,
-          projectId: nextProjectId,
-          tenantId: nextTenantId,
-        }),
-      );
-      router.refresh();
+    return navigateToView(view, {
+      ...currentHrefState,
+      projectId: nextProjectId,
+      tenantId: nextTenantId,
     });
   };
 
@@ -259,7 +271,7 @@ export function PortalDashboard({
 
   const redirectForAccessError = (code?: string, status?: number) => {
     if (code === API_ERROR_CODES.LEGAL_ACCEPTANCE_REQUIRED) {
-      startTransition(() => {
+      startNavigation(() => {
         router.replace(buildLegalPath(currentRoute));
       });
       return true;
@@ -273,96 +285,115 @@ export function PortalDashboard({
     return false;
   };
 
+  const withMutationLock = async <T,>(operation: () => Promise<T>) => {
+    if (mutationInFlightRef.current) {
+      return null;
+    }
+
+    mutationInFlightRef.current = true;
+    setIsMutating(true);
+
+    try {
+      return await operation();
+    } finally {
+      mutationInFlightRef.current = false;
+      setIsMutating(false);
+    }
+  };
+
   const postJson = async <T,>(
     path: string,
     body: Record<string, unknown>,
     successMessage?: string,
-  ) => {
-    setBanner(null);
+  ) =>
+    withMutationLock(async () => {
+      setBanner(null);
 
-    const response = await fetch(`/api/backend${path}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
-    const payload = await readEnvelope<T>(response);
-    if (!response.ok || !payload || payload.ok !== true) {
-      const code = payload && payload.ok === false ? payload.error?.code : undefined;
-      if (redirectForAccessError(code, response.status)) {
+      const response = await fetch(`/api/backend${path}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+      const payload = await readEnvelope<T>(response);
+      if (!response.ok || !payload || payload.ok !== true) {
+        const code = payload && payload.ok === false ? payload.error?.code : undefined;
+        if (redirectForAccessError(code, response.status)) {
+          return null;
+        }
+        const message =
+          payload && payload.ok === false
+            ? (payload.error?.message ?? "Request failed.")
+            : "Request failed.";
+        setErrorBanner(message);
         return null;
       }
-      const message =
-        payload && payload.ok === false
-          ? (payload.error?.message ?? "Request failed.")
-          : "Request failed.";
-      setErrorBanner(message);
-      return null;
-    }
 
-    if (successMessage) {
-      setSuccessBanner(successMessage);
-    }
+      if (successMessage) {
+        setSuccessBanner(successMessage);
+      }
 
-    return payload.data;
-  };
+      return payload.data;
+    });
 
   const patchJson = async <T,>(
     path: string,
     body: Record<string, unknown>,
     successMessage: string,
-  ) => {
-    setBanner(null);
+  ) =>
+    withMutationLock(async () => {
+      setBanner(null);
 
-    const response = await fetch(`/api/backend${path}`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
-    const payload = await readEnvelope<T>(response);
-    if (!response.ok || !payload || payload.ok !== true) {
-      const code = payload && payload.ok === false ? payload.error?.code : undefined;
-      if (redirectForAccessError(code, response.status)) {
+      const response = await fetch(`/api/backend${path}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+      const payload = await readEnvelope<T>(response);
+      if (!response.ok || !payload || payload.ok !== true) {
+        const code = payload && payload.ok === false ? payload.error?.code : undefined;
+        if (redirectForAccessError(code, response.status)) {
+          return null;
+        }
+        const message =
+          payload && payload.ok === false
+            ? (payload.error?.message ?? "Request failed.")
+            : "Request failed.";
+        setErrorBanner(message);
         return null;
       }
-      const message =
-        payload && payload.ok === false
-          ? (payload.error?.message ?? "Request failed.")
-          : "Request failed.";
-      setErrorBanner(message);
-      return null;
-    }
 
-    setSuccessBanner(successMessage);
-    return payload.data;
-  };
-
-  const deleteRequest = async <T,>(path: string, successMessage: string) => {
-    setBanner(null);
-
-    const response = await fetch(`/api/backend${path}`, {
-      method: "DELETE",
+      setSuccessBanner(successMessage);
+      return payload.data;
     });
-    const payload = await readEnvelope<T>(response);
-    if (!response.ok || !payload || payload.ok !== true) {
-      const code = payload && payload.ok === false ? payload.error?.code : undefined;
-      if (redirectForAccessError(code, response.status)) {
+
+  const deleteRequest = async <T,>(path: string, successMessage: string) =>
+    withMutationLock(async () => {
+      setBanner(null);
+
+      const response = await fetch(`/api/backend${path}`, {
+        method: "DELETE",
+      });
+      const payload = await readEnvelope<T>(response);
+      if (!response.ok || !payload || payload.ok !== true) {
+        const code = payload && payload.ok === false ? payload.error?.code : undefined;
+        if (redirectForAccessError(code, response.status)) {
+          return null;
+        }
+        const message =
+          payload && payload.ok === false
+            ? (payload.error?.message ?? "Request failed.")
+            : "Request failed.";
+        setErrorBanner(message);
         return null;
       }
-      const message =
-        payload && payload.ok === false
-          ? (payload.error?.message ?? "Request failed.")
-          : "Request failed.";
-      setErrorBanner(message);
-      return null;
-    }
 
-    setSuccessBanner(successMessage);
-    return payload.data;
-  };
+      setSuccessBanner(successMessage);
+      return payload.data;
+    });
 
   const handleAcceptInvite = async () => {
     if (!inviteToken) {
@@ -380,15 +411,11 @@ export function PortalDashboard({
       return;
     }
 
-    startTransition(() => {
-      router.replace(
-        buildPortalHref(view, {
-          billingSetupStatus,
-          projectId: currentProjectId,
-          tenantId: currentTenantId,
-        }),
-      );
-      router.refresh();
+    navigateToView(view, {
+      billingSetupStatus,
+      inviteToken: null,
+      projectId: currentProjectId,
+      tenantId: currentTenantId,
     });
   };
 
@@ -417,15 +444,11 @@ export function PortalDashboard({
     setRotatedKey(null);
     setCreatedInvite(null);
     form.reset();
-    startTransition(() => {
-      router.replace(
-        buildPortalHref("overview", {
-          billingSetupStatus,
-          tenantId: result.tenant.id,
-          projectId: result.tenant.bootstrap.sandboxProject.id,
-        }),
-      );
-      router.refresh();
+    navigateToView("overview", {
+      billingSetupStatus,
+      inviteToken: null,
+      tenantId: result.tenant.id,
+      projectId: result.tenant.bootstrap.sandboxProject.id,
     });
   };
 
@@ -570,7 +593,16 @@ export function PortalDashboard({
       return;
     }
 
-    navigateWithScope(currentTenantId, sandboxProjectId);
+    const sandboxTenantId = sandboxProject?.tenantId ?? currentTenantId;
+    if (
+      currentProjectId === sandboxProjectId &&
+      currentTenantId === sandboxTenantId
+    ) {
+      setSuccessBanner("Sandbox project already selected.");
+      return;
+    }
+
+    navigateWithScope(sandboxTenantId, sandboxProjectId);
     setSuccessBanner("Sandbox project selected.");
   };
 
@@ -594,15 +626,9 @@ export function PortalDashboard({
 
     setIssuedKey(result);
     setRotatedKey(null);
-    startTransition(() => {
-      router.replace(
-        buildPortalHref(view, {
-          ...currentHrefState,
-          projectId: sandboxProjectId,
-        }),
-      );
-      router.refresh();
-    });
+    if (!navigateWithScope(sandboxProject.tenantId, sandboxProjectId)) {
+      refreshOverview();
+    }
   };
 
   const handleCopySandboxSnippet = async () => {
@@ -884,6 +910,8 @@ export function PortalDashboard({
     form.reset();
     refreshOverview();
   };
+
+  const isPending = isMutating || isNavigating;
 
   return (
     <PortalDashboardShell

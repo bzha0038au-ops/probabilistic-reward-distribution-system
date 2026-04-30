@@ -73,7 +73,10 @@ const splitPermissionKeys = (permissionKeys: Iterable<string>) => {
 
 const revokeAdminPermissionSessions = async (
   adminId: number,
-  metadata: Record<string, unknown>
+  metadata: Record<string, unknown>,
+  options: {
+    excludeSessionId?: string | null;
+  } = {}
 ) => {
   const [admin] = await db
     .select({ userId: admins.userId })
@@ -88,6 +91,7 @@ const revokeAdminPermissionSessions = async (
   await revokeAuthSessions({
     userId: admin.userId,
     kind: 'admin',
+    excludeJti: options.excludeSessionId,
     reason: 'admin_permission_changed',
     eventType: 'admin_sessions_revoked_all',
     metadata: {
@@ -230,7 +234,10 @@ export async function getAdminPermissionScopeAssignment(adminId: number) {
 
 export async function syncManagedAdminPermissionScopes(
   adminId: number,
-  scopeKeys: Iterable<string>
+  scopeKeys: Iterable<string>,
+  options: {
+    excludeSessionId?: string | null;
+  } = {}
 ) {
   const normalizedScopeKeys = dedupePermissionKeys(scopeKeys);
   const invalidScopeKeys = normalizedScopeKeys.filter(
@@ -297,7 +304,7 @@ export async function syncManagedAdminPermissionScopes(
     addedScopes,
     removedScopes,
     managedScopes: nextManagedScopes,
-  });
+  }, options);
 
   const updatedAssignment = await getAdminPermissionScopeAssignment(adminId);
   if (!updatedAssignment) {

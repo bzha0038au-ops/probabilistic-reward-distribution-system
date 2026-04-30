@@ -34,6 +34,7 @@ import {
 import { createPredictionMarket } from "../../backend/src/modules/prediction-market/service";
 import { hashPassword } from "../../backend/src/modules/auth/password";
 import { closeRedis } from "../../backend/src/shared/redis";
+import { reseedWalletLedger } from "./wallet-ledger-seed";
 
 const HOLD_EM_TABLE_NAME = "Mobile Maestro E2E Holdem";
 const HOLD_EM_BUY_IN = "100.00";
@@ -55,6 +56,12 @@ const E2E_USERS = {
 async function upsertE2eUser(spec: { email: string; phone: string }) {
   const now = new Date();
   const passwordHash = hashPassword(E2E_PASSWORD);
+  const walletSeed = {
+    withdrawableBalance: "500.00",
+    bonusBalance: "500.00",
+    lockedBalance: "0.00",
+    wageredAmount: "0.00",
+  } as const;
 
   const [existing] = await db
     .select({ id: users.id })
@@ -94,22 +101,27 @@ async function upsertE2eUser(spec: { email: string; phone: string }) {
     .insert(userWallets)
     .values({
       userId: user.id,
-      withdrawableBalance: "500.00",
-      bonusBalance: "500.00",
-      lockedBalance: "0.00",
-      wageredAmount: "0.00",
+      withdrawableBalance: walletSeed.withdrawableBalance,
+      bonusBalance: walletSeed.bonusBalance,
+      lockedBalance: walletSeed.lockedBalance,
+      wageredAmount: walletSeed.wageredAmount,
       updatedAt: now,
     })
     .onConflictDoUpdate({
       target: userWallets.userId,
       set: {
-        withdrawableBalance: "500.00",
-        bonusBalance: "500.00",
-        lockedBalance: "0.00",
-        wageredAmount: "0.00",
+        withdrawableBalance: walletSeed.withdrawableBalance,
+        bonusBalance: walletSeed.bonusBalance,
+        lockedBalance: walletSeed.lockedBalance,
+        wageredAmount: walletSeed.wageredAmount,
         updatedAt: now,
       },
     });
+
+  await reseedWalletLedger(db, {
+    userId: user.id,
+    ...walletSeed,
+  });
 
   await db
     .insert(userAssetBalances)

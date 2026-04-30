@@ -5,13 +5,6 @@ env:
 ---
 - launchApp:
     clearState: true
-- scrollUntilVisible:
-    element:
-      id: auth-login-seeded-button
-    direction: DOWN
-- tapOn:
-    id: auth-login-seeded-button
-    waitUntilVisible: true
 - tapOn:
     text: "Allow"
     optional: true

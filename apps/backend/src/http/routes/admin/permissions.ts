@@ -105,7 +105,10 @@ export async function registerAdminPermissionRoutes(protectedRoutes: AppInstance
       try {
         const result = await syncManagedAdminPermissionScopes(
           adminId,
-          parsed.data.scopeKeys
+          parsed.data.scopeKeys,
+          {
+            excludeSessionId: request.admin?.sessionId ?? null,
+          }
         );
 
         if (result.addedScopes.length > 0 || result.removedScopes.length > 0) {

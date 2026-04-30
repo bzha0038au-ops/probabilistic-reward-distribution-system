@@ -85,7 +85,7 @@ export function PortalDashboardBillingPage({
     billingCapabilities.customerPortal ||
     billingCapabilities.paymentMethodSetup;
   const budgetComposition =
-    billingInsights?.summary.effectiveBudgetAmount !== null
+    billingInsights && billingInsights.summary.effectiveBudgetAmount !== null
       ? `Budget ${billingInsights.summary.monthlyBudget ?? "0.00"} + credits ${billingInsights.summary.availableCreditAmount}`
       : null;
 
