@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@reward/shared-types": "workspace:*",
-    "@types/node": "^20.10.5",
+    "@types/node": "^25.6.0",
     "@types/react": "^18.2.45",
     "@types/react-dom": "^18.2.18",
     "geist": "^1.2.0",
