@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -10,45 +10,92 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const appDir = path.resolve(__dirname, "..");
 const pnpmCommand = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-const maestroCommand = process.platform === "win32" ? "maestro.bat" : "maestro";
-const appId = process.env.REWARD_MOBILE_APP_ID || "com.anonymous.rewardmobile";
 const androidSdkRoot = resolveAndroidSdkPath();
 const adbCommand = resolveAdbCommand(androidSdkRoot);
 
 const flows = [
   {
     name: "holdem",
-    file: "./e2e/maestro/holdem.yaml",
+    script: "e2e:maestro:holdem",
     prepare: true,
   },
   {
     name: "prediction-market",
-    file: "./e2e/maestro/prediction-market.yaml",
+    script: "e2e:maestro:prediction-market",
     prepare: true,
   },
   {
     name: "notifications",
-    file: "./e2e/maestro/notifications.yaml",
+    script: "e2e:maestro:notifications",
     prepare: false,
   },
 ];
 
 const MAESTRO_RETRY_LIMIT = 2;
+const studioProcess = startMaestroStudioWarmup();
 
-for (const flow of flows) {
-  if (flow.prepare) {
-    run(pnpmCommand, ["e2e:prepare"], { cwd: appDir });
+try {
+  for (const flow of flows) {
+    if (flow.prepare) {
+      run(pnpmCommand, ["e2e:prepare"], { cwd: appDir });
+    }
+
+    runWithRetry(
+      flow.name,
+      pnpmCommand,
+      [flow.script],
+      {
+        cwd: appDir,
+      },
+    );
+  }
+} finally {
+  stopMaestroStudioWarmup(studioProcess);
+}
+
+function startMaestroStudioWarmup() {
+  const shell = process.env.SHELL || "/bin/sh";
+  const studio = spawn(shell, ["-lc", "printf '1\\n' | maestro studio --no-window"], {
+    cwd: appDir,
+    env: process.env,
+    detached: true,
+    stdio: "ignore",
+  });
+
+  studio.unref();
+  waitForPort(9999, 15_000);
+  return studio;
+}
+
+function stopMaestroStudioWarmup(studio) {
+  if (!studio?.pid || process.platform === "win32") {
+    return;
   }
 
-  resetMaestroDriver();
-  runWithRetry(
-    flow.name,
-    maestroCommand,
-    ["test", "-e", `REWARD_MOBILE_APP_ID=${appId}`, flow.file],
-    {
+  try {
+    process.kill(-studio.pid, "SIGTERM");
+  } catch {
+    // Ignore cleanup errors; the next suite run will start a fresh warmup process.
+  }
+}
+
+function waitForPort(port, timeoutMs) {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt <= timeoutMs) {
+    const result = spawnSync("curl", ["-sf", `http://127.0.0.1:${port}`], {
       cwd: appDir,
-    },
-  );
+      env: process.env,
+      stdio: "ignore",
+    });
+
+    if (result.status === 0) {
+      return;
+    }
+    sleep(500);
+  }
+
+  fail(`Timed out waiting for Maestro Studio on localhost:${port}.`);
 }
 
 function resetMaestroDriver() {
@@ -56,6 +103,15 @@ function resetMaestroDriver() {
     runOptional(adbCommand, ["shell", "am", "force-stop", packageName], {
       cwd: appDir,
     });
+  }
+
+  runOptional(adbCommand, ["wait-for-device"], {
+    cwd: appDir,
+  });
+
+  const readyAt = Date.now() + 1000;
+  while (Date.now() < readyAt) {
+    // Give Maestro's adb transport a brief window to settle before retrying.
   }
 }
 
@@ -133,4 +189,8 @@ function printCommand(command, args, cwd) {
 function fail(message) {
   console.error(message);
   process.exit(1);
+}
+
+function sleep(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }

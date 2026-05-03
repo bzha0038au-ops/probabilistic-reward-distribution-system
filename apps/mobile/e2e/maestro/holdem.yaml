@@ -5,8 +5,17 @@ appId: ${REWARD_MOBILE_APP_ID}
 - tapOn:
     text: "Allow"
     optional: true
+- scrollUntilVisible:
+    element:
+      id: auth-login-seeded-button
+    direction: DOWN
+    timeout: 30000
+    speed: 80
+- tapOn:
+    id: auth-login-seeded-button
+    waitUntilVisible: true
 - assertVisible:
-    id: home-open-route-button-account
+    id: app-notifications-bell-button
 - scrollUntilVisible:
     element:
       id: home-open-route-button-holdem
@@ -23,19 +32,14 @@ appId: ${REWARD_MOBILE_APP_ID}
     waitUntilVisible: true
 - scrollUntilVisible:
     element:
-      id: holdem-action-amount-input
+      id: holdem-action-button-fold
     direction: DOWN
-    timeout: 60000
-    speed: 80
-    visibilityPercentage: 20
-- assertVisible:
-    id: holdem-action-amount-input
-- swipe:
-    start: 50%, 85%
-    end: 50%, 60%
-    duration: 500
+    timeout: 90000
+    speed: 60
     waitToSettleTimeoutMs: 500
+    visibilityPercentage: 20
+    centerElement: true
 - assertVisible:
-    text: "Call"
+    id: holdem-action-button-fold
 - assertVisible:
-    text: "Fold"
+    id: holdem-action-button-all-in

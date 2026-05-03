@@ -8,11 +8,37 @@ env:
 - tapOn:
     text: "Allow"
     optional: true
-- assertVisible:
-    id: home-open-route-button-account
+- scrollUntilVisible:
+    element:
+      id: auth-login-seeded-button
+    direction: DOWN
+    timeout: 30000
+    speed: 80
 - tapOn:
-    id: app-notifications-bell-button
+    id: auth-login-seeded-button
     waitUntilVisible: true
+- scrollUntilVisible:
+    element:
+      id: home-open-route-button-notifications
+    direction: DOWN
+    timeout: 30000
+    speed: 60
+    waitToSettleTimeoutMs: 500
+    visibilityPercentage: 20
+    centerElement: true
+- tapOn:
+    id: home-open-route-button-notifications
+    waitUntilVisible: true
+    retryTapIfNoChange: true
+- scrollUntilVisible:
+    element:
+      id: notifications-refresh-button
+    direction: DOWN
+    timeout: 30000
+    speed: 60
+    waitToSettleTimeoutMs: 500
+    visibilityPercentage: 20
+    centerElement: true
 - assertVisible:
     id: notifications-refresh-button
 - assertVisible:

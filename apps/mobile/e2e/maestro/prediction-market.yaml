@@ -5,8 +5,17 @@ appId: ${REWARD_MOBILE_APP_ID}
 - tapOn:
     text: "Allow"
     optional: true
+- scrollUntilVisible:
+    element:
+      id: auth-login-seeded-button
+    direction: DOWN
+    timeout: 30000
+    speed: 80
+- tapOn:
+    id: auth-login-seeded-button
+    waitUntilVisible: true
 - assertVisible:
-    id: home-open-route-button-account
+    id: app-notifications-bell-button
 - scrollUntilVisible:
     element:
       id: home-open-route-button-predictionmarket
