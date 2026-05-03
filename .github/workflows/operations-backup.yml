@@ -59,7 +59,7 @@ jobs:
       RESTORE_APPROVER: ${{ vars.RESTORE_APPROVER }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Select Backup Mode
         id: mode
@@ -102,7 +102,7 @@ jobs:
           test -n "$RESTORE_APPROVER"
 
       - name: Start SSH Agent
-        uses: webfactory/ssh-agent@v0.9.0
+        uses: webfactory/ssh-agent@v0.10.0
         with:
           ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
 
@@ -155,7 +155,7 @@ jobs:
           scp "$DEPLOY_USER@$DEPLOY_HOST:$logical_checksum" ops-backup-artifacts/
 
       - name: Upload Logical Backup Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.mode.outputs.artifact_name }}
           path: ops-backup-artifacts/
@@ -216,15 +216,15 @@ jobs:
       DEPLOY_TG_PAGE_CHAT_ID: ${{ secrets.DEPLOY_TG_PAGE_CHAT_ID }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup PNPM
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: 10
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: pnpm
@@ -239,7 +239,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
       - name: Download Backup Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.backup.outputs.artifact_name }}
           path: ops-backup-artifacts
@@ -294,7 +294,7 @@ jobs:
           echo "evidence_month=${evidence_month}" >> "$GITHUB_OUTPUT"
 
       - name: Upload Restore Drill Evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ops-restore-drill-${{ github.run_id }}
           path: ops-restore-drills/
@@ -302,7 +302,7 @@ jobs:
           if-no-files-found: error
 
       - name: Create Restore Drill Evidence Pull Request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           add-paths: |
             ${{ steps.evidence.outputs.report_path }}
@@ -355,7 +355,7 @@ jobs:
       DEPLOY_TG_PAGE_CHAT_ID: ${{ secrets.DEPLOY_TG_PAGE_CHAT_ID }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Check Restore Drill Freshness
         id: freshness
@@ -390,7 +390,7 @@ jobs:
       DEPLOY_TG_PAGE_CHAT_ID: ${{ secrets.DEPLOY_TG_PAGE_CHAT_ID }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Check Secret Rotation Evidence Freshness
         id: freshness
