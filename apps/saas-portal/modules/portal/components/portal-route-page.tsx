@@ -9,18 +9,22 @@ import { requireCurrentUserSession } from "@/lib/current-user-session";
 import { PortalDashboard } from "@/modules/portal/components/portal-dashboard";
 import type {
   PortalPageSearchParams,
+  PortalSubview,
   PortalView,
 } from "@/modules/portal/lib/portal";
 import {
+  buildPortalRouteHref,
   readPositiveInt,
   resolvePortalSelection,
 } from "@/modules/portal/lib/portal";
 
 export async function PortalRoutePage({
   searchParams,
+  subview = null,
   view,
 }: {
   searchParams?: Promise<PortalPageSearchParams>;
+  subview?: PortalSubview | null;
   view: PortalView;
 }) {
   const resolvedSearchParams = await searchParams;
@@ -33,10 +37,12 @@ export async function PortalRoutePage({
         ),
       ).toString()
     : "";
-  const returnToBase = view === "overview" ? "/portal" : `/portal/${view}`;
-  const returnTo = currentSearch
-    ? `${returnToBase}?${currentSearch}`
-    : returnToBase;
+  const returnTo = buildPortalRouteHref(view, subview, {
+    billingSetupStatus: resolvedSearchParams?.billingSetup?.trim() || null,
+    inviteToken: resolvedSearchParams?.invite?.trim() || null,
+    projectId: readPositiveInt(resolvedSearchParams?.project),
+    tenantId: readPositiveInt(resolvedSearchParams?.tenant),
+  });
 
   await requireCurrentUserSession({ returnTo });
 
@@ -71,6 +77,7 @@ export async function PortalRoutePage({
 
   return (
     <PortalDashboard
+      subview={subview}
       view={view}
       overview={overview}
       reportExports={reportExportsResult?.ok ? reportExportsResult.data : null}

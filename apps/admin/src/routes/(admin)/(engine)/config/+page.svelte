@@ -1,68 +1,67 @@
 <script lang="ts">
-  import { page } from "$app/stores"
   import { getContext } from "svelte"
 
-  import AdminConfigGovernanceSection from "../(shared)/control-center/admin-config-governance-section.svelte"
+  import AdminPageHeader from "$lib/components/admin-page-header.svelte"
+  import AdminConfigModuleTabs from "../(shared)/control-center/admin-config-module-tabs.svelte"
   import AdminMetricsSection from "../(shared)/control-center/admin-metrics-section.svelte"
   import AdminTopSpendersSection from "../(shared)/control-center/admin-top-spenders-section.svelte"
-  import {
-    type CurrentAdmin,
-    type MfaEnrollment,
-    type PageData,
-  } from "../(shared)/control-center/page-support"
+  import type { PageData } from "../(shared)/control-center/page-support"
 
   let { data }: { data: PageData } = $props()
 
-  let stepUpCode = $state("")
-  let mfaEnrollmentCode = $state("")
-
   const { t } = getContext("i18n") as { t: (key: string) => string }
 
-  const currentAdmin = $derived(data.admin ?? null)
   const analytics = $derived(data.analytics)
-  const mfaStatus = $derived(data.mfaStatus)
-  const mfaEnrollment = $derived(
-    $page.form?.mfaEnrollment as MfaEnrollment | undefined,
-  )
-  const recoveryCodes = $derived(
-    ($page.form?.recoveryCodes as string[] | undefined) ?? [],
-  )
-  const recoveryCodesRemaining = $derived(
-    Number(
-      ($page.form?.recoveryCodesRemaining as number | undefined) ??
-        mfaStatus?.recoveryCodesRemaining ??
-        0,
-    ),
-  )
-  const recoveryMode = $derived(
-    ($page.form?.mfaRecoveryMode as
-      | CurrentAdmin["mfaRecoveryMode"]
-      | undefined) ??
-      currentAdmin?.mfaRecoveryMode ??
-      "none",
-  )
-  const mfaEnabled = $derived(
-    Boolean(
-      ($page.form?.mfaEnabled as boolean | undefined) ??
-        currentAdmin?.mfaEnabled ??
-        mfaStatus?.mfaEnabled,
-    ),
-  )
   const winRateLabel = $derived(
     analytics ? `${(analytics.winRate * 100).toFixed(2)}%` : "0%",
   )
-  const actionError = $derived($page.form?.error as string | undefined)
+
+  const configModules = $derived([
+    {
+      href: "/config/high-risk-controls",
+      eyebrow: "Configuration Governance",
+      title: "高风险配置控制面",
+      description:
+        "维护入口开关、支付路径、风控冻结与核心参数，不再和桌规混写。",
+      accent: "badge-error",
+      badge: "High Impact",
+    },
+    {
+      href: "/config/blackjack-rules",
+      eyebrow: "Table Rules",
+      title: "Blackjack 规则",
+      description: "拆分桌规、赔付倍数和分牌策略，独立处理在局风险和结算纪律。",
+      accent: "badge-outline",
+      badge: "Table Ops",
+    },
+    {
+      href: "/config/legacy-bonus-release",
+      eyebrow: "Retired Path",
+      title: "Legacy Bonus Release",
+      description: "保留退役流程的说明和审计上下文，不再和实时配置放在一起。",
+      accent: "badge-warning",
+      badge: "Disabled",
+    },
+    {
+      href: "/config/operator-security",
+      eyebrow: "Operator Security",
+      title: "Operator MFA",
+      description:
+        "把 step-up、恢复码和停用流程单独收纳，Config Hub 只保留控制中枢。",
+      accent: "badge-outline",
+      badge: "Security",
+    },
+  ])
 </script>
 
-<header class="space-y-3">
-  <p class="text-xs font-semibold uppercase tracking-[0.25em] text-primary">
-    Engine
-  </p>
-  <h1 class="text-3xl font-semibold">Config</h1>
-  <p class="max-w-3xl text-sm text-slate-600">
-    共享引擎配置、管理员 MFA 和运行指标集中在这里，和 C 端 / B 端产品面板明确分层。
-  </p>
-</header>
+<AdminPageHeader
+  context="Workspace · controlCenter"
+  eyebrow="Engine"
+  title="System Control Node"
+  description="Config Hub 现在只保留控制中枢和模块入口，把高风险配置、Blackjack 规则、Legacy Bonus Release 和 Operator MFA 全部拆成独立面板。"
+/>
+
+<AdminConfigModuleTabs />
 
 {#if data.error}
   <div class="alert alert-error mt-6 text-sm">
@@ -70,199 +69,117 @@
   </div>
 {/if}
 
-{#if actionError}
-  <div class="alert alert-error mt-6 text-sm">
-    <span>{actionError}</span>
-  </div>
-{/if}
-
-<AdminMetricsSection
-  {analytics}
-  reconciliationAlertsSummary={data.reconciliationAlertsSummary}
-  {t}
-  {winRateLabel}
-/>
-
-<section class="mt-8 grid gap-6 lg:grid-cols-2">
+<section class="mt-8 space-y-6">
   <div class="card bg-base-100 shadow">
-    <div class="card-body space-y-4">
-      <div class="flex items-start justify-between gap-3">
+    <div class="card-body space-y-5">
+      <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 class="card-title">{t("admin.mfa.title")}</h2>
-          <p class="text-sm text-slate-500">{t("admin.mfa.description")}</p>
-        </div>
-        <span class={`badge ${mfaEnabled ? "badge-success" : "badge-warning"}`}>
-          {mfaEnabled ? t("admin.mfa.enabled") : t("admin.mfa.disabled")}
-        </span>
-      </div>
-
-      {#if recoveryMode !== "none"}
-        <div class="alert alert-warning text-sm">
-          <span>
-            {recoveryMode === "break_glass"
-              ? t("admin.mfa.breakGlassRecoveryActive")
-              : t("admin.mfa.recoveryCodeSessionActive")}
-          </span>
-        </div>
-      {/if}
-
-      {#if recoveryCodes.length > 0}
-        <div class="rounded-box border border-warning/40 bg-warning/10 p-4">
-          <p class="text-sm font-semibold">
-            {t("admin.mfa.recoveryCodesTitle")}
+          <p
+            class="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-[var(--admin-primary)]"
+          >
+            Config Drawer
           </p>
-          <p class="mt-1 text-xs text-slate-600">
-            {t("admin.mfa.recoveryCodesHint")}
-          </p>
-          <div class="mt-3 grid gap-2 md:grid-cols-2">
-            {#each recoveryCodes as recoveryCode}
-              <code class="rounded bg-base-100 px-3 py-2 font-mono text-sm">
-                {recoveryCode}
-              </code>
-            {/each}
-          </div>
+          <h2
+            class="mt-2 font-['Newsreader'] text-[1.95rem] leading-tight text-[var(--admin-ink)]"
+          >
+            分域治理入口
+          </h2>
         </div>
-      {/if}
-
-      {#if !mfaEnabled}
-        <form method="post" action="?/startMfaEnrollment">
-          <button class="btn btn-outline" type="submit">
-            {t("admin.mfa.start")}
-          </button>
-        </form>
-
-        {#if mfaEnrollment}
-          <div class="grid gap-4">
-            <label class="form-control">
-              <span class="label-text mb-2">{t("admin.mfa.secret")}</span>
-              <input
-                class="input input-bordered font-mono"
-                readonly
-                value={mfaEnrollment.secret}
-              />
-            </label>
-            <label class="form-control">
-              <span class="label-text mb-2">{t("admin.mfa.otpauthUrl")}</span>
-              <textarea
-                class="textarea textarea-bordered min-h-24 font-mono text-xs"
-                readonly>{mfaEnrollment.otpauthUrl}</textarea
-              >
-            </label>
-            <form
-              method="post"
-              action="?/confirmMfaEnrollment"
-              class="grid gap-4"
-            >
-              <input
-                type="hidden"
-                name="enrollmentToken"
-                value={mfaEnrollment.enrollmentToken}
-              />
-              <label class="form-control max-w-sm">
-                <span class="label-text mb-2">{t("common.totpCode")}</span>
-                <input
-                  name="totpCode"
-                  type="text"
-                  inputmode="text"
-                  autocomplete="one-time-code"
-                  class="input input-bordered"
-                  bind:value={mfaEnrollmentCode}
-                  placeholder={t("admin.mfa.codePlaceholder")}
-                />
-              </label>
-              <button class="btn btn-primary max-w-sm" type="submit">
-                {t("admin.mfa.confirm")}
-              </button>
-            </form>
-          </div>
-        {/if}
-      {:else}
-        <p class="text-sm text-slate-500">{t("admin.mfa.enabledHint")}</p>
-        <div
-          class="rounded-box border border-base-300 bg-base-200/50 p-4 text-sm"
+        <a class="btn btn-outline" href="/change-requests"
+          >Open Change Requests</a
         >
-          <p>
-            {t("admin.mfa.recoveryCodesRemaining")}
-            <span class="ml-2 font-mono font-semibold"
-              >{recoveryCodesRemaining}</span
+      </div>
+
+      <p class="max-w-3xl text-sm leading-6 text-[var(--admin-muted)]">
+        不再把所有配置堆在同一页。选择一个治理模块进入，保存草稿后统一走审批和发布链。
+      </p>
+
+      <div class="grid gap-4 lg:grid-cols-4">
+        {#each configModules as module}
+          <a
+            class="rounded-[1rem] border border-[var(--admin-border)] bg-[var(--admin-paper-strong)] p-5 transition hover:border-[var(--admin-primary)] hover:bg-[var(--admin-paper)]"
+            href={module.href}
+          >
+            <div class="flex items-start justify-between gap-3">
+              <p
+                class="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-[var(--admin-primary)]"
+              >
+                {module.eyebrow}
+              </p>
+              <span class={`badge ${module.accent}`}>{module.badge}</span>
+            </div>
+            <h3
+              class="mt-3 font-['Newsreader'] text-[1.55rem] leading-tight text-[var(--admin-ink)]"
             >
+              {module.title}
+            </h3>
+            <p class="mt-3 text-sm leading-6 text-[var(--admin-muted)]">
+              {module.description}
+            </p>
+            <div
+              class="mt-4 inline-flex items-center gap-2 font-mono text-[0.72rem] uppercase tracking-[0.18em] text-[var(--admin-primary)]"
+            >
+              <span>Open Module</span>
+              <span class="material-symbols-outlined text-[1rem]"
+                >arrow_forward</span
+              >
+            </div>
+          </a>
+        {/each}
+      </div>
+    </div>
+  </div>
+
+  <AdminMetricsSection
+    {analytics}
+    reconciliationAlertsSummary={data.reconciliationAlertsSummary}
+    {t}
+    {winRateLabel}
+  />
+
+  <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.82fr)]">
+    <div class="card bg-base-100 shadow">
+      <div
+        class="card-body flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"
+      >
+        <div class="space-y-2">
+          <p
+            class="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-[var(--admin-primary)]"
+          >
+            Legal Workspace
           </p>
-          <p class="mt-2 text-xs text-slate-500">
-            {mfaStatus?.breakGlassConfigured
-              ? t("admin.mfa.breakGlassConfigured")
-              : t("admin.mfa.breakGlassMissing")}
+          <h2 class="card-title">Release-Controlled Documents</h2>
+          <p class="max-w-2xl text-sm text-slate-500">
+            协议条款已经迁移到独立的 Legal 页面管理，在那里处理版本草稿、HTML
+            预览、diff、灰度发布和回滚。
           </p>
         </div>
-        <div class="flex flex-wrap gap-3">
-          <form method="post" action="?/regenerateRecoveryCodes">
-            <input type="hidden" name="totpCode" value={stepUpCode} />
-            <button class="btn btn-outline" type="submit">
-              {t("admin.mfa.regenerateRecoveryCodes")}
-            </button>
-          </form>
-          <form method="post" action="?/disableMfa">
-            <input type="hidden" name="totpCode" value={stepUpCode} />
-            <button class="btn btn-outline btn-error" type="submit">
-              {recoveryMode === "none"
-                ? t("admin.mfa.disable")
-                : t("admin.mfa.disableAfterRecovery")}
-            </button>
-          </form>
+        <a class="btn btn-outline" href="/legal">Open Legal</a>
+      </div>
+    </div>
+
+    <div class="card bg-base-100 shadow">
+      <div class="card-body space-y-4">
+        <div>
+          <p
+            class="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-[var(--admin-primary)]"
+          >
+            Operator Security
+          </p>
+          <h2 class="card-title mt-2">Authenticator Governance</h2>
+          <p class="text-sm text-slate-500">
+            MFA、recovery codes 和 step-up 已拆到独立面板，不再占用 Config Hub。
+          </p>
         </div>
-        <p class="text-xs text-slate-500">
-          {recoveryMode === "none"
-            ? t("admin.mfa.disableHint")
-            : t("admin.mfa.disableRecoveryHint")}
-        </p>
-      {/if}
-    </div>
-  </div>
-
-  <div class="card bg-base-100 shadow">
-    <div class="card-body space-y-4">
-      <div>
-        <h2 class="card-title">{t("admin.stepUp.title")}</h2>
-        <p class="text-sm text-slate-500">{t("admin.stepUp.description")}</p>
+        <a
+          class="btn btn-outline w-full sm:w-auto"
+          href="/config/operator-security"
+        >
+          Open Operator MFA
+        </a>
       </div>
-      <label class="form-control max-w-sm">
-        <span class="label-text mb-2">{t("common.totpCode")}</span>
-        <input
-          name="totpCode"
-          type="text"
-          inputmode="text"
-          autocomplete="one-time-code"
-          class="input input-bordered"
-          bind:value={stepUpCode}
-          placeholder={t("admin.stepUp.placeholder")}
-          disabled={!mfaEnabled}
-        />
-      </label>
-      {#if !mfaEnabled}
-        <p class="text-sm text-warning">{t("admin.stepUp.mfaRequired")}</p>
-      {/if}
     </div>
   </div>
-</section>
 
-<section class="mt-6">
-  <AdminConfigGovernanceSection config={data.config} {stepUpCode} {t} />
+  <AdminTopSpendersSection spenders={analytics?.topSpenders ?? []} {t} />
 </section>
-
-<section class="mt-6">
-  <div class="card bg-base-100 shadow">
-    <div
-      class="card-body flex flex-col items-start justify-between gap-4 lg:flex-row lg:items-center"
-    >
-      <div class="space-y-2">
-        <h2 class="card-title">Legal Workspace</h2>
-        <p class="max-w-2xl text-sm text-slate-500">
-          协议条款已经迁移到独立的 Legal 页面管理，在那里处理版本草稿、HTML 预览、diff、
-          灰度发布和回滚，不再从 Config 页面直接写生产。
-        </p>
-      </div>
-      <a class="btn btn-outline" href="/legal">Open Legal</a>
-    </div>
-  </div>
-</section>
-
-<AdminTopSpendersSection spenders={analytics?.topSpenders ?? []} {t} />

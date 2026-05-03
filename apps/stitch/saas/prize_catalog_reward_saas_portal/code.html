@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Prize Catalog - Reward SaaS Portal</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&amp;family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="../shared-ui.css" rel="stylesheet"/>
+<script id="tailwind-config">tailwind.config = {darkMode: "class", theme: {extend: {colors: {surface: "#fdf8f8", "on-surface-variant": "#58423a", "surface-container-lowest": "#ffffff", "surface-variant": "#e6e1e1", "surface-tint": "#a73a00", "primary-container": "#a73a00", "on-surface": "#1c1b1b", "on-error": "#ffffff", "on-tertiary": "#ffffff", "secondary-container": "#655dfb", "primary-fixed": "#ffdbce", "tertiary-container": "#c2aa4e", "surface-container": "#f1edec", "on-background": "#1c1b1b", "surface-container-high": "#ece7e7", "on-error-container": "#93000a", "on-secondary-fixed-variant": "#3322cc", secondary: "#4b41e1", "outline-variant": "#dfc0b5", "error-container": "#ffdad6", "inverse-surface": "#313030", "tertiary-fixed-dim": "#dfc566", "on-primary-fixed": "#370e00", "surface-bright": "#fdf8f8", "on-secondary-container": "#fffbff", "on-secondary-fixed": "#0f0069", background: "#fdf8f8", "secondary-fixed": "#e2dfff", "on-secondary": "#ffffff", "tertiary-fixed": "#fce17e", "inverse-on-surface": "#f4f0ef", error: "#ba1a1a", "on-primary-fixed-variant": "#802a00", "on-primary-container": "#ffcebc", "on-primary": "#ffffff", "surface-container-low": "#f7f2f2", "surface-container-highest": "#e6e1e1", "on-tertiary-fixed": "#221b00", "inverse-primary": "#ffb599", "surface-dim": "#ddd9d8", tertiary: "#705d00", "primary-fixed-dim": "#ffb599", outline: "#8c7168", "on-tertiary-container": "#4c3e00", "on-tertiary-fixed-variant": "#544600", primary: "#7f2a00", "secondary-fixed-dim": "#c3c0ff"}, borderRadius: {DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px"}, spacing: {xs: "4px", gutter: "16px", sm: "8px", lg: "24px", "container-max": "1280px", md: "16px", xl: "32px", unit: "4px", margin: "20px"}, fontFamily: {"body-sm": ["Inter"], "body-base": ["Inter"], "numeric-data": ["Inter"], "headline-md": ["Plus Jakarta Sans"], "display-lg": ["Manrope"], "label-caps": ["Inter"], "body-md": ["Be Vietnam Pro"], "headline-lg": ["Plus Jakarta Sans"], "body-lg": ["Be Vietnam Pro"], "label-bold": ["Be Vietnam Pro"], "headline-xl": ["Plus Jakarta Sans"], "label-sm": ["Be Vietnam Pro"]}, fontSize: {"body-sm": ["14px", {lineHeight: "1.5", letterSpacing: "0em", fontWeight: "400"}], "body-base": ["16px", {lineHeight: "1.6", letterSpacing: "0em", fontWeight: "400"}], "numeric-data": ["14px", {lineHeight: "1.0", fontWeight: "500"}], "headline-md": ["24px", {lineHeight: "30px", fontWeight: "700"}], "display-lg": ["48px", {lineHeight: "1.1", letterSpacing: "-0.02em", fontWeight: "700"}], "label-caps": ["12px", {lineHeight: "1.0", letterSpacing: "0.05em", fontWeight: "600"}], "body-md": ["16px", {lineHeight: "24px", fontWeight: "400"}], "headline-lg": ["32px", {lineHeight: "38px", letterSpacing: "-0.01em", fontWeight: "800"}], "body-lg": ["18px", {lineHeight: "28px", fontWeight: "400"}], "label-bold": ["14px", {lineHeight: "20px", fontWeight: "700"}], "headline-xl": ["40px", {lineHeight: "48px", letterSpacing: "-0.02em", fontWeight: "800"}], "label-sm": ["12px", {lineHeight: "16px", fontWeight: "500"}]}}}};</script>
+</head>
+<body class="bg-surface text-on-surface font-body-base min-h-screen portal-page-shell">
+<div class="portal-vignette-fixed"></div>
+<nav class="fixed top-0 w-full z-50 border-b border-slate-200/60 bg-white/80 backdrop-blur-md shadow-sm shadow-slate-200/50">
+<div class="flex items-center justify-between px-8 h-16 max-w-[1280px] mx-auto">
+<div class="flex items-center gap-8">
+<span class="text-lg font-bold text-slate-900 tracking-tighter portal-topbar-brand">Reward SaaS Portal</span>
+<div class="hidden md:flex items-center space-x-6">
+<a class="portal-topnav-link" href="#">Overview</a>
+<a class="portal-topnav-link" href="#">Tenants</a>
+<a class="portal-topnav-link" href="#">API Keys</a>
+<a class="portal-topnav-link" href="#">Usage</a>
+<a class="portal-topnav-link" href="#">Reports</a>
+<a class="portal-topnav-link portal-topnav-link-active" href="#">Prizes</a>
+<a class="portal-topnav-link" href="#">Billing</a>
+<a class="portal-topnav-link" href="#">Docs</a>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<span class="portal-topbar-badge hidden lg:flex">Production Mode</span>
+<div class="flex items-center gap-2">
+<button class="portal-topbar-icon-button">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="portal-topbar-icon-button">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<img alt="User profile" class="portal-topbar-avatar" data-alt="A professional headshot of a corporate executive with a clean background. The lighting is soft and directional, fitting a premium SaaS portal aesthetic. The person is smiling confidently, reflecting a high-performance business environment with a sophisticated blue and white color palette." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBltdCJk-sEF-HV0_WHCZsBoC8llHsC6zgFv9q_INFHDAfr9ceSaiwVycbyJhKtD90RMfjKF71DK9w9_r4r8jkkVOEeCMiwOlxMMW61WHmj5l2aIW4wFIStkQx7-XvuqKSd9E2W0Uaa78jjUyW7HxLtiPiSJJVDI6j7PVi9PRENFZ_wQdMdN4M_qODprtLbCls0gM9Av0FmXdHf1aRyFa57JacWW_SGRH-8ncN_LzIMA8tlWEe5MHnX-rWU5m0pY-POI4Cz_n4cDvs"/>
+</div>
+</div>
+</div>
+</nav>
+<div class="max-w-[1280px] mx-auto px-5 pt-24 pb-16 flex flex-col gap-6 relative z-10 sm:px-8 lg:flex-row">
+<aside class="portal-context-rail w-72 flex flex-col p-4 space-y-2">
+<div class="px-4 py-2 mb-4">
+<p class="portal-context-title">Catalog Controls</p>
+<p class="portal-context-copy mt-3">Keep reward inventory, weight policy, and batch actions readable for operators managing live reward availability and distribution integrity.</p>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="portal-context-link portal-context-link-active text-sm font-semibold" href="#">
+<span class="material-symbols-outlined portal-icon-filled">inventory_2</span>
+<span>Active Inventory</span>
+</a>
+<a class="portal-context-link text-sm" href="#">
+<span class="material-symbols-outlined">tune</span>
+<span>Weight Policy</span>
+</a>
+<a class="portal-context-link text-sm" href="#">
+<span class="material-symbols-outlined">warning</span>
+<span>Low Stock</span>
+</a>
+<a class="portal-context-link text-sm" href="#">
+<span class="material-symbols-outlined">block</span>
+<span>Inactive Rewards</span>
+</a>
+<a class="portal-context-link text-sm" href="#">
+<span class="material-symbols-outlined">bolt</span>
+<span>Batch Actions</span>
+</a>
+</nav>
+<button class="portal-button portal-button-primary mt-auto w-full">
+<span class="material-symbols-outlined text-[18px]">add</span>
+            Add New Prize
+        </button>
+</aside>
+<main class="portal-context-main flex-1 min-w-0">
+<div class="portal-page-intro">
+<div class="portal-scope-strip">
+<span class="portal-scope-chip">Acme Corp</span>
+<span class="portal-scope-chip">5 Active Rewards</span>
+<span class="portal-scope-chip">1 Low Stock Alert</span>
+</div>
+<h1 class="portal-page-title">Prize Catalog</h1>
+<p class="portal-page-copy">Configure reward distribution logic and manage the current tenant’s catalog with clear stock, value, activation state, and batch controls.</p>
+</div>
+<div class="portal-inline-banner portal-inline-banner-info mb-8">
+<span class="material-symbols-outlined text-sky-700">inventory</span>
+<div>
+<p class="text-sm font-semibold">Catalog changes affect live reward outcomes</p>
+<p class="mt-1 text-sm leading-6">Stock levels, weights, and activation state directly shape the available reward pool. Keep edits structured and easy to audit before applying batch actions.</p>
+</div>
+</div>
+<div class="portal-page-actions mb-8">
+<div class="portal-page-actions-group">
+<button class="portal-button portal-button-secondary">
+<span class="material-symbols-outlined text-sm">cloud_download</span>
+                    Export Catalog
+                </button>
+<button class="portal-button portal-button-primary">
+<span class="material-symbols-outlined text-sm">add</span>
+                    Add New Prize
+                </button>
+</div>
+</div>
+<div class="grid grid-cols-12 gap-gutter">
+<section class="col-span-12 lg:col-span-8">
+<div class="portal-panel overflow-hidden">
+<div class="portal-panel-header">
+<div>
+<span class="portal-label-caps">Active Inventory</span>
+<p class="portal-panel-header-copy">Current live and inactive reward entries for the selected tenant scope.</p>
+</div>
+<div class="portal-panel-header-actions">
+<div class="portal-field-shell w-64">
+<span class="material-symbols-outlined text-outline text-lg">search</span>
+<input class="text-sm" placeholder="Filter prizes..." type="text"/>
+</div>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left">
+<thead>
+<tr class="portal-table-head-row">
+<th class="portal-table-head-cell">Prize Name</th>
+<th class="portal-table-head-cell">Stock Level</th>
+<th class="portal-table-head-cell">Reward Value</th>
+<th class="portal-table-head-cell">Status</th>
+<th class="portal-table-head-cell portal-table-head-cell-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/60">
+<tr class="portal-table-row">
+<td class="px-6 py-4 font-medium text-on-surface">Amazon Digital Credit</td>
+<td class="px-6 py-4 font-numeric-data">1,240 <span class="text-xs text-on-surface-variant ml-1 font-normal">units</span></td>
+<td class="px-6 py-4 font-numeric-data text-primary">$25.00</td>
+<td class="px-6 py-4">
+<span class="portal-status-pill portal-status-success">Active</span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="portal-button portal-button-ghost portal-button-sm text-outline">
+<span class="material-symbols-outlined text-xl">edit</span>
+</button>
+</td>
+</tr>
+<tr class="portal-table-row portal-table-row-warn">
+<td class="px-6 py-4 font-medium text-on-surface">Starbucks Premium Pass</td>
+<td class="px-6 py-4 font-numeric-data text-error">42 <span class="text-xs text-on-surface-variant ml-1 font-normal">units</span></td>
+<td class="px-6 py-4 font-numeric-data text-primary">$10.00</td>
+<td class="px-6 py-4">
+<span class="portal-status-pill portal-status-success">Active</span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="portal-button portal-button-ghost portal-button-sm text-outline">
+<span class="material-symbols-outlined text-xl">edit</span>
+</button>
+</td>
+</tr>
+<tr class="portal-table-row">
+<td class="px-6 py-4 font-medium text-on-surface">UberEats Corporate Voucher</td>
+<td class="px-6 py-4 font-numeric-data">890 <span class="text-xs text-on-surface-variant ml-1 font-normal">units</span></td>
+<td class="px-6 py-4 font-numeric-data text-primary">$50.00</td>
+<td class="px-6 py-4">
+<span class="portal-status-pill portal-status-muted">Inactive</span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="portal-button portal-button-ghost portal-button-sm text-outline">
+<span class="material-symbols-outlined text-xl">edit</span>
+</button>
+</td>
+</tr>
+<tr class="portal-table-row">
+<td class="px-6 py-4 font-medium text-on-surface">Apple Gift Card</td>
+<td class="px-6 py-4 font-numeric-data">Unlimited</td>
+<td class="px-6 py-4 font-numeric-data text-primary">$100.00</td>
+<td class="px-6 py-4">
+<span class="portal-status-pill portal-status-success">Active</span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="portal-button portal-button-ghost portal-button-sm text-outline">
+<span class="material-symbols-outlined text-xl">edit</span>
+</button>
+</td>
+</tr>
+<tr class="portal-table-row">
+<td class="px-6 py-4 font-medium text-on-surface">Global Prepaid Visa</td>
+<td class="px-6 py-4 font-numeric-data">512 <span class="text-xs text-on-surface-variant ml-1 font-normal">units</span></td>
+<td class="px-6 py-4 font-numeric-data text-primary">$200.00</td>
+<td class="px-6 py-4">
+<span class="portal-status-pill portal-status-success">Active</span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="portal-button portal-button-ghost portal-button-sm text-outline">
+<span class="material-symbols-outlined text-xl">edit</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="border-t border-outline-variant/60 bg-white px-6 py-4">
+<div class="portal-empty-state">
+<div class="flex items-start gap-3">
+<span class="material-symbols-outlined text-slate-400">inventory</span>
+<div>
+<p class="portal-empty-state-title">No draft rewards are waiting for approval</p>
+<p class="portal-empty-state-copy">The current catalog only contains live or intentionally inactive entries. New draft rewards will appear here before they affect production distribution.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<aside class="col-span-12 lg:col-span-4 space-y-gutter">
+<section class="portal-panel-soft p-6">
+<div class="flex items-center gap-2 mb-6">
+<span class="material-symbols-outlined text-sky-600">analytics</span>
+<h2 class="font-headline-md text-body-base font-bold text-on-surface">Weight Configuration</h2>
+</div>
+<div class="space-y-6">
+<div>
+<div class="flex justify-between mb-2">
+<label class="portal-label-caps">High Value (Top 5%)</label>
+<span class="font-numeric-data text-primary">0.05%</span>
+</div>
+<input class="w-full accent-primary h-1 bg-surface-container-high rounded-lg appearance-none cursor-pointer" type="range"/>
+</div>
+<div>
+<div class="flex justify-between mb-2">
+<label class="portal-label-caps">Medium Value (Mid 25%)</label>
+<span class="font-numeric-data text-primary">15.00%</span>
+</div>
+<input class="w-full accent-primary h-1 bg-surface-container-high rounded-lg appearance-none cursor-pointer" type="range"/>
+</div>
+<div>
+<div class="flex justify-between mb-2">
+<label class="portal-label-caps">Standard Rewards</label>
+<span class="font-numeric-data text-primary">84.95%</span>
+</div>
+<input class="w-full accent-primary h-1 bg-surface-container-high rounded-lg appearance-none cursor-pointer" type="range"/>
+</div>
+</div>
+<div class="mt-8 pt-6 border-t border-outline-variant">
+<div class="flex items-center justify-between mb-4">
+<span class="text-body-sm font-medium text-on-surface">Distribution Integrity</span>
+<span class="material-symbols-outlined portal-icon-filled text-green-600 text-sm">verified</span>
+</div>
+<p class="text-xs text-on-surface-variant leading-relaxed">System automatically normalizes weights to ensure 100% total allocation. Variance is limited to +/- 0.01% based on available stock metadata.</p>
+</div>
+</section>
+<section class="portal-panel-soft p-6">
+<div class="mb-4">
+<h3 class="portal-label-caps">Low Stock Watch</h3>
+</div>
+<div class="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+<div class="flex items-center justify-between mb-2">
+<span class="text-sm font-semibold text-amber-900">Starbucks Premium Pass</span>
+<span class="portal-label-caps portal-label-caps-warn">42 left</span>
+</div>
+<p class="text-xs leading-5 text-amber-800/80">Inventory is below the preferred floor for this project’s reward mix. Replenish stock or reduce weight allocation.</p>
+</div>
+</section>
+<section class="bg-surface-container-high/50 border border-outline-variant border-dashed rounded-xl p-6">
+<h3 class="portal-label-caps mb-4">Batch Actions</h3>
+<div class="grid grid-cols-1 gap-2">
+<button class="portal-button portal-button-secondary w-full justify-between">
+                            Adjust Stock Levels
+                            <span class="material-symbols-outlined text-lg">inventory_2</span>
+</button>
+<button class="portal-button portal-button-secondary w-full justify-between">
+                            Set Global Multiplier
+                            <span class="material-symbols-outlined text-lg">tune</span>
+</button>
+<button class="portal-button portal-button-danger w-full justify-between">
+                            Deactivate All Out-of-Stock
+                            <span class="material-symbols-outlined text-lg">block</span>
+</button>
+</div>
+</section>
+</aside>
+</div>
+</main>
+</div>
+<footer class="portal-footer mt-auto">
+<div class="portal-footer-shell">
+<p class="portal-footer-copy">© 2024 Reward SaaS Portal. Controlled reward catalog, stock posture, and weight policy.</p>
+<div class="portal-footer-links">
+<a class="portal-footer-link" href="#">Privacy Policy</a>
+<a class="portal-footer-link" href="#">Terms of Service</a>
+<a class="portal-footer-link" href="#">Security</a>
+<a class="portal-footer-link" href="#">Status</a>
+</div>
+</div>
+</footer>
+</body></html>

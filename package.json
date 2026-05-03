@@ -5,6 +5,7 @@
     "dev": "pnpm -r --parallel --filter ./apps/frontend --filter ./apps/admin --filter ./apps/backend dev",
     "dev:user": "pnpm -r --parallel --filter ./apps/frontend --filter ./apps/mobile --filter ./apps/backend dev",
     "dev:frontend": "pnpm --dir apps/frontend dev",
+    "dev:tiktok": "pnpm --dir apps/tiktok dev",
     "dev:saas-portal": "pnpm --dir apps/saas-portal dev",
     "dev:saas-status": "pnpm --dir apps/saas-status dev",
     "dev:docs": "pnpm --dir apps/docs dev",

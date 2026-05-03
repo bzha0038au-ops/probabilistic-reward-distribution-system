@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Tenants - Reward SaaS Portal</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&amp;family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="../shared-ui.css" rel="stylesheet"/>
+<script id="tailwind-config">tailwind.config = {darkMode: "class", theme: {extend: {colors: {"surface-container": "#f1edec", primary: "#7f2a00", "outline-variant": "#dfc0b5", "on-error-container": "#93000a", "surface-bright": "#fdf8f8", "primary-container": "#a73a00", secondary: "#4b41e1", error: "#ba1a1a", "error-container": "#ffdad6", "on-primary-fixed-variant": "#802a00", "primary-fixed-dim": "#ffb599", "on-tertiary-fixed-variant": "#544600", "secondary-fixed": "#e2dfff", outline: "#8c7168", "secondary-fixed-dim": "#c3c0ff", "secondary-container": "#655dfb", "on-background": "#1c1b1b", "on-secondary-fixed-variant": "#3322cc", "surface-container-low": "#f7f2f2", "surface-container-high": "#ece7e7", "inverse-primary": "#ffb599", background: "#fdf8f8", "surface-variant": "#e6e1e1", "on-surface": "#1c1b1b", "on-secondary-fixed": "#0f0069", "primary-fixed": "#ffdbce", "on-error": "#ffffff", "on-primary-fixed": "#370e00", surface: "#fdf8f8", "tertiary-container": "#c2aa4e", "on-surface-variant": "#58423a", "on-primary-container": "#ffcebc", tertiary: "#705d00", "inverse-surface": "#313030", "on-tertiary-container": "#4c3e00", "tertiary-fixed": "#fce17e", "surface-dim": "#ddd9d8", "surface-container-lowest": "#ffffff", "on-secondary-container": "#fffbff", "surface-container-highest": "#e6e1e1", "on-secondary": "#ffffff", "on-primary": "#ffffff", "surface-tint": "#a73a00", "on-tertiary": "#ffffff", "on-tertiary-fixed": "#221b00", "tertiary-fixed-dim": "#dfc566", "inverse-on-surface": "#f4f0ef"}, borderRadius: {DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px"}, spacing: {"container-max": "1280px", xl: "32px", unit: "4px", sm: "8px", md: "16px", xs: "4px", lg: "24px", gutter: "16px", margin: "20px"}, fontFamily: {"numeric-data": ["Inter"], "body-base": ["Inter"], "body-sm": ["Inter"], "label-caps": ["Inter"], "display-lg": ["Manrope"], "headline-md": ["Plus Jakarta Sans"], "body-md": ["Be Vietnam Pro"], "headline-lg": ["Plus Jakarta Sans"], "body-lg": ["Be Vietnam Pro"], "label-bold": ["Be Vietnam Pro"], "headline-xl": ["Plus Jakarta Sans"], "label-sm": ["Be Vietnam Pro"]}, fontSize: {"numeric-data": ["14px", {lineHeight: "1.0", fontWeight: "500"}], "body-base": ["16px", {lineHeight: "1.6", letterSpacing: "0em", fontWeight: "400"}], "body-sm": ["14px", {lineHeight: "1.5", letterSpacing: "0em", fontWeight: "400"}], "label-caps": ["12px", {lineHeight: "1.0", letterSpacing: "0.05em", fontWeight: "600"}], "display-lg": ["48px", {lineHeight: "1.1", letterSpacing: "-0.02em", fontWeight: "700"}], "headline-md": ["24px", {lineHeight: "30px", fontWeight: "700"}], "body-md": ["16px", {lineHeight: "24px", fontWeight: "400"}], "headline-lg": ["32px", {lineHeight: "38px", letterSpacing: "-0.01em", fontWeight: "800"}], "body-lg": ["18px", {lineHeight: "28px", fontWeight: "400"}], "label-bold": ["14px", {lineHeight: "20px", fontWeight: "700"}], "headline-xl": ["40px", {lineHeight: "48px", letterSpacing: "-0.02em", fontWeight: "800"}], "label-sm": ["12px", {lineHeight: "16px", fontWeight: "500"}]}}}};</script>
+</head>
+<body class="bg-background text-on-background font-body-base antialiased portal-page-shell">
+<div class="portal-vignette-fixed"></div>
+<nav class="fixed top-0 w-full z-50 border-b border-slate-200/60 bg-white/80 backdrop-blur-md">
+<div class="flex items-center justify-between px-8 h-16 max-w-[1280px] mx-auto">
+<div class="flex items-center gap-8">
+<span class="text-lg font-bold text-slate-900 tracking-tighter portal-topbar-brand">Reward SaaS Portal</span>
+<div class="hidden md:flex items-center gap-6 font-manrope text-sm font-medium tracking-tight">
+<a class="portal-topnav-link" href="#">Overview</a>
+<a class="portal-topnav-link portal-topnav-link-active" href="#">Tenants</a>
+<a class="portal-topnav-link" href="#">API Keys</a>
+<a class="portal-topnav-link" href="#">Usage</a>
+<a class="portal-topnav-link" href="#">Reports</a>
+<a class="portal-topnav-link" href="#">Prizes</a>
+<a class="portal-topnav-link" href="#">Billing</a>
+<a class="portal-topnav-link" href="#">Docs</a>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<span class="portal-topbar-badge hidden lg:flex">Production Mode</span>
+<button class="portal-topbar-icon-button"><span class="material-symbols-outlined">notifications</span></button>
+<button class="portal-topbar-icon-button"><span class="material-symbols-outlined">settings</span></button>
+<div class="portal-topbar-avatar">
+<img alt="User profile" class="h-full w-full object-cover" data-alt="A professional headshot of a senior software architect in a bright, modern corporate office. The lighting is soft and directional, highlighting clean facial features with a shallow depth of field. The background shows blurred architectural glass and white minimalist furniture, maintaining a high-key, professional B2B tech aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA3cgBArIL-VIlYkuEqVDNLumQZXxXjiaBndti5opOieubvx79XlXWqmfdKCN1uexCh4lZJHuUVXqHIiPaoTPChvjJCDDoU6iSdAGAW-tYv39Y-lrmj2f3ZlABIewHCDgia3muvHif0I0-tJ7T78xyhS5qBZIi2gCyhXKtmhXj3D7-knlV_ighnkdnQmC4sjcmsVJgnOANHU8TghdWWoQVvCfNpburzxECaLevp5aFklH9hYB6Jvt6AWWGtv3p6PGyx7RJG3lAnfOI"/>
+</div>
+</div>
+</div>
+</nav>
+<div class="max-w-[1280px] mx-auto px-5 pt-24 pb-16 flex flex-col gap-6 relative z-10 sm:px-8 lg:flex-row">
+<aside class="portal-context-rail w-72 flex flex-col p-4 space-y-2">
+<div class="px-4 py-2 mb-4">
+<p class="portal-context-title">Tenant Operations</p>
+<p class="portal-context-copy mt-3">Keep membership-scoped tenant access, project inventory, and invite health visible for tenant operators, finance owners, and project managers.</p>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="portal-context-link portal-context-link-active text-sm font-semibold" href="#">
+<span class="material-symbols-outlined portal-icon-filled">account_tree</span>
+<span>Tenant Inventory</span>
+</a>
+<a class="portal-context-link text-sm" href="#">
+<span class="material-symbols-outlined">badge</span>
+<span>Membership Roles</span>
+</a>
+<a class="portal-context-link text-sm" href="#">
+<span class="material-symbols-outlined">mark_email_unread</span>
+<span>Pending Invites</span>
+</a>
+<a class="portal-context-link text-sm" href="#">
+<span class="material-symbols-outlined">hub</span>
+<span>Linked Workspaces</span>
+</a>
+<a class="portal-context-link text-sm" href="#">
+<span class="material-symbols-outlined">policy</span>
+<span>Access Policies</span>
+</a>
+</nav>
+<button class="portal-button portal-button-primary mt-auto w-full">
+<span class="material-symbols-outlined text-sm">person_add</span>
+            Invite Member
+        </button>
+</aside>
+<main class="portal-context-main flex-1 min-w-0">
+<div class="portal-page-intro">
+<div class="portal-scope-strip">
+<span class="portal-scope-chip">Membership Scoped</span>
+<span class="portal-scope-chip">124 Tenants</span>
+<span class="portal-scope-chip">3 Pending Invites</span>
+</div>
+<h1 class="portal-page-title">Tenant Inventory</h1>
+<p class="portal-page-copy">Review every tenant attached to the signed-in operator, move between memberships, and keep project relationships legible while preserving a clear split between tenant-level and project-level access.</p>
+</div>
+<div class="portal-inline-banner portal-inline-banner-info mb-8">
+<span class="material-symbols-outlined text-sky-700">groups</span>
+<div>
+<p class="text-sm font-semibold">Membership-scoped access model</p>
+<p class="mt-1 text-sm leading-6">Prioritize who can operate each tenant, which projects are attached, and which invites or relationship edges still need attention.</p>
+</div>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+<section class="portal-panel lg:col-span-8 overflow-hidden">
+<div class="portal-panel-header">
+<div>
+<h2 class="text-headline-md font-headline-md text-slate-900">Tenant Directory</h2>
+<p class="portal-panel-header-copy">Operator-facing tenant inventory with project count, lead contact, and current lifecycle state.</p>
+</div>
+<div class="portal-panel-header-actions">
+<div class="portal-field-shell w-64">
+<span class="material-symbols-outlined text-lg">search</span>
+<input class="text-sm" placeholder="Search tenants..." type="text"/>
+</div>
+<button class="portal-button portal-button-secondary">
+<span class="material-symbols-outlined text-lg">filter_list</span>
+                    Filter
+                </button>
+<button class="portal-button portal-button-primary">
+<span class="material-symbols-outlined text-lg">person_add</span>
+                    Invite Member
+                </button>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="portal-table-head-row">
+<th class="portal-table-head-cell">Tenant Name</th>
+<th class="portal-table-head-cell">Active Projects</th>
+<th class="portal-table-head-cell">Lead Contact</th>
+<th class="portal-table-head-cell">Created Date</th>
+<th class="portal-table-head-cell">Status</th>
+<th class="portal-table-head-cell portal-table-head-cell-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-100">
+<tr class="portal-table-row">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-2xl bg-sky-100 flex items-center justify-center text-sky-600 font-bold text-xs">AC</div>
+<div>
+<div class="font-medium text-slate-900">Acme Global</div>
+<div class="text-xs text-slate-400">Primary operator tenant</div>
+</div>
+</div>
+</td>
+<td class="px-6 py-4 text-slate-600 font-numeric-data">14</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<div class="w-7 h-7 rounded-full bg-slate-200"></div>
+<span class="text-sm text-slate-600">Sarah Jenkins</span>
+</div>
+</td>
+<td class="px-6 py-4 text-sm text-slate-500 font-numeric-data">Oct 12, 2023</td>
+<td class="px-6 py-4">
+<span class="portal-status-pill portal-status-success">Active</span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="portal-button portal-button-ghost portal-button-sm text-slate-400"><span class="material-symbols-outlined">more_horiz</span></button>
+</td>
+</tr>
+<tr class="portal-table-row">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-xs">ST</div>
+<div>
+<div class="font-medium text-slate-900">Stellar Tech</div>
+<div class="text-xs text-slate-400">Consumer rewards workspace</div>
+</div>
+</div>
+</td>
+<td class="px-6 py-4 text-slate-600 font-numeric-data">08</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<div class="w-7 h-7 rounded-full bg-slate-200"></div>
+<span class="text-sm text-slate-600">Marcus Thorne</span>
+</div>
+</td>
+<td class="px-6 py-4 text-sm text-slate-500 font-numeric-data">Nov 02, 2023</td>
+<td class="px-6 py-4">
+<span class="portal-status-pill portal-status-success">Active</span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="portal-button portal-button-ghost portal-button-sm text-slate-400"><span class="material-symbols-outlined">more_horiz</span></button>
+</td>
+</tr>
+<tr class="portal-table-row portal-table-row-warn border-l-2 border-transparent hover:border-sky-500">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-2xl bg-amber-100 flex items-center justify-center text-amber-600 font-bold text-xs">NV</div>
+<div>
+<div class="font-medium text-slate-900">Nova Ventures</div>
+<div class="text-xs text-slate-400">Awaiting production approval</div>
+</div>
+</div>
+</td>
+<td class="px-6 py-4 text-slate-600 font-numeric-data">03</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<div class="w-7 h-7 rounded-full bg-slate-200"></div>
+<span class="text-sm text-slate-600">Eliza Vance</span>
+</div>
+</td>
+<td class="px-6 py-4 text-sm text-slate-500 font-numeric-data">Jan 15, 2024</td>
+<td class="px-6 py-4">
+<span class="portal-status-pill portal-status-warn">Pending</span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="portal-button portal-button-ghost portal-button-sm text-slate-400"><span class="material-symbols-outlined">more_horiz</span></button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="px-6 py-4 bg-slate-50/30 border-t border-slate-100 flex items-center justify-between">
+<span class="text-xs text-slate-500">Showing 3 of 124 tenants</span>
+<div class="flex gap-2">
+<button class="portal-button portal-button-secondary portal-button-sm" disabled><span class="material-symbols-outlined text-lg">chevron_left</span></button>
+<button class="portal-button portal-button-secondary portal-button-sm"><span class="material-symbols-outlined text-lg">chevron_right</span></button>
+</div>
+</div>
+</section>
+<aside class="lg:col-span-4 flex flex-col gap-6">
+<section class="portal-panel-soft p-6">
+<div class="mb-5">
+<h3 class="text-headline-md font-headline-md text-slate-900">Membership Health</h3>
+<p class="mt-1 text-sm text-slate-500">Quick read on role spread and invite backlog.</p>
+</div>
+<div class="space-y-4">
+<div>
+<div class="flex items-center justify-between mb-2">
+<span class="text-sm text-slate-600">Tenant Managers</span>
+<span class="text-sm font-numeric-data font-bold text-slate-900">42</span>
+</div>
+<div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+<div class="bg-sky-500 h-full w-2/3"></div>
+</div>
+</div>
+<div>
+<div class="flex items-center justify-between mb-2">
+<span class="text-sm text-slate-600">Read-only Auditors</span>
+<span class="text-sm font-numeric-data font-bold text-slate-900">12</span>
+</div>
+<div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+<div class="bg-slate-400 h-full w-1/3"></div>
+</div>
+</div>
+<div>
+<div class="flex items-center justify-between mb-2">
+<span class="text-sm text-slate-600">Pending Invites</span>
+<span class="text-sm font-numeric-data font-bold text-amber-700">03</span>
+</div>
+<div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+<div class="bg-amber-400 h-full w-1/4"></div>
+</div>
+</div>
+<button class="portal-button portal-button-secondary portal-button-sm portal-button-caps mt-2 w-full">View Permissions Matrix</button>
+</div>
+</section>
+<section class="portal-panel-soft p-6">
+<div class="mb-5">
+<h3 class="text-headline-md font-headline-md text-slate-900">Pending Invites</h3>
+<p class="mt-1 text-sm text-slate-500">Track outstanding access requests that still block tenant operations.</p>
+</div>
+<div class="space-y-4">
+<div class="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+<div class="flex items-center justify-between mb-1">
+<div class="font-semibold text-slate-900">anna.s@external.com</div>
+<span class="text-[10px] text-slate-400">2h ago</span>
+</div>
+<p class="text-xs text-slate-500">Requested for Acme Global · Manager</p>
+</div>
+<div class="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+<div class="flex items-center justify-between mb-1">
+<div class="font-semibold text-slate-900">li.wei@partner.io</div>
+<span class="text-[10px] text-slate-400">Yesterday</span>
+</div>
+<p class="text-xs text-slate-500">Requested for Nova Ventures · Auditor</p>
+</div>
+</div>
+<div class="portal-empty-state mt-4">
+<div class="flex items-start gap-3">
+<span class="material-symbols-outlined text-slate-400">draft</span>
+<div>
+<p class="portal-empty-state-title">No expired invitations need cleanup</p>
+<p class="portal-empty-state-copy">Current invite backlog is active and still within the 7-day response window, so no resend or revoke action is blocking tenant access.</p>
+</div>
+</div>
+</div>
+</section>
+</aside>
+<section class="portal-panel lg:col-span-12 p-6">
+<div class="flex items-center justify-between mb-4">
+<div>
+<h3 class="text-body-base font-headline-md text-slate-900">Linked Workspace Relationships</h3>
+<p class="mt-1 text-sm text-slate-500">Parent-child relationships, shared controls, and identity constraints that affect tenant routing.</p>
+</div>
+<span class="material-symbols-outlined text-slate-400">hub</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+<div class="md:col-span-2 rounded-2xl border border-slate-100 bg-slate-50 p-5">
+<div class="flex items-start justify-between gap-4">
+<div>
+<p class="text-sm font-semibold text-slate-900">Parent Organization: Global Reward Group</p>
+<p class="mt-1 text-xs text-slate-500">Managing 12 child tenants across EU-West-1 with shared billing policy and linked compliance review.</p>
+</div>
+<button class="portal-button portal-button-ghost portal-button-sm portal-button-accent portal-button-caps">View Graph</button>
+</div>
+</div>
+<div class="rounded-2xl border border-slate-100 bg-white p-5">
+<p class="portal-eyebrow mb-1">Data Residency</p>
+<p class="text-sm font-medium text-slate-700">Multi-Region (AWS)</p>
+</div>
+<div class="rounded-2xl border border-slate-100 bg-white p-5">
+<p class="portal-eyebrow mb-1">Enforced SSO</p>
+<p class="text-sm font-medium text-slate-700">Okta / Azure AD</p>
+</div>
+<div class="rounded-2xl border border-slate-100 bg-white p-5">
+<p class="portal-eyebrow mb-1">Cross-Tenant Billing</p>
+<p class="text-sm font-medium text-slate-700">Parent-managed invoices</p>
+</div>
+</div>
+</section>
+</div>
+</main>
+</div>
+<div class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[60] justify-end items-stretch opacity-0 pointer-events-none transition-opacity">
+<div class="w-full max-w-md bg-white shadow-2xl p-8 transform translate-x-full transition-transform duration-300">
+<div class="flex justify-between items-center mb-8">
+<h2 class="font-headline-md text-slate-900">Invite Member</h2>
+<button class="text-slate-400 hover:text-slate-600"><span class="material-symbols-outlined">close</span></button>
+</div>
+<form class="space-y-6">
+<div>
+<label class="portal-label-caps block mb-2">Email Address</label>
+<input class="portal-field text-sm" placeholder="colleague@company.com" type="email"/>
+</div>
+<div>
+<label class="portal-label-caps block mb-2">Assign Tenant</label>
+<select class="portal-field text-sm">
+<option>Acme Global</option>
+<option>Stellar Tech</option>
+<option>Nova Ventures</option>
+</select>
+</div>
+<div>
+<label class="portal-label-caps block mb-2">Access Role</label>
+<div class="grid grid-cols-2 gap-3">
+<button class="p-3 border-2 border-primary bg-sky-50 rounded-xl text-left" type="button">
+<p class="text-sm font-bold text-primary">Manager</p>
+<p class="text-[10px] text-sky-700">Full tenant control</p>
+</button>
+<button class="p-3 border-2 border-slate-100 rounded-xl text-left hover:border-slate-200" type="button">
+<p class="text-sm font-bold text-slate-700">Auditor</p>
+<p class="text-[10px] text-slate-500">Read-only logs</p>
+</button>
+</div>
+</div>
+<button class="portal-button portal-button-primary w-full" type="submit">Send Invitation</button>
+</form>
+<div class="mt-12 p-4 bg-sky-50 rounded-xl border border-sky-100">
+<div class="flex gap-3">
+<span class="material-symbols-outlined text-sky-600">info</span>
+<p class="text-xs text-sky-800 leading-relaxed">Invitations expire after 7 days. You can monitor pending status in the Audit Logs workspace and export the full activity trail when needed.</p>
+</div>
+</div>
+</div>
+</div>
+<footer class="portal-footer relative z-10">
+<div class="portal-footer-shell">
+<span class="portal-footer-copy">© 2024 Reward SaaS Portal. Membership-scoped tenant inventory and relationship health.</span>
+<div class="portal-footer-links">
+<a class="portal-footer-link" href="#">Privacy Policy</a>
+<a class="portal-footer-link" href="#">Terms of Service</a>
+<a class="portal-footer-link" href="#">Security</a>
+<a class="portal-footer-link" href="#">Status</a>
+</div>
+</div>
+</footer>
+</body></html>

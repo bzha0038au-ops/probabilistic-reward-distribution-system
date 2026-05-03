@@ -19,6 +19,7 @@ export function SecurityRouteContainer(props: SecurityRouteContainerProps) {
       apiBaseUrl={apiBaseUrl}
       message={message}
       error={error}
+      compactHero
     >
       <SecurityRouteScreen {...screenProps} />
     </AppScreenShell>

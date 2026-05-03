@@ -21,6 +21,7 @@ export function CommunityRouteContainer(
       apiBaseUrl={apiBaseUrl}
       message={message}
       error={error}
+      compactHero
     >
       <CommunityRouteScreen {...screenProps} />
     </AppScreenShell>

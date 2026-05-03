@@ -65,6 +65,7 @@ import { useFairness } from "./src/hooks/use-fairness";
 import { useHoldem } from "./src/hooks/use-holdem";
 import { useIap } from "./src/hooks/use-iap";
 import { useKycProfile } from "./src/hooks/use-kyc-profile";
+import { usePaymentOperations } from "./src/hooks/use-payment-operations";
 import { usePredictionMarket } from "./src/hooks/use-prediction-market";
 import { useQuickEight } from "./src/hooks/use-quick-eight";
 import { useRewardCenter } from "./src/hooks/use-reward-center";
@@ -267,26 +268,65 @@ export function NativeApp() {
   const fairnessContent = getMobileFairnessCopy(fairnessLocale);
   const playModeCopy = getPlayModeCopy(fairnessLocale);
   const routeContent = getMobileRouteCopy(fairnessLocale);
+  type EntryFeatureKey = keyof typeof routeContent.cards;
+  const authFeatureKeys = ["gacha", "rewards", "wallet"] as const satisfies readonly EntryFeatureKey[];
+  const legalFeatureKeys = ["security", "fairness", "rewards"] as const satisfies readonly EntryFeatureKey[];
   const notificationRouteCopy =
     fairnessLocale === "zh-CN"
       ? {
           unreadLabel: "未读",
+          latestLabel: "最新",
           refresh: "刷新",
           refreshing: "刷新中...",
           markAllRead: "全部已读",
           markRead: "标记已读",
           empty: "还没有通知。",
           newBadge: "新",
+          allFilter: "全部",
+          accountFilter: "账户",
+          marketsFilter: "市场",
+          tablesFilter: "牌桌",
+          updatesFilter: "更新",
         }
       : {
           unreadLabel: "Unread",
+          latestLabel: "Latest",
           refresh: "Refresh",
           refreshing: "Refreshing...",
           markAllRead: "Mark all read",
           markRead: "Mark read",
           empty: "No notifications yet.",
           newBadge: "NEW",
+          allFilter: "All",
+          accountFilter: "Account",
+          marketsFilter: "Markets",
+          tablesFilter: "Tables",
+          updatesFilter: "Updates",
         };
+  const renderEntryFeatureGrid = (keys: readonly EntryFeatureKey[]) => (
+    <View style={styles.entryFeatureGrid}>
+      {keys.map((key, index) => (
+        <View
+          key={`entry-${key}`}
+          style={[
+            styles.entryFeatureCard,
+            index === 0
+              ? styles.entryFeatureCardWarm
+              : index === 1
+                ? styles.entryFeatureCardInfo
+                : styles.entryFeatureCardPanel,
+          ]}
+        >
+          <Text style={styles.entryFeatureTitle}>
+            {routeContent.cards[key].title}
+          </Text>
+          <Text style={styles.entryFeatureBody}>
+            {routeContent.cards[key].body}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
   const refreshLegalDocuments = useCallback(async () => {
     setLoadingLegalDocuments(true);
     const response = await api.getCurrentLegalDocuments();
@@ -538,6 +578,8 @@ export function NativeApp() {
   const {
     claimingMissionId,
     claimReward,
+    dismissClaimReceipt,
+    lastClaimReceipt,
     loadingRewardCenter,
     refreshRewardCenter,
     resetRewardCenter,
@@ -834,6 +876,34 @@ export function NativeApp() {
     sendGift,
     sendingGift,
   } = useEconomy({
+    api,
+    authTokenRef,
+    handleUnauthorizedRef,
+    refreshBalance,
+    setError,
+    setMessage,
+    sessionToken: session?.token ?? null,
+  });
+  const {
+    activePaymentAction,
+    bankCards,
+    createBankCard,
+    createCryptoDeposit,
+    createCryptoWithdrawAddress,
+    createCryptoWithdrawal,
+    createTopUp,
+    createWithdrawal,
+    cryptoAddresses,
+    cryptoChannels,
+    hasLoadedPayments,
+    loadingPayments,
+    refreshPaymentOperations,
+    resetPaymentOperations,
+    setDefaultBankCard,
+    setDefaultCryptoWithdrawAddress,
+    topUps,
+    withdrawals,
+  } = usePaymentOperations({
     api,
     authTokenRef,
     handleUnauthorizedRef,
@@ -1253,6 +1323,10 @@ export function NativeApp() {
       await refreshCurrentSession(session);
     }
 
+    if (nextRoute === "wallet" && session?.token && !hasLoadedPayments) {
+      await refreshPaymentOperations();
+    }
+
     if (nextRoute === "rewards" && !rewardCenter && session?.token) {
       await refreshRewardCenter();
     }
@@ -1425,7 +1499,25 @@ export function NativeApp() {
               error={error}
               title={routeContent.homeSectionTitle}
               subtitle={routeContent.homeSectionSubtitle}
+              tickerLabel={routeContent.homeTickerLabel}
+              featuredLabel={routeContent.homeFeaturedLabel}
+              moreTitle={routeContent.homeMoreTitle}
+              moreSubtitle={routeContent.homeMoreSubtitle}
               cards={routeContent.cards}
+              formattedBalance={formatAmount(balance)}
+              bonusBalance={formatAmount(
+                rewardCenter?.summary?.bonusBalance ?? "0.00",
+              )}
+              streakDays={rewardCenter?.summary?.streakDays ?? 0}
+              readyMissionCount={rewardCenter?.summary?.availableMissionCount ?? 0}
+              summaryLabels={{
+                balance: appContent.wallet.currentBalance ?? "Balance",
+                bonus: appContent.rewardCenter.summary?.bonusBalance ?? "Bonus",
+                streak:
+                  appContent.rewardCenter.summary?.checkInStreak ?? "Streak",
+                ready:
+                  appContent.rewardCenter.summary?.readyToClaim ?? "Ready",
+              }}
               navigationLocked={routeNavigationLocked}
               onOpenRoute={(route) => void openAppRoute(route)}
             />
@@ -1489,6 +1581,13 @@ export function NativeApp() {
               giftPackProducts={giftPackProducts}
               supportedIap={iapSupported}
               connectedStore={iapConnected}
+              bankCards={bankCards}
+              cryptoChannels={cryptoChannels}
+              cryptoAddresses={cryptoAddresses}
+              topUps={topUps}
+              withdrawals={withdrawals}
+              loadingPayments={loadingPayments}
+              activePaymentAction={activePaymentAction}
               formatAmount={formatAmount}
               formatDateTime={(value) =>
                 formatOptionalTimestamp(value ?? null) ?? "-"
@@ -1497,12 +1596,55 @@ export function NativeApp() {
               onRefreshEconomy={() => void refreshEconomy()}
               onRefreshIapProducts={() => void refreshIapProducts()}
               onSyncPendingPurchases={() => void syncPendingStorePurchases()}
+              onRefreshPayments={() => void refreshPaymentOperations()}
               onSendGift={(receiverUserId, amount) =>
                 sendGift({ receiverUserId, amount })
               }
               onPurchaseVoucher={(sku) => void purchaseVoucher(sku)}
               onPurchaseGiftPack={(sku, recipientUserId) =>
                 purchaseGiftPack(sku, recipientUserId)
+              }
+              onCreateTopUp={(payload) =>
+                createTopUp(payload, appContent.wallet.payments.topUpCreated)
+              }
+              onCreateCryptoDeposit={(payload) =>
+                createCryptoDeposit(
+                  payload,
+                  appContent.wallet.payments.cryptoDepositCreated,
+                )
+              }
+              onCreateBankCard={(payload) =>
+                createBankCard(payload, appContent.wallet.payments.bankCardSaved)
+              }
+              onSetDefaultBankCard={(bankCardId) =>
+                setDefaultBankCard(
+                  bankCardId,
+                  appContent.wallet.payments.defaultBankCardUpdated,
+                )
+              }
+              onCreateWithdrawal={(payload) =>
+                createWithdrawal(
+                  payload,
+                  appContent.wallet.payments.withdrawalCreated,
+                )
+              }
+              onCreateCryptoWithdrawAddress={(payload) =>
+                createCryptoWithdrawAddress(
+                  payload,
+                  appContent.wallet.payments.cryptoRouteSaved,
+                )
+              }
+              onSetDefaultCryptoAddress={(payoutMethodId) =>
+                setDefaultCryptoWithdrawAddress(
+                  payoutMethodId,
+                  appContent.wallet.payments.defaultCryptoRouteUpdated,
+                )
+              }
+              onCreateCryptoWithdrawal={(payload) =>
+                createCryptoWithdrawal(
+                  payload,
+                  appContent.wallet.payments.cryptoWithdrawalCreated,
+                )
               }
             />
           )}
@@ -1518,10 +1660,15 @@ export function NativeApp() {
               apiBaseUrl={configuredApiBaseUrl}
               message={message}
               error={error}
+              currentRoute={appRoute}
+              routeLabels={routeContent.labels}
+              routeNavigationLocked={routeNavigationLocked}
+              onOpenRoute={(route) => void openAppRoute(route)}
               copy={appContent.rewardCenter}
               rewardCenter={rewardCenter}
               loadingRewardCenter={loadingRewardCenter}
               claimingMissionId={claimingMissionId}
+              lastClaimReceipt={lastClaimReceipt}
               submitting={submitting}
               playingDrawCount={playingDrawCount}
               playingQuickEight={playingQuickEight}
@@ -1529,6 +1676,7 @@ export function NativeApp() {
               formatOptionalTimestamp={formatOptionalTimestamp}
               onRefreshRewardCenter={() => void refreshRewardCenter()}
               onClaimReward={(missionId) => void claimReward(missionId)}
+              onDismissClaimReceipt={dismissClaimReceipt}
             />
           )}
         </AppStack.Screen>
@@ -1934,15 +2082,38 @@ export function NativeApp() {
   if (restoringSession) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar style="light" />
+        <StatusBar style="dark" />
         <View style={styles.bootSplash}>
-          <ActivityIndicator color={palette.accent} />
-          <Text style={styles.bootTitle}>
-            {appContent.restoringSession.title}
-          </Text>
-          <Text style={styles.bootSubtitle}>
-            {appContent.restoringSession.subtitle}
-          </Text>
+          <View style={styles.bootCard}>
+            <View style={styles.bootSpinnerBadge}>
+              <ActivityIndicator color={palette.accent} />
+            </View>
+            <Text style={styles.bootTitle}>
+              {appContent.restoringSession.title}
+            </Text>
+            <Text style={styles.bootSubtitle}>
+              {appContent.restoringSession.subtitle}
+            </Text>
+            <View style={styles.bootSummaryRow}>
+              <View style={styles.bootSummaryCard}>
+                <Text style={styles.bootSummaryLabel}>
+                  {routeContent.homeFeaturedLabel}
+                </Text>
+                <Text style={styles.bootSummaryValue}>
+                  {routeContent.labels.gacha}
+                </Text>
+              </View>
+              <View style={styles.bootSummaryCard}>
+                <Text style={styles.bootSummaryLabel}>
+                  {routeContent.homeMoreTitle}
+                </Text>
+                <Text style={styles.bootSummaryValue}>
+                  {routeContent.labels.wallet} + {routeContent.labels.rewards}
+                </Text>
+              </View>
+            </View>
+          </View>
+          {renderEntryFeatureGrid(["wallet", "rewards"])}
         </View>
         {toastOverlay}
       </SafeAreaView>
@@ -1953,7 +2124,7 @@ export function NativeApp() {
     if (legalAcceptanceRequired) {
       return (
         <SafeAreaView style={styles.safeArea}>
-          <StatusBar style="light" />
+          <StatusBar style="dark" />
           <ScrollView
             contentContainerStyle={styles.container}
             keyboardShouldPersistTaps="handled"
@@ -1964,10 +2135,16 @@ export function NativeApp() {
               <Text style={styles.subtitle}>
                 {appContent.legalGate.subtitle}
               </Text>
-              <Text style={styles.endpoint}>
-                {appContent.appHero.endpointLabel}: {configuredApiBaseUrl}
-              </Text>
+              <View style={styles.badgeRow}>
+                {legalFeatureKeys.map((key) => (
+                  <View key={`legal-badge-${key}`} style={[styles.badge, styles.badgeMuted]}>
+                    <Text style={styles.badgeText}>{routeContent.labels[key]}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
+
+            {renderEntryFeatureGrid(legalFeatureKeys)}
 
             <MobileLegalAcceptanceCard
               copy={appContent.legalGate}
@@ -1996,7 +2173,7 @@ export function NativeApp() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       <ScrollView
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
@@ -2005,10 +2182,16 @@ export function NativeApp() {
           <Text style={styles.kicker}>{appContent.appHero.kicker}</Text>
           <Text style={styles.title}>{appContent.appHero.title}</Text>
           <Text style={styles.subtitle}>{appContent.appHero.authSubtitle}</Text>
-          <Text style={styles.endpoint}>
-            {appContent.appHero.endpointLabel}: {configuredApiBaseUrl}
-          </Text>
+          <View style={styles.badgeRow}>
+            {authFeatureKeys.map((key) => (
+              <View key={`auth-badge-${key}`} style={[styles.badge, styles.badgeMuted]}>
+                <Text style={styles.badgeText}>{routeContent.labels[key]}</Text>
+              </View>
+            ))}
+          </View>
         </View>
+
+        {renderEntryFeatureGrid(authFeatureKeys)}
 
         {authCard}
       </ScrollView>

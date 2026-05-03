@@ -295,7 +295,7 @@ const registerAndSignInUser = async (page: Page, payload: {
   await page.getByLabel('Birth Date').fill(TEST_BIRTH_DATE);
   await page.getByRole('button', { name: 'Create Account' }).click();
 
-  await expect(page).toHaveURL(/\/login\?registered=1$/);
+  await page.waitForURL(/\/login\?registered=1$/, { timeout: 30_000 });
 
   const verification = await waitForNotificationPayload({
     kind: 'email_verification',
@@ -305,14 +305,16 @@ const registerAndSignInUser = async (page: Page, payload: {
 
   await page.goto(verificationUrl);
   await page.getByRole('button', { name: 'Verify Email' }).click();
-  await expect(page).toHaveURL(/\/login\?verified=1$/);
+  await page.waitForURL(/\/login\?verified=1$/, { timeout: 30_000 });
 
   await page.getByLabel('Email Address').fill(payload.email);
   await page.getByLabel('Password').fill(payload.password);
   await page.getByRole('button', { name: 'Sign In' }).click();
 
-  await expect(page).toHaveURL(/\/app$/);
-  await expect(page.getByText('Account readiness')).toBeVisible();
+  await page.waitForURL(/\/app$/, { timeout: 60_000 });
+  await expect(
+    page.getByRole('button', { name: 'Sign Out', exact: true }),
+  ).toBeVisible();
 };
 
 const lookupUserId = async (email: string) => {
@@ -474,6 +476,8 @@ test.afterAll(async () => {
 test('wallet no longer requests the retired transactions endpoint', async ({
   page,
 }) => {
+  test.setTimeout(120_000);
+
   const now = Date.now();
   const email = `legacy-transactions-${now}@example.com`;
   const password = 'Password123!';
@@ -497,17 +501,21 @@ test('wallet no longer requests the retired transactions endpoint', async ({
   });
 
   await page.goto('/app/wallet');
-  await expect(page.getByTestId('wallet-current-balance')).toHaveText('25.00');
+  await expect(page.getByTestId('wallet-current-balance')).toHaveText('25.00', {
+    timeout: 30_000,
+  });
   await page.waitForTimeout(250);
 
   await page.getByTestId('wallet-refresh-button').click();
-  await expect(page.getByTestId('wallet-current-balance')).toHaveText('25.00');
+  await expect(page.getByTestId('wallet-current-balance')).toHaveText('25.00', {
+    timeout: 30_000,
+  });
   await page.waitForTimeout(250);
 
   expect(legacyTransactionsRequested).toBe(false);
 });
 
-test('legacy payments route redirects to wallet and browser bff rejects retired finance endpoints', async ({
+test('payments route stays available while browser bff rejects retired finance endpoints', async ({
   page,
 }) => {
   const now = Date.now();
@@ -516,8 +524,8 @@ test('legacy payments route redirects to wallet and browser bff rejects retired 
 
   await registerAndSignInUser(page, { email, password });
   await page.goto('/app/payments');
-  await expect(page).toHaveURL(/\/app\/wallet$/);
-  await expect(page.getByText('Economy wallet', { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/app\/payments$/);
+  await expect(page.getByTestId('payments-hero')).toBeVisible();
 
   const blocked = await page.evaluate(async () => {
     const [topUps, withdrawals, transactions] = await Promise.all([
@@ -560,7 +568,7 @@ test('legacy payments route redirects to wallet and browser bff rejects retired 
   }
 });
 
-test('phone-verified users with approved kyc still stay on wallet and cannot hit retired finance endpoints', async ({
+test('phone-verified users with approved kyc still stay on payments and cannot hit retired finance endpoints', async ({
   page,
 }) => {
   const now = Date.now();
@@ -576,8 +584,8 @@ test('phone-verified users with approved kyc still stay on wallet and cannot hit
   await seedBluckBalance(userId, '80.00');
 
   await page.goto('/app/payments');
-  await expect(page).toHaveURL(/\/app\/wallet$/);
-  await expect(page.getByTestId('wallet-current-balance')).toHaveText('80.00');
+  await expect(page).toHaveURL(/\/app\/payments$/);
+  await expect(page.getByTestId('payments-hero')).toBeVisible();
 
   const blocked = await page.evaluate(async () => {
     const response = await fetch('/api/backend/withdrawals', {

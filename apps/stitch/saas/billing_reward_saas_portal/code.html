@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>Billing - Reward SaaS Portal</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&amp;family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+  <link href="../shared-ui.css" rel="stylesheet"/>
+  <script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            surface: "#fdf8f8",
+            "on-surface-variant": "#58423a",
+            "surface-container-lowest": "#ffffff",
+            "surface-variant": "#e6e1e1",
+            "surface-tint": "#a73a00",
+            "primary-container": "#a73a00",
+            "on-surface": "#1c1b1b",
+            "on-error": "#ffffff",
+            "on-tertiary": "#ffffff",
+            "secondary-container": "#655dfb",
+            "primary-fixed": "#ffdbce",
+            "tertiary-container": "#c2aa4e",
+            "surface-container": "#f1edec",
+            "on-background": "#1c1b1b",
+            "surface-container-high": "#ece7e7",
+            "on-error-container": "#93000a",
+            "on-secondary-fixed-variant": "#3322cc",
+            secondary: "#4b41e1",
+            "outline-variant": "#dfc0b5",
+            "error-container": "#ffdad6",
+            "inverse-surface": "#313030",
+            "tertiary-fixed-dim": "#dfc566",
+            "on-primary-fixed": "#370e00",
+            "surface-bright": "#fdf8f8",
+            "on-secondary-container": "#fffbff",
+            "on-secondary-fixed": "#0f0069",
+            background: "#fdf8f8",
+            "secondary-fixed": "#e2dfff",
+            "on-secondary": "#ffffff",
+            "tertiary-fixed": "#fce17e",
+            "inverse-on-surface": "#f4f0ef",
+            error: "#ba1a1a",
+            "on-primary-fixed-variant": "#802a00",
+            "on-primary-container": "#ffcebc",
+            "on-primary": "#ffffff",
+            "surface-container-low": "#f7f2f2",
+            "surface-container-highest": "#e6e1e1",
+            "on-tertiary-fixed": "#221b00",
+            "inverse-primary": "#ffb599",
+            "surface-dim": "#ddd9d8",
+            tertiary: "#705d00",
+            "primary-fixed-dim": "#ffb599",
+            outline: "#8c7168",
+            "on-tertiary-container": "#4c3e00",
+            "on-tertiary-fixed-variant": "#544600",
+            primary: "#7f2a00",
+            "secondary-fixed-dim": "#c3c0ff"
+          },
+          borderRadius: {
+            DEFAULT: "0.25rem",
+            lg: "0.5rem",
+            xl: "0.75rem",
+            full: "9999px"
+          },
+          spacing: {
+            xs: "4px",
+            gutter: "16px",
+            sm: "8px",
+            lg: "24px",
+            "container-max": "1280px",
+            md: "16px",
+            xl: "32px",
+            unit: "4px",
+            margin: "20px"
+          },
+          fontFamily: {
+            "body-sm": ["Inter"],
+            "body-base": ["Inter"],
+            "numeric-data": ["Inter"],
+            "headline-md": ["Plus Jakarta Sans"],
+            "display-lg": ["Manrope"],
+            "label-caps": ["Inter"],
+            "body-md": ["Be Vietnam Pro"],
+            "headline-lg": ["Plus Jakarta Sans"],
+            "body-lg": ["Be Vietnam Pro"],
+            "label-bold": ["Be Vietnam Pro"],
+            "headline-xl": ["Plus Jakarta Sans"],
+            "label-sm": ["Be Vietnam Pro"]
+          },
+          fontSize: {
+            "body-sm": ["14px", { lineHeight: "1.5", letterSpacing: "0em", fontWeight: "400" }],
+            "body-base": ["16px", { lineHeight: "1.6", letterSpacing: "0em", fontWeight: "400" }],
+            "numeric-data": ["14px", { lineHeight: "1.0", fontWeight: "500" }],
+            "headline-md": ["24px", { lineHeight: "30px", fontWeight: "700" }],
+            "display-lg": ["48px", { lineHeight: "1.1", letterSpacing: "-0.02em", fontWeight: "700" }],
+            "label-caps": ["12px", { lineHeight: "1.0", letterSpacing: "0.05em", fontWeight: "600" }],
+            "body-md": ["16px", { lineHeight: "24px", fontWeight: "400" }],
+            "headline-lg": ["32px", { lineHeight: "38px", letterSpacing: "-0.01em", fontWeight: "800" }],
+            "body-lg": ["18px", { lineHeight: "28px", fontWeight: "400" }],
+            "label-bold": ["14px", { lineHeight: "20px", fontWeight: "700" }],
+            "headline-xl": ["40px", { lineHeight: "48px", letterSpacing: "-0.02em", fontWeight: "800" }],
+            "label-sm": ["12px", { lineHeight: "16px", fontWeight: "500" }]
+          }
+        }
+      }
+    };
+  </script>
+</head>
+<body class="bg-surface font-body-base text-on-surface portal-page-shell">
+  <div class="portal-vignette-fixed"></div>
+  <header class="fixed top-0 z-50 w-full border-b border-slate-200/60 bg-white/80 shadow-sm shadow-slate-200/50 backdrop-blur-md">
+    <div class="mx-auto flex h-16 max-w-[1280px] items-center justify-between px-8">
+      <div class="flex items-center gap-8">
+        <span class="portal-topbar-brand text-lg font-bold tracking-tighter text-slate-900">Reward SaaS Portal</span>
+        <nav class="hidden h-16 items-center space-x-6 font-manrope text-sm font-medium tracking-tight md:flex">
+          <a class="portal-topnav-link" href="#">Overview</a>
+          <a class="portal-topnav-link" href="#">Tenants</a>
+          <a class="portal-topnav-link" href="#">API Keys</a>
+          <a class="portal-topnav-link" href="#">Usage</a>
+          <a class="portal-topnav-link" href="#">Reports</a>
+          <a class="portal-topnav-link" href="#">Prizes</a>
+          <a class="portal-topnav-link portal-topnav-link-active" href="#">Billing</a>
+          <a class="portal-topnav-link" href="#">Docs</a>
+        </nav>
+      </div>
+      <div class="flex items-center gap-4">
+        <div class="portal-topbar-badge hidden lg:flex">
+          <span class="material-symbols-outlined text-[18px]">account_balance_wallet</span>
+          <span>Production Mode</span>
+        </div>
+        <button class="portal-topbar-icon-button">
+          <span class="material-symbols-outlined">notifications</span>
+        </button>
+        <button class="portal-topbar-icon-button">
+          <span class="material-symbols-outlined">settings</span>
+        </button>
+        <div class="portal-topbar-avatar">
+          <img alt="User profile" class="h-full w-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBNq4MujVuS4zBQrfHi1Qe8622U_krWVz42ZxAjJoC6nC7AVliDjKNQG7AVcycrNSleBzTkaLDnEPyZ-v-19BztxH8Z7E8_zZHhXE5pqG24EmZIfp1p20x8qW2CD5bJZRPhki0gCkogJn7xdq60MIw2JL1K6d3FJq6a-z8Amht8vlJiCZ7SSlSDwyY3DnFT9QLAeVSxiaX-GiFfWRow9-uL7urwYi8qTYeVcXXyFwpLZcLkqlBb9hKynzfpRAzwG6mH8WaRYV79FJU"/>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="relative z-10 mx-auto flex max-w-[1280px] flex-col gap-6 px-5 pb-20 pt-24 sm:px-8 lg:flex-row">
+    <aside class="portal-context-rail flex w-72 flex-col space-y-2 p-4">
+      <div class="mb-4 px-4 py-2">
+        <p class="portal-context-title">Billing Controls</p>
+        <p class="portal-context-copy mt-3">Keep budget posture, invoice retrieval, payment entry points, and dispute routes visible while you work through the tenant's finance state.</p>
+      </div>
+      <nav class="flex-1 space-y-1">
+        <a class="portal-context-link text-sm" href="#">
+          <span class="material-symbols-outlined">stacked_line_chart</span>
+          <span>Spend Summary</span>
+        </a>
+        <a class="portal-context-link portal-context-link-active text-sm font-semibold" href="#">
+          <span class="material-symbols-outlined">receipt_long</span>
+          <span>Invoices &amp; Budget</span>
+        </a>
+        <a class="portal-context-link text-sm" href="#">
+          <span class="material-symbols-outlined">credit_card</span>
+          <span>Payment Setup</span>
+        </a>
+        <a class="portal-context-link text-sm" href="#">
+          <span class="material-symbols-outlined">gavel</span>
+          <span>Disputes</span>
+        </a>
+        <a class="portal-context-link text-sm" href="#">
+          <span class="material-symbols-outlined">history</span>
+          <span>Billing History</span>
+        </a>
+      </nav>
+      <button class="portal-button portal-button-primary mt-auto w-full">
+        <span class="material-symbols-outlined text-sm">open_in_new</span>
+        Open Billing Portal
+      </button>
+      <div class="space-y-1 border-t border-slate-100 pt-8">
+        <a class="portal-context-link text-sm" href="#">
+          <span class="material-symbols-outlined">support_agent</span>
+          <span>Billing Support</span>
+        </a>
+        <a class="portal-context-link text-sm" href="#">
+          <span class="material-symbols-outlined">verified_user</span>
+          <span>Finance Status</span>
+        </a>
+      </div>
+    </aside>
+
+    <main class="portal-context-main min-w-0 flex-1">
+      <div class="portal-page-intro portal-animate-in">
+        <div class="portal-scope-strip">
+          <span class="portal-scope-chip">Acme Corp</span>
+          <span class="portal-scope-chip">Tenant Billing</span>
+          <span class="portal-scope-chip">82% Budget Used</span>
+        </div>
+        <h1 class="portal-page-title">Billing</h1>
+        <p class="portal-page-copy">Review current spend, invoice retrieval, budget thresholds, and payment-side actions for the active tenant. The page should feel operationally calm while keeping threshold risk obvious.</p>
+      </div>
+
+      <div class="portal-inline-banner portal-inline-banner-warn portal-inline-banner-live portal-animate-in portal-animate-delay-1 mb-8">
+        <span class="material-symbols-outlined text-[20px]">warning</span>
+        <div>
+          <p class="text-sm font-semibold">Budget threshold approaching</p>
+          <p class="mt-1 text-sm leading-6">Monthly spend has reached 82% of the configured limit. Keep invoice history, dispute paths, and external payment access visible until the current billing cycle closes cleanly.</p>
+        </div>
+      </div>
+
+      <div class="portal-summary-grid md:grid-cols-3 portal-animate-in portal-animate-delay-2">
+        <section class="portal-panel portal-summary-card">
+          <div class="portal-summary-card-head">
+            <div>
+              <p class="portal-eyebrow">Current Cycle Spend</p>
+              <h2 class="portal-summary-value">$8,240</h2>
+            </div>
+            <div class="portal-stat-icon portal-stat-icon-sky">
+              <span class="material-symbols-outlined">payments</span>
+            </div>
+          </div>
+          <p class="portal-summary-copy">Includes reward engine usage, export runs, and live project event volume for the current month.</p>
+          <div class="portal-inline-meta portal-inline-meta-success">
+            <span class="material-symbols-outlined text-[16px]">north_east</span>
+            <span>6.4% below last cycle</span>
+          </div>
+        </section>
+
+        <section class="portal-panel portal-summary-card">
+          <div class="portal-summary-card-head">
+            <div>
+              <p class="portal-eyebrow">Next Invoice Run</p>
+              <h2 class="portal-summary-value">October 12</h2>
+            </div>
+            <div class="portal-stat-icon portal-stat-icon-slate">
+              <span class="material-symbols-outlined">calendar_today</span>
+            </div>
+          </div>
+          <p class="portal-summary-copy">Autopay will attempt collection from the default card on file at 09:00 UTC.</p>
+          <div class="portal-status-pill portal-status-muted mt-5">
+            Automatic renewal enabled
+          </div>
+        </section>
+
+        <section class="portal-panel portal-summary-card">
+          <div class="portal-summary-card-head">
+            <div>
+              <p class="portal-eyebrow">Budget Policy</p>
+              <h2 class="portal-summary-value">$10,000 cap</h2>
+            </div>
+            <div class="portal-stat-icon portal-stat-icon-amber">
+              <span class="material-symbols-outlined">shield</span>
+            </div>
+          </div>
+          <div class="mt-2">
+            <div class="mb-2 flex items-baseline justify-between">
+              <span class="text-sm font-semibold text-slate-900">$8,240 used</span>
+              <span class="text-xs text-slate-500">82%</span>
+            </div>
+            <div class="portal-progress-track portal-progress-track-slate h-2">
+              <div class="portal-progress-fill portal-progress-fill-warn h-full w-[82%]"></div>
+            </div>
+          </div>
+          <p class="mt-4 portal-summary-copy">Alerts were sent to 2 finance admins after the 80% threshold was crossed.</p>
+        </section>
+      </div>
+
+      <div class="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <section class="portal-panel overflow-hidden lg:col-span-8">
+          <div class="portal-panel-header">
+            <div>
+              <h3 class="text-headline-md font-headline-md text-slate-900">Invoice History</h3>
+              <p class="portal-panel-header-copy">Track invoice state, retrieval status, and whether a billing run still needs finance follow-up.</p>
+            </div>
+            <div class="portal-panel-header-actions">
+              <button class="portal-button portal-button-secondary portal-button-sm">Export CSV</button>
+              <button class="portal-button portal-button-dark portal-button-sm">Open Stripe Portal</button>
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full border-collapse text-left">
+              <thead>
+                <tr class="portal-table-head-row">
+                  <th class="portal-table-head-cell">Invoice ID</th>
+                  <th class="portal-table-head-cell">Period</th>
+                  <th class="portal-table-head-cell">Amount</th>
+                  <th class="portal-table-head-cell">Status</th>
+                  <th class="portal-table-head-cell">Payment Method</th>
+                  <th class="portal-table-head-cell portal-table-head-cell-right">Action</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 text-sm">
+                <tr class="portal-table-row">
+                  <td class="px-6 py-4 font-mono text-xs text-slate-700">INV-2024-009</td>
+                  <td class="px-6 py-4 text-slate-500">Sep 01 - Sep 30</td>
+                  <td class="px-6 py-4 font-semibold text-slate-900">$2,100.00</td>
+                  <td class="px-6 py-4">
+                    <span class="portal-status-pill portal-status-success">Paid</span>
+                  </td>
+                  <td class="px-6 py-4 text-slate-500">Visa •••• 4492</td>
+                  <td class="px-6 py-4 text-right">
+                    <button class="portal-button portal-button-secondary portal-button-sm">Download PDF</button>
+                  </td>
+                </tr>
+                <tr class="portal-table-row">
+                  <td class="px-6 py-4 font-mono text-xs text-slate-700">INV-2024-008</td>
+                  <td class="px-6 py-4 text-slate-500">Aug 01 - Aug 31</td>
+                  <td class="px-6 py-4 font-semibold text-slate-900">$2,100.00</td>
+                  <td class="px-6 py-4">
+                    <span class="portal-status-pill portal-status-success">Paid</span>
+                  </td>
+                  <td class="px-6 py-4 text-slate-500">Visa •••• 4492</td>
+                  <td class="px-6 py-4 text-right">
+                    <button class="portal-button portal-button-secondary portal-button-sm">Download PDF</button>
+                  </td>
+                </tr>
+                <tr class="portal-table-row portal-table-row-warn">
+                  <td class="px-6 py-4 font-mono text-xs text-slate-700">INV-2024-007</td>
+                  <td class="px-6 py-4 text-slate-500">Jul 01 - Jul 31</td>
+                  <td class="px-6 py-4 font-semibold text-slate-900">$1,850.00</td>
+                  <td class="px-6 py-4">
+                    <span class="portal-status-pill portal-status-warn">Processing</span>
+                  </td>
+                  <td class="px-6 py-4 text-slate-500">ACH debit</td>
+                  <td class="px-6 py-4 text-right">
+                    <button class="portal-button portal-button-secondary portal-button-sm" disabled>Pending</button>
+                  </td>
+                </tr>
+                <tr class="portal-table-row portal-table-row-danger">
+                  <td class="px-6 py-4 font-mono text-xs text-slate-700">INV-2024-006</td>
+                  <td class="px-6 py-4 text-slate-500">Jun 01 - Jun 30</td>
+                  <td class="px-6 py-4 font-semibold text-slate-900">$1,850.00</td>
+                  <td class="px-6 py-4">
+                    <span class="portal-status-pill portal-status-danger">Overdue</span>
+                  </td>
+                  <td class="px-6 py-4 text-slate-500">Manual wire</td>
+                  <td class="px-6 py-4 text-right">
+                    <button class="portal-button portal-button-danger portal-button-sm">Open Dispute</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <aside class="flex flex-col gap-6 lg:col-span-4">
+          <section class="portal-panel-soft p-6">
+            <div class="mb-4 flex items-center gap-3">
+              <span class="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-900 text-sky-400">
+                <span class="material-symbols-outlined">tune</span>
+              </span>
+              <div>
+                <h3 class="text-headline-md font-headline-md text-slate-900">Budget Policy</h3>
+                <p class="mt-1 text-sm text-slate-500">Threshold routing for finance owners.</p>
+              </div>
+            </div>
+            <div class="space-y-4 text-sm">
+              <div class="flex items-start justify-between gap-4">
+                <span class="text-slate-500">Soft alert</span>
+                <span class="font-semibold text-slate-900">80% of monthly cap</span>
+              </div>
+              <div class="flex items-start justify-between gap-4">
+                <span class="text-slate-500">Hard alert</span>
+                <span class="font-semibold text-slate-900">95% of monthly cap</span>
+              </div>
+              <div class="flex items-start justify-between gap-4">
+                <span class="text-slate-500">Recipients</span>
+                <span class="font-semibold text-slate-900">2 finance admins</span>
+              </div>
+              <div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
+                Crossed 80% on Sep 28. No automatic spend freeze is configured for this tenant.
+              </div>
+            </div>
+          </section>
+
+          <section class="portal-panel-soft p-6">
+            <div class="mb-4">
+              <h3 class="text-headline-md font-headline-md text-slate-900">Billing Profile</h3>
+              <p class="mt-1 text-sm text-slate-500">Primary legal entity and notification routing.</p>
+            </div>
+            <div class="space-y-4 text-sm">
+              <div class="flex justify-between gap-4 border-b border-slate-100 pb-3">
+                <span class="text-slate-500">Business Name</span>
+                <span class="text-right font-semibold text-slate-900">Reward Logic Systems Inc.</span>
+              </div>
+              <div class="flex justify-between gap-4 border-b border-slate-100 pb-3">
+                <span class="text-slate-500">Tax ID</span>
+                <span class="text-right font-semibold text-slate-900">US-882103445-B</span>
+              </div>
+              <div class="flex justify-between gap-4 border-b border-slate-100 pb-3">
+                <span class="text-slate-500">Billing Email</span>
+                <span class="text-right font-semibold text-slate-900">billing@rewardlogic.com</span>
+              </div>
+              <div class="flex justify-between gap-4">
+                <span class="text-slate-500">Address</span>
+                <span class="text-right font-semibold leading-6 text-slate-900">1280 Precision Way, Suite 400<br/>San Francisco, CA 94105<br/>United States</span>
+              </div>
+            </div>
+            <button class="portal-button portal-button-secondary mt-5">Edit Billing Details</button>
+          </section>
+
+          <section class="portal-panel-soft p-6">
+            <div class="mb-4">
+              <h3 class="text-headline-md font-headline-md text-slate-900">Payment &amp; Disputes</h3>
+              <p class="mt-1 text-sm text-slate-500">External entry points for collection and issue resolution.</p>
+            </div>
+            <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+              <div class="mb-3 flex items-center gap-3">
+                <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-slate-700 shadow-sm ring-1 ring-slate-200">
+                  <span class="material-symbols-outlined">credit_card</span>
+                </span>
+                <div>
+                  <p class="text-sm font-semibold text-slate-900">Primary Method</p>
+                  <p class="text-xs text-slate-500">Visa ending in •••• 4492</p>
+                </div>
+              </div>
+              <a class="portal-button portal-button-primary flex w-full" href="https://billing.stripe.com/p/login">
+                Manage Payment Methods
+                <span class="material-symbols-outlined text-sm">open_in_new</span>
+              </a>
+            </div>
+            <div class="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-4">
+              <div class="flex items-start gap-3">
+                <span class="material-symbols-outlined text-red-600">report_problem</span>
+                <div>
+                  <p class="text-sm font-semibold text-red-700">1 open dispute requires review</p>
+                  <p class="mt-1 text-sm leading-6 text-red-700">Invoice `INV-2024-006` is still unresolved. Finance should confirm whether the manual wire has settled before closing the issue.</p>
+                </div>
+              </div>
+              <button class="portal-button portal-button-danger mt-4">Review Dispute Queue</button>
+            </div>
+            <div class="portal-empty-state mt-4">
+              <div class="flex items-start gap-3">
+                <span class="material-symbols-outlined text-slate-400">inventory_2</span>
+                <div>
+                  <p class="portal-empty-state-title">No additional disputes queued</p>
+                  <p class="portal-empty-state-copy">Only the currently open invoice issue requires review. New disputes will appear here before they reach manual escalation.</p>
+                </div>
+              </div>
+            </div>
+          </section>
+        </aside>
+      </div>
+    </main>
+  </div>
+
+  <footer class="portal-footer">
+    <div class="portal-footer-shell">
+      <span class="portal-footer-copy">© 2024 Reward SaaS Portal. Billing posture, invoice retrieval, and budget controls.</span>
+      <div class="portal-footer-links">
+        <a class="portal-footer-link" href="#">Privacy Policy</a>
+        <a class="portal-footer-link" href="#">Terms of Service</a>
+        <a class="portal-footer-link" href="#">Security</a>
+        <a class="portal-footer-link" href="#">Status</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Voucher Redemption</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;700&amp;family=Plus+Jakarta+Sans:wght@700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-variant": "#e5e2e1",
+                        "error": "#ba1a1a",
+                        "on-primary": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "on-error": "#ffffff",
+                        "secondary-fixed": "#e2dfff",
+                        "inverse-on-surface": "#f3f0ef",
+                        "on-tertiary-container": "#4c3e00",
+                        "tertiary": "#705d00",
+                        "surface-container": "#f0eded",
+                        "on-surface": "#1c1b1b",
+                        "on-secondary-fixed": "#0f0069",
+                        "surface-dim": "#dcd9d9",
+                        "primary-fixed-dim": "#ffb59a",
+                        "on-tertiary-fixed": "#221b00",
+                        "surface-container-high": "#eae7e7",
+                        "on-tertiary": "#ffffff",
+                        "on-secondary-fixed-variant": "#3323cc",
+                        "primary-fixed": "#ffdbce",
+                        "inverse-primary": "#ffb59a",
+                        "on-tertiary-fixed-variant": "#544600",
+                        "on-surface-variant": "#5b4137",
+                        "secondary-container": "#645efb",
+                        "tertiary-fixed": "#ffe170",
+                        "surface-bright": "#fcf9f8",
+                        "on-primary-container": "#521800",
+                        "error-container": "#ffdad6",
+                        "secondary-fixed-dim": "#c3c0ff",
+                        "tertiary-fixed-dim": "#e9c400",
+                        "on-primary-fixed-variant": "#802a00",
+                        "on-primary-fixed": "#370e00",
+                        "background": "#fcf9f8",
+                        "tertiary-container": "#caa900",
+                        "secondary": "#4b41e1",
+                        "surface": "#fcf9f8",
+                        "outline": "#8f7065",
+                        "surface-container-low": "#f6f3f2",
+                        "surface-tint": "#a73a00",
+                        "inverse-surface": "#313030",
+                        "outline-variant": "#e4beb1",
+                        "primary": "#a73a00",
+                        "surface-container-lowest": "#ffffff",
+                        "primary-container": "#ff5c00",
+                        "on-secondary-container": "#fffbff",
+                        "on-background": "#1c1b1b",
+                        "surface-container-highest": "#e5e2e1",
+                        "on-secondary": "#ffffff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xs": "4px",
+                        "unit": "4px",
+                        "margin": "20px",
+                        "gutter": "16px",
+                        "sm": "8px",
+                        "xl": "32px",
+                        "lg": "24px",
+                        "md": "16px"
+                    },
+                    "fontFamily": {
+                        "label-bold": ["Be Vietnam Pro"],
+                        "headline-xl": ["Plus Jakarta Sans"],
+                        "label-sm": ["Be Vietnam Pro"],
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "headline-lg": ["Plus Jakarta Sans"],
+                        "body-md": ["Be Vietnam Pro"],
+                        "body-lg": ["Be Vietnam Pro"]
+                    },
+                    "fontSize": {
+                        "label-bold": ["14px", { "lineHeight": "20px", "fontWeight": "700" }],
+                        "headline-xl": ["40px", { "lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "800" }],
+                        "label-sm": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+                        "headline-md": ["24px", { "lineHeight": "30px", "fontWeight": "700" }],
+                        "headline-lg": ["32px", { "lineHeight": "38px", "letterSpacing": "-0.01em", "fontWeight": "800" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .hard-shadow {
+            box-shadow: 4px 4px 0px 0px #1c1b1b;
+        }
+        .hard-shadow-sm {
+            box-shadow: 2px 2px 0px 0px #1c1b1b;
+        }
+        .hatch-pattern {
+            background-image: repeating-linear-gradient(45deg, #1c1b1b 0, #1c1b1b 2px, transparent 2px, transparent 8px);
+        }
+        .interactive-press:active {
+            transform: translate(4px, 4px);
+            box-shadow: none !important;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface min-h-screen pb-10">
+<!-- JSON Component: TopAppBar -->
+<!-- Applying style_* keys strictly from JSON -->
+<header class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-4 h-16 bg-white dark:bg-slate-900 border-b-2 border-slate-950 shadow-[0px_4px_0px_0px_rgba(2,6,23,1)]">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full border-2 border-slate-950 bg-slate-200 overflow-hidden flex items-center justify-center">
+<span class="material-symbols-outlined text-slate-500" style="font-variation-settings: 'FILL' 1;">person</span>
+</div>
+<span class="text-xl font-black text-slate-950 dark:text-white font-plus-jakarta-sans uppercase tracking-tight">REWARDS HUB</span>
+</div>
+<div class="flex items-center">
+<span class="text-[#FF5C00] font-plus-jakarta-sans font-black uppercase tracking-tight">$1,240.50</span>
+</div>
+</header>
+<!-- Main Canvas Content -->
+<!-- Suppressed BottomNavBar & NavigationDrawer as this is a transactional destination -->
+<main class="pt-[88px] px-4 max-w-md mx-auto">
+<!-- Contextual Back Action -->
+<button class="flex items-center gap-2 mb-6 text-on-surface hover:text-primary transition-colors">
+<span class="material-symbols-outlined font-bold text-xl">arrow_back</span>
+<span class="font-label-bold text-label-bold uppercase tracking-wide">Back to Catalog</span>
+</button>
+<!-- Hero Reward Graphic (Retro Pop Style) -->
+<div class="relative w-full aspect-[4/3] bg-secondary border-2 border-on-surface rounded-xl hard-shadow mb-8 flex flex-col items-center justify-center p-6 overflow-hidden">
+<!-- Decorative Background Element -->
+<div class="absolute inset-0 opacity-10 hatch-pattern"></div>
+<!-- Floating Image Wrapper -->
+<div class="relative w-4/5 h-full max-h-[200px] border-2 border-on-surface rounded-lg bg-surface hard-shadow-sm overflow-hidden rotate-[-2deg] transition-transform hover:rotate-0 duration-300">
+<div class="absolute top-0 left-0 w-full h-8 bg-on-surface flex items-center px-3 gap-2">
+<div class="w-3 h-3 rounded-full bg-error border border-background"></div>
+<div class="w-3 h-3 rounded-full bg-tertiary-fixed border border-background"></div>
+</div>
+<img alt="Gaming Voucher" class="w-full h-full object-cover pt-8" data-alt="A brightly lit, pop-art style close-up of a vibrant digital gaming gift card floating in a clean, minimalist white space. The lighting is high-key and flat, emphasizing the bold electric orange and deep indigo colors of the card's design. Solid, thick black outlines surround the graphical elements on the card, giving it a playful, modern 2D vector art aesthetic consistent with a retro mobile game UI." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBD4dbh_LxDpfjhQhCnz9-VsPWjfnha9ZPMRROVNnVJ2IzrLuPwqi7p5y8mU8f44LtVbmmxXNIXlSStG5fxhr0Gcei0ciiGUUARyYH_noLjPUAqY2F_pYY_RHOI2NAJ5TEotzJ_3e_09HHW9HD0sIm8pj52fvT_GQ31L3cZT2T4mo75Ji3V2biYSQhe1-MsUCkbsS9botWciqvow4Gqq8z6Ae3PXNWlZxhp0dZgg1h238XRh6RTxodkmY_-irTShG9GjxPhj16AJ2FQ"/>
+</div>
+<!-- Value Badge -->
+<div class="absolute -bottom-4 right-4 bg-tertiary-fixed border-2 border-on-surface px-4 py-2 rounded-full hard-shadow-sm rotate-[5deg]">
+<span class="font-headline-md text-headline-md text-on-surface whitespace-nowrap">$50 VALUE</span>
+</div>
+</div>
+<!-- Details Section -->
+<div class="mb-8">
+<h1 class="font-headline-xl text-headline-xl text-on-surface mb-2 tracking-tight uppercase">Steam Wallet Card</h1>
+<p class="font-body-md text-body-md text-on-surface-variant mb-6">Instantly top up your Steam Wallet to purchase the latest games, software, and hardware on the Steam platform.</p>
+<!-- Cost Breakdown Card -->
+<div class="bg-surface-container border-2 border-on-surface rounded-lg p-4 hard-shadow flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 bg-primary-container border-2 border-on-surface rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary" style="font-variation-settings: 'FILL' 1;">monetization_on</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Required Balance</span>
+<span class="font-headline-md text-headline-md text-on-surface leading-none">5,000 XP</span>
+</div>
+</div>
+<div class="h-10 w-[2px] bg-on-surface opacity-20"></div>
+<div class="flex flex-col items-end">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Your Balance</span>
+<span class="font-label-bold text-label-bold text-secondary">12,400 XP</span>
+</div>
+</div>
+</div>
+<!-- Primary Action -->
+<button class="w-full bg-primary-container text-on-primary border-2 border-on-surface rounded-lg py-5 px-6 mb-10 flex items-center justify-center gap-3 hard-shadow interactive-press transition-all group">
+<span class="font-headline-md text-headline-md uppercase tracking-wide">Redeem Now</span>
+<span class="material-symbols-outlined font-bold group-active:scale-90 transition-transform">redeem</span>
+</button>
+<!-- Terms & Information List (Dense Card List) -->
+<div class="bg-surface border-2 border-on-surface rounded-lg hard-shadow overflow-hidden">
+<div class="bg-surface-variant border-b-2 border-on-surface px-4 py-3">
+<h2 class="font-label-bold text-label-bold text-on-surface uppercase tracking-wider">How it works</h2>
+</div>
+<div class="flex items-start gap-4 p-4 border-b-2 border-on-surface">
+<span class="material-symbols-outlined text-secondary mt-1" style="font-variation-settings: 'FILL' 1;">local_post_office</span>
+<div>
+<h3 class="font-label-bold text-label-bold text-on-surface">Instant Delivery</h3>
+<p class="font-label-sm text-label-sm text-on-surface-variant mt-1">The digital code will be sent immediately to your registered email address.</p>
+</div>
+</div>
+<div class="flex items-start gap-4 p-4 border-b-2 border-on-surface">
+<span class="material-symbols-outlined text-secondary mt-1" style="font-variation-settings: 'FILL' 1;">public</span>
+<div>
+<h3 class="font-label-bold text-label-bold text-on-surface">Region Locked</h3>
+<p class="font-label-sm text-label-sm text-on-surface-variant mt-1">This voucher is only valid for accounts registered in the North America region.</p>
+</div>
+</div>
+<div class="flex items-start gap-4 p-4">
+<span class="material-symbols-outlined text-secondary mt-1" style="font-variation-settings: 'FILL' 1;">info</span>
+<div>
+<h3 class="font-label-bold text-label-bold text-on-surface">Non-Refundable</h3>
+<p class="font-label-sm text-label-sm text-on-surface-variant mt-1">All reward redemptions are final. XP cannot be refunded once the code is issued.</p>
+</div>
+</div>
+</div>
+</main>
+</body></html>

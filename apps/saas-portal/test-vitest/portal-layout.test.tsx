@@ -15,14 +15,16 @@ vi.mock("@/components/logout-form", () => ({
   ),
 }));
 
-vi.mock("@/components/ui/badge", () => ({
-  Badge: ({ children }: { children: React.ReactNode }) => (
-    <span>{children}</span>
-  ),
-}));
-
 vi.mock("@/modules/portal/components/portal-nav", () => ({
   PortalNav: () => <nav>Portal navigation</nav>,
+}));
+
+vi.mock("@/modules/portal/components/portal-layout-header", () => ({
+  PortalLayoutHeader: () => <div>Portal layout header</div>,
+}));
+
+vi.mock("@/modules/portal/components/portal-side-rail", () => ({
+  PortalSideRail: () => <aside>Portal side rail</aside>,
 }));
 
 import PortalLayout from "../app/portal/layout";
@@ -44,10 +46,9 @@ describe("app/portal/layout", () => {
       allowPendingLegal: true,
       returnTo: "/portal",
     });
-    expect(html).toContain("SaaS Portal");
-    expect(html).toContain("Tenant-scoped control plane");
-    expect(html).toContain("operator@example.com");
+    expect(html).toContain("Portal layout header");
     expect(html).toContain("Portal navigation");
+    expect(html).toContain("Portal side rail");
     expect(html).toContain("Sign out");
     expect(html).toContain("Portal content");
   });

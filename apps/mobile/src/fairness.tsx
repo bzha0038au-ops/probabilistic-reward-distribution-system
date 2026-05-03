@@ -10,25 +10,29 @@ import {
 } from "@reward/user-core";
 
 import {
+  mobileChromeTheme,
   mobileFeedbackTheme,
-  mobileGameTheme,
   mobilePalette,
   mobileTypography,
 } from "./theme";
-import {
-  GameHashCard,
-  GameStatCard,
-  GameStatusPanel,
-} from "./game-domain-ui";
 import { ActionButton, Field, SectionCard } from "./ui";
 
 export type MobileFairnessLocale = "en" | "zh-CN";
 
 const fairnessCopy = {
   en: {
-    verifierTitle: "Fairness verifier",
+    verifierTitle: "Fairness verification",
     verifierDescription:
-      "Standalone commit-reveal demo for the prize engine, split away from the gameplay routes.",
+      "Inspect the live commit, understand the seed protocol, and reveal any closed epoch to verify it locally.",
+    protocolTitle: "The Seed Protocol",
+    protocolBody:
+      "Every result starts with a published commit, then unlocks the real seed only after the epoch closes. That keeps randomness transparent and tamper-evident.",
+    activeSeedsTitle: "Active seeds",
+    activeSeedsBody:
+      "Use the live commit before a round starts, then reveal a closed epoch afterwards and compare the computed hash locally.",
+    auditMetricsTitle: "Audit metrics",
+    auditMetricsBody:
+      "Track the live epoch, reveal window, and how far the background auto-audit has already verified.",
     currentCommit: "Current commit",
     currentCommitBody:
       "The backend publishes this hash before the epoch resolves. Results in the same epoch must derive from the unrevealed seed behind this hash.",
@@ -37,6 +41,7 @@ const fairnessCopy = {
     revealAfter: "Reveal after",
     verifiedDays: "Continuous auto-audit days",
     lastAutoAudit: "Last auto-audit",
+    auditStatus: "Audit status",
     autoAuditHealthy: "Passing",
     autoAuditIssue: "Issue detected",
     noAuditYet: "No closed epoch has been auto-audited yet.",
@@ -49,7 +54,7 @@ const fairnessCopy = {
     refresh: "Refresh commit",
     refreshing: "Refreshing...",
     backHome: "Back to home",
-    howToRead: "How to read this",
+    howToRead: "How verification works",
     steps: [
       "1. Fetch the live commit for the current epoch.",
       "2. Reveal any older epoch once it is closed.",
@@ -64,6 +69,15 @@ const fairnessCopy = {
     noPreviousEpoch:
       "No previous epoch is available yet. Wait for the first epoch rollover.",
     resultTitle: "Verification result",
+    resultBody:
+      "Compare the published commit against the revealed seed and your locally computed SHA-256 result.",
+    resultKicker: "Verification receipt",
+    resultVerificationLabel: "Verification",
+    resultHashBundleTitle: "Hash bundle",
+    resultHashBundleBody:
+      "Review the revealed seed, the published commit, and the locally computed SHA-256 output side by side.",
+    resultHashMatchSuccess: "Published and computed commits match exactly.",
+    resultHashMatchFailure: "Published and computed commits do not match.",
     revealedAt: "Revealed at",
     seed: "Seed",
     publishedCommit: "Published commit",
@@ -86,9 +100,18 @@ const fairnessCopy = {
       `Revealed fairness epoch ${epoch}. Local SHA-256 verification is ready.`,
   },
   "zh-CN": {
-    verifierTitle: "公平性验证器",
+    verifierTitle: "公平性验证",
     verifierDescription:
-      "把奖池引擎的 commit-reveal 独立做成演示页，不再和具体玩法页面混在一起。",
+      "查看实时 commit、理解 seed protocol，并对任意已结束 epoch 做本地校验。",
+    protocolTitle: "Seed Protocol",
+    protocolBody:
+      "每一轮结果都会先公开 commit，等 epoch 结束后再公开真实 seed，这样随机性既透明又不可篡改。",
+    activeSeedsTitle: "当前种子",
+    activeSeedsBody:
+      "先记录开局前的实时 commit，等已结束 epoch reveal 后，再在本地重算哈希做比对。",
+    auditMetricsTitle: "校验指标",
+    auditMetricsBody:
+      "这里集中显示当前 epoch、可 reveal 时间，以及后台自动审计已经校验到哪里。",
     currentCommit: "当前 Commit",
     currentCommitBody:
       "后端会在 epoch 结算前先公开这条哈希；同一 epoch 内的结果都必须来自这条哈希背后的未公开 seed。",
@@ -97,6 +120,7 @@ const fairnessCopy = {
     revealAfter: "可 Reveal 时间",
     verifiedDays: "连续自动校验天数",
     lastAutoAudit: "最近自动校验",
+    auditStatus: "审计状态",
     autoAuditHealthy: "校验通过",
     autoAuditIssue: "发现异常",
     noAuditYet: "当前还没有已结束 epoch 的自动校验记录。",
@@ -109,7 +133,7 @@ const fairnessCopy = {
     refresh: "刷新 Commit",
     refreshing: "刷新中...",
     backHome: "返回首页",
-    howToRead: "怎么读这个页面",
+    howToRead: "验证流程",
     steps: [
       "1. 先读取当前 epoch 已公开的 commit。",
       "2. 对任意已结束的 epoch 发起 reveal。",
@@ -124,6 +148,14 @@ const fairnessCopy = {
     noPreviousEpoch:
       "当前还没有上一轮可验证的 epoch，等第一次 rollover 后再试。",
     resultTitle: "验证结果",
+    resultBody: "对照已公布 commit、reveal 出来的 seed，以及本地重新计算的 SHA-256 结果。",
+    resultKicker: "校验回执",
+    resultVerificationLabel: "校验结论",
+    resultHashBundleTitle: "哈希对照",
+    resultHashBundleBody:
+      "把 reveal 出来的 seed、已公布 commit，以及本地计算的 SHA-256 结果放在一起逐项比对。",
+    resultHashMatchSuccess: "已公布 commit 与本地计算结果完全一致。",
+    resultHashMatchFailure: "已公布 commit 与本地计算结果不一致。",
     revealedAt: "Reveal 时间",
     seed: "Seed",
     publishedCommit: "已公布 Commit",
@@ -218,7 +250,7 @@ export function MobileFairnessCompactSummary(
   const auditStatus =
     audit?.lastAuditPassed == null
       ? "--"
-      : audit?.lastAuditPassed
+      : audit.lastAuditPassed
         ? c.autoAuditHealthy
         : c.autoAuditIssue;
   const auditDetail =
@@ -248,37 +280,54 @@ export function MobileFairnessCompactSummary(
 
   return (
     <View style={styles.summaryShell}>
-      <View style={styles.summaryHero}>
+      <View style={styles.summaryCommitCard}>
         <Text style={styles.summaryEyebrow}>
           {props.eyebrow ?? c.currentCommit}
         </Text>
         <Text style={styles.summaryCommit}>
           {props.fairness ? truncateHash(props.fairness.commitHash) : "--"}
         </Text>
-        {props.body ? (
-          <Text style={styles.summaryBody}>{props.body}</Text>
-        ) : null}
-      </View>
-
-      <View style={styles.metricGrid}>
-        <GameStatCard label={c.currentEpoch} value={props.fairness?.epoch ?? "--"} />
-        <GameStatCard label={c.revealAfter} value={revealAfter} />
-        <GameStatCard
-          label={c.verifiedDays}
-          value={audit?.consecutiveVerifiedDays ?? 0}
-        />
+        <Text style={styles.summaryBody}>
+          {props.body ?? c.currentCommitBody}
+        </Text>
       </View>
 
       {props.clientNonce ? (
         <View style={styles.hashRow}>
           <Text style={styles.hashLabel}>{c.clientNonce}</Text>
-          <Text style={styles.hashValue}>
-            {truncateHash(props.clientNonce)}
-          </Text>
+          <Text style={styles.hashValue}>{truncateHash(props.clientNonce)}</Text>
         </View>
       ) : null}
 
-      <GameStatusPanel tone={revealReady ? "success" : "warning"}>
+      <View style={styles.metricGrid}>
+        <View style={[styles.metricCard, styles.metricCardPaper]}>
+          <Text style={styles.metricLabel}>{c.currentEpoch}</Text>
+          <Text style={styles.metricValue}>{props.fairness?.epoch ?? "--"}</Text>
+        </View>
+        <View style={[styles.metricCard, styles.metricCardBlue]}>
+          <Text style={styles.metricLabel}>{c.revealAfter}</Text>
+          <Text style={styles.metricValue}>{revealAfter}</Text>
+        </View>
+        <View style={[styles.metricCard, styles.metricCardGold]}>
+          <Text style={styles.metricLabel}>{c.verifiedDays}</Text>
+          <Text style={styles.metricValue}>
+            {audit?.consecutiveVerifiedDays ?? 0}
+          </Text>
+        </View>
+        <View style={[styles.metricCard, styles.metricCardPeach]}>
+          <Text style={styles.metricLabel}>{c.auditStatus}</Text>
+          <Text style={styles.metricValue}>{auditStatus}</Text>
+        </View>
+      </View>
+
+      <View
+        style={[
+          styles.revealWindowCard,
+          revealReady
+            ? styles.revealWindowCardReady
+            : styles.revealWindowCardWaiting,
+        ]}
+      >
         <View style={styles.revealStatusHeader}>
           <Text style={styles.hashLabel}>{c.revealStatus}</Text>
           <Text
@@ -301,7 +350,7 @@ export function MobileFairnessCompactSummary(
           {c.lastAutoAudit}: {auditStatus}
         </Text>
         <Text style={styles.revealStatusMeta}>{auditDetail}</Text>
-      </GameStatusPanel>
+      </View>
     </View>
   );
 }
@@ -323,10 +372,39 @@ type MobileFairnessVerifierProps = {
 
 export function MobileFairnessVerifier(props: MobileFairnessVerifierProps) {
   const c = fairnessCopy[props.locale];
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const verificationPassed = props.verification?.matches === true;
+  const revealAt = getFairnessRevealDate(props.commit);
+  const targetEpoch =
+    props.commit && props.commit.epoch > 0 ? props.commit.epoch - 1 : null;
+  const remainingMs = revealAt ? Math.max(revealAt.getTime() - nowMs, 0) : null;
+  const revealReady =
+    targetEpoch !== null && remainingMs !== null ? remainingMs === 0 : false;
+  const revealTimingLabel =
+    remainingMs !== null && remainingMs > 0
+      ? `${c.opensIn} ${formatCountdown(remainingMs)}`
+      : formatLocaleTimestamp(revealAt, props.locale);
+
+  useEffect(() => {
+    if (!revealAt) {
+      return;
+    }
+
+    if (revealAt.getTime() <= Date.now()) {
+      setNowMs(Date.now());
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [revealAt?.getTime()]);
 
   return (
     <>
-      <SectionCard title={c.verifierTitle} subtitle={c.verifierDescription}>
+      <SectionCard title={c.verifierTitle}>
         <View style={styles.actionRow}>
           <ActionButton
             label={c.backHome}
@@ -344,24 +422,67 @@ export function MobileFairnessVerifier(props: MobileFairnessVerifierProps) {
           />
         </View>
 
+        <View style={styles.protocolCard}>
+          <View style={styles.protocolHero}>
+            <Text style={styles.protocolTitle}>{c.protocolTitle}</Text>
+            <Text style={styles.protocolBody}>{c.verifierDescription}</Text>
+          </View>
+          <View style={styles.protocolStepStack}>
+            {c.steps.map((step) => (
+              <View key={step} style={styles.protocolStepCard}>
+                <Text style={styles.protocolStepText}>{step}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
         <MobileFairnessCompactSummary
           locale={props.locale}
           fairness={props.commit}
           eyebrow={c.currentCommit}
-          body={c.currentCommitBody}
+          body={c.activeSeedsBody}
         />
-
-        <View style={styles.stepsCard}>
-          <Text style={styles.stepsTitle}>{c.howToRead}</Text>
-          {c.steps.map((step) => (
-            <Text key={step} style={styles.stepText}>
-              {step}
-            </Text>
-          ))}
-        </View>
       </SectionCard>
 
-      <SectionCard title={c.revealCardTitle} subtitle={c.revealCardBody}>
+      <SectionCard title={c.revealCardTitle}>
+        <View
+          style={[
+            styles.revealHeroCard,
+            revealReady
+              ? styles.revealHeroCardReady
+              : styles.revealHeroCardWaiting,
+          ]}
+        >
+          <View style={styles.revealHeroHeader}>
+            <View style={styles.revealHeroBadge}>
+              <Text style={styles.revealHeroBadgeText}>
+                {revealReady ? "OK" : "..."}
+              </Text>
+            </View>
+            <View style={styles.revealHeroCopy}>
+              <Text style={styles.revealHeroTitle}>
+                {revealReady ? c.revealReady : c.revealLocked}
+              </Text>
+              <Text style={styles.revealHeroBody}>{c.revealCardBody}</Text>
+            </View>
+          </View>
+
+          <View style={styles.revealHeroMetricRow}>
+            <View style={styles.revealHeroMetricCard}>
+              <Text style={styles.revealHeroMetricLabel}>{c.currentEpoch}</Text>
+              <Text style={styles.revealHeroMetricValue}>
+                {targetEpoch ?? "--"}
+              </Text>
+            </View>
+            <View style={styles.revealHeroMetricCard}>
+              <Text style={styles.revealHeroMetricLabel}>{c.revealAfter}</Text>
+              <Text style={styles.revealHeroMetricValue}>
+                {revealTimingLabel}
+              </Text>
+            </View>
+          </View>
+        </View>
+
         <Field
           label={c.epochInput}
           value={props.revealEpoch}
@@ -375,7 +496,9 @@ export function MobileFairnessVerifier(props: MobileFairnessVerifierProps) {
         />
 
         {props.commit?.epoch === 0 ? (
-          <GameStatusPanel tone="warning">{c.noPreviousEpoch}</GameStatusPanel>
+          <View style={[styles.inlineNotice, styles.inlineNoticeWarning]}>
+            <Text style={styles.inlineNoticeText}>{c.noPreviousEpoch}</Text>
+          </View>
         ) : null}
 
         <View style={styles.actionRow}>
@@ -387,9 +510,25 @@ export function MobileFairnessVerifier(props: MobileFairnessVerifierProps) {
               props.loadingCommit ||
               props.commit?.epoch === 0
             }
-            compact
+            fullWidth
           />
         </View>
+
+        {!props.reveal ? (
+          <View
+            style={[
+              styles.resultPlaceholderCard,
+              revealReady
+                ? styles.resultPlaceholderCardReady
+                : styles.resultPlaceholderCardWaiting,
+            ]}
+          >
+            <Text style={styles.resultPlaceholderTitle}>{c.resultTitle}</Text>
+            <Text style={styles.resultPlaceholderBody}>
+              {revealReady ? c.resultBody : c.revealCardBody}
+            </Text>
+          </View>
+        ) : null}
       </SectionCard>
 
       {props.reveal ? (
@@ -400,39 +539,103 @@ export function MobileFairnessVerifier(props: MobileFairnessVerifierProps) {
             props.locale,
           )}`}
         >
-          <View style={styles.badgeRow}>
+          <View style={styles.resultShell}>
             <View
               style={[
-                styles.statusBadge,
-                props.verification?.matches
-                  ? styles.statusBadgeSuccess
-                  : styles.statusBadgeDanger,
+                styles.resultBanner,
+                verificationPassed
+                  ? styles.resultBannerSuccess
+                  : styles.resultBannerDanger,
               ]}
             >
-              <Text style={styles.statusBadgeLabel}>
-                {props.verification?.matches ? c.verified : c.mismatch}
-              </Text>
+              <View
+                style={[
+                  styles.resultStamp,
+                  verificationPassed
+                    ? styles.resultStampSuccess
+                    : styles.resultStampDanger,
+                ]}
+              >
+                <Text style={styles.resultStampText}>
+                  {verificationPassed ? "OK" : "ERR"}
+                </Text>
+              </View>
+              <View style={styles.resultBannerCopy}>
+                <Text style={styles.resultKicker}>{c.resultKicker}</Text>
+                <View
+                  style={[
+                    styles.statusBadge,
+                    verificationPassed
+                      ? styles.statusBadgeSuccess
+                      : styles.statusBadgeDanger,
+                  ]}
+                >
+                  <Text style={styles.statusBadgeLabel}>
+                    {verificationPassed ? c.verified : c.mismatch}
+                  </Text>
+                </View>
+                <Text style={styles.resultHeadline}>
+                  {verificationPassed ? c.verified : c.mismatch}
+                </Text>
+                <Text style={styles.resultLead}>
+                  {verificationPassed ? c.verifiedBody : c.mismatchBody}
+                </Text>
+              </View>
             </View>
-          </View>
 
-          <GameStatusPanel
-            tone={props.verification?.matches ? "success" : "danger"}
-          >
-            {props.verification?.matches ? c.verifiedBody : c.mismatchBody}
-          </GameStatusPanel>
+            <View style={styles.resultMetricGrid}>
+              <View
+                style={[styles.resultMetricCard, styles.resultMetricCardPaper]}
+              >
+                <Text style={styles.resultMetricLabel}>{c.currentEpoch}</Text>
+                <Text style={styles.resultMetricValue}>{props.reveal.epoch}</Text>
+              </View>
+              <View
+                style={[styles.resultMetricCard, styles.resultMetricCardBlue]}
+              >
+                <Text style={styles.resultMetricLabel}>{c.revealedAt}</Text>
+                <Text style={styles.resultMetricValue}>
+                  {formatLocaleTimestamp(props.reveal.revealedAt, props.locale)}
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.resultMetricCard,
+                  verificationPassed
+                    ? styles.resultMetricCardSuccess
+                    : styles.resultMetricCardDanger,
+                ]}
+              >
+                <Text style={styles.resultMetricLabel}>
+                  {c.resultVerificationLabel}
+                </Text>
+                <Text style={styles.resultMetricValue}>
+                  {verificationPassed ? c.verified : c.mismatch}
+                </Text>
+                <Text style={styles.resultMetricCaption}>
+                  {verificationPassed
+                    ? c.resultHashMatchSuccess
+                    : c.resultHashMatchFailure}
+                </Text>
+              </View>
+            </View>
 
-          <View style={styles.resultStack}>
-            <GameHashCard label={c.seed} value={props.reveal.seed} />
-            <GameHashCard
-              label={c.publishedCommit}
-              value={props.reveal.commitHash}
-              valueTone="accent"
-            />
-            <GameHashCard
-              label={c.computedCommit}
-              value={props.verification?.computedHash ?? c.unknown}
-              valueTone="warning"
-            />
+            <View style={styles.resultStack}>
+              <View style={styles.hashCard}>
+                <Text style={styles.hashLabel}>{c.seed}</Text>
+                <Text style={styles.hashValueFull}>{props.reveal.seed}</Text>
+              </View>
+              <View style={[styles.hashCard, styles.hashCardBlue]}>
+                <Text style={styles.hashLabel}>{c.publishedCommit}</Text>
+                <Text style={styles.hashValueFull}>{props.reveal.commitHash}</Text>
+              </View>
+              <View style={[styles.hashCard, styles.hashCardGold]}>
+                <Text style={styles.hashLabel}>{c.computedCommit}</Text>
+                <Text style={styles.hashValueFull}>
+                  {props.verification?.computedHash ?? c.unknown}
+                </Text>
+              </View>
+            </View>
           </View>
         </SectionCard>
       ) : null}
@@ -446,49 +649,89 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 10,
   },
-  summaryShell: {
-    gap: 12,
-  },
-  summaryHero: {
+  hashCard: {
     gap: 8,
     borderRadius: 18,
-    borderWidth: 1,
-    borderColor: mobileGameTheme.fairness.hero.borderColor,
-    backgroundColor: mobileGameTheme.fairness.hero.backgroundColor,
-    padding: 16,
+    borderWidth: mobileChromeTheme.borderWidth,
+    borderColor: mobilePalette.border,
+    backgroundColor: mobilePalette.panel,
+    padding: 14,
+    ...mobileChromeTheme.cardShadowSm,
   },
-  summaryEyebrow: {
-    color: mobileGameTheme.fairness.hero.accentColor,
+  hashCardBlue: {
+    backgroundColor: mobileFeedbackTheme.info.backgroundColor,
+  },
+  hashCardGold: {
+    backgroundColor: mobileFeedbackTheme.warningSoft.backgroundColor,
+  },
+  hashLabel: {
+    color: mobilePalette.textMuted,
     fontSize: 11,
     fontWeight: "700",
-    letterSpacing: 1,
+    letterSpacing: 0.9,
     textTransform: "uppercase",
   },
-  summaryCommit: {
-    color: mobilePalette.text,
-    fontSize: 20,
-    fontWeight: "800",
+  hashRow: {
+    gap: 6,
+    borderRadius: 16,
+    borderWidth: mobileChromeTheme.borderWidth,
+    borderColor: mobilePalette.border,
+    backgroundColor: mobilePalette.panelMuted,
+    padding: 14,
+    ...mobileChromeTheme.cardShadowSm,
+  },
+  hashValue: {
+    color: mobileFeedbackTheme.info.accentColor,
+    fontSize: 14,
+    fontWeight: "700",
     fontFamily: mobileTypography.mono,
   },
-  summaryBody: {
-    color: mobilePalette.textMuted,
+  hashValueFull: {
+    color: mobilePalette.text,
+    fontSize: 13,
+    lineHeight: 19,
+    fontFamily: mobileTypography.mono,
+  },
+  inlineNotice: {
+    borderRadius: 16,
+    borderWidth: mobileChromeTheme.borderWidth,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  inlineNoticeText: {
+    color: mobilePalette.text,
     fontSize: 14,
     lineHeight: 20,
+  },
+  inlineNoticeWarning: {
+    borderColor: mobileFeedbackTheme.warningSoft.borderColor,
+    backgroundColor: mobileFeedbackTheme.warningSoft.backgroundColor,
+  },
+  metricCard: {
+    width: "48%",
+    gap: 8,
+    borderRadius: 18,
+    borderWidth: mobileChromeTheme.borderWidth,
+    borderColor: mobilePalette.border,
+    padding: 14,
+    ...mobileChromeTheme.cardShadowSm,
+  },
+  metricCardBlue: {
+    backgroundColor: mobileFeedbackTheme.info.backgroundColor,
+  },
+  metricCardGold: {
+    backgroundColor: mobileFeedbackTheme.warningSoft.backgroundColor,
+  },
+  metricCardPaper: {
+    backgroundColor: mobilePalette.panel,
+  },
+  metricCardPeach: {
+    backgroundColor: mobileFeedbackTheme.danger.backgroundColor,
   },
   metricGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10,
-  },
-  metricCard: {
-    flexGrow: 1,
-    minWidth: 140,
-    gap: 8,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: mobilePalette.border,
-    backgroundColor: mobilePalette.panelMuted,
-    padding: 14,
   },
   metricLabel: {
     color: mobilePalette.textMuted,
@@ -499,22 +742,187 @@ const styles = StyleSheet.create({
   },
   metricValue: {
     color: mobilePalette.text,
-    fontSize: 15,
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  protocolBody: {
+    color: mobilePalette.text,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  protocolCard: {
+    overflow: "hidden",
+    gap: 0,
+    borderRadius: 20,
+    borderWidth: mobileChromeTheme.borderWidth,
+    borderColor: mobilePalette.border,
+    backgroundColor: mobilePalette.panel,
+    ...mobileChromeTheme.cardShadow,
+  },
+  protocolHero: {
+    gap: 8,
+    backgroundColor: "#35270e",
+    padding: 16,
+  },
+  protocolStepCard: {
+    borderRadius: 14,
+    borderWidth: mobileChromeTheme.borderWidth,
+    borderColor: mobilePalette.border,
+    backgroundColor: mobilePalette.panelMuted,
+    padding: 10,
+    ...mobileChromeTheme.cardShadowSm,
+  },
+  protocolStepStack: {
+    gap: 8,
+    padding: 12,
+  },
+  protocolStepText: {
+    color: mobilePalette.text,
+    fontSize: 13,
+    lineHeight: 18,
     fontWeight: "700",
   },
-  revealStatusCard: {
-    gap: 8,
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 14,
+  protocolTitle: {
+    color: mobilePalette.text,
+    fontSize: 24,
+    lineHeight: 28,
+    fontWeight: "800",
   },
-  revealStatusCardReady: {
+  resultBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 22,
+    borderWidth: mobileChromeTheme.borderWidth,
+    padding: 16,
+    ...mobileChromeTheme.cardShadow,
+  },
+  resultBannerDanger: {
+    borderColor: mobileFeedbackTheme.danger.borderColor,
+    backgroundColor: mobileFeedbackTheme.danger.backgroundColor,
+  },
+  resultBannerSuccess: {
     borderColor: mobileFeedbackTheme.success.borderColor,
     backgroundColor: mobileFeedbackTheme.success.backgroundColor,
   },
-  revealStatusCardWaiting: {
+  resultBannerCopy: {
+    flex: 1,
+    gap: 6,
+  },
+  resultHeadline: {
+    color: mobilePalette.text,
+    fontSize: 26,
+    lineHeight: 30,
+    fontWeight: "800",
+  },
+  resultKicker: {
+    color: mobilePalette.textMuted,
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.7,
+    textTransform: "uppercase",
+  },
+  resultLead: {
+    color: mobilePalette.text,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  resultMetricCaption: {
+    color: mobilePalette.textMuted,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  resultMetricCard: {
+    gap: 6,
+    borderRadius: 18,
+    borderWidth: mobileChromeTheme.borderWidth,
+    borderColor: mobilePalette.border,
+    padding: 14,
+    ...mobileChromeTheme.cardShadowSm,
+  },
+  resultMetricCardBlue: {
+    backgroundColor: mobileFeedbackTheme.info.backgroundColor,
+  },
+  resultMetricCardDanger: {
+    backgroundColor: mobileFeedbackTheme.danger.backgroundColor,
+  },
+  resultMetricCardPaper: {
+    backgroundColor: mobilePalette.panel,
+  },
+  resultMetricCardSuccess: {
+    backgroundColor: mobileFeedbackTheme.success.backgroundColor,
+  },
+  resultMetricGrid: {
+    gap: 12,
+  },
+  resultMetricLabel: {
+    color: mobilePalette.textMuted,
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.9,
+    textTransform: "uppercase",
+  },
+  resultMetricValue: {
+    color: mobilePalette.text,
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  resultPlaceholderBody: {
+    color: mobilePalette.textMuted,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  resultPlaceholderCard: {
+    gap: 6,
+    borderRadius: 18,
+    borderWidth: mobileChromeTheme.borderWidth,
+    padding: 14,
+    ...mobileChromeTheme.cardShadowSm,
+  },
+  resultPlaceholderCardReady: {
+    borderColor: mobileFeedbackTheme.info.borderColor,
+    backgroundColor: mobileFeedbackTheme.info.backgroundColor,
+  },
+  resultPlaceholderCardWaiting: {
     borderColor: mobileFeedbackTheme.warningSoft.borderColor,
     backgroundColor: mobileFeedbackTheme.warningSoft.backgroundColor,
+  },
+  resultPlaceholderTitle: {
+    color: mobilePalette.text,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  resultShell: {
+    gap: 14,
+  },
+  resultStamp: {
+    width: 78,
+    height: 78,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 39,
+    borderWidth: 6,
+    backgroundColor: mobilePalette.panel,
+  },
+  resultStampDanger: {
+    borderColor: mobileFeedbackTheme.danger.accentColor,
+  },
+  resultStampSuccess: {
+    borderColor: mobileFeedbackTheme.success.accentColor,
+  },
+  resultStampText: {
+    color: mobilePalette.text,
+    fontSize: 19,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+  },
+  resultStack: {
+    gap: 12,
+  },
+  revealStatusBody: {
+    color: mobilePalette.text,
+    fontSize: 14,
+    fontWeight: "700",
   },
   revealStatusHeader: {
     flexDirection: "row",
@@ -522,6 +930,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
+  },
+  revealStatusMeta: {
+    color: mobilePalette.textMuted,
+    fontSize: 13,
+    lineHeight: 18,
   },
   revealStatusValue: {
     fontSize: 13,
@@ -533,61 +946,106 @@ const styles = StyleSheet.create({
   revealStatusValueWaiting: {
     color: mobilePalette.warning,
   },
-  revealStatusBody: {
+  revealHeroBadge: {
+    width: 72,
+    height: 72,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 36,
+    borderWidth: 4,
+    borderColor: mobilePalette.border,
+    backgroundColor: mobilePalette.panelMuted,
+    ...mobileChromeTheme.cardShadowSm,
+  },
+  revealHeroBadgeText: {
     color: mobilePalette.text,
-    fontSize: 14,
-    fontWeight: "700",
+    fontSize: 18,
+    fontWeight: "800",
+    letterSpacing: 0.7,
   },
-  revealStatusMeta: {
-    color: mobilePalette.textMuted,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  stepsCard: {
-    gap: 8,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: mobileGameTheme.fairness.stepsPanel.borderColor,
-    backgroundColor: mobileGameTheme.fairness.stepsPanel.backgroundColor,
-    padding: 16,
-  },
-  stepsTitle: {
+  revealHeroBody: {
     color: mobilePalette.text,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  stepText: {
-    color: mobilePalette.textMuted,
     fontSize: 14,
     lineHeight: 20,
   },
-  warningPanel: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: mobileFeedbackTheme.warningSoft.borderColor,
-    backgroundColor: mobileFeedbackTheme.warningSoft.backgroundColor,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+  revealHeroCard: {
+    gap: 12,
+    borderRadius: 20,
+    borderWidth: mobileChromeTheme.borderWidth,
+    padding: 14,
+    ...mobileChromeTheme.cardShadowSm,
   },
-  warningText: {
-    color: mobilePalette.warning,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  badgeRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  statusBadge: {
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  statusBadgeSuccess: {
+  revealHeroCardReady: {
     borderColor: mobileFeedbackTheme.success.borderColor,
     backgroundColor: mobileFeedbackTheme.success.backgroundColor,
+  },
+  revealHeroCardWaiting: {
+    borderColor: mobileFeedbackTheme.warningSoft.borderColor,
+    backgroundColor: mobileFeedbackTheme.warningSoft.backgroundColor,
+  },
+  revealHeroCopy: {
+    flex: 1,
+    gap: 6,
+  },
+  revealHeroHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  revealHeroMetricCard: {
+    flex: 1,
+    gap: 4,
+    borderRadius: 16,
+    borderWidth: mobileChromeTheme.borderWidth,
+    borderColor: mobilePalette.border,
+    backgroundColor: mobilePalette.panelMuted,
+    padding: 12,
+    ...mobileChromeTheme.cardShadowSm,
+  },
+  revealHeroMetricLabel: {
+    color: mobilePalette.textMuted,
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+  },
+  revealHeroMetricRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  revealHeroMetricValue: {
+    color: mobilePalette.text,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  revealHeroTitle: {
+    color: mobilePalette.text,
+    fontSize: 20,
+    lineHeight: 24,
+    fontWeight: "800",
+  },
+  revealWindowCard: {
+    gap: 8,
+    borderRadius: 18,
+    borderWidth: mobileChromeTheme.borderWidth,
+    padding: 14,
+    ...mobileChromeTheme.cardShadowSm,
+  },
+  revealWindowCardReady: {
+    borderColor: mobileFeedbackTheme.success.borderColor,
+    backgroundColor: mobileFeedbackTheme.success.backgroundColor,
+  },
+  revealWindowCardWaiting: {
+    borderColor: mobileFeedbackTheme.warningSoft.borderColor,
+    backgroundColor: mobileFeedbackTheme.warningSoft.backgroundColor,
+  },
+  statusBadge: {
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    borderWidth: mobileChromeTheme.borderWidth,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    ...mobileChromeTheme.cardShadowSm,
   },
   statusBadgeDanger: {
     borderColor: mobileFeedbackTheme.danger.borderColor,
@@ -596,68 +1054,40 @@ const styles = StyleSheet.create({
   statusBadgeLabel: {
     color: mobilePalette.text,
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "800",
   },
-  statusPanel: {
-    borderRadius: 16,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  statusPanelSuccess: {
+  statusBadgeSuccess: {
     borderColor: mobileFeedbackTheme.success.borderColor,
     backgroundColor: mobileFeedbackTheme.success.backgroundColor,
   },
-  statusPanelDanger: {
-    borderColor: mobileFeedbackTheme.danger.borderColor,
-    backgroundColor: mobileFeedbackTheme.danger.backgroundColor,
-  },
-  statusPanelText: {
+  summaryBody: {
+    color: mobilePalette.textMuted,
     fontSize: 14,
     lineHeight: 20,
   },
-  statusPanelTextSuccess: {
-    color: mobilePalette.success,
+  summaryCommit: {
+    color: mobilePalette.text,
+    fontSize: 18,
+    fontWeight: "800",
+    fontFamily: mobileTypography.mono,
   },
-  statusPanelTextDanger: {
-    color: mobilePalette.danger,
-  },
-  resultStack: {
-    gap: 12,
-  },
-  hashCard: {
-    gap: 8,
-    borderRadius: 16,
-    borderWidth: 1,
+  summaryCommitCard: {
+    gap: 10,
+    borderRadius: 20,
+    borderWidth: mobileChromeTheme.borderWidth,
     borderColor: mobilePalette.border,
-    backgroundColor: mobilePalette.panelMuted,
+    backgroundColor: mobilePalette.panel,
     padding: 14,
+    ...mobileChromeTheme.cardShadow,
   },
-  hashRow: {
-    gap: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: mobilePalette.border,
-    backgroundColor: mobilePalette.panelMuted,
-    padding: 14,
-  },
-  hashLabel: {
-    color: mobilePalette.textMuted,
+  summaryEyebrow: {
+    color: mobileFeedbackTheme.info.accentColor,
     fontSize: 11,
     fontWeight: "700",
-    letterSpacing: 0.9,
+    letterSpacing: 1,
     textTransform: "uppercase",
   },
-  hashValue: {
-    color: mobileGameTheme.fairness.hashAccent,
-    fontSize: 14,
-    fontWeight: "700",
-    fontFamily: mobileTypography.mono,
-  },
-  hashValueFull: {
-    color: mobilePalette.text,
-    fontSize: 13,
-    lineHeight: 19,
-    fontFamily: mobileTypography.mono,
+  summaryShell: {
+    gap: 12,
   },
 });

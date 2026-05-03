@@ -6,14 +6,15 @@ import type {
   PredictionMarketHistoryResponse,
   PredictionMarketPortfolioFilter,
   PredictionMarketPortfolioItem,
+  PredictionMarketPortfolioStatus,
+  PredictionMarketStatus,
   PredictionPosition,
+  PredictionPositionStatus,
 } from "@reward/shared-types/prediction-market";
 
 import { useLocale, useTranslations } from "@/components/i18n-provider";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
   CardContent,
   CardDescription,
   CardHeader,
@@ -22,15 +23,19 @@ import {
 import { browserUserApiClient } from "@/lib/api/user-client";
 import { cn } from "@/lib/utils";
 import {
+  GameMetricTile,
+  GamePill,
+  GameSectionBlock,
+  GameStatusNotice,
+  GameSurfaceCard,
+} from "@/modules/game/components/game-domain-ui";
+import {
   formatMarketAmount,
   formatMarketDateTime,
   formatMarketStatus,
   formatPortfolioFilter,
   formatPortfolioStatus,
   formatPositionStatus,
-  resolveMarketStatusClasses,
-  resolvePortfolioStatusClasses,
-  resolvePositionStatusClasses,
 } from "../lib/format";
 
 const PAGE_SIZE = 10;
@@ -47,6 +52,71 @@ const getOutcomeLabel = (
 ) =>
   item.market.outcomes.find((outcome) => outcome.key === outcomeKey)?.label ??
   outcomeKey;
+
+const parseMarketNumber = (value: string | number | null | undefined) => {
+  if (value === null || value === undefined || value === "") {
+    return 0;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const toTimestamp = (value: string | Date | null | undefined) => {
+  if (!value) {
+    return 0;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+};
+
+const resolvePortfolioTone = (
+  status: PredictionMarketPortfolioStatus,
+): "success" | "info" | "neutral" => {
+  switch (status) {
+    case "open":
+      return "success";
+    case "resolved":
+      return "info";
+    default:
+      return "neutral";
+  }
+};
+
+const resolveMarketTone = (
+  status: PredictionMarketStatus,
+): "success" | "warning" | "info" | "danger" | "neutral" => {
+  switch (status) {
+    case "open":
+      return "success";
+    case "locked":
+      return "warning";
+    case "resolved":
+      return "info";
+    case "cancelled":
+      return "danger";
+    default:
+      return "neutral";
+  }
+};
+
+const resolvePositionTone = (
+  status: PredictionPositionStatus,
+): "warning" | "success" | "danger" | "neutral" | "info" => {
+  switch (status) {
+    case "sold":
+      return "warning";
+    case "won":
+      return "success";
+    case "lost":
+      return "danger";
+    case "refunded":
+      return "neutral";
+    default:
+      return "info";
+  }
+};
 
 const renderPositionTimestamp = (
   locale: ReturnType<typeof useLocale>,
@@ -75,6 +145,11 @@ const renderPositionTimestamp = (
     t("markets.unknownTime"),
   )}`;
 };
+
+const countPortfolioStatus = (
+  items: PredictionMarketPortfolioItem[],
+  status: PredictionMarketPortfolioStatus,
+) => items.filter((item) => item.portfolioStatus === status).length;
 
 export function PredictionMarketPortfolioPage() {
   const locale = useLocale();
@@ -128,7 +203,7 @@ export function PredictionMarketPortfolioPage() {
     return () => {
       cancelled = true;
     };
-  }, [locale, page, refreshKey, status]);
+  }, [page, refreshKey, status]);
 
   const handleFilterChange = (nextStatus: PredictionMarketPortfolioFilter) => {
     if (nextStatus === status) {
@@ -141,378 +216,527 @@ export function PredictionMarketPortfolioPage() {
 
   const items = history?.items ?? [];
   const hasItems = items.length > 0;
+  const recentItems = [...items]
+    .sort((left, right) => toTimestamp(right.lastActivityAt) - toTimestamp(left.lastActivityAt))
+    .slice(0, 3);
+  const openItemCount = countPortfolioStatus(items, "open");
+  const resolvedItemCount = countPortfolioStatus(items, "resolved");
+  const refundedItemCount = countPortfolioStatus(items, "refunded");
 
   return (
     <section className="space-y-6" data-testid="markets-portfolio-page">
-      <Card className="border-white/10 bg-white/[0.04] text-slate-100 shadow-[0_24px_80px_rgba(15,23,42,0.35)]">
-        <CardHeader className="gap-5">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-            <div className="space-y-2">
-              <CardTitle className="text-3xl">
-                {t("markets.portfolioTitle")}
-              </CardTitle>
-              <CardDescription className="max-w-3xl text-sm leading-6 text-slate-300">
-                {t("markets.portfolioDescription")}
-              </CardDescription>
-            </div>
+      <GameSurfaceCard className="overflow-hidden" tone="light">
+        <CardContent className="retro-ivory-surface relative p-6 md:p-8">
+          <div className="pointer-events-none absolute inset-0 retro-dot-overlay opacity-15" />
+          <div className="relative grid gap-6 xl:grid-cols-[1.08fr,0.92fr]">
+            <div className="space-y-5">
+              <div className="space-y-4">
+                <span className="retro-kicker">{t("markets.openPortfolio")}</span>
+                <div className="space-y-3">
+                  <h1 className="text-[2.7rem] font-semibold leading-[0.95] tracking-[-0.05em] text-[var(--retro-ink)] md:text-[3.8rem]">
+                    {t("markets.portfolioTitle")}
+                  </h1>
+                  <p className="max-w-3xl text-base leading-7 text-[rgba(15,17,31,0.7)]">
+                    {t("markets.portfolioDescription")}
+                  </p>
+                </div>
+              </div>
 
-            <div className="flex flex-wrap gap-3">
-              <Button
-                asChild
-                type="button"
-                variant="outline"
-                className="rounded-full border-white/15 bg-white/5 text-slate-100 hover:bg-white/10 hover:text-white"
-              >
-                <Link href="/app/markets">{t("markets.browseMarkets")}</Link>
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={loading}
-                onClick={() => setRefreshKey((value) => value + 1)}
-                className="rounded-full border-white/15 bg-white/5 text-slate-100 hover:bg-white/10 hover:text-white"
-              >
-                {loading ? t("common.loading") : t("markets.refreshPortfolio")}
-              </Button>
-            </div>
-          </div>
+              <div className="flex flex-wrap gap-2">
+                <GamePill surface="light" tone="accent">
+                  {t("markets.openExposure")}
+                </GamePill>
+                <GamePill surface="light" tone="info">
+                  {t("markets.settledPayout")}
+                </GamePill>
+                <GamePill surface="light" tone="neutral">
+                  {t("markets.refundedAmount")}
+                </GamePill>
+              </div>
 
-          <div className="rounded-3xl border border-sky-300/20 bg-sky-400/10 p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-100/80">
-              {t("markets.portfolioExposureTitle")}
-            </p>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-sky-50/90">
-              {t("markets.portfolioExposureDescription")}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {PORTFOLIO_FILTERS.map((filter) => {
-              const active = filter === status;
-
-              return (
-                <Button
-                  key={filter}
-                  type="button"
-                  variant="outline"
-                  onClick={() => handleFilterChange(filter)}
-                  className={cn(
-                    "rounded-full border px-4 text-xs uppercase tracking-[0.22em]",
-                    active
-                      ? "border-cyan-300/40 bg-cyan-400/15 text-cyan-50"
-                      : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.08] hover:text-white",
-                  )}
-                >
-                  {formatPortfolioFilter(filter, t)}
+              <div className="flex flex-wrap gap-3">
+                <Button asChild variant="arcadeDark">
+                  <Link href="/app/markets">{t("markets.browseMarkets")}</Link>
                 </Button>
-              );
-            })}
-          </div>
-        </CardHeader>
-      </Card>
+                <Button
+                  type="button"
+                  variant="arcadeOutline"
+                  disabled={loading}
+                  onClick={() => setRefreshKey((value) => value + 1)}
+                >
+                  {loading ? t("common.loading") : t("markets.refreshPortfolio")}
+                </Button>
+              </div>
 
-      {history ? (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <Card className="border-white/10 bg-white/[0.04] text-slate-100">
-            <CardContent className="pt-6">
-              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                {t("markets.portfolioMarketCount")}
-              </p>
-              <p className="mt-2 text-3xl font-semibold text-white">
-                {history.summary.marketCount}
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="border-white/10 bg-white/[0.04] text-slate-100">
-            <CardContent className="pt-6">
-              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                {t("markets.portfolioPositionCount")}
-              </p>
-              <p className="mt-2 text-3xl font-semibold text-white">
-                {history.summary.positionCount}
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="border-white/10 bg-white/[0.04] text-slate-100">
-            <CardContent className="pt-6">
-              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                {t("markets.openExposure")}
-              </p>
-              <p className="mt-2 text-3xl font-semibold text-white">
-                {formatMarketAmount(locale, history.summary.openStakeAmount)}
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="border-white/10 bg-white/[0.04] text-slate-100">
-            <CardContent className="pt-6">
-              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                {t("markets.settledAndRefunded")}
-              </p>
-              <p className="mt-2 text-2xl font-semibold text-white">
-                {formatMarketAmount(
-                  locale,
-                  history.summary.settledPayoutAmount,
-                )}
-              </p>
-              <p className="mt-2 text-sm text-slate-400">
-                {t("markets.refundedInlineValue", {
-                  amount: formatMarketAmount(
-                    locale,
-                    history.summary.refundedAmount,
-                  ),
+              <div className="flex flex-wrap gap-3">
+                {PORTFOLIO_FILTERS.map((filter) => {
+                  const active = filter === status;
+
+                  return (
+                    <Button
+                      key={filter}
+                      type="button"
+                      variant={active ? "arcade" : "arcadeOutline"}
+                      onClick={() => handleFilterChange(filter)}
+                      data-testid={`markets-portfolio-filter-${filter}`}
+                      className={cn(!active && "bg-white/86")}
+                    >
+                      {formatPortfolioFilter(filter, t)}
+                    </Button>
+                  );
                 })}
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      ) : null}
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              {history ? (
+                <>
+                  <GameMetricTile
+                    tone="light"
+                    label={t("markets.portfolioMarketCount")}
+                    value={history.summary.marketCount}
+                    valueClassName="text-3xl font-black tracking-[-0.04em] text-[var(--retro-ink)]"
+                  />
+                  <GameMetricTile
+                    tone="light"
+                    label={t("markets.portfolioPositionCount")}
+                    value={history.summary.positionCount}
+                    valueClassName="text-3xl font-black tracking-[-0.04em] text-[var(--retro-violet)]"
+                  />
+                  <GameMetricTile
+                    tone="light"
+                    label={t("markets.openExposure")}
+                    value={formatMarketAmount(locale, history.summary.openStakeAmount)}
+                    valueClassName="text-2xl font-black tracking-[-0.04em] text-[var(--retro-orange)]"
+                  />
+                  <GameMetricTile
+                    tone="light"
+                    label={t("markets.settledPayout")}
+                    value={formatMarketAmount(
+                      locale,
+                      history.summary.settledPayoutAmount,
+                    )}
+                    valueClassName="text-2xl font-black tracking-[-0.04em] text-[var(--retro-green)]"
+                  />
+                </>
+              ) : (
+                <GameSectionBlock
+                  className="sm:col-span-2"
+                  tone="light"
+                >
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--retro-orange)]">
+                    {t("markets.portfolioExposureTitle")}
+                  </p>
+                  <p className="mt-3 text-sm leading-6 text-[rgba(15,17,31,0.72)]">
+                    {loading
+                      ? t("markets.loadingPortfolio")
+                      : t("markets.portfolioExposureDescription")}
+                  </p>
+                </GameSectionBlock>
+              )}
+
+              <GameSectionBlock className="sm:col-span-2" tone="light">
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--retro-orange)]">
+                  {t("markets.portfolioExposureTitle")}
+                </p>
+                <p className="mt-3 text-sm leading-6 text-[rgba(15,17,31,0.72)]">
+                  {t("markets.portfolioExposureDescription")}
+                </p>
+              </GameSectionBlock>
+            </div>
+          </div>
+        </CardContent>
+      </GameSurfaceCard>
 
       {error ? (
-        <Card className="border-rose-300/30 bg-rose-400/12 text-rose-50">
-          <CardContent className="flex flex-col gap-4 pt-6 sm:flex-row sm:items-center sm:justify-between">
-            <p
-              className="text-sm leading-6"
-              data-testid="markets-portfolio-error"
-              role="alert"
-            >
-              {error}
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setRefreshKey((value) => value + 1)}
-            >
-              {t("markets.retry")}
-            </Button>
-          </CardContent>
-        </Card>
+        <GameStatusNotice
+          className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+          surface="light"
+          tone="danger"
+        >
+          <p data-testid="markets-portfolio-error" role="alert">
+            {error}
+          </p>
+          <Button
+            type="button"
+            variant="arcadeOutline"
+            onClick={() => setRefreshKey((value) => value + 1)}
+          >
+            {t("markets.retry")}
+          </Button>
+        </GameStatusNotice>
       ) : null}
 
       {!history && loading ? (
-        <Card className="border-white/10 bg-white/[0.04] text-slate-100">
-          <CardContent className="pt-6 text-sm text-slate-300">
+        <GameSurfaceCard tone="light">
+          <CardContent className="p-6 text-sm text-[rgba(15,17,31,0.68)]">
             {t("markets.loadingPortfolio")}
           </CardContent>
-        </Card>
+        </GameSurfaceCard>
       ) : null}
 
       {history && !hasItems ? (
-        <Card className="border-white/10 bg-white/[0.04] text-slate-100">
+        <GameSurfaceCard tone="light">
           <CardHeader>
-            <CardTitle>{t("markets.portfolioEmptyTitle")}</CardTitle>
-            <CardDescription className="text-slate-300">
+            <CardTitle className="text-[var(--retro-ink)]">
+              {t("markets.portfolioEmptyTitle")}
+            </CardTitle>
+            <CardDescription className="text-[rgba(15,17,31,0.68)]">
               {status === "all"
                 ? t("markets.portfolioEmptyDescription")
                 : t("markets.portfolioEmptyFilteredDescription")}
             </CardDescription>
           </CardHeader>
-        </Card>
+        </GameSurfaceCard>
       ) : null}
 
       {hasItems ? (
-        <div className="space-y-5">
-          {items.map((item) => (
-            <Card
-              key={item.market.id}
-              className="border-white/10 bg-white/[0.04] text-slate-100 shadow-[0_20px_70px_rgba(15,23,42,0.22)]"
-              data-testid={`markets-portfolio-item-${item.market.id}`}
-            >
-              <CardHeader className="gap-4">
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                  <div className="space-y-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          "rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.22em]",
-                          resolvePortfolioStatusClasses(item.portfolioStatus),
-                        )}
-                      >
-                        {formatPortfolioStatus(item.portfolioStatus, t)}
-                      </Badge>
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          "rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.22em]",
-                          resolveMarketStatusClasses(item.market.status),
-                        )}
-                      >
-                        {formatMarketStatus(item.market.status, t)}
-                      </Badge>
-                      <span className="text-xs uppercase tracking-[0.24em] text-slate-400">
-                        {item.market.roundKey}
-                      </span>
-                    </div>
-                    <div className="space-y-2">
-                      <CardTitle className="text-2xl">
-                        {item.market.title}
-                      </CardTitle>
-                      <CardDescription className="text-sm leading-6 text-slate-300">
-                        {item.market.description?.trim() ||
-                          t("markets.noDescription")}
-                      </CardDescription>
-                    </div>
-                  </div>
+        <div className="grid gap-6 xl:grid-cols-[1.04fr,0.96fr]">
+          <div className="space-y-5">
+            {items.map((item) => (
+              <GameSurfaceCard
+                key={item.market.id}
+                className="overflow-hidden"
+                tone="light"
+              >
+                <CardContent
+                  className="retro-ivory-surface relative p-5 md:p-6"
+                  data-testid={`markets-portfolio-item-${item.market.id}`}
+                >
+                  <div className="pointer-events-none absolute inset-0 retro-dot-overlay opacity-15" />
+                  <div className="relative space-y-5">
+                    <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                      <div className="space-y-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <GamePill
+                            surface="light"
+                            tone={resolvePortfolioTone(item.portfolioStatus)}
+                          >
+                            {formatPortfolioStatus(item.portfolioStatus, t)}
+                          </GamePill>
+                          <GamePill
+                            surface="light"
+                            tone={resolveMarketTone(item.market.status)}
+                          >
+                            {formatMarketStatus(item.market.status, t)}
+                          </GamePill>
+                          <span className="rounded-full border border-[rgba(15,17,31,0.14)] bg-white/84 px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-[rgba(15,17,31,0.58)]">
+                            {item.market.roundKey}
+                          </span>
+                          {item.market.tags.slice(0, 2).map((tag) => (
+                            <span
+                              key={tag}
+                              className="rounded-full border border-[rgba(15,17,31,0.12)] bg-[rgba(97,88,255,0.08)] px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-[var(--retro-violet)]"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
 
-                  <div className="flex flex-col items-start gap-3 xl:items-end">
-                    <div className="rounded-2xl border border-white/10 bg-slate-950/45 px-4 py-3 xl:text-right">
-                      <p className="text-xs uppercase tracking-[0.22em] text-slate-400">
-                        {t("markets.lastActivity")}
-                      </p>
-                      <p className="mt-1 text-sm text-white">
-                        {formatMarketDateTime(
-                          locale,
-                          item.lastActivityAt,
-                          t("markets.unknownTime"),
-                        )}
-                      </p>
-                    </div>
-
-                    <Button asChild className="rounded-full">
-                      <Link href={`/app/markets/${item.market.id}`}>
-                        {t("markets.viewMarket")}
-                      </Link>
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-
-              <CardContent className="space-y-5">
-                <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                  <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                    <dt className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                      {t("markets.portfolioPositionCount")}
-                    </dt>
-                    <dd className="mt-2 text-sm text-slate-100">
-                      {item.positionCount}
-                    </dd>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                    <dt className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                      {t("markets.totalStake")}
-                    </dt>
-                    <dd className="mt-2 text-sm text-slate-100">
-                      {formatMarketAmount(locale, item.totalStakeAmount)}
-                    </dd>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                    <dt className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                      {t("markets.openExposure")}
-                    </dt>
-                    <dd className="mt-2 text-sm text-slate-100">
-                      {formatMarketAmount(locale, item.openStakeAmount)}
-                    </dd>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                    <dt className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                      {t("markets.settledPayout")}
-                    </dt>
-                    <dd className="mt-2 text-sm text-slate-100">
-                      {formatMarketAmount(locale, item.settledPayoutAmount)}
-                    </dd>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                    <dt className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                      {t("markets.refundedAmount")}
-                    </dt>
-                    <dd className="mt-2 text-sm text-slate-100">
-                      {formatMarketAmount(locale, item.refundedAmount)}
-                    </dd>
-                  </div>
-                </dl>
-
-                <div className="space-y-3">
-                  <h3 className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-300">
-                    {t("markets.yourPositions")}
-                  </h3>
-
-                  <div className="grid gap-3">
-                    {item.positions.map((position) => (
-                      <div
-                        key={position.id}
-                        className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
-                      >
-                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                          <div className="space-y-2">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="font-medium text-white">
-                                {getOutcomeLabel(item, position.outcomeKey)}
-                              </p>
-                              <Badge
-                                variant="outline"
-                                className={cn(
-                                  "border",
-                                  resolvePositionStatusClasses(position.status),
-                                )}
-                              >
-                                {formatPositionStatus(position.status, t)}
-                              </Badge>
-                            </div>
-                            <p className="text-sm text-slate-400">
-                              {renderPositionTimestamp(locale, t, position)}
-                            </p>
-                          </div>
-
-                          <dl className="grid gap-3 sm:grid-cols-2 lg:min-w-[16rem]">
-                            <div>
-                              <dt className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                                {t("markets.stakeAmountLabel")}
-                              </dt>
-                              <dd className="mt-1 text-sm text-slate-100">
-                                {formatMarketAmount(
-                                  locale,
-                                  position.stakeAmount,
-                                )}
-                              </dd>
-                            </div>
-                            <div>
-                              <dt className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                                {t("markets.payoutAmount")}
-                              </dt>
-                              <dd className="mt-1 text-sm text-slate-100">
-                                {formatMarketAmount(
-                                  locale,
-                                  position.payoutAmount,
-                                )}
-                              </dd>
-                            </div>
-                          </dl>
+                        <div className="space-y-2">
+                          <CardTitle className="text-[1.9rem] leading-tight tracking-[-0.04em] text-[var(--retro-ink)]">
+                            {item.market.title}
+                          </CardTitle>
+                          <p className="max-w-3xl text-sm leading-6 text-[rgba(15,17,31,0.7)]">
+                            {item.market.description?.trim() ||
+                              t("markets.noDescription")}
+                          </p>
                         </div>
                       </div>
-                    ))}
+
+                      <GameSectionBlock
+                        className="xl:min-w-[17rem]"
+                        tone="light"
+                      >
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--retro-orange)]">
+                          {t("markets.lastActivity")}
+                        </p>
+                        <p className="mt-2 text-sm font-semibold text-[var(--retro-ink)]">
+                          {formatMarketDateTime(
+                            locale,
+                            item.lastActivityAt,
+                            t("markets.unknownTime"),
+                          )}
+                        </p>
+
+                        <div className="mt-4 space-y-2 text-sm text-[rgba(15,17,31,0.68)]">
+                          <p>
+                            {t("markets.locksAt")}:{" "}
+                            {formatMarketDateTime(
+                              locale,
+                              item.market.locksAt,
+                              t("markets.unknownTime"),
+                            )}
+                          </p>
+                          <p>
+                            {t("markets.resolvesAt")}:{" "}
+                            {formatMarketDateTime(
+                              locale,
+                              item.market.resolvesAt,
+                              t("markets.unknownTime"),
+                            )}
+                          </p>
+                        </div>
+
+                        <Button asChild className="mt-4 w-full" variant="arcadeDark">
+                          <Link href={`/app/markets/${item.market.id}`}>
+                            {t("markets.viewMarket")}
+                          </Link>
+                        </Button>
+                      </GameSectionBlock>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      <GameMetricTile
+                        tone="light"
+                        label={t("markets.totalStake")}
+                        value={formatMarketAmount(locale, item.totalStakeAmount)}
+                        valueClassName="text-base font-black tracking-[-0.03em] text-[var(--retro-ink)]"
+                      />
+                      <GameMetricTile
+                        tone="light"
+                        label={t("markets.openExposure")}
+                        value={formatMarketAmount(locale, item.openStakeAmount)}
+                        valueClassName="text-base font-black tracking-[-0.03em] text-[var(--retro-orange)]"
+                      />
+                      <GameMetricTile
+                        tone="light"
+                        label={t("markets.settledPayout")}
+                        value={formatMarketAmount(
+                          locale,
+                          item.settledPayoutAmount,
+                        )}
+                        valueClassName="text-base font-black tracking-[-0.03em] text-[var(--retro-violet)]"
+                      />
+                      <GameMetricTile
+                        tone="light"
+                        label={t("markets.refundedAmount")}
+                        value={formatMarketAmount(locale, item.refundedAmount)}
+                        valueClassName="text-base font-black tracking-[-0.03em] text-[var(--retro-green)]"
+                      />
+                    </div>
+
+                    <GameSectionBlock className="space-y-4" tone="light">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <h3 className="text-base font-black uppercase tracking-[0.16em] text-[var(--retro-ink)]">
+                            {t("markets.yourPositions")}
+                          </h3>
+                          <p className="mt-1 text-sm text-[rgba(15,17,31,0.6)]">
+                            {t("markets.positionCountValue", {
+                              count: item.positionCount,
+                            })}
+                          </p>
+                        </div>
+                        <GamePill
+                          surface="light"
+                          tone={resolvePortfolioTone(item.portfolioStatus)}
+                        >
+                          {formatPortfolioStatus(item.portfolioStatus, t)}
+                        </GamePill>
+                      </div>
+
+                      <div className="grid gap-3">
+                        {item.positions.map((position) => (
+                          <div
+                            key={position.id}
+                            className="rounded-[1.25rem] border border-[rgba(15,17,31,0.12)] bg-white/84 p-4 shadow-[3px_3px_0px_0px_rgba(15,17,31,0.12)]"
+                          >
+                            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                              <div className="space-y-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="text-base font-semibold text-[var(--retro-ink)]">
+                                    {getOutcomeLabel(item, position.outcomeKey)}
+                                  </p>
+                                  <GamePill
+                                    surface="light"
+                                    tone={resolvePositionTone(position.status)}
+                                  >
+                                    {formatPositionStatus(position.status, t)}
+                                  </GamePill>
+                                </div>
+                                <p className="text-sm text-[rgba(15,17,31,0.58)]">
+                                  {renderPositionTimestamp(locale, t, position)}
+                                </p>
+                              </div>
+
+                              <dl className="grid gap-3 sm:grid-cols-2 lg:min-w-[16rem]">
+                                <div>
+                                  <dt className="text-xs font-semibold uppercase tracking-[0.18em] text-[rgba(15,17,31,0.48)]">
+                                    {t("markets.stakeAmountLabel")}
+                                  </dt>
+                                  <dd className="mt-1 text-sm font-semibold text-[var(--retro-ink)]">
+                                    {formatMarketAmount(
+                                      locale,
+                                      position.stakeAmount,
+                                    )}
+                                  </dd>
+                                </div>
+                                <div>
+                                  <dt className="text-xs font-semibold uppercase tracking-[0.18em] text-[rgba(15,17,31,0.48)]">
+                                    {t("markets.payoutAmount")}
+                                  </dt>
+                                  <dd className="mt-1 text-sm font-semibold text-[var(--retro-ink)]">
+                                    {formatMarketAmount(
+                                      locale,
+                                      position.payoutAmount,
+                                    )}
+                                  </dd>
+                                </div>
+                              </dl>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </GameSectionBlock>
+                  </div>
+                </CardContent>
+              </GameSurfaceCard>
+            ))}
+
+            <GameSectionBlock
+              className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+              tone="light"
+            >
+              <p className="text-sm text-[rgba(15,17,31,0.62)]">
+                {t("markets.portfolioPageValue", { page })}
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  type="button"
+                  variant="arcadeOutline"
+                  disabled={page <= 1 || loading}
+                  onClick={() => setPage((value) => Math.max(1, value - 1))}
+                >
+                  {t("markets.previousPage")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="arcadeOutline"
+                  disabled={!history?.hasNext || loading}
+                  onClick={() => setPage((value) => value + 1)}
+                >
+                  {t("markets.nextPage")}
+                </Button>
+              </div>
+            </GameSectionBlock>
+          </div>
+
+          <aside className="space-y-5 xl:sticky xl:top-28 xl:self-start">
+            <GameSurfaceCard tone="dark">
+              <CardContent className="space-y-5 p-5 md:p-6">
+                <div className="space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--retro-gold)]">
+                    {t("markets.portfolioExposureTitle")}
+                  </p>
+                  <div className="space-y-2">
+                    <h2 className="text-[2rem] font-semibold tracking-[-0.04em] text-slate-50">
+                      {t("markets.portfolioTitle")}
+                    </h2>
+                    <p className="text-sm leading-6 text-slate-300">
+                      {t("markets.portfolioExposureDescription")}
+                    </p>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : null}
 
-      {history ? (
-        <div className="flex flex-col gap-3 rounded-3xl border border-white/10 bg-white/[0.04] p-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-slate-300">
-            {t("markets.portfolioPageValue", { page })}
-          </p>
-          <div className="flex flex-wrap gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              disabled={page <= 1 || loading}
-              onClick={() => setPage((value) => Math.max(1, value - 1))}
-              className="rounded-full border-white/15 bg-white/5 text-slate-100 hover:bg-white/10 hover:text-white"
-            >
-              {t("markets.previousPage")}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={!history.hasNext || loading}
-              onClick={() => setPage((value) => value + 1)}
-              className="rounded-full border-white/15 bg-white/5 text-slate-100 hover:bg-white/10 hover:text-white"
-            >
-              {t("markets.nextPage")}
-            </Button>
-          </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <GameMetricTile
+                    label={t("markets.portfolioStatus.open")}
+                    tone="dark"
+                    value={openItemCount}
+                    valueClassName="text-2xl font-black tracking-[-0.04em] text-[var(--retro-gold)]"
+                  />
+                  <GameMetricTile
+                    label={t("markets.portfolioStatus.resolved")}
+                    tone="dark"
+                    value={resolvedItemCount}
+                    valueClassName="text-2xl font-black tracking-[-0.04em] text-cyan-100"
+                  />
+                  <GameMetricTile
+                    label={t("markets.portfolioStatus.refunded")}
+                    tone="dark"
+                    value={refundedItemCount}
+                    valueClassName="text-2xl font-black tracking-[-0.04em] text-slate-50"
+                  />
+                  <GameMetricTile
+                    label={t("markets.totalStake")}
+                    tone="dark"
+                    value={formatMarketAmount(
+                      locale,
+                      history?.summary.totalStakeAmount,
+                    )}
+                    valueClassName="text-2xl font-black tracking-[-0.04em] text-emerald-100"
+                  />
+                </div>
+              </CardContent>
+            </GameSurfaceCard>
+
+            <GameSurfaceCard tone="light">
+              <CardContent className="space-y-4 p-5 md:p-6">
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--retro-orange)]">
+                    {t("markets.lastActivity")}
+                  </p>
+                  <h3 className="text-[1.55rem] font-semibold tracking-[-0.03em] text-[var(--retro-ink)]">
+                    {t("markets.portfolioExposureTitle")}
+                  </h3>
+                  <p className="text-sm leading-6 text-[rgba(15,17,31,0.68)]">
+                    {t("markets.portfolioDescription")}
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  {recentItems.map((item) => (
+                    <div
+                      key={item.market.id}
+                      className="rounded-[1.2rem] border border-[rgba(15,17,31,0.12)] bg-white/84 px-4 py-4 shadow-[3px_3px_0px_0px_rgba(15,17,31,0.12)]"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-2">
+                          <p className="text-sm font-semibold text-[var(--retro-ink)]">
+                            {item.market.title}
+                          </p>
+                          <p className="text-xs text-[rgba(15,17,31,0.54)]">
+                            {formatMarketDateTime(
+                              locale,
+                              item.lastActivityAt,
+                              t("markets.unknownTime"),
+                            )}
+                          </p>
+                        </div>
+                        <GamePill
+                          className="shrink-0"
+                          surface="light"
+                          tone={resolvePortfolioTone(item.portfolioStatus)}
+                        >
+                          {formatPortfolioStatus(item.portfolioStatus, t)}
+                        </GamePill>
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-[rgba(15,17,31,0.5)]">
+                        <span>
+                          {t("markets.positionCountValue", {
+                            count: item.positionCount,
+                          })}
+                        </span>
+                        <span>·</span>
+                        <span>
+                          {t("markets.openExposure")}:{" "}
+                          {formatMarketAmount(locale, item.openStakeAmount)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+
+                  {recentItems.length === 0 ? (
+                    <GameStatusNotice surface="light" tone="neutral">
+                      {t("markets.portfolioEmptyDescription")}
+                    </GameStatusNotice>
+                  ) : null}
+                </div>
+              </CardContent>
+            </GameSurfaceCard>
+          </aside>
         </div>
       ) : null}
     </section>

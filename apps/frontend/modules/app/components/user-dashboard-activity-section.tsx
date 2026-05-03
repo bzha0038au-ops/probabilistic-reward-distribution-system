@@ -41,17 +41,21 @@ export function UserDashboardActivitySection({
   return (
     <section className="grid gap-6 xl:grid-cols-1">
       {showSessionsSection ? (
-        <Card>
+        <Card className="retro-panel rounded-[1.85rem] border-none">
           <CardHeader>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <CardTitle>{c.sessionsTitle}</CardTitle>
-                <CardDescription>{c.sessionsDescription}</CardDescription>
+                <CardTitle className="text-[1.9rem] text-[var(--retro-ink)]">
+                  {c.sessionsTitle}
+                </CardTitle>
+                <CardDescription className="text-[rgba(15,17,31,0.68)]">
+                  {c.sessionsDescription}
+                </CardDescription>
               </div>
               <div className="flex gap-2">
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="arcadeOutline"
                   size="sm"
                   onClick={() => void controller.handleRefresh()}
                   disabled={controller.refreshing}
@@ -60,7 +64,7 @@ export function UserDashboardActivitySection({
                 </Button>
                 <Button
                   type="button"
-                  variant="destructive"
+                  variant="arcade"
                   size="sm"
                   onClick={() => void controller.handleRevokeAllSessions()}
                   disabled={controller.sessionLoading}
@@ -76,7 +80,12 @@ export function UserDashboardActivitySection({
             <SecuritySessionCard
               title={c.currentDevice}
               badge={
-                <Badge variant={badgeVariant(true)}>{c.currentDevice}</Badge>
+                <Badge
+                  variant={badgeVariant(true)}
+                  className="retro-badge retro-badge-gold border-none"
+                >
+                  {c.currentDevice}
+                </Badge>
               }
               userAgent={controller.currentSession.userAgent ?? c.unknown}
               details={
@@ -95,14 +104,21 @@ export function UserDashboardActivitySection({
             />
 
             {controller.sessions.length === 0 ? (
-              <p className="text-sm text-slate-500">{c.noSessions}</p>
+              <p className="text-sm text-[rgba(15,17,31,0.56)]">{c.noSessions}</p>
             ) : (
               controller.sessions.map((entry) => (
                 <SecuritySessionCard
                   key={entry.sessionId}
                   title={entry.current ? c.currentDevice : c.activeSession}
                   badge={
-                    <Badge variant={badgeVariant(entry.current)}>
+                    <Badge
+                      variant={badgeVariant(entry.current)}
+                      className={
+                        entry.current
+                          ? 'retro-badge retro-badge-gold border-none'
+                          : 'retro-badge retro-badge-violet border-none'
+                      }
+                    >
                       {entry.current ? c.currentDevice : formatStatus(entry.kind)}
                     </Badge>
                   }
@@ -123,7 +139,7 @@ export function UserDashboardActivitySection({
                   action={
                     <Button
                       type="button"
-                      variant={entry.current ? 'destructive' : 'outline'}
+                      variant={entry.current ? 'arcade' : 'arcadeOutline'}
                       size="sm"
                       onClick={() =>
                         void controller.handleRevokeSession(entry.sessionId, entry.current)

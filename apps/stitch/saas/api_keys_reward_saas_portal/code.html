@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>API Keys - Reward SaaS Portal</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&amp;family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="../shared-ui.css" rel="stylesheet"/>
+<script id="tailwind-config">tailwind.config = {darkMode: "class", theme: {extend: {colors: {surface: "#fdf8f8", "on-surface-variant": "#58423a", "surface-container-lowest": "#ffffff", "surface-variant": "#e6e1e1", "surface-tint": "#a73a00", "primary-container": "#a73a00", "on-surface": "#1c1b1b", "on-error": "#ffffff", "on-tertiary": "#ffffff", "secondary-container": "#655dfb", "primary-fixed": "#ffdbce", "tertiary-container": "#c2aa4e", "surface-container": "#f1edec", "on-background": "#1c1b1b", "surface-container-high": "#ece7e7", "on-error-container": "#93000a", "on-secondary-fixed-variant": "#3322cc", secondary: "#4b41e1", "outline-variant": "#dfc0b5", "error-container": "#ffdad6", "inverse-surface": "#313030", "tertiary-fixed-dim": "#dfc566", "on-primary-fixed": "#370e00", "surface-bright": "#fdf8f8", "on-secondary-container": "#fffbff", "on-secondary-fixed": "#0f0069", background: "#fdf8f8", "secondary-fixed": "#e2dfff", "on-secondary": "#ffffff", "tertiary-fixed": "#fce17e", "inverse-on-surface": "#f4f0ef", error: "#ba1a1a", "on-primary-fixed-variant": "#802a00", "on-primary-container": "#ffcebc", "on-primary": "#ffffff", "surface-container-low": "#f7f2f2", "surface-container-highest": "#e6e1e1", "on-tertiary-fixed": "#221b00", "inverse-primary": "#ffb599", "surface-dim": "#ddd9d8", tertiary: "#705d00", "primary-fixed-dim": "#ffb599", outline: "#8c7168", "on-tertiary-container": "#4c3e00", "on-tertiary-fixed-variant": "#544600", primary: "#7f2a00", "secondary-fixed-dim": "#c3c0ff"}, borderRadius: {DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px"}, spacing: {xs: "4px", gutter: "16px", sm: "8px", lg: "24px", "container-max": "1280px", md: "16px", xl: "32px", unit: "4px", margin: "20px"}, fontFamily: {"body-sm": ["Inter"], "body-base": ["Inter"], "numeric-data": ["Inter"], "headline-md": ["Plus Jakarta Sans"], "display-lg": ["Manrope"], "label-caps": ["Inter"], "body-md": ["Be Vietnam Pro"], "headline-lg": ["Plus Jakarta Sans"], "body-lg": ["Be Vietnam Pro"], "label-bold": ["Be Vietnam Pro"], "headline-xl": ["Plus Jakarta Sans"], "label-sm": ["Be Vietnam Pro"]}, fontSize: {"body-sm": ["14px", {lineHeight: "1.5", letterSpacing: "0em", fontWeight: "400"}], "body-base": ["16px", {lineHeight: "1.6", letterSpacing: "0em", fontWeight: "400"}], "numeric-data": ["14px", {lineHeight: "1.0", fontWeight: "500"}], "headline-md": ["24px", {lineHeight: "30px", fontWeight: "700"}], "display-lg": ["48px", {lineHeight: "1.1", letterSpacing: "-0.02em", fontWeight: "700"}], "label-caps": ["12px", {lineHeight: "1.0", letterSpacing: "0.05em", fontWeight: "600"}], "body-md": ["16px", {lineHeight: "24px", fontWeight: "400"}], "headline-lg": ["32px", {lineHeight: "38px", letterSpacing: "-0.01em", fontWeight: "800"}], "body-lg": ["18px", {lineHeight: "28px", fontWeight: "400"}], "label-bold": ["14px", {lineHeight: "20px", fontWeight: "700"}], "headline-xl": ["40px", {lineHeight: "48px", letterSpacing: "-0.02em", fontWeight: "800"}], "label-sm": ["12px", {lineHeight: "16px", fontWeight: "500"}]}}}};</script>
+</head>
+<body class="bg-surface font-body-base text-on-surface portal-page-shell">
+<div class="portal-vignette-fixed"></div>
+<header class="fixed top-0 w-full z-50 border-b bg-white/80 backdrop-blur-md border-slate-200/60 shadow-sm shadow-slate-200/50">
+<div class="flex items-center justify-between px-8 h-16 max-w-[1280px] mx-auto">
+<div class="flex items-center gap-8">
+<span class="text-lg font-bold text-slate-900 tracking-tighter portal-topbar-brand">Reward SaaS Portal</span>
+<nav class="hidden md:flex items-center space-x-6 font-manrope text-sm font-medium tracking-tight h-16">
+<a class="portal-topnav-link" href="#">Overview</a>
+<a class="portal-topnav-link" href="#">Tenants</a>
+<a class="portal-topnav-link portal-topnav-link-active" href="#">API Keys</a>
+<a class="portal-topnav-link" href="#">Usage</a>
+<a class="portal-topnav-link" href="#">Reports</a>
+<a class="portal-topnav-link" href="#">Prizes</a>
+<a class="portal-topnav-link" href="#">Billing</a>
+<a class="portal-topnav-link" href="#">Docs</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="portal-topbar-badge hidden lg:flex">
+<span class="material-symbols-outlined text-[18px]">vpn_key</span>
+<span>Production Mode</span>
+</div>
+<button class="portal-topbar-icon-button">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="portal-topbar-icon-button">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<div class="portal-topbar-avatar">
+<img alt="User profile" class="w-full h-full object-cover" data-alt="A professional headshot of a software engineer with a clean, tech-focused background. The lighting is soft and professional, reflecting a modern corporate environment. The image is high-resolution with a shallow depth of field, emphasizing the person's friendly and capable expression in a light-mode UI context." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDsMx3wGpI-El0Yrv_O13XoHziDRkXNnFtvF6sjnZveo6d9mY9dNMWO6TQDLsMIXynJiu8d6ig6Mkr_ns1rP02oth--6w0Wqr5gVAPhTVF0_5fwhbOJYDYY0IgaAJjPGGHoFddV79JuzPAItqTSEI5Q7cAXoR1Xv5xVX9L_oyXE3IeOEtGo2DCVEmq3YXjo2g1Jd5Y3AUpQPGI9CeWkZksbHwKAvfFkSnBChHOCxi3CzbqKQcMDZRGQjIBa0sV00wDO04C4LH67vkA"/>
+</div>
+</div>
+</div>
+</header>
+<div class="max-w-[1280px] mx-auto px-5 pt-24 pb-20 flex flex-col gap-6 relative z-10 sm:px-8 lg:flex-row">
+<aside class="portal-context-rail w-72 flex flex-col p-4 space-y-2">
+<div class="px-4 py-2 mb-4">
+<p class="portal-context-title">Key Lifecycle</p>
+<p class="portal-context-copy mt-3">Keep sandbox credentials, production keys, secret reveal state, and revoke policy easy to reason about before users take destructive actions.</p>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="portal-context-link portal-context-link-active text-sm font-semibold" href="#">
+<span class="material-symbols-outlined portal-icon-filled">vpn_key</span>
+<span>Starter Key</span>
+</a>
+<a class="portal-context-link text-sm" href="#">
+<span class="material-symbols-outlined">key</span>
+<span>Production Keys</span>
+</a>
+<a class="portal-context-link text-sm" href="#">
+<span class="material-symbols-outlined">visibility</span>
+<span>Secret Reveal</span>
+</a>
+<a class="portal-context-link text-sm" href="#">
+<span class="material-symbols-outlined">sync</span>
+<span>Rotation Policy</span>
+</a>
+<a class="portal-context-link text-sm" href="#">
+<span class="material-symbols-outlined">warning</span>
+<span>Revoke Safeguards</span>
+</a>
+</nav>
+<button class="portal-button portal-button-primary mt-auto w-full">
+<span class="material-symbols-outlined text-sm">add</span>
+            Create New Key
+        </button>
+</aside>
+<main class="portal-context-main flex-1 min-w-0">
+<div class="portal-page-intro portal-animate-in">
+<div class="portal-scope-strip">
+<span class="portal-scope-chip">Acme Corp</span>
+<span class="portal-scope-chip">Sandbox + Production</span>
+<span class="portal-scope-chip">2 Active Keys</span>
+</div>
+<h1 class="portal-page-title">API Keys</h1>
+<p class="portal-page-copy">Manage programmatic access for the current tenant workspace. Keep sandbox onboarding smooth, make production key ownership legible, and ensure rotate or revoke actions feel deliberate.</p>
+</div>
+<div class="portal-inline-banner portal-inline-banner-warn portal-inline-banner-live portal-animate-in portal-animate-delay-1 mb-8">
+<span class="material-symbols-outlined text-[20px]">shield</span>
+<div>
+<p class="text-sm font-semibold">One-time reveal and revoke policy</p>
+<p class="mt-1 text-sm leading-6">Full secrets should only be shown once, and revoking a live key should happen only after a rotated replacement has reached every dependent deployment.</p>
+</div>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-10">
+<section class="portal-panel lg:col-span-8 p-8 portal-hover-lift portal-animate-in portal-animate-delay-2">
+<div class="mb-6 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+<div>
+<div class="flex items-center gap-3 mb-3">
+<div class="bg-primary/10 text-primary p-2 rounded-xl">
+<span class="material-symbols-outlined">auto_awesome</span>
+</div>
+<h2 class="text-headline-md font-headline-md text-slate-900">Starter API Key</h2>
+</div>
+<p class="text-body-sm text-on-surface-variant max-w-lg">Use the default sandbox credential for SDK onboarding and first reward event tests. Keep this key out of production workloads and long-lived shared scripts.</p>
+</div>
+<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-right">
+<div class="portal-label-caps portal-label-caps-success">Status</div>
+<div class="mt-1 text-lg font-bold text-emerald-700">Active</div>
+</div>
+</div>
+<div class="portal-panel-soft p-4">
+<div class="flex flex-col gap-3 rounded-xl border border-outline-variant/30 bg-surface-container p-4 font-mono text-sm group sm:flex-row sm:items-center">
+<span class="text-on-surface-variant font-semibold select-none">KEY:</span>
+<code class="block flex-1 overflow-x-auto whitespace-nowrap text-primary tracking-wider blur-sm select-none transition-all group-hover:blur-none">pk_test_starter_9f2a_7721_b12c</code>
+<div class="flex items-center justify-end gap-2 sm:justify-start">
+<button class="p-1.5 hover:bg-white rounded transition-colors text-on-surface-variant" title="Copy key">
+<span class="material-symbols-outlined text-[18px]">content_copy</span>
+</button>
+<button class="p-1.5 hover:bg-white rounded transition-colors text-on-surface-variant" title="Reveal secret">
+<span class="material-symbols-outlined text-[18px]">visibility</span>
+</button>
+</div>
+</div>
+<div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+<div>
+<p class="portal-eyebrow mb-1">Allowed Environment</p>
+<p class="font-semibold text-slate-900">Sandbox only</p>
+</div>
+<div>
+<p class="portal-eyebrow mb-1">Starter Scopes</p>
+<p class="font-semibold text-slate-900">events:write, rewards:read</p>
+</div>
+<div>
+<p class="portal-eyebrow mb-1">Issued</p>
+<p class="font-semibold text-slate-900">3 hours ago</p>
+</div>
+</div>
+<div class="portal-empty-state mt-4">
+<div class="flex items-start gap-3">
+<span class="material-symbols-outlined text-slate-400">timer</span>
+<div>
+<p class="portal-empty-state-title">Secret reveal is intentionally short-lived</p>
+<p class="portal-empty-state-copy">If the starter secret is lost after copy, issue a replacement key instead of attempting to reveal the same secret again.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<aside class="lg:col-span-4 flex flex-col gap-6">
+<section class="portal-panel-soft p-6">
+<div class="mb-4 flex items-center gap-3">
+<span class="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-900 text-sky-400">
+<span class="material-symbols-outlined">terminal</span>
+</span>
+<div>
+<h3 class="text-headline-md font-headline-md text-slate-900">Quick Connect</h3>
+<p class="mt-1 text-sm text-slate-500">Verify the current key before moving to production.</p>
+</div>
+</div>
+<div class="rounded-2xl bg-slate-950 p-4 border border-slate-800 font-mono text-[11px] leading-relaxed text-sky-300 overflow-x-auto">
+curl -H "Authorization: Bearer [YOUR_API_KEY]" \<br/>
+https://api.rewardportal.io/v1/engine/health
+</div>
+<a class="portal-inline-action mt-4" href="#">
+                    View API Reference
+                    <span class="material-symbols-outlined text-sm">arrow_forward</span>
+</a>
+</section>
+<section class="portal-panel-soft p-6">
+<div class="mb-4">
+<h3 class="text-headline-md font-headline-md text-slate-900">Key Safety</h3>
+<p class="mt-1 text-sm text-slate-500">Primary checks before rotate or revoke.</p>
+</div>
+<ul class="space-y-3 text-sm text-slate-600">
+<li class="flex items-center gap-2"><span class="material-symbols-outlined text-emerald-500 text-[18px]">check_circle</span><span>Starter key is sandbox-restricted</span></li>
+<li class="flex items-center gap-2"><span class="material-symbols-outlined text-amber-500 text-[18px]">schedule</span><span>One production key was last rotated 14 days ago</span></li>
+<li class="flex items-center gap-2"><span class="material-symbols-outlined text-rose-500 text-[18px]">warning</span><span>Revoke only after all deployments use the replacement key</span></li>
+</ul>
+</section>
+</aside>
+</div>
+<section class="portal-panel overflow-hidden">
+<div class="portal-panel-header">
+<div>
+<h3 class="text-headline-md font-headline-md text-slate-900">Key Inventory</h3>
+<p class="portal-panel-header-copy">Track production credentials, their scopes, and whether each key is safe to rotate or revoke.</p>
+</div>
+<div class="portal-panel-header-actions">
+<div class="portal-field-shell min-w-[240px]">
+<span class="material-symbols-outlined text-sm">search</span>
+<input class="text-sm" placeholder="Search keys..." type="text"/>
+</div>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="portal-table-head-row">
+<th class="portal-table-head-cell">Name</th>
+<th class="portal-table-head-cell">Scopes</th>
+<th class="portal-table-head-cell">Key</th>
+<th class="portal-table-head-cell">Last Used</th>
+<th class="portal-table-head-cell">Status</th>
+<th class="portal-table-head-cell portal-table-head-cell-right">Actions</th>
+</tr>
+</thead>
+<tbody class="text-sm font-body-sm divide-y divide-slate-100">
+<tr class="portal-table-row group">
+<td class="px-6 py-4 align-top">
+<div class="font-semibold text-on-surface">Main Dashboard Sync</div>
+<div class="text-[11px] text-slate-400">Created 14 days ago by Alex · production service account</div>
+</td>
+<td class="px-6 py-4 align-top">
+<div class="flex flex-wrap gap-1.5">
+<span class="portal-inline-chip portal-inline-chip-mono">rewards:read</span>
+<span class="portal-inline-chip portal-inline-chip-mono">events:write</span>
+<span class="portal-inline-chip portal-inline-chip-mono">users:write</span>
+</div>
+</td>
+<td class="px-6 py-4 align-top">
+<div class="portal-mono-row font-mono text-xs text-on-surface-variant">
+<span class="portal-mono-wrap">rk_live_••••••92a1</span>
+<button class="opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-sm">content_copy</span>
+</button>
+</div>
+</td>
+<td class="px-6 py-4 align-top text-slate-500">2 hours ago</td>
+<td class="px-6 py-4 align-top">
+<span class="portal-status-pill portal-status-success">Active</span>
+</td>
+<td class="px-6 py-4 align-top text-right">
+<div class="flex justify-end gap-2">
+<button class="portal-button portal-button-secondary portal-button-sm">Rotate</button>
+<button class="portal-button portal-button-danger portal-button-sm">
+<span class="material-symbols-outlined text-[16px]">delete_forever</span>
+                                    Revoke
+                                </button>
+</div>
+</td>
+</tr>
+<tr class="portal-table-row group">
+<td class="px-6 py-4 align-top">
+<div class="font-semibold text-on-surface">External Auditor Access</div>
+<div class="text-[11px] text-slate-400">Created 2 months ago by Sarah · read-only reporting integration</div>
+</td>
+<td class="px-6 py-4 align-top">
+<div class="flex flex-wrap gap-1.5">
+<span class="portal-inline-chip portal-inline-chip-mono">reports:read</span>
+<span class="portal-inline-chip portal-inline-chip-mono">billing:read</span>
+</div>
+</td>
+<td class="px-6 py-4 align-top">
+<div class="portal-mono-row font-mono text-xs text-on-surface-variant">
+<span class="portal-mono-wrap">rk_live_••••••44bb</span>
+<button class="opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-sm">content_copy</span>
+</button>
+</div>
+</td>
+<td class="px-6 py-4 align-top text-slate-500">Aug 24, 2024</td>
+<td class="px-6 py-4 align-top">
+<span class="portal-status-pill portal-status-success">Active</span>
+</td>
+<td class="px-6 py-4 align-top text-right">
+<div class="flex justify-end gap-2">
+<button class="portal-button portal-button-secondary portal-button-sm">Rotate</button>
+<button class="portal-button portal-button-danger portal-button-sm">
+<span class="material-symbols-outlined text-[16px]">delete_forever</span>
+                                    Revoke
+                                </button>
+</div>
+</td>
+</tr>
+<tr class="bg-slate-50/40 grayscale transition-all">
+<td class="px-6 py-4 align-top">
+<div class="font-semibold text-slate-400">Legacy Mobile App</div>
+<div class="text-[11px] text-slate-400">Revoked on Sep 01, 2024</div>
+</td>
+<td class="px-6 py-4 align-top">
+<div class="flex flex-wrap gap-1.5 opacity-50">
+<span class="portal-inline-chip portal-inline-chip-mono">full:access</span>
+</div>
+</td>
+<td class="px-6 py-4 align-top">
+<div class="portal-mono-row font-mono text-xs text-slate-400 line-through">
+<span class="portal-mono-wrap">rk_live_••••••1122</span>
+</div>
+</td>
+<td class="px-6 py-4 align-top text-slate-400">Never</td>
+<td class="px-6 py-4 align-top">
+<span class="portal-status-pill portal-status-muted">Revoked</span>
+</td>
+<td class="px-6 py-4 align-top text-right">
+<button class="portal-button portal-button-secondary portal-button-sm" disabled>Unavailable</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<div class="portal-inline-banner portal-inline-banner-danger mt-10">
+<span class="material-symbols-outlined text-[20px]">warning</span>
+<div>
+<h4 class="text-sm font-bold mb-1">Revoking a production key is irreversible</h4>
+<p class="text-sm leading-relaxed">
+                    Any service still using the revoked key will immediately receive `401 Unauthorized` responses. Rotate credentials through every deployment target before you revoke an active production secret.
+                </p>
+</div>
+</div>
+</main>
+</div>
+<footer class="portal-footer">
+<div class="portal-footer-shell">
+<span class="portal-footer-copy">© 2024 Reward SaaS Portal. Key lifecycle, secret handling, and revoke safeguards.</span>
+<div class="portal-footer-links">
+<a class="portal-footer-link" href="#">Privacy Policy</a>
+<a class="portal-footer-link" href="#">Terms of Service</a>
+<a class="portal-footer-link" href="#">Security</a>
+<a class="portal-footer-link" href="#">Status</a>
+</div>
+</div>
+</footer>
+<div class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4" id="reveal-modal">
+<div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 border border-slate-200">
+<div class="mb-6 flex flex-col items-center text-center">
+<div class="bg-primary/10 text-primary w-16 h-16 rounded-full flex items-center justify-center mb-4">
+<span class="material-symbols-outlined text-3xl">vpn_key</span>
+</div>
+<h3 class="text-xl font-bold font-manrope text-on-surface">One-Time Secret Reveal</h3>
+<p class="text-on-surface-variant text-sm mt-2">Store this secret safely. For security reasons, you will only be able to view this full secret once.</p>
+</div>
+<div class="bg-slate-50 border border-slate-200 p-4 rounded-lg font-mono text-sm text-on-surface flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-8 group">
+<code class="portal-mono-wrap">sk_live_51pXj22FmS9A8L0q4R7...</code>
+<button class="text-primary hover:text-sky-700">
+<span class="material-symbols-outlined text-xl">content_copy</span>
+</button>
+</div>
+<button class="w-full bg-on-surface text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-all" onclick="document.getElementById('reveal-modal').classList.add('hidden')">
+                I've stored it securely
+            </button>
+</div>
+</div>
+</body></html>

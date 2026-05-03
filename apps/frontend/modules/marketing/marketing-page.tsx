@@ -10,10 +10,10 @@ export async function MarketingPage() {
   const messages = await getServerMessages();
 
   return (
-    <main className="min-h-app-screen bg-white text-slate-900">
+    <main className="landing-shell min-h-app-screen">
       <Hero messages={messages} />
-      <StackStrip messages={messages} />
       <Metrics messages={messages} />
+      <StackStrip messages={messages} />
       <FeatureSection messages={messages} />
       <CallToAction messages={messages} />
       <MarketingFooter messages={messages} />

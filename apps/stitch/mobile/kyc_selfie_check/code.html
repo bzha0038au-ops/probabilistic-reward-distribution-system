@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>KYC Selfie Check</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;700&amp;family=Plus+Jakarta+Sans:wght@700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-surface": "#1c1b1b",
+                    "primary": "#a73a00",
+                    "primary-container": "#ff5c00",
+                    "background": "#fcf9f8",
+                    "inverse-on-surface": "#f3f0ef",
+                    "surface-container-low": "#f6f3f2",
+                    "surface-container": "#f0eded",
+                    "on-primary-fixed-variant": "#802a00",
+                    "inverse-primary": "#ffb59a",
+                    "on-secondary-fixed": "#0f0069",
+                    "surface-dim": "#dcd9d9",
+                    "on-secondary-fixed-variant": "#3323cc",
+                    "on-secondary-container": "#fffbff",
+                    "tertiary-fixed": "#ffe170",
+                    "surface": "#fcf9f8",
+                    "error-container": "#ffdad6",
+                    "error": "#ba1a1a",
+                    "secondary": "#4b41e1",
+                    "on-background": "#1c1b1b",
+                    "surface-bright": "#fcf9f8",
+                    "on-error-container": "#93000a",
+                    "primary-fixed": "#ffdbce",
+                    "secondary-fixed": "#e2dfff",
+                    "on-tertiary-container": "#4c3e00",
+                    "on-secondary": "#ffffff",
+                    "surface-container-highest": "#e5e2e1",
+                    "on-tertiary-fixed-variant": "#544600",
+                    "secondary-container": "#645efb",
+                    "surface-container-lowest": "#ffffff",
+                    "on-error": "#ffffff",
+                    "on-primary-container": "#521800",
+                    "on-tertiary-fixed": "#221b00",
+                    "tertiary-fixed-dim": "#e9c400",
+                    "tertiary-container": "#caa900",
+                    "tertiary": "#705d00",
+                    "primary-fixed-dim": "#ffb59a",
+                    "on-surface-variant": "#5b4137",
+                    "surface-tint": "#a73a00",
+                    "outline": "#8f7065",
+                    "on-tertiary": "#ffffff",
+                    "outline-variant": "#e4beb1",
+                    "inverse-surface": "#313030",
+                    "surface-variant": "#e5e2e1",
+                    "surface-container-high": "#eae7e7",
+                    "on-primary": "#ffffff",
+                    "on-primary-fixed": "#370e00",
+                    "secondary-fixed-dim": "#c3c0ff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "gutter": "16px",
+                    "lg": "24px",
+                    "xs": "4px",
+                    "xl": "32px",
+                    "unit": "4px",
+                    "sm": "8px",
+                    "md": "16px",
+                    "margin": "20px"
+            },
+            "fontFamily": {
+                    "label-sm": [
+                            "Be Vietnam Pro"
+                    ],
+                    "body-md": [
+                            "Be Vietnam Pro"
+                    ],
+                    "label-bold": [
+                            "Be Vietnam Pro"
+                    ],
+                    "headline-lg": [
+                            "Plus Jakarta Sans"
+                    ],
+                    "body-lg": [
+                            "Be Vietnam Pro"
+                    ],
+                    "headline-xl": [
+                            "Plus Jakarta Sans"
+                    ],
+                    "headline-md": [
+                            "Plus Jakarta Sans"
+                    ]
+            },
+            "fontSize": {
+                    "label-sm": [
+                            "12px",
+                            {
+                                    "lineHeight": "16px",
+                                    "fontWeight": "500"
+                            }
+                    ],
+                    "body-md": [
+                            "16px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "label-bold": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "headline-lg": [
+                            "32px",
+                            {
+                                    "lineHeight": "38px",
+                                    "letterSpacing": "-0.01em",
+                                    "fontWeight": "800"
+                            }
+                    ],
+                    "body-lg": [
+                            "18px",
+                            {
+                                    "lineHeight": "28px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "headline-xl": [
+                            "40px",
+                            {
+                                    "lineHeight": "48px",
+                                    "letterSpacing": "-0.02em",
+                                    "fontWeight": "800"
+                            }
+                    ],
+                    "headline-md": [
+                            "24px",
+                            {
+                                    "lineHeight": "30px",
+                                    "fontWeight": "700"
+                            }
+                    ]
+            }
+    },
+        },
+      }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface font-body-md min-h-screen flex flex-col items-center">
+<!-- Top Navigation (Transactional/Task-focused -> Suppress full shell, use simple header) -->
+<header class="w-full max-w-md px-margin py-md flex items-center justify-between bg-surface sticky top-0 z-10 border-b-2 border-on-surface shadow-[0px_4px_0px_0px_rgba(28,27,27,1)]">
+<button class="w-10 h-10 flex items-center justify-center border-2 border-on-surface rounded-full bg-white active:translate-y-0.5 shadow-[2px_2px_0px_0px_rgba(28,27,27,1)] active:shadow-none transition-all">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">arrow_back</span>
+</button>
+<h1 class="font-headline-md text-headline-md text-on-surface tracking-tight uppercase">Selfie Verification</h1>
+<div class="w-10 h-10"></div> <!-- Placeholder for balance -->
+</header>
+<!-- Main Canvas -->
+<main class="w-full max-w-md flex-1 flex flex-col px-margin py-xl gap-xl relative">
+<!-- Progress Bar (Retro Pop style) -->
+<div class="flex flex-col gap-sm">
+<div class="flex justify-between items-center px-xs">
+<span class="font-label-bold text-label-bold text-on-surface uppercase tracking-wider">Step 3 of 4</span>
+<span class="font-label-bold text-label-bold text-primary-container">75%</span>
+</div>
+<div class="w-full h-4 bg-surface-container-highest border-2 border-on-surface rounded-full overflow-hidden shadow-[2px_2px_0px_0px_rgba(28,27,27,1)]">
+<!-- Striped pattern for progress -->
+<div class="h-full bg-primary-container w-[75%] border-r-2 border-on-surface relative overflow-hidden" style="background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.2) 10px, rgba(255,255,255,0.2) 20px);">
+</div>
+</div>
+</div>
+<!-- Instructions Section -->
+<section class="flex flex-col items-center text-center gap-md">
+<div class="bg-tertiary-fixed text-on-tertiary-fixed px-md py-sm rounded-lg border-2 border-on-surface shadow-[4px_4px_0px_0px_rgba(28,27,27,1)] flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary-container" style="font-variation-settings: 'FILL' 1;">face</span>
+<p class="font-label-bold text-label-bold uppercase">Position your face within the frame</p>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant max-w-[280px]">
+                Ensure your face is clearly visible, well-lit, and centered in the circle below.
+            </p>
+</section>
+<!-- Viewfinder Area -->
+<section class="flex-1 flex flex-col items-center justify-center relative my-lg">
+<!-- Outer Container -->
+<div class="relative w-72 h-72 rounded-full border-4 border-on-surface bg-surface-container overflow-hidden shadow-[8px_8px_0px_0px_rgba(28,27,27,1)] flex items-center justify-center group">
+<!-- Simulated Camera Feed (Image) -->
+<img alt="Camera viewfinder simulation" class="absolute inset-0 w-full h-full object-cover filter brightness-90 z-0" data-alt="A portrait photograph of a diverse individual looking directly into the camera lens with a neutral, relaxed expression. The lighting is bright, even, and studio-quality, casting soft highlights and eliminating harsh shadows. The subject is framed tightly, similar to a passport or ID photo, against a clean, light-colored background. The overall aesthetic is professional, clear, and perfectly suited for a mobile verification or KYC interface within a modern app." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD0dw_E31Ioskk78HO9s7-LBum2-l8V0bzPpaxHifXhngcRmydZ9zPDZNQDdNvchYdpPxW2iv_GPl41a3CSETtjsPUQyi06JIpB68KDDBLeeKw84CWro1A_vfn494xtovTHfEfoHH5BnPS-e7xlxxap7RFU8O-ittZzDovgtN6kOomPIMPlzoz0kgX5THiXi17LJ31ZIXmjRGLgxSjUjogtY-sazR5qBAW-CLWeeqWP7Y8W3iC5xcOmEnDsfHHEMJ_LToanHTy6la5E"/>
+<!-- Face Silhouette Guide -->
+<div class="absolute inset-0 z-10 pointer-events-none flex items-center justify-center">
+<svg class="opacity-50" fill="none" height="240" viewbox="0 0 200 240" width="200" xmlns="http://www.w3.org/2000/svg">
+<ellipse cx="100" cy="120" fill="transparent" rx="80" ry="100" stroke="#ff5c00" stroke-dasharray="8 8" stroke-width="4"></ellipse>
+<!-- Alignment marks -->
+<line stroke="#ff5c00" stroke-linecap="round" stroke-width="4" x1="100" x2="100" y1="10" y2="30"></line>
+<line stroke="#ff5c00" stroke-linecap="round" stroke-width="4" x1="100" x2="100" y1="210" y2="230"></line>
+<line stroke="#ff5c00" stroke-linecap="round" stroke-width="4" x1="10" x2="30" y1="120" y2="120"></line>
+<line stroke="#ff5c00" stroke-linecap="round" stroke-width="4" x1="170" x2="190" y1="120" y2="120"></line>
+</svg>
+</div>
+<!-- Overlay for "Scanning" effect -->
+<div class="absolute inset-0 bg-gradient-to-b from-transparent via-primary-container/20 to-transparent h-1/2 w-full animate-[pulse_2s_ease-in-out_infinite] z-20 top-0"></div>
+</div>
+<!-- Action Prompt -->
+<div class="mt-xl bg-surface border-2 border-on-surface rounded-full px-lg py-sm shadow-[4px_4px_0px_0px_rgba(28,27,27,1)] flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary-container animate-bounce">visibility</span>
+<span class="font-headline-md text-headline-md text-on-surface uppercase tracking-tight">Blink to capture</span>
+</div>
+</section>
+<!-- Footer Actions -->
+<footer class="flex flex-col gap-md w-full mt-auto">
+<button class="w-full bg-primary-container text-white border-2 border-on-surface rounded-lg py-md font-headline-md text-headline-md uppercase tracking-wide shadow-[4px_4px_0px_0px_rgba(28,27,27,1)] active:shadow-none active:translate-y-1 active:translate-x-1 transition-all flex justify-center items-center gap-sm relative overflow-hidden">
+<span class="relative z-10">Capture Manual</span>
+<span class="material-symbols-outlined relative z-10" style="font-variation-settings: 'FILL' 1;">photo_camera</span>
+<!-- Halftone texture overlay -->
+<div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: radial-gradient(#000 1px, transparent 1px); background-size: 4px 4px;"></div>
+</button>
+<button class="w-full bg-surface text-on-surface border-2 border-transparent py-sm font-label-bold text-label-bold uppercase tracking-wider hover:underline underline-offset-4 decoration-2 decoration-primary-container transition-all">
+                Skip for now
+            </button>
+</footer>
+</main>
+</body></html>

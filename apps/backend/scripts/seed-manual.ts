@@ -7,6 +7,7 @@ import {
   adminActions,
   admins,
   bankCards,
+  ledgerEntries,
   prizes,
   systemConfig,
   userWallets,
@@ -29,6 +30,7 @@ import {
 } from '../src/modules/withdraw/service';
 import { ensureUserFreeze, recordSuspiciousActivity } from '../src/modules/risk/service';
 import { setPrizePoolBalance } from '../src/modules/house/service';
+import { toDecimal, toMoneyString } from '../src/shared/money';
 import { setConfigDecimal } from '../src/modules/system/store';
 import {
   ADMIN_FAILURE_THRESHOLD_KEY,
@@ -167,6 +169,82 @@ const ensureFreshSeed = async () => {
   }
 };
 
+const seedWalletLedger = async (params: {
+  userId: number;
+  withdrawableBalance: string;
+  bonusBalance: string;
+  lockedBalance: string;
+  wageredAmount: string;
+}) => {
+  const withdrawableBalance = toDecimal(params.withdrawableBalance);
+  const bonusBalance = toDecimal(params.bonusBalance);
+  const lockedBalance = toDecimal(params.lockedBalance);
+  const wageredAmount = toDecimal(params.wageredAmount);
+
+  if (
+    withdrawableBalance.lt(0) ||
+    bonusBalance.lt(0) ||
+    lockedBalance.lt(0) ||
+    wageredAmount.lt(0)
+  ) {
+    throw new Error('Manual seed only supports non-negative wallet balances.');
+  }
+
+  let withdrawableCursor = toDecimal(0);
+
+  const fundingAmount = withdrawableBalance.plus(lockedBalance).plus(wageredAmount);
+  if (fundingAmount.gt(0)) {
+    await db.insert(ledgerEntries).values({
+      userId: params.userId,
+      entryType: 'deposit_credit',
+      amount: toMoneyString(fundingAmount),
+      balanceBefore: toMoneyString(withdrawableCursor),
+      balanceAfter: toMoneyString(withdrawableCursor.plus(fundingAmount)),
+      referenceType: 'manual_seed',
+      metadata: { reason: 'manual_seed', seedBalanceType: 'withdrawable' },
+    });
+    withdrawableCursor = withdrawableCursor.plus(fundingAmount);
+  }
+
+  if (lockedBalance.gt(0)) {
+    await db.insert(ledgerEntries).values({
+      userId: params.userId,
+      entryType: 'withdraw_request',
+      amount: toMoneyString(lockedBalance.negated()),
+      balanceBefore: toMoneyString(withdrawableCursor),
+      balanceAfter: toMoneyString(withdrawableCursor.minus(lockedBalance)),
+      referenceType: 'manual_seed',
+      metadata: { reason: 'manual_seed', seedBalanceType: 'locked' },
+    });
+    withdrawableCursor = withdrawableCursor.minus(lockedBalance);
+  }
+
+  if (wageredAmount.gt(0)) {
+    await db.insert(ledgerEntries).values({
+      userId: params.userId,
+      entryType: 'draw_cost',
+      amount: toMoneyString(wageredAmount.negated()),
+      balanceBefore: toMoneyString(withdrawableCursor),
+      balanceAfter: toMoneyString(withdrawableCursor.minus(wageredAmount)),
+      referenceType: 'manual_seed',
+      metadata: { reason: 'manual_seed', seedBalanceType: 'wagered' },
+    });
+    withdrawableCursor = withdrawableCursor.minus(wageredAmount);
+  }
+
+  if (bonusBalance.gt(0)) {
+    await db.insert(ledgerEntries).values({
+      userId: params.userId,
+      entryType: 'gamification_reward',
+      amount: toMoneyString(bonusBalance),
+      balanceBefore: '0.00',
+      balanceAfter: toMoneyString(bonusBalance),
+      referenceType: 'manual_seed',
+      metadata: { reason: 'manual_seed', seedBalanceType: 'bonus' },
+    });
+  }
+};
+
 const insertSeedUser = async (spec: SeedUserSpec) => {
   const [user] = await db
     .insert(users)
@@ -179,6 +257,13 @@ const insertSeedUser = async (spec: SeedUserSpec) => {
     .returning();
 
   await db.insert(userWallets).values({
+    userId: user.id,
+    withdrawableBalance: spec.wallet.withdrawableBalance,
+    bonusBalance: spec.wallet.bonusBalance,
+    lockedBalance: spec.wallet.lockedBalance,
+    wageredAmount: spec.wallet.wageredAmount,
+  });
+  await seedWalletLedger({
     userId: user.id,
     withdrawableBalance: spec.wallet.withdrawableBalance,
     bonusBalance: spec.wallet.bonusBalance,

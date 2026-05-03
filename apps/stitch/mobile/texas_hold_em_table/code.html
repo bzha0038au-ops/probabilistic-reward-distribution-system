@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Texas Hold'em</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;700;800&amp;family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "surface-container-highest": "#e5e2e1",
+                      "tertiary": "#705d00",
+                      "surface-container-high": "#eae7e7",
+                      "on-secondary-container": "#fffbff",
+                      "secondary-fixed-dim": "#c3c0ff",
+                      "on-secondary-fixed-variant": "#3323cc",
+                      "surface-container": "#f0eded",
+                      "secondary-fixed": "#e2dfff",
+                      "inverse-on-surface": "#f3f0ef",
+                      "surface-tint": "#a73a00",
+                      "on-tertiary-fixed": "#221b00",
+                      "on-surface": "#1c1b1b",
+                      "on-tertiary-fixed-variant": "#544600",
+                      "on-error": "#ffffff",
+                      "on-secondary": "#ffffff",
+                      "primary-fixed": "#ffdbce",
+                      "on-error-container": "#93000a",
+                      "on-primary-container": "#521800",
+                      "primary-container": "#ff5c00",
+                      "on-primary": "#ffffff",
+                      "on-surface-variant": "#5b4137",
+                      "tertiary-fixed-dim": "#e9c400",
+                      "on-background": "#1c1b1b",
+                      "on-tertiary-container": "#4c3e00",
+                      "primary-fixed-dim": "#ffb59a",
+                      "on-primary-fixed-variant": "#802a00",
+                      "outline": "#8f7065",
+                      "secondary": "#4b41e1",
+                      "tertiary-container": "#caa900",
+                      "outline-variant": "#e4beb1",
+                      "surface-dim": "#dcd9d9",
+                      "surface": "#fcf9f8",
+                      "on-tertiary": "#ffffff",
+                      "inverse-surface": "#313030",
+                      "on-primary-fixed": "#370e00",
+                      "secondary-container": "#645efb",
+                      "background": "#fcf9f8",
+                      "surface-container-lowest": "#ffffff",
+                      "error": "#ba1a1a",
+                      "primary": "#a73a00",
+                      "surface-variant": "#e5e2e1",
+                      "inverse-primary": "#ffb59a",
+                      "surface-container-low": "#f6f3f2",
+                      "on-secondary-fixed": "#0f0069",
+                      "tertiary-fixed": "#ffe170",
+                      "error-container": "#ffdad6",
+                      "surface-bright": "#fcf9f8"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "xs": "4px",
+                      "lg": "24px",
+                      "md": "16px",
+                      "sm": "8px",
+                      "margin": "20px",
+                      "xl": "32px",
+                      "gutter": "16px",
+                      "unit": "4px"
+              },
+              "fontFamily": {
+                      "headline-lg": ["Plus Jakarta Sans"],
+                      "label-bold": ["Be Vietnam Pro"],
+                      "body-lg": ["Be Vietnam Pro"],
+                      "body-md": ["Be Vietnam Pro"],
+                      "headline-xl": ["Plus Jakarta Sans"],
+                      "headline-md": ["Plus Jakarta Sans"],
+                      "label-sm": ["Be Vietnam Pro"]
+              },
+              "fontSize": {
+                      "headline-lg": ["32px", {"lineHeight": "38px", "letterSpacing": "-0.01em", "fontWeight": "800"}],
+                      "label-bold": ["14px", {"lineHeight": "20px", "fontWeight": "700"}],
+                      "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                      "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "headline-xl": ["40px", {"lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                      "headline-md": ["24px", {"lineHeight": "30px", "fontWeight": "700"}],
+                      "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "500"}]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .retro-shadow {
+            box-shadow: 4px 4px 0px 0px #1c1b1b;
+        }
+        .retro-shadow-sm {
+            box-shadow: 2px 2px 0px 0px #1c1b1b;
+        }
+        .retro-shadow-lg {
+            box-shadow: 6px 6px 0px 0px #1c1b1b;
+        }
+        .halftone-bg {
+            background-image: radial-gradient(#1c1b1b22 1.5px, transparent 1.5px);
+            background-size: 8px 8px;
+        }
+        .card-pattern {
+            background-image: repeating-linear-gradient(45deg, transparent, transparent 4px, #e5e2e1 4px, #e5e2e1 8px);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background h-screen flex flex-col font-body-md text-body-md overflow-hidden halftone-bg">
+<!-- Header / Game Info (Task-focused, suppressing global nav) -->
+<header class="flex-none p-4 flex justify-between items-center z-10">
+<button class="w-10 h-10 rounded-full border-2 border-on-surface bg-surface flex items-center justify-center retro-shadow-sm active:translate-y-[2px] active:translate-x-[2px] active:shadow-none transition-all">
+<span class="material-symbols-outlined text-on-surface">arrow_back</span>
+</button>
+<div class="flex flex-col items-center">
+<h1 class="font-headline-md text-headline-md uppercase tracking-tight text-on-surface">Texas Hold'em</h1>
+<span class="font-label-bold text-label-bold text-on-surface-variant bg-surface-container px-3 py-0.5 rounded-full border-2 border-on-surface">Blinds: 100/200</span>
+</div>
+<button class="w-10 h-10 rounded-full border-2 border-on-surface bg-tertiary-container text-on-tertiary-container flex items-center justify-center retro-shadow-sm active:translate-y-[2px] active:translate-x-[2px] active:shadow-none transition-all">
+<span class="material-symbols-outlined">menu</span>
+</button>
+</header>
+<!-- Main Game Canvas -->
+<main class="flex-grow relative flex flex-col items-center justify-center p-4">
+<!-- Probability / Fairness Widget -->
+<div class="absolute top-4 right-4 z-20 flex items-center gap-2 bg-surface border-2 border-on-surface rounded-full py-1 px-3 retro-shadow-sm">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">verified_user</span>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm leading-none">Provably Fair</span>
+<span class="font-label-bold text-label-bold leading-none text-secondary">Seed: Active</span>
+</div>
+</div>
+<!-- The Poker Table -->
+<div class="relative w-full max-w-md h-[486px] bg-surface-container border-4 border-on-surface rounded-[60px] retro-shadow-lg flex flex-col items-center justify-center p-6">
+<!-- Table Inner Ring -->
+<div class="absolute inset-4 border-2 border-on-surface/20 rounded-[48px] pointer-events-none"></div>
+<!-- Opponent Position (Top) -->
+<div class="absolute -top-10 left-1/2 -translate-x-1/2 flex flex-col items-center z-10">
+<div class="relative">
+<img class="w-20 h-20 rounded-full border-4 border-on-surface bg-surface retro-shadow-sm object-cover" data-alt="A stylized, vibrant pop-art portrait of a dog wearing vintage sunglasses against a bright blue background. The illustration uses thick dark outlines and solid flat colors typical of retro comic books or modern flat vector art, evoking a playful and slightly rebellious character suitable for a mobile game avatar." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCa39NIH3lRN_Izfq8fCIe0yd0JPf1dv7krVMLJMdkHrmBivDhcgFq8S-ENudc_sg6rGTDN0DVrsEd6p8btZjgwIAHlUueqc79inoOcFJwSPqVHkuXrKNbWTnC2sZrSjIp1BBx_1JpPbUo1T9_feCtfCEI-VNu-ummL9VZQ_XTgdWmTW38G2T8N7-E64YqsYM_kte-_IYdwmtSzUUS-f7LQwAuwf5E2L7w9nybErJ1sBP32Z47ps8kbyxNbECNOw9jqPi-DGhpGovjX"/>
+<div class="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-surface px-3 py-1 border-2 border-on-surface rounded-md retro-shadow-sm whitespace-nowrap">
+<span class="font-label-bold text-label-bold">Sharky_99</span>
+</div>
+</div>
+<div class="mt-4 bg-surface-container-highest px-3 py-1 rounded-full border-2 border-on-surface font-label-bold text-label-bold">
+                    $12,400
+                </div>
+<!-- Opponent Cards (Face Down) -->
+<div class="flex gap-1 mt-2">
+<div class="w-10 h-14 bg-primary border-2 border-on-surface rounded-md retro-shadow-sm card-pattern"></div>
+<div class="w-10 h-14 bg-primary border-2 border-on-surface rounded-md retro-shadow-sm card-pattern -ml-4 rotate-6"></div>
+</div>
+</div>
+<!-- Pot Info -->
+<div class="mb-4 flex flex-col items-center bg-surface px-6 py-2 border-2 border-on-surface rounded-xl retro-shadow-sm z-10">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Current Pot</span>
+<span class="font-headline-md text-headline-md text-primary">$4,800</span>
+</div>
+<!-- Community Cards -->
+<div class="flex gap-2 z-10">
+<!-- Card 1 -->
+<div class="w-14 h-20 bg-surface border-2 border-on-surface rounded-lg flex flex-col justify-between p-1 retro-shadow-sm">
+<span class="font-headline-md text-headline-md leading-none text-on-surface">A</span>
+<span class="material-symbols-outlined self-center text-on-surface" style="font-variation-settings: 'FILL' 1; font-size: 24px;">favorite</span>
+</div>
+<!-- Card 2 -->
+<div class="w-14 h-20 bg-surface border-2 border-on-surface rounded-lg flex flex-col justify-between p-1 retro-shadow-sm">
+<span class="font-headline-md text-headline-md leading-none text-error">K</span>
+<span class="material-symbols-outlined self-center text-error" style="font-variation-settings: 'FILL' 1; font-size: 24px;">diamond</span>
+</div>
+<!-- Card 3 -->
+<div class="w-14 h-20 bg-surface border-2 border-on-surface rounded-lg flex flex-col justify-between p-1 retro-shadow-sm">
+<span class="font-headline-md text-headline-md leading-none text-on-surface">J</span>
+<span class="material-symbols-outlined self-center text-on-surface" style="font-variation-settings: 'FILL' 1; font-size: 24px;">favorite</span>
+</div>
+<!-- Card 4 (Turn) -->
+<div class="w-14 h-20 bg-surface border-2 border-on-surface rounded-lg flex flex-col justify-between p-1 retro-shadow-sm">
+<span class="font-headline-md text-headline-md leading-none text-error">10</span>
+<span class="material-symbols-outlined self-center text-error" style="font-variation-settings: 'FILL' 1; font-size: 24px;">diamond</span>
+</div>
+<!-- Card 5 (River - Empty placeholder) -->
+<div class="w-14 h-20 bg-surface-container-high border-2 border-dashed border-on-surface/50 rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-on-surface/30">help</span>
+</div>
+</div>
+<!-- Player Position (Bottom) -->
+<div class="absolute -bottom-12 left-1/2 -translate-x-1/2 flex flex-col items-center z-20">
+<!-- Player Hole Cards -->
+<div class="flex gap-2 mb-2 relative top-6">
+<div class="w-16 h-24 bg-surface border-2 border-on-surface rounded-lg flex flex-col justify-between p-2 retro-shadow transform -rotate-6">
+<span class="font-headline-md text-headline-md leading-none text-on-surface">Q</span>
+<span class="material-symbols-outlined self-center text-on-surface" style="font-variation-settings: 'FILL' 1; font-size: 32px;">favorite</span>
+</div>
+<div class="w-16 h-24 bg-surface border-2 border-on-surface rounded-lg flex flex-col justify-between p-2 retro-shadow transform rotate-6">
+<span class="font-headline-md text-headline-md leading-none text-on-surface">9</span>
+<span class="material-symbols-outlined self-center text-on-surface" style="font-variation-settings: 'FILL' 1; font-size: 32px;">favorite</span>
+</div>
+</div>
+<!-- Player Avatar -->
+<div class="relative z-10 mt-2">
+<div class="w-20 h-20 rounded-full border-4 border-on-surface bg-secondary-container flex items-center justify-center retro-shadow-sm">
+<span class="material-symbols-outlined text-on-secondary-container" style="font-size: 40px;">person</span>
+</div>
+<div class="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-surface px-4 py-1 border-2 border-on-surface rounded-md retro-shadow-sm whitespace-nowrap">
+<span class="font-label-bold text-label-bold text-primary">Hero</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Action Bar (Bottom Fixed) -->
+<div class="flex-none p-4 bg-surface border-t-4 border-on-surface z-30 pb-8">
+<!-- Balance Row -->
+<div class="flex justify-between items-center mb-4 px-2">
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Your Balance</span>
+<span class="font-headline-md text-headline-md">$8,250</span>
+</div>
+<div class="flex flex-col items-end">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">To Call</span>
+<span class="font-headline-md text-headline-md text-tertiary-container">$400</span>
+</div>
+</div>
+<!-- Buttons Row -->
+<div class="flex gap-4">
+<!-- Fold Button -->
+<button class="flex-1 bg-surface border-2 border-on-surface rounded-xl py-4 flex flex-col items-center justify-center retro-shadow active:translate-y-[4px] active:translate-x-[4px] active:shadow-none transition-all group hover:bg-error-container">
+<span class="font-headline-md text-headline-md uppercase tracking-tight group-hover:text-on-error-container">Fold</span>
+</button>
+<!-- Call Button -->
+<button class="flex-1 bg-tertiary-container border-2 border-on-surface rounded-xl py-4 flex flex-col items-center justify-center retro-shadow active:translate-y-[4px] active:translate-x-[4px] active:shadow-none transition-all">
+<span class="font-headline-md text-headline-md text-on-tertiary-container uppercase tracking-tight">Call</span>
+<span class="font-label-sm text-label-sm text-on-tertiary-container">$400</span>
+</button>
+<!-- Raise Button -->
+<button class="flex-[1.5] bg-primary-container border-2 border-on-surface rounded-xl py-4 flex flex-col items-center justify-center retro-shadow active:translate-y-[4px] active:translate-x-[4px] active:shadow-none transition-all">
+<span class="font-headline-md text-headline-md text-on-primary-container uppercase tracking-tight">Raise</span>
+<span class="font-label-sm text-label-sm text-on-primary-container">Min $800</span>
+</button>
+</div>
+</div>
+</body></html>

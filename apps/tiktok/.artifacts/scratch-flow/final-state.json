@@ -1,0 +1,14 @@
+{
+  "origin": "top-left, x rightwards, y downwards",
+  "activeTab": "play",
+  "stage": "rex-win",
+  "scratchTotal": 120,
+  "displayCash": 240,
+  "scratchableSlot": null,
+  "revealedSlots": [
+    0,
+    1,
+    2
+  ],
+  "runCount": 2
+}

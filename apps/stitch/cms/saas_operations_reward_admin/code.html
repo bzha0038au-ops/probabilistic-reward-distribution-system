@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SaaS Operations - Reward Admin</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&amp;family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">tailwind.config = {darkMode: "class", theme: {extend: {colors: {"primary-container": "#ff7941", primary: "#a23800", tertiary: "#6d5a00", "on-error-container": "#570008", error: "#b31b25", "primary-fixed-dim": "#ee6d36", "on-primary-fixed": "#000000", "surface-container-low": "#f4f0ef", "secondary-fixed": "#cfcdff", "inverse-primary": "#ff7941", "error-container": "#fb5151", "on-primary-fixed-variant": "#531900", "surface-dim": "#d8d3d3", "secondary-container": "#cfcdff", "outline-variant": "#b0acac", outline: "#797676", "surface-tint": "#a23800", "on-surface": "#302e2e", "on-tertiary-fixed-variant": "#6d5a00", "on-tertiary-fixed": "#4c3e00", "on-error": "#ffefee", "on-secondary-container": "#3423cd", "inverse-surface": "#0f0e0e", "surface-container-high": "#e6e1e1", "on-surface-variant": "#5d5b5b", "on-secondary": "#f4f1ff", surface: "#faf5f5", "on-tertiary": "#fff2cd", "on-secondary-fixed-variant": "#3e32d5", "surface-bright": "#faf5f5", "tertiary-fixed-dim": "#edd372", "tertiary-container": "#fce17e", "primary-fixed": "#ff7941", "on-tertiary-container": "#615000", "on-secondary-fixed": "#2000b0", secondary: "#4a40e0", "surface-container": "#ece7e7", "on-background": "#302e2e", "tertiary-fixed": "#fce17e", "on-primary": "#ffefeb", background: "#faf5f5", "surface-container-lowest": "#ffffff", "surface-variant": "#e0dcdb", "inverse-on-surface": "#9f9c9c", "on-primary-container": "#431200", "surface-container-highest": "#e0dcdb", "secondary-fixed-dim": "#c0bdff", "tertiary-dim": "#5f4e00", "error-dim": "#9f0519", "secondary-dim": "#3d30d4", "primary-dim": "#8e3000"}, borderRadius: {DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px"}, spacing: {sm: "8px", xs: "4px", base: "4px", lg: "24px", gutter: "16px", md: "16px", xl: "32px", "container-margin": "32px", unit: "4px", margin: "20px"}, fontFamily: {"h1-editorial": ["Newsreader"], "body-standard": ["Inter"], "data-mono": ["Space Grotesk"], "body-strong": ["Inter"], "display-editorial": ["Newsreader"], "label-caps": ["Space Grotesk"], "headline-md": ["Plus Jakarta Sans"], "headline-xl": ["Plus Jakarta Sans"], "body-md": ["Be Vietnam Pro"], "body-lg": ["Be Vietnam Pro"], "headline-lg": ["Plus Jakarta Sans"], "label-bold": ["Be Vietnam Pro"], "label-sm": ["Be Vietnam Pro"]}, fontSize: {"h1-editorial": ["28px", {lineHeight: "1.2", fontWeight: "500"}], "body-standard": ["14px", {lineHeight: "1.5", fontWeight: "400"}], "data-mono": ["13px", {lineHeight: "1.2", letterSpacing: "0.02em", fontWeight: "500"}], "body-strong": ["14px", {lineHeight: "1.5", fontWeight: "600"}], "display-editorial": ["42px", {lineHeight: "1.1", letterSpacing: "-0.02em", fontWeight: "400"}], "label-caps": ["11px", {lineHeight: "1", letterSpacing: "0.08em", fontWeight: "700"}], "headline-md": ["24px", {lineHeight: "30px", fontWeight: "700"}], "headline-xl": ["40px", {lineHeight: "48px", letterSpacing: "-0.02em", fontWeight: "800"}], "body-md": ["16px", {lineHeight: "24px", fontWeight: "400"}], "body-lg": ["18px", {lineHeight: "28px", fontWeight: "400"}], "headline-lg": ["32px", {lineHeight: "38px", letterSpacing: "-0.01em", fontWeight: "800"}], "label-bold": ["14px", {lineHeight: "20px", fontWeight: "700"}], "label-sm": ["12px", {lineHeight: "16px", fontWeight: "500"}]}}}};</script>
+<style>
+        .noise-bg {
+            position: relative;
+        }
+        .noise-bg::before {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.02'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 0;
+        }
+        .content-layer {
+            position: relative;
+            z-index: 1;
+        }
+        .hairline-border {
+            border: 0.5px solid rgba(112, 119, 122, 0.2);
+        }
+        .inset-box {
+            background-color: #f6f3f0;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.02);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-standard antialiased noise-bg h-screen flex overflow-hidden">
+<!-- TopNavBar -->
+<nav class="bg-stone-950 dark:bg-black font-newsreader tracking-tight text-sm fixed w-full top-0 h-12 border-b border-stone-800 z-50 flex justify-between items-center px-8">
+<div class="flex items-center space-x-8">
+<span class="font-newsreader font-black uppercase tracking-widest text-white text-sm">Reward Admin</span>
+<div class="hidden md:flex space-x-6">
+<a class="text-stone-500 font-medium hover:text-stone-200 transition-colors active:scale-95 duration-200" href="#">FinanceOps</a>
+<a class="text-white font-bold border-b border-white hover:text-stone-200 transition-colors active:scale-95 duration-200 pb-[13px] pt-3" href="#">SaaS-Ops</a>
+</div>
+</div>
+<div class="flex items-center space-x-6">
+<div class="flex items-center text-stone-500 space-x-4">
+<span class="font-data-mono text-data-mono text-xs border border-stone-800 px-2 py-1 rounded">PROD</span>
+<span class="material-symbols-outlined hover:text-stone-200 cursor-pointer" data-icon="notifications">notifications</span>
+<span class="material-symbols-outlined hover:text-stone-200 cursor-pointer" data-icon="settings">settings</span>
+</div>
+<img alt="Operator Identity" class="w-7 h-7 rounded-full border border-stone-700" data-alt="A small, professional headshot of an operator used as a profile avatar. The portrait is sharply focused with neutral, high-end studio lighting against a dark background, fitting a sleek, authoritative UI design." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBbTzCnDJm3k7XX7_u9XUqsyoKkn7JpgwWr2QN7hkCDBrf858edA4ivdifkDk09Jk2u3uSvb84PZ9r4MTV7_ISeJqgqb6jYLap6qEXn6OUU6KiHBB-kvP3R0nwVvqF35v1Wlp-5mux6TJwPi55aJHwU-35jMS0ghSW2OOzWZkHmv4zbMymQ0gKQgu315SX6qpRAWINIgbnpXuKTZN90simerSQImuAj86yyOnfwjcwDeRPH0uecGzweIUb5lgWyyc40lAZ0Lll0nk-Q"/>
+</div>
+</nav>
+<!-- SideNavBar -->
+<aside class="hidden md:flex flex-col pt-16 pb-8 overflow-y-auto bg-[#F2EFE9] dark:bg-stone-900/95 backdrop-blur-md font-newsreader text-sm uppercase tracking-wider fixed left-0 top-0 h-full w-64 rounded-none border-r border-stone-300 dark:border-stone-700 shadow-sm z-40">
+<div class="px-6 pb-6 mb-4 border-b border-stone-300 dark:border-stone-700">
+<div class="flex items-center space-x-3 mb-2">
+<div class="w-8 h-8 rounded-full bg-stone-300 flex items-center justify-center text-stone-600 font-bold">O</div>
+<div>
+<div class="font-bold text-stone-900 text-xs">System Engine</div>
+<div class="text-stone-500 text-[10px]">Terminal Tier 01</div>
+</div>
+</div>
+<div class="flex items-center space-x-1 text-[10px] text-primary-container mt-2 bg-primary-fixed-dim/20 px-2 py-1 rounded w-max">
+<span class="material-symbols-outlined text-[12px]" data-icon="verified_user" data-weight="fill" style="font-variation-settings: 'FILL' 1;">verified_user</span>
+<span>MFA Verified</span>
+</div>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center space-x-3 py-2 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="settings_input_component">settings_input_component</span>
+<span>Config</span>
+</a>
+<a class="flex items-center space-x-3 py-2 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="gavel">gavel</span>
+<span>Legal</span>
+</a>
+<a class="flex items-center space-x-3 py-2 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="hub">hub</span>
+<span>Providers</span>
+</a>
+<a class="flex items-center space-x-3 py-2 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="military_tech">military_tech</span>
+<span>Prizes</span>
+</a>
+<a class="flex items-center space-x-3 py-2 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="account_balance">account_balance</span>
+<span>Reconciliation</span>
+</a>
+<a class="flex items-center space-x-3 py-2 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="payments">payments</span>
+<span>Finance</span>
+</a>
+<a class="flex items-center space-x-3 py-2 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="trending_up">trending_up</span>
+<span>Economy</span>
+</a>
+<a class="flex items-center space-x-3 py-2 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="fingerprint">fingerprint</span>
+<span>KYC</span>
+</a>
+<a class="flex items-center space-x-3 py-2 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="group">group</span>
+<span>Users</span>
+</a>
+<a class="flex items-center space-x-3 py-2 text-stone-950 dark:text-white font-bold border-l-2 border-[#5F634F] bg-stone-200/50 dark:bg-stone-800/50 transition-all duration-300 ease-in-out pl-[14px]" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="business">business</span>
+<span>SaaS</span>
+</a>
+<a class="flex items-center space-x-3 py-2 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="list_alt">list_alt</span>
+<span>Audit</span>
+</a>
+<a class="flex items-center space-x-3 py-2 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="verified_user">verified_user</span>
+<span>AML</span>
+</a>
+<a class="flex items-center space-x-3 py-2 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="security">security</span>
+<span>Collusion</span>
+</a>
+</nav>
+<div class="mt-auto px-4 pt-4 border-t border-stone-300 dark:border-stone-700">
+<a class="flex items-center space-x-3 py-2 text-stone-500 dark:text-stone-400 hover:text-stone-900 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[16px]" data-icon="help">help</span>
+<span class="text-xs">Help</span>
+</a>
+<a class="flex items-center space-x-3 py-2 text-stone-500 dark:text-stone-400 hover:text-stone-900 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[16px]" data-icon="description">description</span>
+<span class="text-xs">Docs</span>
+</a>
+</div>
+</aside>
+<!-- Main Canvas -->
+<main class="flex-1 ml-0 md:ml-64 pt-12 overflow-y-auto content-layer bg-surface relative">
+<div class="max-w-7xl mx-auto p-container-margin space-y-lg">
+<!-- Header Section -->
+<header class="flex justify-between items-end border-b border-surface-variant pb-md">
+<div>
+<h1 class="font-h1-editorial text-h1-editorial text-on-surface mb-xs">SaaS Operations</h1>
+<p class="font-body-standard text-body-standard text-on-surface-variant">Workspace: saasOps. Tenant configuration and developer handoff.</p>
+</div>
+<button class="bg-surface-container-high hover:bg-surface-variant text-on-surface font-data-mono text-data-mono px-4 py-2 border border-outline-variant flex items-center space-x-2 transition-colors duration-200">
+<span class="material-symbols-outlined text-[16px]" data-icon="add">add</span>
+<span>New Tenant</span>
+</button>
+</header>
+<!-- Grid Layout -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-lg">
+<!-- Left Column (Wider) -->
+<div class="lg:col-span-2 space-y-lg">
+<!-- Active Tenants Table -->
+<section class="bg-surface-container-lowest hairline-border p-md flex flex-col h-full">
+<div class="flex justify-between items-center mb-md">
+<h2 class="font-body-strong text-body-strong text-on-surface uppercase tracking-wider text-xs">Active Tenants</h2>
+<span class="font-data-mono text-data-mono text-xs text-on-surface-variant">4 Records</span>
+</div>
+<div class="inset-box overflow-x-auto hairline-border flex-1">
+<table class="w-full text-left border-collapse min-w-max">
+<thead>
+<tr class="border-b border-outline-variant bg-surface-container-low text-on-surface-variant font-label-caps text-label-caps">
+<th class="p-3 font-normal">Tenant ID</th>
+<th class="p-3 font-normal">Project Name</th>
+<th class="p-3 font-normal text-right">API Calls (30d)</th>
+<th class="p-3 font-normal text-right">Billing Status</th>
+<th class="p-3 font-normal text-center">Actions</th>
+</tr>
+</thead>
+<tbody class="font-data-mono text-data-mono text-on-surface">
+<tr class="border-b border-outline-variant/50 hover:bg-surface-container-low transition-colors group">
+<td class="p-3 text-on-surface-variant">tnt_092a8b</td>
+<td class="p-3 font-body-standard text-body-standard">Alpha Rewards Corp</td>
+<td class="p-3 text-right">1.2M</td>
+<td class="p-3 text-right">
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-[#f2e6d9] text-[#7a5c3a] font-bold">CURRENT</span>
+</td>
+<td class="p-3 text-center">
+<button class="text-on-surface-variant hover:text-on-surface"><span class="material-symbols-outlined text-[18px]" data-icon="more_horiz">more_horiz</span></button>
+</td>
+</tr>
+<tr class="border-b border-outline-variant/50 hover:bg-surface-container-low transition-colors group">
+<td class="p-3 text-on-surface-variant">tnt_f713cd</td>
+<td class="p-3 font-body-standard text-body-standard">Beta Loyalty</td>
+<td class="p-3 text-right">845K</td>
+<td class="p-3 text-right">
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-[#f2e6d9] text-[#7a5c3a] font-bold">CURRENT</span>
+</td>
+<td class="p-3 text-center">
+<button class="text-on-surface-variant hover:text-on-surface"><span class="material-symbols-outlined text-[18px]" data-icon="more_horiz">more_horiz</span></button>
+</td>
+</tr>
+<tr class="border-b border-outline-variant/50 hover:bg-surface-container-low transition-colors group">
+<td class="p-3 text-on-surface-variant">tnt_88b19e</td>
+<td class="p-3 font-body-standard text-body-standard">Gamma Incentives</td>
+<td class="p-3 text-right">2.4M</td>
+<td class="p-3 text-right">
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-error-container text-on-error-container font-bold">PAST DUE</span>
+</td>
+<td class="p-3 text-center">
+<button class="text-on-surface-variant hover:text-on-surface"><span class="material-symbols-outlined text-[18px]" data-icon="more_horiz">more_horiz</span></button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="p-3 text-on-surface-variant">tnt_12x9zf</td>
+<td class="p-3 font-body-standard text-body-standard">Delta Programs</td>
+<td class="p-3 text-right">12K</td>
+<td class="p-3 text-right">
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-surface-variant text-on-surface-variant font-bold">TRIAL</span>
+</td>
+<td class="p-3 text-center">
+<button class="text-on-surface-variant hover:text-on-surface"><span class="material-symbols-outlined text-[18px]" data-icon="more_horiz">more_horiz</span></button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</div>
+<!-- Right Column (Narrower) -->
+<div class="space-y-lg">
+<!-- Developer Handoff -->
+<section class="bg-inverse-surface text-inverse-on-surface p-md hairline-border flex flex-col h-full border-stone-700">
+<div class="flex items-center space-x-2 mb-md border-b border-stone-700 pb-2">
+<span class="material-symbols-outlined text-[18px] text-inverse-primary" data-icon="terminal">terminal</span>
+<h2 class="font-body-strong text-body-strong text-inverse-on-surface">Developer Handoff</h2>
+</div>
+<div class="space-y-4">
+<div>
+<label class="font-label-caps text-label-caps text-stone-400 block mb-1">Production API Key</label>
+<div class="bg-[#1c1c1a] border border-stone-700 p-2 flex justify-between items-center group">
+<span class="font-data-mono text-data-mono text-sm text-stone-300 tracking-wider">pk_live_89fa...2bd9</span>
+<button class="text-stone-500 hover:text-white transition-colors"><span class="material-symbols-outlined text-[16px]" data-icon="content_copy">content_copy</span></button>
+</div>
+</div>
+<div>
+<label class="font-label-caps text-label-caps text-stone-400 block mb-1">Init Snippet</label>
+<div class="bg-[#1c1c1a] border border-stone-700 p-3 overflow-x-auto">
+<pre class="font-data-mono text-data-mono text-[11px] text-stone-400 leading-relaxed"><span class="text-stone-500">const</span> rewardClient = <span class="text-stone-500">new</span> RewardSDK({
+  apiKey: <span class="text-inverse-primary">'pk_live_...'</span>,
+  environment: <span class="text-inverse-primary">'production'</span>,
+  tenant: <span class="text-inverse-primary">'tnt_092a8b'</span>
+});
+</pre>
+</div>
+</div>
+</div>
+</section>
+</div>
+</div>
+<!-- Configuration Bottom Row -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-lg">
+<!-- Webhooks -->
+<section class="bg-surface-container-lowest hairline-border p-md">
+<div class="flex justify-between items-center mb-md">
+<h2 class="font-body-strong text-body-strong text-on-surface flex items-center space-x-2">
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant" data-icon="webhook">webhook</span>
+<span>Outbound Webhooks</span>
+</h2>
+<span class="inline-flex items-center px-2 py-0.5 border border-outline-variant rounded-full text-[10px] font-label-caps text-on-surface-variant">2 ACTIVE</span>
+</div>
+<div class="space-y-2">
+<div class="flex items-center justify-between p-3 inset-box hairline-border">
+<div>
+<div class="font-data-mono text-data-mono text-on-surface text-sm">reward.claimed</div>
+<div class="font-body-standard text-[11px] text-on-surface-variant mt-1 truncate max-w-[200px]">https://api.tenant.com/hooks/rewards</div>
+</div>
+<button class="border border-outline-variant px-3 py-1 bg-surface hover:bg-surface-variant text-xs font-data-mono transition-colors">Edit</button>
+</div>
+<div class="flex items-center justify-between p-3 inset-box hairline-border">
+<div>
+<div class="font-data-mono text-data-mono text-on-surface text-sm">user.kyc_approved</div>
+<div class="font-body-standard text-[11px] text-on-surface-variant mt-1 truncate max-w-[200px]">https://api.tenant.com/hooks/identity</div>
+</div>
+<button class="border border-outline-variant px-3 py-1 bg-surface hover:bg-surface-variant text-xs font-data-mono transition-colors">Edit</button>
+</div>
+</div>
+</section>
+<!-- Project Settings -->
+<section class="bg-surface-container-lowest hairline-border p-md">
+<div class="flex justify-between items-center mb-md">
+<h2 class="font-body-strong text-body-strong text-on-surface flex items-center space-x-2">
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant" data-icon="settings_applications">settings_applications</span>
+<span>Project-level Settings</span>
+</h2>
+</div>
+<form class="space-y-4">
+<div>
+<label class="font-label-caps text-label-caps text-on-surface-variant block mb-1">Default Prize Tier</label>
+<select class="w-full bg-surface-container-low border border-outline-variant p-2 font-data-mono text-data-mono text-on-surface focus:outline-none focus:border-primary-container appearance-none">
+<option>Standard (Multiplier 1x)</option>
+<option>Premium (Multiplier 1.5x)</option>
+<option>VIP (Multiplier 2x)</option>
+</select>
+</div>
+<div>
+<label class="font-label-caps text-label-caps text-on-surface-variant block mb-1">Global Rate Limit (Req/s)</label>
+<input class="w-full bg-surface-container-low border border-outline-variant p-2 font-data-mono text-data-mono text-on-surface focus:outline-none focus:border-primary-container" type="number" value="100"/>
+</div>
+<div class="pt-2">
+<button class="w-full border-2 border-outline-variant py-2 font-data-mono text-data-mono text-on-surface hover:bg-surface-variant transition-colors flex justify-center items-center space-x-2 group" type="button">
+<span class="material-symbols-outlined text-[16px] text-on-surface-variant group-hover:text-on-surface transition-colors" data-icon="save">save</span>
+<span>Save Configuration</span>
+</button>
+</div>
+</form>
+</section>
+</div>
+</div>
+</main>
+</body></html>

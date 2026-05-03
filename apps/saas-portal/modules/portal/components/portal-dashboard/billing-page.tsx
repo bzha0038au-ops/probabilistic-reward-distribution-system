@@ -14,19 +14,24 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import type { PortalSelection } from "@/modules/portal/lib/portal";
+import type {
+  PortalBillingSubview,
+  PortalSelection,
+} from "@/modules/portal/lib/portal";
 
 import { formatDate, formatPlainPercent } from "./shared";
 
 type CurrentBudgetPolicy =
-  Exclude<
-    NonNullable<PortalSelection["currentTenant"]>["billing"],
-    null | undefined
-  >["budgetPolicy"] | null;
+  | Exclude<
+      NonNullable<PortalSelection["currentTenant"]>["billing"],
+      null | undefined
+    >["budgetPolicy"]
+  | null;
 
 type BillingPageProps = {
   billingCurrency: string;
   billingInsights: SaasTenantBillingInsights | null;
+  billingSubview: PortalBillingSubview | null;
   currentBudgetPolicy: CurrentBudgetPolicy;
   currentTenant: PortalSelection["currentTenant"];
   currentTenantBillingDisputes: PortalSelection["currentTenantBillingDisputes"];
@@ -65,9 +70,15 @@ const getTopUpSourceLabel = (source: string) =>
     ? "Local manual credit"
     : "Stripe balance top-up";
 
+const parseDecimal = (value: string | null | undefined) => {
+  const parsed = Number.parseFloat(value ?? "");
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
 export function PortalDashboardBillingPage({
   billingCurrency,
   billingInsights,
+  billingSubview,
   currentBudgetPolicy,
   currentTenant,
   currentTenantBillingDisputes,
@@ -88,12 +99,464 @@ export function PortalDashboardBillingPage({
     billingInsights && billingInsights.summary.effectiveBudgetAmount !== null
       ? `Budget ${billingInsights.summary.monthlyBudget ?? "0.00"} + credits ${billingInsights.summary.availableCreditAmount}`
       : null;
+  const effectiveBudget = parseDecimal(
+    billingInsights?.summary.effectiveBudgetAmount,
+  );
+  const currentTotal = parseDecimal(
+    billingInsights?.summary.currentTotalAmount,
+  );
+  const budgetProgressPercent =
+    effectiveBudget && currentTotal !== null
+      ? Math.max(
+          0,
+          Math.min(100, Math.round((currentTotal / effectiveBudget) * 100)),
+        )
+      : null;
+  const activeSubview = billingSubview ?? "overview";
+
+  if (activeSubview === "controls") {
+    return (
+      <section className="grid gap-6">
+        <Card className="portal-shell-card-dark portal-fade-up portal-fade-up-delay-2 overflow-hidden rounded-[2rem] text-slate-100">
+          <CardHeader className="gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge className="rounded-full bg-white/10 px-3 py-1 text-slate-200 hover:bg-white/10">
+                Budget policy
+              </Badge>
+              <Badge className="rounded-full bg-white/10 px-3 py-1 text-slate-200 hover:bg-white/10">
+                Guardrails
+              </Badge>
+            </div>
+            <CardTitle className="text-white tracking-[-0.04em]">
+              Budget controls
+            </CardTitle>
+            <CardDescription className="text-slate-400">
+              Configure the tenant budget target, alert threshold, webhook
+              destination, and the hard cap that flips the engine into a
+              non-billable throttle instead of letting the invoice keep
+              climbing.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4">
+            {currentTenant?.billing ? (
+              <div className="grid gap-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {[
+                    ["Plan", currentTenant.billing.planCode],
+                    ["Collection", currentTenant.billing.collectionMethod],
+                    [
+                      "Auto billing",
+                      currentTenant.billing.autoBillingEnabled
+                        ? "enabled"
+                        : "disabled",
+                    ],
+                    ["Currency", currentTenant.billing.currency],
+                  ].map(([label, value]) => (
+                    <div
+                      key={label}
+                      className="portal-kpi-card rounded-[1.45rem] p-4"
+                    >
+                      <p className="text-xs uppercase tracking-[0.22em] text-slate-400">
+                        {label}
+                      </p>
+                      <p className="mt-2 text-sm font-medium text-white">
+                        {value}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge className="rounded-full bg-white/10 text-slate-100 hover:bg-white/10">
+                      alert email{" "}
+                      {currentBudgetPolicy?.alertEmailEnabled ? "on" : "off"}
+                    </Badge>
+                    <Badge className="rounded-full bg-white/10 text-slate-100 hover:bg-white/10">
+                      webhook{" "}
+                      {currentBudgetPolicy?.alertWebhookConfigured
+                        ? "configured"
+                        : "off"}
+                    </Badge>
+                    <Badge className="rounded-full bg-white/10 text-slate-100 hover:bg-white/10">
+                      threshold{" "}
+                      {formatPlainPercent(
+                        currentBudgetPolicy?.alertThresholdPct,
+                      )}
+                    </Badge>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-slate-300">
+                    Budget target{" "}
+                    {currentBudgetPolicy?.monthlyBudget
+                      ? `${currentBudgetPolicy.monthlyBudget} ${billingCurrency}`
+                      : "not configured"}
+                    {" · "}Hard cap{" "}
+                    {currentBudgetPolicy?.hardCap
+                      ? `${currentBudgetPolicy.hardCap} ${billingCurrency}`
+                      : "not configured"}
+                    {currentBudgetPolicy?.state.hardCapReachedAt
+                      ? ` · cap reached ${formatDate(
+                          currentBudgetPolicy.state.hardCapReachedAt,
+                        )}`
+                      : ""}
+                  </p>
+                </div>
+
+                <form
+                  className="grid gap-4 rounded-[1.7rem] border border-white/10 bg-white/[0.04] p-4"
+                  onSubmit={handleUpdateBudgetPolicy}
+                >
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="monthlyBudget" className="text-slate-200">
+                        Monthly budget target
+                      </Label>
+                      <Input
+                        id="monthlyBudget"
+                        name="monthlyBudget"
+                        defaultValue={currentBudgetPolicy?.monthlyBudget ?? ""}
+                        placeholder="1500.00"
+                        className="portal-field-dark rounded-2xl"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label
+                        htmlFor="alertThresholdPct"
+                        className="text-slate-200"
+                      >
+                        Alert threshold %
+                      </Label>
+                      <Input
+                        id="alertThresholdPct"
+                        name="alertThresholdPct"
+                        defaultValue={
+                          currentBudgetPolicy?.alertThresholdPct ?? ""
+                        }
+                        placeholder="80"
+                        className="portal-field-dark rounded-2xl"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="hardCap" className="text-slate-200">
+                        Hard cap
+                      </Label>
+                      <Input
+                        id="hardCap"
+                        name="hardCap"
+                        defaultValue={currentBudgetPolicy?.hardCap ?? ""}
+                        placeholder="1800.00"
+                        className="portal-field-dark rounded-2xl"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label
+                        htmlFor="alertWebhookUrl"
+                        className="text-slate-200"
+                      >
+                        Alert webhook URL
+                      </Label>
+                      <Input
+                        id="alertWebhookUrl"
+                        name="alertWebhookUrl"
+                        defaultValue={
+                          currentBudgetPolicy?.alertWebhookUrl ?? ""
+                        }
+                        placeholder="https://example.com/reward/billing-alert"
+                        className="portal-field-dark rounded-2xl"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label
+                      htmlFor="alertWebhookSecret"
+                      className="text-slate-200"
+                    >
+                      Webhook secret
+                    </Label>
+                    <Input
+                      id="alertWebhookSecret"
+                      name="alertWebhookSecret"
+                      type="password"
+                      placeholder={
+                        currentBudgetPolicy?.alertWebhookConfigured
+                          ? "Leave blank to keep the existing secret"
+                          : "Required when configuring a webhook"
+                      }
+                      className="portal-field-dark rounded-2xl"
+                    />
+                  </div>
+
+                  <div className="grid gap-3 text-sm text-slate-300">
+                    <label className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        name="alertEmailEnabled"
+                        defaultChecked={
+                          currentBudgetPolicy?.alertEmailEnabled ?? true
+                        }
+                      />
+                      Send alert emails to{" "}
+                      {currentTenant.tenant.billingEmail ??
+                        "the billing contact once set"}
+                    </label>
+                    <label className="flex items-center gap-3">
+                      <input type="checkbox" name="clearAlertWebhook" />
+                      Remove the alert webhook and stored signing secret
+                    </label>
+                  </div>
+
+                  <div className="flex justify-end">
+                    <Button
+                      type="submit"
+                      className="rounded-2xl px-4 shadow-[0_18px_44px_rgba(14,165,233,0.24)]"
+                      disabled={isPending}
+                    >
+                      Save budget policy
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400">
+                No billing account is currently visible for this tenant.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </section>
+    );
+  }
+
+  if (activeSubview === "credits") {
+    return (
+      <section className="grid gap-6">
+        <Card className="portal-shell-card portal-fade-up portal-fade-up-delay-3 overflow-hidden rounded-[2rem] bg-white/92">
+          <CardHeader className="gap-3">
+            <CardTitle className="tracking-[-0.03em] text-slate-950">
+              {billingCapabilities.localManualCredits
+                ? "Credit adjustments"
+                : "Top-ups"}
+            </CardTitle>
+            <CardDescription>
+              Recent credit adjustments already present in the overview payload.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            {currentTenantTopUps.length > 0 ? (
+              currentTenantTopUps.slice(0, 6).map((topUp) => (
+                <div
+                  key={topUp.id}
+                  className="portal-soft-metric rounded-[1.5rem] p-4"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-slate-900">
+                      {topUp.amount} {topUp.currency}
+                    </p>
+                    <Badge
+                      className={cn(
+                        "rounded-full",
+                        getTopUpStatusTone(topUp.status),
+                      )}
+                    >
+                      {topUp.status}
+                    </Badge>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-600">
+                    {getTopUpSourceLabel(topUp.source)} ·{" "}
+                    {topUp.note || "No note"} · {formatDate(topUp.createdAt)}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-slate-500">
+                No top-up records are visible for the selected tenant yet.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </section>
+    );
+  }
+
+  if (activeSubview === "disputes") {
+    return (
+      <section className="grid gap-6">
+        <Card className="portal-shell-card overflow-hidden rounded-[2rem] bg-white/92">
+          <CardHeader className="gap-3">
+            <CardTitle className="tracking-[-0.03em] text-slate-950">
+              Billing disputes
+            </CardTitle>
+            <CardDescription>
+              Submit a formal invoice dispute tied to a specific billing run and
+              track the resolution state from the tenant portal.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-5">
+            {currentTenant ? (
+              <>
+                <form
+                  className="grid gap-4 rounded-[1.7rem] border border-slate-200/90 bg-slate-50/75 p-4"
+                  onSubmit={handleCreateBillingDispute}
+                >
+                  <div className="grid gap-2">
+                    <Label htmlFor="billingRunId">Invoice run</Label>
+                    <select
+                      id="billingRunId"
+                      name="billingRunId"
+                      className="portal-select flex h-10 w-full rounded-2xl px-3 py-2 text-sm text-slate-950"
+                      defaultValue=""
+                      required
+                    >
+                      <option value="" disabled>
+                        Select an invoice run
+                      </option>
+                      {currentTenantBillingRuns.map((run) => (
+                        <option key={run.id} value={run.id}>
+                          #{run.id} · {run.totalAmount} {run.currency} ·{" "}
+                          {run.status}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="reason">Reason</Label>
+                    <select
+                      id="reason"
+                      name="reason"
+                      className="portal-select flex h-10 w-full rounded-2xl px-3 py-2 text-sm text-slate-950"
+                      defaultValue="invoice_amount"
+                    >
+                      <option value="invoice_amount">Invoice amount</option>
+                      <option value="duplicate_charge">Duplicate charge</option>
+                      <option value="service_quality">Service quality</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+
+                  <div className="grid gap-2 sm:grid-cols-[1fr_180px]">
+                    <div className="grid gap-2">
+                      <Label htmlFor="summary">Summary</Label>
+                      <Input
+                        id="summary"
+                        name="summary"
+                        maxLength={160}
+                        placeholder="Brief statement of the billing concern"
+                        className="portal-field rounded-2xl"
+                        required
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="requestedRefundAmount">
+                        Requested refund
+                      </Label>
+                      <Input
+                        id="requestedRefundAmount"
+                        name="requestedRefundAmount"
+                        placeholder="25.00"
+                        className="portal-field rounded-2xl"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="description">Detail</Label>
+                    <textarea
+                      id="description"
+                      name="description"
+                      className="portal-textarea min-h-28 rounded-2xl px-3 py-2 text-sm text-slate-950"
+                      placeholder="Describe the invoice line, period, or service issue behind this dispute."
+                      required
+                    />
+                  </div>
+
+                  <div className="flex justify-end">
+                    <Button
+                      type="submit"
+                      className="rounded-2xl px-4 shadow-[0_18px_44px_rgba(11,123,189,0.18)]"
+                      disabled={!currentTenantBillingRuns.length || isPending}
+                    >
+                      Submit dispute
+                    </Button>
+                  </div>
+                </form>
+
+                <div className="flex flex-col gap-3">
+                  {currentTenantBillingDisputes.length > 0 ? (
+                    currentTenantBillingDisputes.slice(0, 6).map((dispute) => (
+                      <div
+                        key={dispute.id}
+                        className="portal-soft-metric rounded-[1.5rem] p-4"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge className="rounded-full bg-slate-100 text-slate-700 hover:bg-slate-100">
+                              {dispute.status}
+                            </Badge>
+                            <span className="text-sm font-medium text-slate-900">
+                              {dispute.requestedRefundAmount} {dispute.currency}
+                            </span>
+                          </div>
+                          <span className="text-xs text-slate-500">
+                            {formatDate(dispute.createdAt)}
+                          </span>
+                        </div>
+                        <p className="mt-2 text-sm font-medium text-slate-900">
+                          {dispute.summary}
+                        </p>
+                        <p className="mt-1 text-sm leading-6 text-slate-600">
+                          Run #{dispute.billingRunId} ·{" "}
+                          {dispute.reason.replaceAll("_", " ")}
+                          {dispute.approvedRefundAmount
+                            ? ` · approved ${dispute.approvedRefundAmount} ${dispute.currency}`
+                            : ""}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-slate-500">
+                      No billing disputes have been submitted for this tenant
+                      yet.
+                    </p>
+                  )}
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-slate-500">
+                Select a tenant before submitting or reviewing billing disputes.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </section>
+    );
+  }
 
   return (
-    <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-      <Card className="border-slate-200 bg-white/90">
-        <CardHeader className="gap-2">
-          <CardTitle>Billing, forecast, and invoices</CardTitle>
+    <section className="grid gap-6">
+      <Card className="portal-shell-card-strong portal-fade-up portal-fade-up-delay-1 overflow-hidden rounded-[2rem] bg-white/94">
+        <CardHeader className="gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge className="rounded-full bg-sky-100 px-3 py-1 text-sky-800 hover:bg-sky-100">
+              Billing operations
+            </Badge>
+            <Badge className="rounded-full bg-slate-100 px-3 py-1 text-slate-700 hover:bg-slate-100">
+              {billingCurrency}
+            </Badge>
+            {billingCapabilities.localManualCredits ? (
+              <Badge className="rounded-full bg-amber-100 px-3 py-1 text-amber-800 hover:bg-amber-100">
+                Manual credit mode
+              </Badge>
+            ) : null}
+          </div>
+          <CardTitle className="tracking-[-0.04em] text-slate-950">
+            Billing, forecast, and invoices
+          </CardTitle>
           <CardDescription>
             {billingCapabilities.localManualCredits
               ? "Inspect daily spend, local credit balance, and invoice history. Stripe payment actions are disabled in this environment, so extra spend capacity is applied as manual credits from the internal admin console."
@@ -104,11 +567,11 @@ export function PortalDashboardBillingPage({
           {currentTenant ? (
             <>
               <div className="grid gap-3">
-                <div className="rounded-3xl border border-slate-200 bg-slate-50/80 p-4">
-                  <p className="text-sm font-medium text-slate-900">
+                <div className="portal-soft-metric rounded-[1.55rem] p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
                     Billing profile
                   </p>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                  <p className="mt-3 text-sm leading-6 text-slate-600">
                     {currentTenant.billing
                       ? `${currentTenant.billing.planCode} · ${currentTenant.billing.currency} · base ${currentTenant.billing.baseMonthlyFee} · draw ${currentTenant.billing.drawFee}`
                       : "No billing profile is attached to this tenant yet."}
@@ -117,11 +580,11 @@ export function PortalDashboardBillingPage({
 
                 {billingInsights ? (
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <div className="rounded-3xl border border-slate-200 bg-white p-4">
-                      <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                    <div className="portal-soft-metric rounded-[1.45rem] p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
                         Current month
                       </p>
-                      <p className="mt-2 text-xl font-semibold text-slate-950">
+                      <p className="mt-3 text-xl font-semibold tracking-[-0.03em] text-slate-950">
                         {billingInsights.summary.currentTotalAmount}{" "}
                         {billingCurrency}
                       </p>
@@ -130,11 +593,11 @@ export function PortalDashboardBillingPage({
                         {billingInsights.summary.currentUsageAmount}
                       </p>
                     </div>
-                    <div className="rounded-3xl border border-slate-200 bg-white p-4">
-                      <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                    <div className="portal-soft-metric rounded-[1.45rem] p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
                         7d forecast
                       </p>
-                      <p className="mt-2 text-xl font-semibold text-slate-950">
+                      <p className="mt-3 text-xl font-semibold tracking-[-0.03em] text-slate-950">
                         {
                           billingInsights.forecasts.trailing7d
                             .projectedTotalAmount
@@ -146,11 +609,11 @@ export function PortalDashboardBillingPage({
                         {billingInsights.forecasts.trailing7d.dailyRunRate}/day
                       </p>
                     </div>
-                    <div className="rounded-3xl border border-slate-200 bg-white p-4">
-                      <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                    <div className="portal-soft-metric rounded-[1.45rem] p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
                         30d forecast
                       </p>
-                      <p className="mt-2 text-xl font-semibold text-slate-950">
+                      <p className="mt-3 text-xl font-semibold tracking-[-0.03em] text-slate-950">
                         {
                           billingInsights.forecasts.trailing30d
                             .projectedTotalAmount
@@ -162,15 +625,23 @@ export function PortalDashboardBillingPage({
                         {billingInsights.forecasts.trailing30d.dailyRunRate}/day
                       </p>
                     </div>
-                    <div className="rounded-3xl border border-slate-200 bg-white p-4">
-                      <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                    <div className="portal-soft-metric rounded-[1.45rem] p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
                         Budget state
                       </p>
-                      <p className="mt-2 text-xl font-semibold text-slate-950">
+                      <p className="mt-3 text-xl font-semibold tracking-[-0.03em] text-slate-950">
                         {billingInsights.summary.effectiveBudgetAmount
                           ? `${billingInsights.summary.remainingBudgetAmount} left`
                           : "No target"}
                       </p>
+                      {budgetProgressPercent !== null ? (
+                        <div className="portal-progress-track mt-3 h-2">
+                          <div
+                            className="portal-progress-fill"
+                            style={{ width: `${budgetProgressPercent}%` }}
+                          />
+                        </div>
+                      ) : null}
                       <p className="mt-1 text-sm text-slate-600">
                         {budgetComposition
                           ? `${budgetComposition} · threshold ${billingInsights.summary.budgetThresholdAmount ?? "not configured"}`
@@ -179,7 +650,7 @@ export function PortalDashboardBillingPage({
                     </div>
                   </div>
                 ) : (
-                  <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-4 text-sm text-slate-500">
+                  <div className="portal-banner rounded-[1.5rem] border border-dashed border-slate-200 bg-white/92 p-4 text-sm text-slate-500">
                     Budget forecasting becomes available as soon as the tenant
                     has a billing profile and usage history.
                   </div>
@@ -190,6 +661,7 @@ export function PortalDashboardBillingPage({
                     {billingCapabilities.customerPortal ? (
                       <Button
                         type="button"
+                        className="rounded-2xl px-4 shadow-[0_18px_44px_rgba(11,123,189,0.22)]"
                         disabled={!currentTenantId || isPending}
                         onClick={() => {
                           handleBillingRedirect(
@@ -205,6 +677,7 @@ export function PortalDashboardBillingPage({
                       <Button
                         type="button"
                         variant="outline"
+                        className="rounded-2xl border-slate-200 bg-white/90 px-4 shadow-sm hover:border-sky-200 hover:bg-sky-50"
                         disabled={!currentTenantId || isPending}
                         onClick={() => {
                           handleBillingRedirect(
@@ -218,7 +691,7 @@ export function PortalDashboardBillingPage({
                     ) : null}
                   </div>
                 ) : (
-                  <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-4 text-sm text-slate-500">
+                  <div className="portal-banner rounded-[1.5rem] border border-dashed border-slate-200 bg-white/92 p-4 text-sm text-slate-500">
                     Stripe payment actions are disabled in this environment.
                     Manual credit adjustments from the admin console will show
                     up below and increase the available budget automatically.
@@ -227,7 +700,7 @@ export function PortalDashboardBillingPage({
               </div>
 
               {billingInsights ? (
-                <div className="rounded-3xl border border-slate-200 bg-white p-4">
+                <div className="portal-shell-card rounded-[1.7rem] bg-white/92 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-medium text-slate-900">
@@ -289,7 +762,7 @@ export function PortalDashboardBillingPage({
                       .map((point) => (
                         <div
                           key={String(point.date)}
-                          className="grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3"
+                          className="portal-soft-metric grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-[1.35rem] px-4 py-3"
                         >
                           <p className="text-sm font-medium text-slate-900">
                             {formatDate(point.date)}
@@ -311,7 +784,7 @@ export function PortalDashboardBillingPage({
                   currentTenantBillingRuns.slice(0, 6).map((run) => (
                     <div
                       key={run.id}
-                      className="rounded-3xl border border-slate-200 bg-white p-4"
+                      className="portal-soft-metric rounded-[1.5rem] p-4"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex flex-wrap items-center gap-2">
@@ -333,7 +806,7 @@ export function PortalDashboardBillingPage({
                       <div className="mt-3 flex flex-wrap gap-3 text-sm">
                         {run.stripeHostedInvoiceUrl ? (
                           <a
-                            className="font-medium text-sky-700 underline-offset-4 hover:underline"
+                            className="portal-link"
                             href={run.stripeHostedInvoiceUrl}
                             rel="noreferrer"
                             target="_blank"
@@ -343,7 +816,7 @@ export function PortalDashboardBillingPage({
                         ) : null}
                         {run.stripeInvoicePdf ? (
                           <a
-                            className="font-medium text-sky-700 underline-offset-4 hover:underline"
+                            className="portal-link"
                             href={run.stripeInvoicePdf}
                             rel="noreferrer"
                             target="_blank"
@@ -369,394 +842,6 @@ export function PortalDashboardBillingPage({
           )}
         </CardContent>
       </Card>
-
-      <div className="grid gap-6">
-        <Card className="border-slate-200 bg-slate-950 text-slate-100">
-          <CardHeader className="gap-2">
-            <CardTitle className="text-white">Budget controls</CardTitle>
-            <CardDescription className="text-slate-400">
-              Configure the tenant budget target, alert threshold, webhook
-              destination, and the hard cap that flips the engine into a
-              non-billable throttle instead of letting the invoice keep
-              climbing.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            {currentTenant?.billing ? (
-              <div className="grid gap-4">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {[
-                    ["Plan", currentTenant.billing.planCode],
-                    ["Collection", currentTenant.billing.collectionMethod],
-                    [
-                      "Auto billing",
-                      currentTenant.billing.autoBillingEnabled
-                        ? "enabled"
-                        : "disabled",
-                    ],
-                    ["Currency", currentTenant.billing.currency],
-                  ].map(([label, value]) => (
-                    <div
-                      key={label}
-                      className="rounded-3xl border border-white/10 bg-white/[0.05] p-4"
-                    >
-                      <p className="text-xs uppercase tracking-[0.22em] text-slate-400">
-                        {label}
-                      </p>
-                      <p className="mt-2 text-sm font-medium text-white">
-                        {value}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge className="rounded-full bg-white/10 text-slate-100 hover:bg-white/10">
-                      alert email{" "}
-                      {currentBudgetPolicy?.alertEmailEnabled ? "on" : "off"}
-                    </Badge>
-                    <Badge className="rounded-full bg-white/10 text-slate-100 hover:bg-white/10">
-                      webhook{" "}
-                      {currentBudgetPolicy?.alertWebhookConfigured
-                        ? "configured"
-                        : "off"}
-                    </Badge>
-                    <Badge className="rounded-full bg-white/10 text-slate-100 hover:bg-white/10">
-                      threshold{" "}
-                      {formatPlainPercent(
-                        currentBudgetPolicy?.alertThresholdPct,
-                      )}
-                    </Badge>
-                  </div>
-                  <p className="mt-3 text-sm leading-6 text-slate-300">
-                    Budget target{" "}
-                    {currentBudgetPolicy?.monthlyBudget
-                      ? `${currentBudgetPolicy.monthlyBudget} ${billingCurrency}`
-                      : "not configured"}
-                    {" · "}Hard cap{" "}
-                    {currentBudgetPolicy?.hardCap
-                      ? `${currentBudgetPolicy.hardCap} ${billingCurrency}`
-                      : "not configured"}
-                    {currentBudgetPolicy?.state.hardCapReachedAt
-                      ? ` · cap reached ${formatDate(
-                          currentBudgetPolicy.state.hardCapReachedAt,
-                        )}`
-                      : ""}
-                  </p>
-                </div>
-
-                <form
-                  className="grid gap-4"
-                  onSubmit={handleUpdateBudgetPolicy}
-                >
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="grid gap-2">
-                      <Label htmlFor="monthlyBudget" className="text-slate-200">
-                        Monthly budget target
-                      </Label>
-                      <Input
-                        id="monthlyBudget"
-                        name="monthlyBudget"
-                        defaultValue={currentBudgetPolicy?.monthlyBudget ?? ""}
-                        placeholder="1500.00"
-                        className="border-white/15 bg-white/[0.06] text-white placeholder:text-slate-500"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label
-                        htmlFor="alertThresholdPct"
-                        className="text-slate-200"
-                      >
-                        Alert threshold %
-                      </Label>
-                      <Input
-                        id="alertThresholdPct"
-                        name="alertThresholdPct"
-                        defaultValue={
-                          currentBudgetPolicy?.alertThresholdPct ?? ""
-                        }
-                        placeholder="80"
-                        className="border-white/15 bg-white/[0.06] text-white placeholder:text-slate-500"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="grid gap-2">
-                      <Label htmlFor="hardCap" className="text-slate-200">
-                        Hard cap
-                      </Label>
-                      <Input
-                        id="hardCap"
-                        name="hardCap"
-                        defaultValue={currentBudgetPolicy?.hardCap ?? ""}
-                        placeholder="1800.00"
-                        className="border-white/15 bg-white/[0.06] text-white placeholder:text-slate-500"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label
-                        htmlFor="alertWebhookUrl"
-                        className="text-slate-200"
-                      >
-                        Alert webhook URL
-                      </Label>
-                      <Input
-                        id="alertWebhookUrl"
-                        name="alertWebhookUrl"
-                        defaultValue={
-                          currentBudgetPolicy?.alertWebhookUrl ?? ""
-                        }
-                        placeholder="https://example.com/reward/billing-alert"
-                        className="border-white/15 bg-white/[0.06] text-white placeholder:text-slate-500"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label
-                      htmlFor="alertWebhookSecret"
-                      className="text-slate-200"
-                    >
-                      Webhook secret
-                    </Label>
-                    <Input
-                      id="alertWebhookSecret"
-                      name="alertWebhookSecret"
-                      type="password"
-                      placeholder={
-                        currentBudgetPolicy?.alertWebhookConfigured
-                          ? "Leave blank to keep the existing secret"
-                          : "Required when configuring a webhook"
-                      }
-                      className="border-white/15 bg-white/[0.06] text-white placeholder:text-slate-500"
-                    />
-                  </div>
-
-                  <div className="grid gap-3 text-sm text-slate-300">
-                    <label className="flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        name="alertEmailEnabled"
-                        defaultChecked={
-                          currentBudgetPolicy?.alertEmailEnabled ?? true
-                        }
-                      />
-                      Send alert emails to{" "}
-                      {currentTenant.tenant.billingEmail ??
-                        "the billing contact once set"}
-                    </label>
-                    <label className="flex items-center gap-3">
-                      <input type="checkbox" name="clearAlertWebhook" />
-                      Remove the alert webhook and stored signing secret
-                    </label>
-                  </div>
-
-                  <div className="flex justify-end">
-                    <Button type="submit" disabled={isPending}>
-                      Save budget policy
-                    </Button>
-                  </div>
-                </form>
-              </div>
-            ) : (
-              <p className="text-sm text-slate-400">
-                No billing account is currently visible for this tenant.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="border-slate-200 bg-white/90">
-          <CardHeader className="gap-2">
-            <CardTitle>
-              {billingCapabilities.localManualCredits
-                ? "Credit adjustments"
-                : "Top-ups"}
-            </CardTitle>
-            <CardDescription>
-              Recent credit adjustments already present in the overview payload.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            {currentTenantTopUps.length > 0 ? (
-              currentTenantTopUps.slice(0, 6).map((topUp) => (
-                <div
-                  key={topUp.id}
-                  className="rounded-3xl border border-slate-200 bg-slate-50/80 p-4"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-medium text-slate-900">
-                      {topUp.amount} {topUp.currency}
-                    </p>
-                    <Badge
-                      className={cn(
-                        "rounded-full",
-                        getTopUpStatusTone(topUp.status),
-                      )}
-                    >
-                      {topUp.status}
-                    </Badge>
-                  </div>
-                  <p className="mt-2 text-sm text-slate-600">
-                    {getTopUpSourceLabel(topUp.source)} ·{" "}
-                    {topUp.note || "No note"} · {formatDate(topUp.createdAt)}
-                  </p>
-                </div>
-              ))
-            ) : (
-              <p className="text-sm text-slate-500">
-                No top-up records are visible for the selected tenant yet.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="border-slate-200 bg-white/90">
-          <CardHeader className="gap-2">
-            <CardTitle>Billing disputes</CardTitle>
-            <CardDescription>
-              Submit a formal invoice dispute tied to a specific billing run and
-              track the resolution state from the tenant portal.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-5">
-            {currentTenant ? (
-              <>
-                <form
-                  className="grid gap-4"
-                  onSubmit={handleCreateBillingDispute}
-                >
-                  <div className="grid gap-2">
-                    <Label htmlFor="billingRunId">Invoice run</Label>
-                    <select
-                      id="billingRunId"
-                      name="billingRunId"
-                      className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950"
-                      defaultValue=""
-                      required
-                    >
-                      <option value="" disabled>
-                        Select an invoice run
-                      </option>
-                      {currentTenantBillingRuns.map((run) => (
-                        <option key={run.id} value={run.id}>
-                          #{run.id} · {run.totalAmount} {run.currency} ·{" "}
-                          {run.status}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label htmlFor="reason">Reason</Label>
-                    <select
-                      id="reason"
-                      name="reason"
-                      className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950"
-                      defaultValue="invoice_amount"
-                    >
-                      <option value="invoice_amount">Invoice amount</option>
-                      <option value="duplicate_charge">Duplicate charge</option>
-                      <option value="service_quality">Service quality</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
-
-                  <div className="grid gap-2 sm:grid-cols-[1fr_180px]">
-                    <div className="grid gap-2">
-                      <Label htmlFor="summary">Summary</Label>
-                      <Input
-                        id="summary"
-                        name="summary"
-                        maxLength={160}
-                        placeholder="Brief statement of the billing concern"
-                        required
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="requestedRefundAmount">
-                        Requested refund
-                      </Label>
-                      <Input
-                        id="requestedRefundAmount"
-                        name="requestedRefundAmount"
-                        placeholder="25.00"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label htmlFor="description">Detail</Label>
-                    <textarea
-                      id="description"
-                      name="description"
-                      className="min-h-28 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950"
-                      placeholder="Describe the invoice line, period, or service issue behind this dispute."
-                      required
-                    />
-                  </div>
-
-                  <div className="flex justify-end">
-                    <Button
-                      type="submit"
-                      disabled={!currentTenantBillingRuns.length || isPending}
-                    >
-                      Submit dispute
-                    </Button>
-                  </div>
-                </form>
-
-                <div className="flex flex-col gap-3">
-                  {currentTenantBillingDisputes.length > 0 ? (
-                    currentTenantBillingDisputes.slice(0, 6).map((dispute) => (
-                      <div
-                        key={dispute.id}
-                        className="rounded-3xl border border-slate-200 bg-slate-50/80 p-4"
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge className="rounded-full bg-slate-100 text-slate-700 hover:bg-slate-100">
-                              {dispute.status}
-                            </Badge>
-                            <span className="text-sm font-medium text-slate-900">
-                              {dispute.requestedRefundAmount} {dispute.currency}
-                            </span>
-                          </div>
-                          <span className="text-xs text-slate-500">
-                            {formatDate(dispute.createdAt)}
-                          </span>
-                        </div>
-                        <p className="mt-2 text-sm font-medium text-slate-900">
-                          {dispute.summary}
-                        </p>
-                        <p className="mt-1 text-sm leading-6 text-slate-600">
-                          Run #{dispute.billingRunId} ·{" "}
-                          {dispute.reason.replaceAll("_", " ")}
-                          {dispute.approvedRefundAmount
-                            ? ` · approved ${dispute.approvedRefundAmount} ${dispute.currency}`
-                            : ""}
-                        </p>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-slate-500">
-                      No billing disputes have been submitted for this tenant
-                      yet.
-                    </p>
-                  )}
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-slate-500">
-                Select a tenant before submitting or reviewing billing disputes.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
     </section>
   );
 }

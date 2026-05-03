@@ -1,0 +1,20 @@
+{
+  "dev": {
+    "clientKey": "replace-with-your-tiktok-client-key",
+    "name": "Reward TikTok Starter",
+    "host": "localhost",
+    "port": 3004
+  },
+  "navbar": {
+    "style": "custom",
+    "bgColorLight": "#fff7ed",
+    "bgColorDark": "#130b08"
+  },
+  "build": {
+    "outputDir": "dist",
+    "htmlEntry": "index.html"
+  },
+  "domain": {
+    "trustedDomains": ["https://example.com"]
+  }
+}

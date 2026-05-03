@@ -3,6 +3,8 @@
   import type { AdminDataDeletionQueueItem } from "@reward/shared-types/data-rights"
   import type { LegalDocumentAdminRecord } from "@reward/shared-types/legal"
 
+  import AdminPageHeader from "$lib/components/admin-page-header.svelte"
+
   import AdminChangeRequestsSection from "../(shared)/control-center/admin-change-requests-section.svelte"
   import type { ChangeRequestRecord } from "../(shared)/control-center/page-support"
 
@@ -69,9 +71,23 @@
       items: [],
     },
   )
-  const changeRequests = $derived((data.changeRequests ?? []).filter(
-    (request) => request.changeType === "legal_document_publish",
-  ))
+  const changeRequests = $derived(
+    (data.changeRequests ?? []).filter(
+      (request) => request.changeType === "legal_document_publish",
+    ),
+  )
+  const liveDocumentCount = $derived(
+    documents.filter((document) => document.activePublication !== null).length,
+  )
+  const queuedDocumentCount = $derived(
+    documents.reduce(
+      (total, document) => total + document.queuedChangeRequestCount,
+      0,
+    ),
+  )
+  const totalAcceptanceCount = $derived(
+    documents.reduce((total, document) => total + document.acceptanceCount, 0),
+  )
 
   const selectedDocument = $derived(
     documents.find((document) => document.id === selectedDocumentId) ?? null,
@@ -85,14 +101,14 @@
 
   const previousVersion = $derived(
     selectedDocument
-      ? documents
+      ? (documents
           .filter(
             (document) =>
               document.documentKey === selectedDocument.documentKey &&
               document.locale === selectedDocument.locale &&
               document.version < selectedDocument.version,
           )
-          .sort((left, right) => right.version - left.version)[0] ?? null
+          .sort((left, right) => right.version - left.version)[0] ?? null)
       : null,
   )
 
@@ -136,8 +152,8 @@
   const diffRows = $derived(
     buildLineDiff(
       selectedDocument
-        ? previousVersion?.htmlContent ?? ""
-        : createBaseDocument?.htmlContent ?? "",
+        ? (previousVersion?.htmlContent ?? "")
+        : (createBaseDocument?.htmlContent ?? ""),
       editorPreviewHtml,
     ),
   )
@@ -175,8 +191,10 @@
   }
 
   const statusClass = (document: LegalDocumentAdminRecord) => {
-    if (document.activePublication?.releaseMode === "gray") return "badge-warning"
-    if (document.activePublication?.releaseMode === "rollback") return "badge-info"
+    if (document.activePublication?.releaseMode === "gray")
+      return "badge-warning"
+    if (document.activePublication?.releaseMode === "rollback")
+      return "badge-info"
     if (document.activePublication) return "badge-success"
     if (document.latestPublication) return "badge-ghost"
     return "badge-outline"
@@ -209,8 +227,10 @@
 
   const displayDeletionSubject = (item: AdminDataDeletionQueueItem) =>
     item.currentUserEmail?.endsWith("@privacy.invalid")
-      ? item.subjectEmailHint ?? `User #${item.userId}`
-      : item.currentUserEmail ?? item.subjectEmailHint ?? `User #${item.userId}`
+      ? (item.subjectEmailHint ?? `User #${item.userId}`)
+      : (item.currentUserEmail ??
+        item.subjectEmailHint ??
+        `User #${item.userId}`)
 
   const startNewVersionFromSelected = () => {
     if (!selectedDocument) return
@@ -259,568 +279,792 @@
   }
 </script>
 
-<header class="space-y-3">
-  <p class="text-xs font-semibold uppercase tracking-[0.25em] text-primary">
-    Engine
-  </p>
-  <h1 class="text-3xl font-semibold">Legal</h1>
-  <p class="max-w-3xl text-sm text-slate-600">
-    条款版本、灰度发布、回滚与接受统计统一收口到共享引擎层，不再从配置页直接写入生产。
-  </p>
-</header>
+{#snippet legalActions()}
+  <button
+    class="btn btn-outline"
+    type="button"
+    onclick={startNewVersionFromSelected}
+  >
+    New Version
+  </button>
+{/snippet}
 
-{#if data.error}
-  <div class="alert alert-error mt-6 text-sm">
-    <span>{data.error}</span>
-  </div>
-{/if}
+<div class="space-y-6">
+  <AdminPageHeader
+    context="Workspace · legalGovernance"
+    eyebrow="Engine"
+    title="Legal"
+    description="条款版本、灰度发布、回滚、接受统计以及数据删除请求统一收口到共享引擎治理层。"
+    actions={legalActions}
+  />
 
-{#if actionError}
-  <div class="alert alert-error mt-6 text-sm">
-    <span>{actionError}</span>
-  </div>
-{/if}
+  {#if data.error}
+    <div class="alert alert-error text-sm">
+      <span>{data.error}</span>
+    </div>
+  {/if}
 
-<section class="mt-6 grid gap-4 md:grid-cols-4">
-  <article class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-    <p class="text-sm text-slate-500">Versions</p>
-    <p class="mt-3 text-3xl font-semibold">{documents.length}</p>
-  </article>
-  <article class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-    <p class="text-sm text-slate-500">Live</p>
-    <p class="mt-3 text-3xl font-semibold">
-      {documents.filter((document) => document.activePublication !== null).length}
-    </p>
-  </article>
-  <article class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-    <p class="text-sm text-slate-500">Queued</p>
-    <p class="mt-3 text-3xl font-semibold">
-      {documents.reduce(
-        (total, document) => total + document.queuedChangeRequestCount,
-        0,
-      )}
-    </p>
-  </article>
-  <article class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-    <p class="text-sm text-slate-500">Acceptances</p>
-    <p class="mt-3 text-3xl font-semibold">
-      {documents.reduce((total, document) => total + document.acceptanceCount, 0)}
-    </p>
-  </article>
-</section>
+  {#if actionError}
+    <div class="alert alert-error text-sm">
+      <span>{actionError}</span>
+    </div>
+  {/if}
 
-<section class="mt-6 card bg-base-100 shadow">
-  <div class="card-body space-y-5">
-    <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-      <div>
-        <h2 class="card-title">Data Deletion Queue</h2>
+  <section class="admin-summary-grid grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
+    <article class="card bg-base-100 shadow">
+      <div class="card-body gap-2">
+        <p
+          class="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-[var(--admin-primary)]"
+        >
+          Versions
+        </p>
+        <div class="flex items-end justify-between gap-4">
+          <p class="font-[Newsreader] text-4xl text-[var(--admin-ink)]">
+            {documents.length}
+          </p>
+          <span class="badge badge-outline">registry</span>
+        </div>
         <p class="text-sm text-slate-500">
-          处理用户“删我数据”请求。审批通过后会执行 pseudo-anonymize，并追加法律审计记录。
+          Current and historical legal document versions visible in the
+          registry.
         </p>
       </div>
-      <div class="grid gap-3 sm:grid-cols-3">
-        <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-          <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Pending</p>
-          <p class="mt-2 text-2xl font-semibold">{dataDeletionQueue.pendingCount}</p>
+    </article>
+
+    <article class="card bg-base-100 shadow">
+      <div class="card-body gap-2">
+        <p
+          class="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-[var(--admin-primary)]"
+        >
+          Live
+        </p>
+        <div class="flex items-end justify-between gap-4">
+          <p class="font-[Newsreader] text-4xl text-[var(--admin-ink)]">
+            {liveDocumentCount}
+          </p>
+          <span class="badge badge-outline">production</span>
         </div>
-        <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-          <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Overdue</p>
-          <p class="mt-2 text-2xl font-semibold text-error">{dataDeletionQueue.overdueCount}</p>
-        </div>
-        <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-          <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Completed</p>
-          <p class="mt-2 text-2xl font-semibold">{dataDeletionQueue.completedCount}</p>
-        </div>
+        <p class="text-sm text-slate-500">
+          Versions currently active across live publication channels.
+        </p>
       </div>
-    </div>
+    </article>
 
-    <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-      {#if mfaEnabled}
-        审批动作要求当前管理员输入 MFA code。
-      {:else}
-        当前管理员未启用 MFA，后端会拒绝审批动作。
-      {/if}
-    </div>
-
-    {#if dataDeletionQueue.items.length === 0}
-      <div class="rounded-2xl border border-dashed border-slate-300 p-6 text-sm text-slate-500">
-        还没有数据删除请求。
-      </div>
-    {:else}
-      <div class="space-y-4">
-        {#each dataDeletionQueue.items as item}
-          <article class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-              <div class="space-y-3">
-                <div class="flex flex-wrap items-center gap-3">
-                  <h3 class="text-lg font-semibold text-slate-900">
-                    Request #{item.id}
-                  </h3>
-                  <span class={`badge ${deletionStatusClass(item)}`}>
-                    {deletionStatusLabel(item)}
-                  </span>
-                  {#if item.isOverdue}
-                    <span class="badge badge-error badge-outline">Overdue</span>
-                  {/if}
-                </div>
-                <div class="grid gap-3 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-3">
-                  <div>
-                    <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Subject</p>
-                    <p class="mt-1 font-medium text-slate-900">
-                      {displayDeletionSubject(item)}
-                    </p>
-                    <p class="text-xs text-slate-500">
-                      User #{item.userId}{item.currentUserPhone ? ` · ${item.currentUserPhone}` : ""}
-                    </p>
-                  </div>
-                  <div>
-                    <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Requested</p>
-                    <p class="mt-1">{formatDateTime(item.createdAt)}</p>
-                    <p class="text-xs text-slate-500">Due {formatDateTime(item.dueAt)}</p>
-                  </div>
-                  <div>
-                    <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Review</p>
-                    <p class="mt-1">
-                      {item.reviewedAt ? formatDateTime(item.reviewedAt) : "Not reviewed"}
-                    </p>
-                    <p class="text-xs text-slate-500">
-                      {item.completedAt
-                        ? `Completed ${formatDateTime(item.completedAt)}`
-                        : item.failureReason ?? "Awaiting action"}
-                    </p>
-                  </div>
-                </div>
-                {#if item.requestReason}
-                  <div class="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                    <span class="font-medium text-slate-900">Request reason:</span>
-                    {" "}{item.requestReason}
-                  </div>
-                {/if}
-                {#if item.reviewNotes}
-                  <div class="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                    <span class="font-medium text-slate-900">Review notes:</span>
-                    {" "}{item.reviewNotes}
-                  </div>
-                {/if}
-                {#if item.resultSummary}
-                  <div class="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-                    Redacted:
-                    {item.resultSummary.authSessionsRevoked} sessions,
-                    {item.resultSummary.authTokensRedacted} tokens,
-                    {item.resultSummary.kycProfilesRedacted} KYC profiles,
-                    {item.resultSummary.notificationsRedacted} notifications.
-                  </div>
-                {/if}
-              </div>
-
-              {#if item.status === "pending_review"}
-                <form method="post" class="w-full max-w-md space-y-3 xl:shrink-0">
-                  <input type="hidden" name="requestId" value={item.id} />
-                  <label class="form-control">
-                    <span class="label-text mb-2">Review Notes</span>
-                    <textarea
-                      name="reviewNotes"
-                      class="textarea textarea-bordered min-h-24"
-                      placeholder="Retention exception, scope note, or rejection reason"
-                    ></textarea>
-                  </label>
-                  <label class="form-control">
-                    <span class="label-text mb-2">Admin MFA Code</span>
-                    <input
-                      name="totpCode"
-                      class="input input-bordered"
-                      inputmode="numeric"
-                      placeholder="123456"
-                    />
-                  </label>
-                  <div class="flex flex-wrap gap-3">
-                    <button
-                      class="btn btn-primary"
-                      type="submit"
-                      formaction="?/approveDataDeletionRequest"
-                    >
-                      Approve & Erase
-                    </button>
-                    <button
-                      class="btn btn-outline"
-                      type="submit"
-                      formaction="?/rejectDataDeletionRequest"
-                    >
-                      Reject
-                    </button>
-                  </div>
-                </form>
-              {/if}
-            </div>
-          </article>
-        {/each}
-      </div>
-    {/if}
-  </div>
-</section>
-
-<section class="mt-6 grid gap-6 xl:grid-cols-[1.2fr_1.8fr]">
-  <div class="space-y-6">
-    <div class="card bg-base-100 shadow">
-      <div class="card-body space-y-4">
-        <div class="flex items-center justify-between gap-3">
-          <div>
-            <h2 class="card-title">Version Registry</h2>
-            <p class="text-sm text-slate-500">
-              所有历史版本、当前生效状态和接受人数都在这里查看。
-            </p>
-          </div>
-          <button
-            class="btn btn-outline btn-sm"
-            type="button"
-            onclick={startNewVersionFromSelected}
-          >
-            New Version
-          </button>
+    <article class="card bg-base-100 shadow">
+      <div class="card-body gap-2">
+        <p
+          class="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-[var(--admin-primary)]"
+        >
+          Queued
+        </p>
+        <div class="flex items-end justify-between gap-4">
+          <p class="font-[Newsreader] text-4xl text-[var(--admin-ink)]">
+            {queuedDocumentCount}
+          </p>
+          <span class="badge badge-outline">requests</span>
         </div>
-
-        <div class="space-y-3">
-          {#if documents.length === 0}
-            <div class="rounded-2xl border border-dashed border-slate-300 p-6 text-sm text-slate-500">
-              还没有 legal 版本，先创建第一份条款。
-            </div>
-          {:else}
-            {#each documents as document}
-              <button
-                type="button"
-                class={`w-full rounded-2xl border p-4 text-left transition ${
-                  selectedDocumentId === document.id
-                    ? "border-primary bg-primary/5"
-                    : "border-slate-200 bg-white hover:border-slate-300"
-                }`}
-                onclick={() => {
-                  selectedDocumentId = document.id
-                }}
-              >
-                <div class="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <div class="font-semibold text-slate-900">
-                      {document.documentKey} v{document.version}
-                    </div>
-                    <div class="mt-1 text-xs text-slate-500">
-                      {document.locale} · {document.title}
-                    </div>
-                  </div>
-                  <span class={`badge ${statusClass(document)}`}>
-                    {statusLabel(document)}
-                  </span>
-                </div>
-                <div class="mt-3 grid gap-2 text-xs text-slate-500 md:grid-cols-3">
-                  <div>Accepted: {document.acceptanceCount}</div>
-                  <div>Queued: {document.queuedChangeRequestCount}</div>
-                  <div>
-                    Updated: {formatDateTime(document.updatedAt)}
-                  </div>
-                </div>
-              </button>
-            {/each}
-          {/if}
-        </div>
+        <p class="text-sm text-slate-500">
+          Publish requests currently staged or waiting for approval.
+        </p>
       </div>
-    </div>
+    </article>
 
-    <div class="card bg-base-100 shadow">
-      <div class="card-body space-y-4">
+    <article class="card bg-base-100 shadow">
+      <div class="card-body gap-2">
+        <p
+          class="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-[var(--admin-primary)]"
+        >
+          Acceptances
+        </p>
+        <div class="flex items-end justify-between gap-4">
+          <p class="font-[Newsreader] text-4xl text-[var(--admin-ink)]">
+            {totalAcceptanceCount}
+          </p>
+          <span class="badge badge-outline">users</span>
+        </div>
+        <p class="text-sm text-slate-500">
+          Aggregate acceptance records tied to all registered legal versions.
+        </p>
+      </div>
+    </article>
+  </section>
+
+  <section class="card bg-base-100 shadow">
+    <div class="card-body gap-5">
+      <div
+        class="flex flex-col gap-3 border-b border-[var(--admin-border)] pb-4 lg:flex-row lg:items-end lg:justify-between"
+      >
         <div>
-          <h2 class="card-title">
-            {selectedDocument ? "Edit Version" : "Create Version"}
-          </h2>
+          <p
+            class="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-[var(--admin-primary)]"
+          >
+            Data Rights Queue
+          </p>
+          <h2 class="card-title mt-2">Data Deletion Queue</h2>
           <p class="text-sm text-slate-500">
-            {selectedDocument
-              ? "已发布或排队中的版本会锁定为只读；如需变更，请复制为新版本。"
-              : "相同 document key + locale 会自动递增版本号。"}
+            处理用户“删我数据”请求。审批通过后会执行
+            pseudo-anonymize，并追加法律审计记录。
           </p>
         </div>
 
-        {#if selectedDocument}
-          <form method="post" action="?/updateDocument" class="grid gap-4">
-            <input type="hidden" name="documentId" value={selectedDocument.id} />
-            <label class="form-control">
-              <span class="label-text mb-2">Title</span>
-              <input
-                name="title"
-                class="input input-bordered"
-                bind:value={editForm.title}
-                disabled={!selectedMutable}
-              />
-            </label>
-            <div class="grid gap-4 md:grid-cols-2">
-              <label class="form-control">
-                <span class="label-text mb-2">Summary</span>
-                <input
-                  name="summary"
-                  class="input input-bordered"
-                  bind:value={editForm.summary}
-                  disabled={!selectedMutable}
-                />
-              </label>
-              <label class="form-control">
-                <span class="label-text mb-2">Change Notes</span>
-                <input
-                  name="changeNotes"
-                  class="input input-bordered"
-                  bind:value={editForm.changeNotes}
-                  disabled={!selectedMutable}
-                />
-              </label>
-            </div>
-            <label class="form-control">
-              <span class="label-text mb-2">HTML</span>
-              <textarea
-                name="htmlContent"
-                class="textarea textarea-bordered min-h-64 font-mono text-xs"
-                bind:value={editForm.htmlContent}
-                disabled={!selectedMutable}
-              ></textarea>
-            </label>
-            <label class="label cursor-pointer justify-start gap-3">
-              <input
-                name="isRequired"
-                type="checkbox"
-                class="checkbox"
-                bind:checked={editForm.isRequired}
-                disabled={!selectedMutable}
-              />
-              <span class="label-text">Require user acceptance</span>
-            </label>
-            <div class="flex flex-wrap gap-3">
-              <button class="btn btn-primary" type="submit" disabled={!selectedMutable}>
-                Save Draft
-              </button>
-            </div>
-          </form>
+        <div class="grid gap-3 sm:grid-cols-3">
+          <div
+            class="rounded-[0.95rem] border border-[var(--admin-border)] bg-[var(--admin-paper)] px-4 py-3"
+          >
+            <p class="text-xs uppercase tracking-[0.18em] text-slate-500">
+              Pending
+            </p>
+            <p class="mt-2 font-[Newsreader] text-3xl text-[var(--admin-ink)]">
+              {dataDeletionQueue.pendingCount}
+            </p>
+          </div>
+          <div
+            class="rounded-[0.95rem] border border-[var(--admin-border)] bg-[var(--admin-paper)] px-4 py-3"
+          >
+            <p class="text-xs uppercase tracking-[0.18em] text-slate-500">
+              Overdue
+            </p>
+            <p
+              class="mt-2 font-[Newsreader] text-3xl text-[var(--admin-danger)]"
+            >
+              {dataDeletionQueue.overdueCount}
+            </p>
+          </div>
+          <div
+            class="rounded-[0.95rem] border border-[var(--admin-border)] bg-[var(--admin-paper)] px-4 py-3"
+          >
+            <p class="text-xs uppercase tracking-[0.18em] text-slate-500">
+              Completed
+            </p>
+            <p class="mt-2 font-[Newsreader] text-3xl text-[var(--admin-ink)]">
+              {dataDeletionQueue.completedCount}
+            </p>
+          </div>
+        </div>
+      </div>
 
-          <form method="post" action="?/deleteDocument" class="mt-2">
-            <input type="hidden" name="documentId" value={selectedDocument.id} />
-            <button class="btn btn-ghost text-error" type="submit" disabled={!selectedMutable}>
-              Delete Draft
-            </button>
-          </form>
+      <div
+        class="rounded-[0.95rem] border border-dashed border-[var(--admin-border)] bg-[var(--admin-paper)] px-4 py-3 text-sm text-slate-600"
+      >
+        {#if mfaEnabled}
+          审批动作要求当前管理员输入 MFA code。
         {:else}
-          <form method="post" action="?/createDocument" class="grid gap-4">
-            <div class="grid gap-4 md:grid-cols-2">
-              <label class="form-control">
-                <span class="label-text mb-2">Document Key</span>
-                <input
-                  name="documentKey"
-                  class="input input-bordered"
-                  bind:value={createForm.documentKey}
-                  placeholder="terms-of-service"
-                />
-              </label>
-              <label class="form-control">
-                <span class="label-text mb-2">Locale</span>
-                <input
-                  name="locale"
-                  class="input input-bordered"
-                  bind:value={createForm.locale}
-                  placeholder="zh-CN"
-                />
-              </label>
-            </div>
-            <label class="form-control">
-              <span class="label-text mb-2">Title</span>
-              <input
-                name="title"
-                class="input input-bordered"
-                bind:value={createForm.title}
-              />
-            </label>
-            <div class="grid gap-4 md:grid-cols-2">
-              <label class="form-control">
-                <span class="label-text mb-2">Summary</span>
-                <input
-                  name="summary"
-                  class="input input-bordered"
-                  bind:value={createForm.summary}
-                />
-              </label>
-              <label class="form-control">
-                <span class="label-text mb-2">Change Notes</span>
-                <input
-                  name="changeNotes"
-                  class="input input-bordered"
-                  bind:value={createForm.changeNotes}
-                />
-              </label>
-            </div>
-            <label class="form-control">
-              <span class="label-text mb-2">HTML</span>
-              <textarea
-                name="htmlContent"
-                class="textarea textarea-bordered min-h-64 font-mono text-xs"
-                bind:value={createForm.htmlContent}
-              ></textarea>
-            </label>
-            <label class="label cursor-pointer justify-start gap-3">
-              <input
-                name="isRequired"
-                type="checkbox"
-                class="checkbox"
-                bind:checked={createForm.isRequired}
-              />
-              <span class="label-text">Require user acceptance</span>
-            </label>
-            <button class="btn btn-primary" type="submit">Create Version</button>
-          </form>
+          当前管理员未启用 MFA，后端会拒绝审批动作。
         {/if}
       </div>
-    </div>
 
-    <div class="card bg-base-100 shadow">
-      <div class="card-body space-y-4">
-        <div>
-          <h2 class="card-title">Release Draft</h2>
-          <p class="text-sm text-slate-500">
-            灰度发布填写 1-99，全量发布填写 100。选择旧版本并全量发布时会被记录为 rollback。
-          </p>
+      {#if dataDeletionQueue.items.length === 0}
+        <div
+          class="rounded-[0.95rem] border border-dashed border-[var(--admin-border)] p-6 text-sm text-slate-500"
+        >
+          还没有数据删除请求。
         </div>
-        <form method="post" action="?/createPublishDraft" class="grid gap-4">
-          <input type="hidden" name="documentId" value={selectedDocument?.id ?? ""} />
-          <div class="grid gap-4 md:grid-cols-2">
-            <label class="form-control">
-              <span class="label-text mb-2">Rollout Percent</span>
-              <input
-                name="rolloutPercent"
-                type="number"
-                min="1"
-                max="100"
-                class="input input-bordered"
-                bind:value={publishRolloutPercent}
-                disabled={!selectedDocument}
-              />
-            </label>
-            <label class="form-control">
-              <span class="label-text mb-2">Reason</span>
-              <input
-                name="reason"
-                class="input input-bordered"
-                bind:value={publishReason}
-                disabled={!selectedDocument}
-              />
-            </label>
-          </div>
-          <button class="btn btn-secondary" type="submit" disabled={!selectedDocument}>
-            Queue Publish Request
-          </button>
-        </form>
-      </div>
-    </div>
-  </div>
-
-  <div class="space-y-6">
-    <div class="card bg-base-100 shadow">
-      <div class="card-body space-y-4">
-        <div>
-          <h2 class="card-title">HTML Preview</h2>
-          <p class="text-sm text-slate-500">
-            预览渲染使用 iframe sandbox，避免直接执行编辑内容里的脚本。
-          </p>
-        </div>
-        <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-        <iframe
-          class="h-[30rem] w-full rounded-2xl border border-slate-200 bg-white"
-          sandbox=""
-          srcdoc={previewSrcDoc}
-          title="Legal preview"
-        ></iframe>
-      </div>
-    </div>
-
-    <div class="card bg-base-100 shadow">
-      <div class="card-body space-y-4">
-        <div class="flex items-start justify-between gap-3">
-          <div>
-            <h2 class="card-title">HTML Diff</h2>
-            <p class="text-sm text-slate-500">
-              {selectedDocument
-                ? previousVersion
-                  ? `Comparing v${selectedDocument.version} against v${previousVersion.version}.`
-                  : "This is the first version for this document key."
-                : createBaseDocument
-                  ? `Comparing draft against latest ${createBaseDocument.documentKey} v${createBaseDocument.version}.`
-                  : "No earlier version to diff against."}
-            </p>
-          </div>
-        </div>
-        <div class="grid gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3">
-          {#each diffRows as row}
-            <div
-              class={`grid gap-2 rounded-xl p-2 text-xs md:grid-cols-2 ${
-                row.status === "same"
-                  ? "bg-white"
-                  : row.status === "added"
-                    ? "bg-emerald-50"
-                    : row.status === "removed"
-                      ? "bg-rose-50"
-                      : "bg-amber-50"
-              }`}
+      {:else}
+        <div class="space-y-4">
+          {#each dataDeletionQueue.items as item}
+            <article
+              class="rounded-[1rem] border border-[var(--admin-border)] bg-[var(--admin-paper)] p-5"
             >
-              <pre class="overflow-x-auto whitespace-pre-wrap font-mono">{row.previousLine}</pre>
-              <pre class="overflow-x-auto whitespace-pre-wrap font-mono">{row.currentLine}</pre>
-            </div>
+              <div
+                class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between"
+              >
+                <div class="space-y-3">
+                  <div class="flex flex-wrap items-center gap-3">
+                    <h3
+                      class="font-[Newsreader] text-[1.6rem] leading-tight text-[var(--admin-ink)]"
+                    >
+                      Request #{item.id}
+                    </h3>
+                    <span class={`badge ${deletionStatusClass(item)}`}>
+                      {deletionStatusLabel(item)}
+                    </span>
+                    {#if item.isOverdue}
+                      <span class="badge badge-error badge-outline"
+                        >Overdue</span
+                      >
+                    {/if}
+                  </div>
+
+                  <div
+                    class="grid gap-3 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-3"
+                  >
+                    <div>
+                      <p
+                        class="text-xs uppercase tracking-[0.18em] text-slate-400"
+                      >
+                        Subject
+                      </p>
+                      <p class="mt-1 font-medium text-base-content">
+                        {displayDeletionSubject(item)}
+                      </p>
+                      <p class="text-xs text-slate-500">
+                        User #{item.userId}{item.currentUserPhone
+                          ? ` · ${item.currentUserPhone}`
+                          : ""}
+                      </p>
+                    </div>
+                    <div>
+                      <p
+                        class="text-xs uppercase tracking-[0.18em] text-slate-400"
+                      >
+                        Requested
+                      </p>
+                      <p class="mt-1">{formatDateTime(item.createdAt)}</p>
+                      <p class="text-xs text-slate-500">
+                        Due {formatDateTime(item.dueAt)}
+                      </p>
+                    </div>
+                    <div>
+                      <p
+                        class="text-xs uppercase tracking-[0.18em] text-slate-400"
+                      >
+                        Review
+                      </p>
+                      <p class="mt-1">
+                        {item.reviewedAt
+                          ? formatDateTime(item.reviewedAt)
+                          : "Not reviewed"}
+                      </p>
+                      <p class="text-xs text-slate-500">
+                        {item.completedAt
+                          ? `Completed ${formatDateTime(item.completedAt)}`
+                          : (item.failureReason ?? "Awaiting action")}
+                      </p>
+                    </div>
+                  </div>
+
+                  {#if item.requestReason}
+                    <div
+                      class="rounded-[0.85rem] bg-base-100 px-4 py-3 text-sm text-slate-700"
+                    >
+                      <span class="font-medium text-base-content"
+                        >Request reason:</span
+                      >
+                      {" "}{item.requestReason}
+                    </div>
+                  {/if}
+
+                  {#if item.reviewNotes}
+                    <div
+                      class="rounded-[0.85rem] bg-base-100 px-4 py-3 text-sm text-slate-700"
+                    >
+                      <span class="font-medium text-base-content"
+                        >Review notes:</span
+                      >
+                      {" "}{item.reviewNotes}
+                    </div>
+                  {/if}
+
+                  {#if item.resultSummary}
+                    <div
+                      class="rounded-[0.85rem] bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+                    >
+                      Redacted:
+                      {item.resultSummary.authSessionsRevoked} sessions,
+                      {item.resultSummary.authTokensRedacted} tokens,
+                      {item.resultSummary.kycProfilesRedacted} KYC profiles,
+                      {item.resultSummary.notificationsRedacted} notifications.
+                    </div>
+                  {/if}
+                </div>
+
+                {#if item.status === "pending_review"}
+                  <form
+                    method="post"
+                    class="w-full max-w-md space-y-3 xl:shrink-0"
+                  >
+                    <input type="hidden" name="requestId" value={item.id} />
+                    <label class="form-control">
+                      <span class="label-text mb-2">Review Notes</span>
+                      <textarea
+                        name="reviewNotes"
+                        class="textarea textarea-bordered min-h-24"
+                        placeholder="Retention exception, scope note, or rejection reason"
+                      ></textarea>
+                    </label>
+                    <label class="form-control">
+                      <span class="label-text mb-2">Admin MFA Code</span>
+                      <input
+                        name="totpCode"
+                        class="input input-bordered"
+                        inputmode="numeric"
+                        placeholder="123456"
+                      />
+                    </label>
+                    <div class="flex flex-wrap gap-3">
+                      <button
+                        class="btn btn-primary"
+                        type="submit"
+                        formaction="?/approveDataDeletionRequest"
+                      >
+                        Approve & Erase
+                      </button>
+                      <button
+                        class="btn btn-outline"
+                        type="submit"
+                        formaction="?/rejectDataDeletionRequest"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </form>
+                {/if}
+              </div>
+            </article>
           {/each}
         </div>
-      </div>
+      {/if}
+    </div>
+  </section>
+
+  <section
+    class="grid gap-6 2xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]"
+  >
+    <div class="min-w-0 space-y-6">
+      <section class="card bg-base-100 shadow">
+        <div class="card-body gap-5">
+          <div
+            class="flex flex-col gap-3 border-b border-[var(--admin-border)] pb-4 lg:flex-row lg:items-end lg:justify-between"
+          >
+            <div>
+              <p
+                class="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-[var(--admin-primary)]"
+              >
+                Registry
+              </p>
+              <h2 class="card-title mt-2">Version Registry</h2>
+              <p class="text-sm text-slate-500">
+                所有历史版本、当前生效状态和接受人数都在这里查看。
+              </p>
+            </div>
+            <button
+              class="btn btn-outline btn-sm"
+              type="button"
+              onclick={startNewVersionFromSelected}
+            >
+              New Version
+            </button>
+          </div>
+
+          <div class="space-y-3">
+            {#if documents.length === 0}
+              <div class="admin-empty-state p-6 text-sm">
+                还没有 legal 版本，先创建第一份条款。
+              </div>
+            {:else}
+              {#each documents as document}
+                <button
+                  type="button"
+                  class={`admin-selectable-card w-full rounded-[0.95rem] p-4 text-left ${
+                    selectedDocumentId === document.id
+                      ? "admin-selectable-card--active"
+                      : ""
+                  }`}
+                  onclick={() => {
+                    selectedDocumentId = document.id
+                  }}
+                >
+                  <div
+                    class="flex flex-wrap items-center justify-between gap-3"
+                  >
+                    <div>
+                      <div class="font-semibold text-base-content">
+                        {document.documentKey} v{document.version}
+                      </div>
+                      <div class="mt-1 text-xs text-slate-500">
+                        {document.locale} · {document.title}
+                      </div>
+                    </div>
+                    <span class={`badge ${statusClass(document)}`}>
+                      {statusLabel(document)}
+                    </span>
+                  </div>
+                  <div
+                    class="mt-3 grid gap-2 text-xs text-slate-500 md:grid-cols-3"
+                  >
+                    <div>Accepted: {document.acceptanceCount}</div>
+                    <div>Queued: {document.queuedChangeRequestCount}</div>
+                    <div>Updated: {formatDateTime(document.updatedAt)}</div>
+                  </div>
+                </button>
+              {/each}
+            {/if}
+          </div>
+        </div>
+      </section>
+
+      <section class="card bg-base-100 shadow">
+        <div class="card-body gap-5">
+          <div
+            class="flex flex-col gap-3 border-b border-[var(--admin-border)] pb-4"
+          >
+            <div>
+              <p
+                class="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-[var(--admin-primary)]"
+              >
+                Document Workbench
+              </p>
+              <h2 class="card-title mt-2">
+                {selectedDocument ? "Edit Version" : "Create Version"}
+              </h2>
+              <p class="text-sm text-slate-500">
+                {selectedDocument
+                  ? "已发布或排队中的版本会锁定为只读；如需变更，请复制为新版本。"
+                  : "相同 document key + locale 会自动递增版本号。"}
+              </p>
+            </div>
+          </div>
+
+          {#if selectedDocument}
+            <form method="post" action="?/updateDocument" class="grid gap-4">
+              <input
+                type="hidden"
+                name="documentId"
+                value={selectedDocument.id}
+              />
+              <label class="form-control">
+                <span class="label-text mb-2">Title</span>
+                <input
+                  name="title"
+                  class="input input-bordered"
+                  bind:value={editForm.title}
+                  disabled={!selectedMutable}
+                />
+              </label>
+              <div class="grid gap-4 md:grid-cols-2">
+                <label class="form-control">
+                  <span class="label-text mb-2">Summary</span>
+                  <input
+                    name="summary"
+                    class="input input-bordered"
+                    bind:value={editForm.summary}
+                    disabled={!selectedMutable}
+                  />
+                </label>
+                <label class="form-control">
+                  <span class="label-text mb-2">Change Notes</span>
+                  <input
+                    name="changeNotes"
+                    class="input input-bordered"
+                    bind:value={editForm.changeNotes}
+                    disabled={!selectedMutable}
+                  />
+                </label>
+              </div>
+              <label class="form-control">
+                <span class="label-text mb-2">HTML</span>
+                <textarea
+                  name="htmlContent"
+                  class="textarea textarea-bordered min-h-64 font-mono text-xs"
+                  bind:value={editForm.htmlContent}
+                  disabled={!selectedMutable}
+                ></textarea>
+              </label>
+              <label class="label cursor-pointer justify-start gap-3">
+                <input
+                  name="isRequired"
+                  type="checkbox"
+                  class="checkbox"
+                  bind:checked={editForm.isRequired}
+                  disabled={!selectedMutable}
+                />
+                <span class="label-text">Require user acceptance</span>
+              </label>
+              <div class="flex flex-wrap gap-3">
+                <button
+                  class="btn btn-primary"
+                  type="submit"
+                  disabled={!selectedMutable}
+                >
+                  Save Draft
+                </button>
+                <button
+                  class="btn btn-ghost text-error"
+                  type="submit"
+                  formaction="?/deleteDocument"
+                  disabled={!selectedMutable}
+                >
+                  Delete Draft
+                </button>
+              </div>
+            </form>
+          {:else}
+            <form method="post" action="?/createDocument" class="grid gap-4">
+              <div class="grid gap-4 md:grid-cols-2">
+                <label class="form-control">
+                  <span class="label-text mb-2">Document Key</span>
+                  <input
+                    name="documentKey"
+                    class="input input-bordered"
+                    bind:value={createForm.documentKey}
+                    placeholder="terms-of-service"
+                  />
+                </label>
+                <label class="form-control">
+                  <span class="label-text mb-2">Locale</span>
+                  <input
+                    name="locale"
+                    class="input input-bordered"
+                    bind:value={createForm.locale}
+                    placeholder="zh-CN"
+                  />
+                </label>
+              </div>
+              <label class="form-control">
+                <span class="label-text mb-2">Title</span>
+                <input
+                  name="title"
+                  class="input input-bordered"
+                  bind:value={createForm.title}
+                />
+              </label>
+              <div class="grid gap-4 md:grid-cols-2">
+                <label class="form-control">
+                  <span class="label-text mb-2">Summary</span>
+                  <input
+                    name="summary"
+                    class="input input-bordered"
+                    bind:value={createForm.summary}
+                  />
+                </label>
+                <label class="form-control">
+                  <span class="label-text mb-2">Change Notes</span>
+                  <input
+                    name="changeNotes"
+                    class="input input-bordered"
+                    bind:value={createForm.changeNotes}
+                  />
+                </label>
+              </div>
+              <label class="form-control">
+                <span class="label-text mb-2">HTML</span>
+                <textarea
+                  name="htmlContent"
+                  class="textarea textarea-bordered min-h-64 font-mono text-xs"
+                  bind:value={createForm.htmlContent}
+                ></textarea>
+              </label>
+              <label class="label cursor-pointer justify-start gap-3">
+                <input
+                  name="isRequired"
+                  type="checkbox"
+                  class="checkbox"
+                  bind:checked={createForm.isRequired}
+                />
+                <span class="label-text">Require user acceptance</span>
+              </label>
+              <button class="btn btn-primary" type="submit"
+                >Create Version</button
+              >
+            </form>
+          {/if}
+        </div>
+      </section>
+
+      <section class="card bg-base-100 shadow">
+        <div class="card-body gap-5">
+          <div
+            class="flex flex-col gap-3 border-b border-[var(--admin-border)] pb-4"
+          >
+            <div>
+              <p
+                class="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-[var(--admin-primary)]"
+              >
+                Release Desk
+              </p>
+              <h2 class="card-title mt-2">Release Draft</h2>
+              <p class="text-sm text-slate-500">
+                灰度发布填写 1-99，全量发布填写
+                100。选择旧版本并全量发布时会被记录为 rollback。
+              </p>
+            </div>
+          </div>
+
+          <form method="post" action="?/createPublishDraft" class="grid gap-4">
+            <input
+              type="hidden"
+              name="documentId"
+              value={selectedDocument?.id ?? ""}
+            />
+            <div class="grid gap-4 md:grid-cols-2">
+              <label class="form-control">
+                <span class="label-text mb-2">Rollout Percent</span>
+                <input
+                  name="rolloutPercent"
+                  type="number"
+                  min="1"
+                  max="100"
+                  class="input input-bordered"
+                  bind:value={publishRolloutPercent}
+                  disabled={!selectedDocument}
+                />
+              </label>
+              <label class="form-control">
+                <span class="label-text mb-2">Reason</span>
+                <input
+                  name="reason"
+                  class="input input-bordered"
+                  bind:value={publishReason}
+                  disabled={!selectedDocument}
+                />
+              </label>
+            </div>
+            <button
+              class="btn btn-secondary max-w-sm"
+              type="submit"
+              disabled={!selectedDocument}
+            >
+              Queue Publish Request
+            </button>
+          </form>
+        </div>
+      </section>
     </div>
 
-    <section class="card bg-base-100 shadow">
-      <div class="card-body space-y-4">
-        <div class="flex items-start justify-between gap-3">
+    <aside class="space-y-6 2xl:sticky 2xl:top-24 2xl:self-start">
+      <section class="card bg-base-100 shadow">
+        <div class="card-body gap-5">
+          <div
+            class="flex flex-col gap-3 border-b border-[var(--admin-border)] pb-4"
+          >
+            <div>
+              <p
+                class="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-[var(--admin-primary)]"
+              >
+                Preview Surface
+              </p>
+              <h2 class="card-title mt-2">HTML Preview</h2>
+              <p class="text-sm text-slate-500">
+                预览渲染使用 iframe sandbox，避免直接执行编辑内容里的脚本。
+              </p>
+            </div>
+          </div>
+          <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+          <iframe
+            class="h-[30rem] w-full rounded-[0.95rem] border border-[var(--admin-border)] bg-white"
+            sandbox=""
+            srcdoc={previewSrcDoc}
+            title="Legal preview"
+          ></iframe>
+        </div>
+      </section>
+
+      <section class="card bg-base-100 shadow">
+        <div class="card-body gap-5">
+          <div
+            class="flex flex-col gap-3 border-b border-[var(--admin-border)] pb-4"
+          >
+            <div>
+              <p
+                class="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-[var(--admin-primary)]"
+              >
+                Diff Ledger
+              </p>
+              <h2 class="card-title mt-2">HTML Diff</h2>
+              <p class="text-sm text-slate-500">
+                {selectedDocument
+                  ? previousVersion
+                    ? `Comparing v${selectedDocument.version} against v${previousVersion.version}.`
+                    : "This is the first version for this document key."
+                  : createBaseDocument
+                    ? `Comparing draft against latest ${createBaseDocument.documentKey} v${createBaseDocument.version}.`
+                    : "No earlier version to diff against."}
+              </p>
+            </div>
+          </div>
+
+          <div
+            class="grid gap-2 rounded-[0.95rem] border border-[var(--admin-border)] bg-[var(--admin-paper)] p-3"
+          >
+            {#each diffRows as row}
+              <div
+                class={`grid gap-2 rounded-[0.75rem] p-2 text-xs md:grid-cols-2 ${
+                  row.status === "same"
+                    ? "bg-base-100"
+                    : row.status === "added"
+                      ? "bg-emerald-50"
+                      : row.status === "removed"
+                        ? "bg-rose-50"
+                        : "bg-amber-50"
+                }`}
+              >
+                <pre
+                  class="overflow-x-auto whitespace-pre-wrap font-mono">{row.previousLine}</pre>
+                <pre
+                  class="overflow-x-auto whitespace-pre-wrap font-mono">{row.currentLine}</pre>
+              </div>
+            {/each}
+          </div>
+        </div>
+      </section>
+
+      <section class="card bg-base-100 shadow">
+        <div class="card-body gap-4">
           <div>
-            <h2 class="card-title">Publish Step-Up</h2>
+            <p
+              class="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-[var(--admin-primary)]"
+            >
+              Publish Step-Up
+            </p>
+            <h2 class="card-title mt-2">Release Verification</h2>
             <p class="text-sm text-slate-500">
               发布审批通过后的 change request 时，使用这里输入的 MFA 验证码。
             </p>
           </div>
-          <span class={`badge ${mfaEnabled ? "badge-success" : "badge-warning"}`}>
-            {mfaEnabled ? "MFA Enabled" : "MFA Required"}
-          </span>
+          <div
+            class="rounded-[0.95rem] border border-[var(--admin-border)] bg-[var(--admin-paper)] p-4"
+          >
+            <div class="flex items-center justify-between gap-4">
+              <p class="text-sm font-medium text-base-content">
+                Verification State
+              </p>
+              <span
+                class={`badge ${mfaEnabled ? "badge-success" : "badge-warning"}`}
+              >
+                {mfaEnabled ? "MFA Enabled" : "MFA Required"}
+              </span>
+            </div>
+            <label class="form-control mt-4 max-w-sm">
+              <span class="label-text mb-2">MFA 验证码</span>
+              <input
+                name="totpCode"
+                type="text"
+                inputmode="text"
+                autocomplete="one-time-code"
+                class="input input-bordered"
+                bind:value={stepUpCode}
+                placeholder="发布前输入管理员 MFA 验证码"
+                disabled={!mfaEnabled}
+              />
+            </label>
+            <label class="form-control mt-4 max-w-sm">
+              <span class="label-text mb-2">二次确认口令</span>
+              <input
+                class="input input-bordered font-mono"
+                bind:value={confirmationText}
+                placeholder="例如 SUBMIT 18 / PUBLISH 18"
+              />
+            </label>
+            <label class="form-control mt-4">
+              <span class="label-text mb-2">驳回原因</span>
+              <input
+                class="input input-bordered"
+                bind:value={rejectReason}
+                placeholder="写明驳回原因或回滚说明。"
+              />
+            </label>
+          </div>
         </div>
-        <label class="form-control max-w-sm">
-          <span class="label-text mb-2">MFA 验证码</span>
-          <input
-            name="totpCode"
-            type="text"
-            inputmode="text"
-            autocomplete="one-time-code"
-            class="input input-bordered"
-            bind:value={stepUpCode}
-            placeholder="发布前输入管理员 MFA 验证码"
-            disabled={!mfaEnabled}
-          />
-        </label>
-        <label class="form-control max-w-sm">
-          <span class="label-text mb-2">二次确认口令</span>
-          <input
-            class="input input-bordered font-mono"
-            bind:value={confirmationText}
-            placeholder="例如 SUBMIT 18 / PUBLISH 18"
-          />
-        </label>
-        <label class="form-control">
-          <span class="label-text mb-2">驳回原因</span>
-          <input
-            class="input input-bordered"
-            bind:value={rejectReason}
-            placeholder="写明驳回原因或回滚说明。"
-          />
-        </label>
-      </div>
-    </section>
+      </section>
 
-    <AdminChangeRequestsSection
-      {changeRequests}
-      {mfaEnabled}
-      {stepUpCode}
-      {confirmationText}
-      {rejectReason}
-      showControlInputs={false}
-    />
-  </div>
-</section>
+      <AdminChangeRequestsSection
+        {changeRequests}
+        {mfaEnabled}
+        {stepUpCode}
+        {confirmationText}
+        {rejectReason}
+        showControlInputs={false}
+      />
+    </aside>
+  </section>
+</div>

@@ -1,4 +1,4 @@
-import { DarkTheme } from "@react-navigation/native";
+import { DefaultTheme } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Platform } from "react-native";
 import { BLACKJACK_CONFIG } from "@reward/shared-types/blackjack";
@@ -68,9 +68,9 @@ export const AppStack = createNativeStackNavigator<AppStackParamList>();
 export const SESSION_RESTORE_TIMEOUT_MS = 8_000;
 
 export const appNavigationTheme = {
-  ...DarkTheme,
+  ...DefaultTheme,
   colors: {
-    ...DarkTheme.colors,
+    ...DefaultTheme.colors,
     background: palette.background,
     border: palette.border,
     card: palette.panel,

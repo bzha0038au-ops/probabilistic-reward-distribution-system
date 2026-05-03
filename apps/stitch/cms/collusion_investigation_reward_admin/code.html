@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Collusion Investigation</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&amp;family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">tailwind.config = {darkMode: "class", theme: {extend: {colors: {"on-surface": "#302e2e", "on-tertiary-container": "#615000", "surface-variant": "#e0dcdb", "primary-container": "#ff7941", "on-error-container": "#570008", tertiary: "#6d5a00", "surface-container": "#ece7e7", "on-primary-container": "#431200", "surface-tint": "#a23800", "inverse-primary": "#ff7941", "primary-fixed": "#ff7941", "on-primary-fixed-variant": "#531900", secondary: "#4a40e0", "on-primary": "#ffefeb", background: "#faf5f5", "inverse-surface": "#0f0e0e", "on-error": "#ffefee", "on-tertiary": "#fff2cd", "error-container": "#fb5151", "tertiary-fixed": "#fce17e", "on-surface-variant": "#5d5b5b", "surface-bright": "#faf5f5", "surface-container-highest": "#e0dcdb", error: "#b31b25", "secondary-fixed": "#cfcdff", "surface-dim": "#d8d3d3", "on-secondary-container": "#3423cd", "surface-container-lowest": "#ffffff", outline: "#797676", "secondary-fixed-dim": "#c0bdff", "on-tertiary-fixed": "#4c3e00", primary: "#a23800", "secondary-container": "#cfcdff", "on-tertiary-fixed-variant": "#6d5a00", "on-background": "#302e2e", "on-secondary": "#f4f1ff", "inverse-on-surface": "#9f9c9c", "primary-fixed-dim": "#ee6d36", "on-secondary-fixed-variant": "#3e32d5", "surface-container-low": "#f4f0ef", "outline-variant": "#b0acac", "surface-container-high": "#e6e1e1", "tertiary-container": "#fce17e", "on-primary-fixed": "#000000", surface: "#faf5f5", "tertiary-fixed-dim": "#edd372", "on-secondary-fixed": "#2000b0", "tertiary-dim": "#5f4e00", "error-dim": "#9f0519", "secondary-dim": "#3d30d4", "primary-dim": "#8e3000"}, borderRadius: {DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px"}, spacing: {md: "16px", lg: "24px", gutter: "16px", "container-margin": "32px", base: "4px", sm: "8px", xl: "32px", xs: "4px", unit: "4px", margin: "20px"}, fontFamily: {"label-caps": ["Space Grotesk"], "display-editorial": ["Newsreader"], "h1-editorial": ["Newsreader"], "body-standard": ["Inter"], "data-mono": ["Space Grotesk"], "body-strong": ["Inter"], "headline-md": ["Plus Jakarta Sans"], "headline-xl": ["Plus Jakarta Sans"], "body-md": ["Be Vietnam Pro"], "body-lg": ["Be Vietnam Pro"], "headline-lg": ["Plus Jakarta Sans"], "label-bold": ["Be Vietnam Pro"], "label-sm": ["Be Vietnam Pro"]}, fontSize: {"label-caps": ["11px", {lineHeight: "1", letterSpacing: "0.08em", fontWeight: "700"}], "display-editorial": ["42px", {lineHeight: "1.1", letterSpacing: "-0.02em", fontWeight: "400"}], "h1-editorial": ["28px", {lineHeight: "1.2", fontWeight: "500"}], "body-standard": ["14px", {lineHeight: "1.5", fontWeight: "400"}], "data-mono": ["13px", {lineHeight: "1.2", letterSpacing: "0.02em", fontWeight: "500"}], "body-strong": ["14px", {lineHeight: "1.5", fontWeight: "600"}], "headline-md": ["24px", {lineHeight: "30px", fontWeight: "700"}], "headline-xl": ["40px", {lineHeight: "48px", letterSpacing: "-0.02em", fontWeight: "800"}], "body-md": ["16px", {lineHeight: "24px", fontWeight: "400"}], "body-lg": ["18px", {lineHeight: "28px", fontWeight: "400"}], "headline-lg": ["32px", {lineHeight: "38px", letterSpacing: "-0.01em", fontWeight: "800"}], "label-bold": ["14px", {lineHeight: "20px", fontWeight: "700"}], "label-sm": ["12px", {lineHeight: "16px", fontWeight: "500"}]}}}};</script>
+<style>
+        body {
+            /* Simulating paper/matte texture via background pattern */
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.02'/%3E%3C/svg%3E");
+            background-color: #fcf9f5;
+        }
+        .dark body {
+            background-color: #1c1c1a;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.03'/%3E%3C/svg%3E");
+        }
+        /* Custom scrollbar for data tables */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.05);
+        }
+        .dark ::-webkit-scrollbar-track {
+            background: rgba(255,255,255,0.05);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0,0,0,0.2);
+            border-radius: 4px;
+        }
+        .dark ::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.2);
+        }
+    </style>
+</head>
+<body class="text-on-background min-h-screen flex flex-col md:flex-row antialiased selection:bg-primary-container selection:text-on-primary-container">
+<!-- JSON Component: SideNavBar -->
+<nav class="hidden md:flex flex-col pt-16 pb-8 overflow-y-auto bg-[#F2EFE9] dark:bg-stone-900/95 backdrop-blur-md fixed left-0 top-0 h-full w-64 rounded-none border-r border-stone-300 dark:border-stone-700 inset-shadow-sm z-40 transition-all duration-300 ease-in-out">
+<div class="px-8 mb-8 flex items-center justify-between hidden">
+<!-- style_brand_logo: "hidden" per JSON -->
+</div>
+<div class="px-6 mb-8">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full overflow-hidden bg-stone-300 dark:bg-stone-800 border border-stone-400 dark:border-stone-600">
+<img alt="Operator" class="w-full h-full object-cover" data-alt="A close-up portrait of a serious operational security professional. They are lit by dramatic, high-contrast studio lighting creating deep shadows and bright highlights. The overall aesthetic is dark, serious, and cinematic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBbvZaCRHSVwXH4Nek0dLQ-F6F7eLErzSe2Ss_NgoSUEWSav-iBHzWZdtltmUigX0jYz2jmCjzfNHZBJwqSYlrSyg2IAjNCvI-Zruzvx_OpOD41_3-tJhPnoANRewpU2RMoXhYGAXy18O8zacUghdDuIWm6C-iv1zYbK9asGvlSLr9nL3dg07wIK7wcFkjn-f99PVmoO54c6YK9vttP7kDC0P3iblkv0UEsvw72GvfvqqS6AzkD1XtI6uqzE0iErrbr1HHMoKNzop9K"/>
+</div>
+<div>
+<h2 class="font-h1-editorial text-h1-editorial text-stone-900 dark:text-stone-100 text-[16px]">System Engine</h2>
+<p class="font-body-standard text-body-standard text-stone-500 dark:text-stone-400 text-[12px]">Terminal Tier 01</p>
+</div>
+</div>
+<div class="mt-4 px-3 py-1.5 bg-stone-200 dark:bg-stone-800 rounded text-center border border-stone-300 dark:border-stone-700">
+<span class="font-label-caps text-label-caps text-stone-600 dark:text-stone-300">MFA Verified</span>
+</div>
+</div>
+<ul class="flex-1 px-4 space-y-1">
+<li>
+<a class="flex items-center gap-3 py-2 pl-4 text-stone-500 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out font-newsreader text-sm uppercase tracking-wider rounded-sm" href="#">
+<span class="material-symbols-outlined text-[18px]">settings_input_component</span>
+<span>Config</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 py-2 pl-4 text-stone-500 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out font-newsreader text-sm uppercase tracking-wider rounded-sm" href="#">
+<span class="material-symbols-outlined text-[18px]">gavel</span>
+<span>Legal</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 py-2 pl-4 text-stone-500 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out font-newsreader text-sm uppercase tracking-wider rounded-sm" href="#">
+<span class="material-symbols-outlined text-[18px]">hub</span>
+<span>Providers</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 py-2 pl-4 text-stone-500 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out font-newsreader text-sm uppercase tracking-wider rounded-sm" href="#">
+<span class="material-symbols-outlined text-[18px]">military_tech</span>
+<span>Prizes</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 py-2 pl-4 text-stone-500 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out font-newsreader text-sm uppercase tracking-wider rounded-sm" href="#">
+<span class="material-symbols-outlined text-[18px]">account_balance</span>
+<span>Reconciliation</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 py-2 pl-4 text-stone-500 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out font-newsreader text-sm uppercase tracking-wider rounded-sm" href="#">
+<span class="material-symbols-outlined text-[18px]">payments</span>
+<span>Finance</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 py-2 pl-4 text-stone-500 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out font-newsreader text-sm uppercase tracking-wider rounded-sm" href="#">
+<span class="material-symbols-outlined text-[18px]">trending_up</span>
+<span>Economy</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 py-2 pl-4 text-stone-500 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out font-newsreader text-sm uppercase tracking-wider rounded-sm" href="#">
+<span class="material-symbols-outlined text-[18px]">fingerprint</span>
+<span>KYC</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 py-2 pl-4 text-stone-500 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out font-newsreader text-sm uppercase tracking-wider rounded-sm" href="#">
+<span class="material-symbols-outlined text-[18px]">group</span>
+<span>Users</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 py-2 pl-4 text-stone-500 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out font-newsreader text-sm uppercase tracking-wider rounded-sm" href="#">
+<span class="material-symbols-outlined text-[18px]">business</span>
+<span>SaaS</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 py-2 pl-4 text-stone-500 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out font-newsreader text-sm uppercase tracking-wider rounded-sm" href="#">
+<span class="material-symbols-outlined text-[18px]">list_alt</span>
+<span>Audit</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 py-2 pl-4 text-stone-500 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out font-newsreader text-sm uppercase tracking-wider rounded-sm" href="#">
+<span class="material-symbols-outlined text-[18px]">verified_user</span>
+<span>AML</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 py-2 text-stone-950 dark:text-white font-bold border-l-2 border-[#5F634F] bg-stone-200/50 dark:bg-stone-800/50 transition-all duration-300 ease-in-out font-newsreader text-sm uppercase tracking-wider rounded-sm pl-4" href="#">
+<span class="material-symbols-outlined text-[18px]" style="font-variation-settings: 'FILL' 1;">security</span>
+<span>Collusion</span>
+</a>
+</li>
+</ul>
+<div class="mt-auto px-4 space-y-1">
+<div class="w-full h-px bg-stone-300 dark:bg-stone-700 my-4"></div>
+<a class="flex items-center gap-3 py-2 pl-4 text-stone-500 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out font-newsreader text-sm uppercase tracking-wider rounded-sm" href="#">
+<span class="material-symbols-outlined text-[18px]">help</span>
+<span>Help</span>
+</a>
+<a class="flex items-center gap-3 py-2 pl-4 text-stone-500 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out font-newsreader text-sm uppercase tracking-wider rounded-sm" href="#">
+<span class="material-symbols-outlined text-[18px]">description</span>
+<span>Docs</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<div class="flex-1 flex flex-col md:ml-64 min-w-0">
+<!-- JSON Component: TopNavBar -->
+<header class="flex justify-between items-center w-full px-8 bg-stone-950 dark:bg-black font-newsreader tracking-tight text-sm docked full-width top-0 h-12 border-b border-stone-800 flat no-shadows z-30 sticky top-0">
+<div class="flex items-center gap-6">
+<span class="font-newsreader font-black uppercase tracking-widest text-white text-sm">Reward Admin</span>
+<!-- Search Bar on Left -->
+<div class="relative hidden sm:block">
+<span class="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-stone-500 text-[16px]">search</span>
+<input class="bg-stone-900 border-none rounded text-white text-xs pl-8 pr-3 py-1 focus:ring-1 focus:ring-stone-600 placeholder-stone-600 w-64 font-data-mono" placeholder="Query UUID, IP, or Fingerprint..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<nav class="hidden lg:flex gap-4">
+<a class="text-stone-500 font-medium hover:text-stone-200 transition-colors active:scale-95 duration-200 py-3" href="#">FinanceOps</a>
+<a class="text-stone-500 font-medium hover:text-stone-200 transition-colors active:scale-95 duration-200 py-3" href="#">SaaS-Ops</a>
+</nav>
+<div class="flex items-center gap-4 border-l border-stone-800 pl-4">
+<span class="font-label-caps text-[10px] text-stone-400 px-2 py-0.5 border border-stone-700 rounded bg-stone-900">PROD</span>
+<div class="flex gap-2">
+<button class="text-stone-400 hover:text-stone-200 transition-colors active:scale-95 duration-200 flex items-center justify-center w-6 h-6 rounded hover:bg-stone-800">
+<span class="material-symbols-outlined text-[18px]">notifications</span>
+</button>
+<button class="text-stone-400 hover:text-stone-200 transition-colors active:scale-95 duration-200 flex items-center justify-center w-6 h-6 rounded hover:bg-stone-800">
+<span class="material-symbols-outlined text-[18px]">settings</span>
+</button>
+</div>
+<div class="w-6 h-6 rounded-full bg-stone-700 overflow-hidden ml-2 cursor-pointer border border-stone-600">
+<img alt="Operator Identity" class="w-full h-full object-cover" data-alt="A small circular avatar portrait of an operator." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCgPPrJ6-Ivk_5VXmqcoHYiOfemsOAfXxjt551CHPL_qgFqwICqirslADfCd3mq1CaixZP9jIHNtJosfXHlU1u8eETpXVXtjLVZl928BdcKBLR_uWg1eGpb_gvnmI_9GqXl5Wsc7y5OgJg27LOzwXOvq_MDaeh4CDG1t31N6ZIJmJ-BV8yFbSmAVzhm7y1lebQMC85rkL5AtBncyFfMY5i1LqGdtYwMEctcl1eWXUy8rfLsFuVpfHIhPkKxiP99uG9iPGDdLCeqE0-u"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Page Canvas -->
+<main class="flex-1 p-container-margin flex flex-col gap-lg overflow-hidden bg-background dark:bg-[#111110]">
+<!-- Header Section -->
+<div class="flex justify-between items-end border-b border-outline-variant dark:border-stone-800 pb-sm">
+<div>
+<div class="flex items-center gap-2 mb-1">
+<span class="material-symbols-outlined text-error text-[18px]">warning</span>
+<span class="font-label-caps text-label-caps text-error">CRITICAL THREAT DETECTED</span>
+</div>
+<h1 class="font-h1-editorial text-h1-editorial text-on-background dark:text-stone-100">Collusion Ring <span class="font-data-mono text-[22px] text-stone-500 ml-2">#R-992A-X</span></h1>
+</div>
+<div class="flex gap-3">
+<button class="font-label-caps text-label-caps px-4 py-2 border border-outline dark:border-stone-600 text-on-surface dark:text-stone-300 rounded hover:bg-surface-variant dark:hover:bg-stone-800 transition-colors">
+                        EXPORT CSV
+                    </button>
+<!-- Gated Write Action -->
+<button class="font-label-caps text-label-caps px-4 py-2 border border-error text-error rounded hover:bg-error/10 transition-colors flex items-center gap-2 group relative overflow-hidden">
+<span class="material-symbols-outlined text-[16px]">lock</span>
+                        INITIATE BULK FREEZE
+                        <!-- Hold to confirm visual indicator (static for this output) -->
+<div class="absolute bottom-0 left-0 h-0.5 bg-error w-0 group-hover:w-full transition-all duration-[2000ms] ease-linear"></div>
+</button>
+</div>
+</div>
+<!-- Bento Grid Layout -->
+<div class="flex-1 grid grid-cols-12 gap-lg min-h-0">
+<!-- Main Connection Matrix (Terminal Style) -->
+<div class="col-span-12 xl:col-span-8 flex flex-col bg-surface dark:bg-[#151514] border border-outline-variant/50 dark:border-stone-800 shadow-[inset_0_0_20px_rgba(0,0,0,0.02)] dark:shadow-none overflow-hidden relative group">
+<div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-error/50 to-transparent"></div>
+<div class="px-md py-sm border-b border-outline-variant/50 dark:border-stone-800 flex justify-between items-center bg-surface-container-lowest dark:bg-[#1a1a19]">
+<h3 class="font-body-strong text-body-strong text-on-surface dark:text-stone-200 flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px] text-stone-500">grid_on</span>
+                            Connection Matrix
+                        </h3>
+<div class="flex gap-2">
+<span class="font-data-mono text-data-mono text-stone-500">Nodes: 14</span>
+<span class="font-data-mono text-data-mono text-stone-500">|</span>
+<span class="font-data-mono text-data-mono text-stone-500">Edges: 42</span>
+</div>
+</div>
+<div class="flex-1 overflow-auto bg-surface-container-lowest dark:bg-[#121211]">
+<table class="w-full text-left border-collapse">
+<thead class="sticky top-0 bg-surface-variant dark:bg-[#1c1c1a] z-10 shadow-sm border-b border-outline-variant dark:border-stone-800">
+<tr>
+<th class="py-2 px-md font-label-caps text-label-caps text-stone-600 dark:text-stone-400 border-r border-outline-variant/30 dark:border-stone-800/50">NODE_ID</th>
+<th class="py-2 px-md font-label-caps text-label-caps text-stone-600 dark:text-stone-400 border-r border-outline-variant/30 dark:border-stone-800/50">LINK_TYPE</th>
+<th class="py-2 px-md font-label-caps text-label-caps text-stone-600 dark:text-stone-400 border-r border-outline-variant/30 dark:border-stone-800/50">TARGET_ID</th>
+<th class="py-2 px-md font-label-caps text-label-caps text-stone-600 dark:text-stone-400 border-r border-outline-variant/30 dark:border-stone-800/50">WEIGHT</th>
+<th class="py-2 px-md font-label-caps text-label-caps text-stone-600 dark:text-stone-400 text-right">LAST_SYNC</th>
+</tr>
+</thead>
+<tbody class="font-data-mono text-data-mono divide-y divide-outline-variant/20 dark:divide-stone-800/40">
+<tr class="hover:bg-surface-variant/50 dark:hover:bg-[#1a1a19] transition-colors group cursor-pointer bg-error/5 dark:bg-error/10">
+<td class="py-2 px-md border-r border-outline-variant/20 dark:border-stone-800/30 text-error">USR_9921</td>
+<td class="py-2 px-md border-r border-outline-variant/20 dark:border-stone-800/30 text-stone-700 dark:text-stone-300 flex items-center gap-2">
+<span class="material-symbols-outlined text-[14px]">router</span> Shared IP
+                                    </td>
+<td class="py-2 px-md border-r border-outline-variant/20 dark:border-stone-800/30 text-stone-900 dark:text-stone-200">USR_4412</td>
+<td class="py-2 px-md border-r border-outline-variant/20 dark:border-stone-800/30">
+<div class="w-full bg-stone-200 dark:bg-stone-800 h-1.5 rounded-full overflow-hidden">
+<div class="bg-error h-full w-[95%]"></div>
+</div>
+</td>
+<td class="py-2 px-md text-stone-500 text-right">14:02:11.099</td>
+</tr>
+<tr class="hover:bg-surface-variant/50 dark:hover:bg-[#1a1a19] transition-colors group cursor-pointer bg-error/5 dark:bg-error/10">
+<td class="py-2 px-md border-r border-outline-variant/20 dark:border-stone-800/30 text-error">USR_4412</td>
+<td class="py-2 px-md border-r border-outline-variant/20 dark:border-stone-800/30 text-stone-700 dark:text-stone-300 flex items-center gap-2">
+<span class="material-symbols-outlined text-[14px]">account_balance_wallet</span> Shared WD
+                                    </td>
+<td class="py-2 px-md border-r border-outline-variant/20 dark:border-stone-800/30 text-stone-900 dark:text-stone-200">USR_8830</td>
+<td class="py-2 px-md border-r border-outline-variant/20 dark:border-stone-800/30">
+<div class="w-full bg-stone-200 dark:bg-stone-800 h-1.5 rounded-full overflow-hidden">
+<div class="bg-error h-full w-[98%]"></div>
+</div>
+</td>
+<td class="py-2 px-md text-stone-500 text-right">14:05:44.210</td>
+</tr>
+<tr class="hover:bg-surface-variant/50 dark:hover:bg-[#1a1a19] transition-colors group cursor-pointer">
+<td class="py-2 px-md border-r border-outline-variant/20 dark:border-stone-800/30 text-stone-900 dark:text-stone-200">USR_8830</td>
+<td class="py-2 px-md border-r border-outline-variant/20 dark:border-stone-800/30 text-stone-700 dark:text-stone-300 flex items-center gap-2">
+<span class="material-symbols-outlined text-[14px]">devices</span> Fingerprint
+                                    </td>
+<td class="py-2 px-md border-r border-outline-variant/20 dark:border-stone-800/30 text-stone-900 dark:text-stone-200">USR_1102</td>
+<td class="py-2 px-md border-r border-outline-variant/20 dark:border-stone-800/30">
+<div class="w-full bg-stone-200 dark:bg-stone-800 h-1.5 rounded-full overflow-hidden">
+<div class="bg-primary-container h-full w-[65%]"></div>
+</div>
+</td>
+<td class="py-2 px-md text-stone-500 text-right">09:11:02.441</td>
+</tr>
+<tr class="hover:bg-surface-variant/50 dark:hover:bg-[#1a1a19] transition-colors group cursor-pointer">
+<td class="py-2 px-md border-r border-outline-variant/20 dark:border-stone-800/30 text-stone-900 dark:text-stone-200">USR_1102</td>
+<td class="py-2 px-md border-r border-outline-variant/20 dark:border-stone-800/30 text-stone-700 dark:text-stone-300 flex items-center gap-2">
+<span class="material-symbols-outlined text-[14px]">router</span> Shared IP
+                                    </td>
+<td class="py-2 px-md border-r border-outline-variant/20 dark:border-stone-800/30 text-stone-900 dark:text-stone-200">USR_9921</td>
+<td class="py-2 px-md border-r border-outline-variant/20 dark:border-stone-800/30">
+<div class="w-full bg-stone-200 dark:bg-stone-800 h-1.5 rounded-full overflow-hidden">
+<div class="bg-primary-container h-full w-[45%]"></div>
+</div>
+</td>
+<td class="py-2 px-md text-stone-500 text-right">08:44:19.002</td>
+</tr>
+<!-- Filler rows for terminal feel -->
+<tr class="hover:bg-surface-variant/50 dark:hover:bg-[#1a1a19] transition-colors group cursor-pointer opacity-70">
+<td class="py-2 px-md border-r border-outline-variant/20 dark:border-stone-800/30 text-stone-900 dark:text-stone-400">USR_5531</td>
+<td class="py-2 px-md border-r border-outline-variant/20 dark:border-stone-800/30 text-stone-500 flex items-center gap-2">
+<span class="material-symbols-outlined text-[14px]">schedule</span> Timing Pattern
+                                    </td>
+<td class="py-2 px-md border-r border-outline-variant/20 dark:border-stone-800/30 text-stone-900 dark:text-stone-400">USR_4412</td>
+<td class="py-2 px-md border-r border-outline-variant/20 dark:border-stone-800/30">
+<div class="w-full bg-stone-200 dark:bg-stone-800 h-1.5 rounded-full overflow-hidden">
+<div class="bg-stone-400 h-full w-[30%]"></div>
+</div>
+</td>
+<td class="py-2 px-md text-stone-600 text-right">YDAY 23:59</td>
+</tr>
+<tr class="hover:bg-surface-variant/50 dark:hover:bg-[#1a1a19] transition-colors group cursor-pointer opacity-70">
+<td class="py-2 px-md border-r border-outline-variant/20 dark:border-stone-800/30 text-stone-900 dark:text-stone-400">USR_7761</td>
+<td class="py-2 px-md border-r border-outline-variant/20 dark:border-stone-800/30 text-stone-500 flex items-center gap-2">
+<span class="material-symbols-outlined text-[14px]">router</span> Shared IP
+                                    </td>
+<td class="py-2 px-md border-r border-outline-variant/20 dark:border-stone-800/30 text-stone-900 dark:text-stone-400">USR_8830</td>
+<td class="py-2 px-md border-r border-outline-variant/20 dark:border-stone-800/30">
+<div class="w-full bg-stone-200 dark:bg-stone-800 h-1.5 rounded-full overflow-hidden">
+<div class="bg-stone-400 h-full w-[20%]"></div>
+</div>
+</td>
+<td class="py-2 px-md text-stone-600 text-right">YDAY 18:22</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Side Panel: Relationship Detail -->
+<div class="col-span-12 xl:col-span-4 flex flex-col gap-md">
+<!-- Detail Card -->
+<div class="flex-1 bg-surface-container-low dark:bg-[#181816] border border-outline-variant/50 dark:border-stone-800 relative flex flex-col">
+<div class="p-md border-b border-outline-variant/50 dark:border-stone-800 flex justify-between items-center bg-surface-container dark:bg-[#1c1c1a]">
+<h3 class="font-body-strong text-body-strong text-on-surface dark:text-stone-200 flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px] text-stone-500">search</span>
+                                Relationship Detail
+                            </h3>
+<button class="text-stone-500 hover:text-stone-900 dark:hover:text-stone-200">
+<span class="material-symbols-outlined text-[18px]">close</span>
+</button>
+</div>
+<div class="p-md flex-1 overflow-auto">
+<!-- Selected Nodes Header -->
+<div class="flex items-center justify-between mb-lg bg-surface dark:bg-[#121211] p-3 border border-outline-variant/30 dark:border-stone-700 rounded-sm">
+<div class="text-center">
+<div class="font-data-mono text-data-mono text-error">USR_9921</div>
+<div class="font-label-caps text-[9px] text-stone-500 mt-1">SOURCE</div>
+</div>
+<div class="flex flex-col items-center px-4">
+<span class="material-symbols-outlined text-stone-400 text-[16px] mb-1">arrow_forward</span>
+<div class="font-label-caps text-[9px] text-stone-500 bg-stone-200 dark:bg-stone-800 px-2 py-0.5 rounded">SHARED_IP</div>
+</div>
+<div class="text-center">
+<div class="font-data-mono text-data-mono text-stone-900 dark:text-stone-200">USR_4412</div>
+<div class="font-label-caps text-[9px] text-stone-500 mt-1">TARGET</div>
+</div>
+</div>
+<!-- Overlap Data -->
+<div class="space-y-6">
+<div>
+<h4 class="font-label-caps text-label-caps text-stone-500 mb-2 border-b border-stone-200 dark:border-stone-800 pb-1">METADATA OVERLAP</h4>
+<ul class="space-y-3 font-data-mono text-[12px]">
+<li class="flex justify-between items-start">
+<span class="text-stone-500">IP_Address</span>
+<span class="text-error bg-error/10 px-1 py-0.5 rounded text-right">192.168.1.105<br/><span class="text-[10px] text-stone-500">(14 matches)</span></span>
+</li>
+<li class="flex justify-between items-start">
+<span class="text-stone-500">Subnet</span>
+<span class="text-stone-900 dark:text-stone-300 text-right">192.168.1.0/24</span>
+</li>
+<li class="flex justify-between items-start">
+<span class="text-stone-500">Device_Hash</span>
+<span class="text-stone-900 dark:text-stone-300 text-right">a8f93...2b1c</span>
+</li>
+<li class="flex justify-between items-start">
+<span class="text-stone-500">User_Agent</span>
+<span class="text-stone-900 dark:text-stone-400 text-right w-3/5 truncate" title="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36...">Mozilla/5.0 (Windows NT...</span>
+</li>
+</ul>
+</div>
+<div>
+<h4 class="font-label-caps text-label-caps text-stone-500 mb-2 border-b border-stone-200 dark:border-stone-800 pb-1">BEHAVIORAL FLAGS</h4>
+<div class="space-y-2">
+<div class="bg-surface dark:bg-[#121211] border-l-2 border-primary-container p-2 text-sm text-stone-700 dark:text-stone-300 font-body-standard">
+                                            Synchronized login events detected within 45 seconds of each other.
+                                        </div>
+<div class="bg-surface dark:bg-[#121211] border-l-2 border-error p-2 text-sm text-stone-700 dark:text-stone-300 font-body-standard">
+                                            Sequential withdrawal requests to identical external wallet address.
+                                        </div>
+</div>
+</div>
+</div>
+</div>
+<!-- Panel Actions -->
+<div class="p-md border-t border-outline-variant/50 dark:border-stone-800 bg-surface-container dark:bg-[#1c1c1a]">
+<button class="w-full font-label-caps text-label-caps py-3 border border-outline dark:border-stone-600 text-on-surface dark:text-stone-300 rounded hover:bg-surface-variant dark:hover:bg-stone-800 transition-colors flex justify-center items-center gap-2">
+<span class="material-symbols-outlined text-[16px]">flag</span>
+                                FLAG GROUP FOR REVIEW
+                            </button>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

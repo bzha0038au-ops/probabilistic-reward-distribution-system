@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+
+<html class="" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Retro-Modern Web3 Play</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&amp;family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">tailwind.config = {darkMode: "class", theme: {extend: {colors: {"surface-container-highest": "#e6e1e1", "on-surface-variant": "#58423a", "outline-variant": "#dfc0b5", "inverse-surface": "#313030", "inverse-primary": "#ffb599", secondary: "#4b41e1", "on-background": "#1c1b1b", "tertiary-container": "#c2aa4e", "surface-dim": "#ddd9d8", "on-primary": "#ffffff", "surface-variant": "#e6e1e1", tertiary: "#705d00", primary: "#7f2a00", "surface-container-high": "#ece7e7", background: "#fdf8f8", "on-secondary-fixed": "#0f0069", "surface-container-low": "#f7f2f2", "primary-fixed": "#ffdbce", outline: "#8c7168", "on-error-container": "#93000a", "error-container": "#ffdad6", "on-tertiary-fixed": "#221b00", "primary-fixed-dim": "#ffb599", error: "#ba1a1a", "on-secondary-container": "#fffbff", "surface-bright": "#fdf8f8", "tertiary-fixed": "#fce17e", "surface-container-lowest": "#ffffff", "inverse-on-surface": "#f4f0ef", "on-error": "#ffffff", "on-tertiary": "#ffffff", "surface-tint": "#a73a00", "primary-container": "#a73a00", "on-primary-fixed": "#370e00", "on-primary-fixed-variant": "#802a00", "secondary-fixed-dim": "#c3c0ff", "on-secondary-fixed-variant": "#3322cc", surface: "#fdf8f8", "tertiary-fixed-dim": "#dfc566", "surface-container": "#f1edec", "on-tertiary-container": "#4c3e00", "on-tertiary-fixed-variant": "#544600", "on-secondary": "#ffffff", "secondary-fixed": "#e2dfff", "secondary-container": "#655dfb", "on-surface": "#1c1b1b", "on-primary-container": "#ffcebc"}, borderRadius: {DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px"}, spacing: {sm: "8px", lg: "24px", "container-max": "1440px", xs: "4px", md: "16px", base: "8px", xl: "32px", gutter: "16px", margin: "20px", unit: "4px"}, fontFamily: {h3: ["Space Grotesk"], button: ["Space Grotesk"], "body-lg": ["Be Vietnam Pro"], "label-caps": ["Space Grotesk"], h1: ["Space Grotesk"], "body-md": ["Be Vietnam Pro"], h2: ["Space Grotesk"], "headline-xl": ["Plus Jakarta Sans"], "label-bold": ["Be Vietnam Pro"], "label-sm": ["Be Vietnam Pro"], "headline-md": ["Plus Jakarta Sans"], "headline-lg": ["Plus Jakarta Sans"]}, fontSize: {h3: ["32px", {lineHeight: "1.2", fontWeight: "600"}], button: ["16px", {lineHeight: "1.0", fontWeight: "600"}], "body-lg": ["18px", {lineHeight: "28px", fontWeight: "400"}], "label-caps": ["14px", {lineHeight: "1.2", letterSpacing: "0.05em", fontWeight: "700"}], h1: ["64px", {lineHeight: "1.1", letterSpacing: "-0.02em", fontWeight: "700"}], "body-md": ["16px", {lineHeight: "24px", fontWeight: "400"}], h2: ["48px", {lineHeight: "1.2", letterSpacing: "-0.01em", fontWeight: "700"}], "headline-xl": ["40px", {lineHeight: "48px", letterSpacing: "-0.02em", fontWeight: "800"}], "label-bold": ["14px", {lineHeight: "20px", fontWeight: "700"}], "label-sm": ["12px", {lineHeight: "16px", fontWeight: "500"}], "headline-md": ["24px", {lineHeight: "30px", fontWeight: "700"}], "headline-lg": ["32px", {lineHeight: "38px", letterSpacing: "-0.01em", fontWeight: "800"}]}}}};</script>
+<style>
+        .halftone-bg {
+            background-image: radial-gradient(theme('colors.on-surface') 10%, transparent 10%);
+            background-size: 8px 8px;
+            opacity: 0.05;
+        }
+        .btn-plump {
+            transition: all 0.1s ease;
+        }
+        .btn-plump:hover {
+            transform: translate(2px, 2px);
+            box-shadow: none !important;
+        }
+        .hard-drop {
+            box-shadow: 4px 4px 0px 0px rgba(0,0,0,1);
+        }
+        .hard-drop-lg {
+            box-shadow: 8px 8px 0px 0px rgba(0,0,0,1);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen flex flex-col font-body-md overflow-x-hidden">
+<!-- TopAppBar -->
+<header class="flex justify-between items-center w-full px-8 h-20 z-50 docked full-width top-0 border-b-2 bg-slate-950 border-slate-800 shadow-[0px_4px_0px_0px_rgba(0,0,0,1)] sticky">
+<div class="flex items-center gap-8">
+<div class="text-2xl font-black text-yellow-400 italic border-2 border-yellow-400 px-3 py-1 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                Retro-Modern Web3 Play
+            </div>
+<nav class="hidden md:flex gap-6">
+<a class="font-['Space_Grotesk'] uppercase tracking-tighter font-bold text-yellow-400 border-b-4 border-yellow-400 pb-1 hover:text-yellow-300 hover:bg-slate-900 active:translate-y-1 active:shadow-none transition-all duration-100" href="#">Lobby</a>
+<a class="font-['Space_Grotesk'] uppercase tracking-tighter font-bold text-slate-400 font-medium hover:text-yellow-300 hover:bg-slate-900 active:translate-y-1 active:shadow-none transition-all duration-100" href="#">Tables</a>
+<a class="font-['Space_Grotesk'] uppercase tracking-tighter font-bold text-slate-400 font-medium hover:text-yellow-300 hover:bg-slate-900 active:translate-y-1 active:shadow-none transition-all duration-100" href="#">Predictions</a>
+<a class="font-['Space_Grotesk'] uppercase tracking-tighter font-bold text-slate-400 font-medium hover:text-yellow-300 hover:bg-slate-900 active:translate-y-1 active:shadow-none transition-all duration-100" href="#">Wallet</a>
+<a class="font-['Space_Grotesk'] uppercase tracking-tighter font-bold text-slate-400 font-medium hover:text-yellow-300 hover:bg-slate-900 active:translate-y-1 active:shadow-none transition-all duration-100" href="#">Fairness</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex gap-2">
+<button class="text-slate-400 hover:text-yellow-300 p-2">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-slate-400 hover:text-yellow-300 p-2">
+<span class="material-symbols-outlined">settings</span>
+</button>
+</div>
+<button class="bg-primary-container text-on-primary-container font-button px-6 py-2 border-2 border-black hard-drop btn-plump rounded-full">
+                Connect Wallet
+            </button>
+</div>
+</header>
+<div class="flex flex-1">
+<!-- SideNavBar -->
+<nav class="hidden md:flex fixed left-0 top-20 h-[calc(100vh-5rem)] flex flex-col p-4 z-40 bg-slate-900 border-r-2 border-slate-800 shadow-[4px_0px_0px_0px_rgba(0,0,0,1)] w-64 rounded-none">
+<div class="mb-8 px-3">
+<h2 class="text-slate-100 font-h3 text-h3 mb-1">Player Hub</h2>
+<p class="text-primary-container font-label-caps text-label-caps">Legendary Rank</p>
+</div>
+<div class="flex flex-col gap-2 flex-1">
+<a class="font-['Space_Grotesk'] text-sm font-bold uppercase flex items-center gap-4 bg-yellow-400 text-black p-3 rounded-lg border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined">group</span>
+                    Social
+                </a>
+<a class="font-['Space_Grotesk'] text-sm font-bold uppercase flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined">military_tech</span>
+                    Missions
+                </a>
+<a class="font-['Space_Grotesk'] text-sm font-bold uppercase flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined">leaderboard</span>
+                    Leaderboard
+                </a>
+<a class="font-['Space_Grotesk'] text-sm font-bold uppercase flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined">psychology</span>
+                    Strategy
+                </a>
+<a class="font-['Space_Grotesk'] text-sm font-bold uppercase flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined">help_center</span>
+                    Support
+                </a>
+</div>
+<div class="mt-auto pt-8 border-t-2 border-slate-800 flex flex-col gap-2 mb-4">
+<a class="font-['Space_Grotesk'] text-sm font-bold uppercase flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined">verified_user</span>
+                    Audit Log
+                </a>
+<a class="font-['Space_Grotesk'] text-sm font-bold uppercase flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined">enhanced_encryption</span>
+                    Security
+                </a>
+</div>
+<button class="w-full bg-secondary text-on-secondary-fixed font-button text-button py-3 border-2 border-black hard-drop btn-plump rounded-full mt-4">
+                Daily Spin
+            </button>
+</nav>
+<!-- Main Content Canvas -->
+<main class="flex-1 md:ml-64 p-8 relative">
+<div class="absolute inset-0 halftone-bg pointer-events-none z-0"></div>
+<div class="max-w-container-max mx-auto relative z-10">
+<!-- Hero Section -->
+<section class="mb-16 relative bg-surface-container rounded-xl border-2 border-outline-variant overflow-hidden flex flex-col lg:flex-row items-center hard-drop-lg">
+<div class="p-12 lg:w-1/2 z-10">
+<span class="inline-block px-4 py-1 bg-primary-container text-on-primary-fixed font-label-caps text-label-caps rounded-full border-2 border-black mb-6 hard-drop">NEW SEASON LIVE</span>
+<h1 class="font-h1 text-h1 text-on-background mb-6 leading-tight">DOMINATE THE DECK.</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant mb-8 max-w-md">Experience provably fair gaming with a retro-pop twist. Play, predict, and earn in the most vibrant Web3 casino.</p>
+<div class="flex gap-4">
+<button class="bg-primary-container text-on-primary-container font-button text-button px-8 py-4 border-2 border-black hard-drop btn-plump rounded-full text-lg">
+                                Play Now
+                            </button>
+<button class="bg-surface-bright text-on-surface font-button text-button px-8 py-4 border-2 border-outline-variant hover:border-primary-container transition-colors rounded-full text-lg">
+                                View Markets
+                            </button>
+</div>
+</div>
+<div class="lg:w-1/2 h-full min-h-[400px] relative">
+<img alt="Hero Illustration" class="absolute inset-0 w-full h-full object-cover border-l-2 border-outline-variant" data-alt="A highly stylized, flat vector illustration of stylized playing cards floating in mid-air against a vibrant, deep purple background with a comic-book style halftone pattern. The cards feature thick black outlines, neon pink and gold accents, and a retro-pop digital aesthetic. The lighting is bright and flat, emphasizing the 2D graphic novel style. The mood is energetic, playful, and premium, perfectly matching a high-end Web3 gaming platform." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDjKxzjgoM6DWxRbiB3lN_7a9MGIDQZCKbXTEftkogqDxkc-KudF6MHRQaJnbtr9jbT6me-BJ12yK6ThJcfYjNKimFrnUnCtmgMnyVxb-mLsLDewgyHv2wZDGSS83gT6bncfaNHVytPjO5HjVe2RTJQ7YALC61wjm3BNDkBfhXfLANUeJwRvyaSFbHSFhChK7ThrZ2OhJwL1JXqcu8sm0l28PkbKzCm-bQpIHZnGrSbzkimkJXKlfYCh1uroUPLEMKpKNRsp2kNEbVL"/>
+</div>
+</section>
+<!-- Featured Games Bento Grid -->
+<section class="mb-16">
+<h2 class="font-h2 text-h2 text-on-background mb-8 flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-container text-4xl" style="font-variation-settings: 'FILL' 1;">casino</span>
+                        Featured Tables
+                    </h2>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+<!-- Game Card 1 -->
+<div class="bg-surface-container-high rounded-xl border-2 border-outline-variant p-6 hard-drop hover:-translate-y-1 transition-transform relative overflow-hidden group">
+<div class="absolute inset-0 bg-secondary opacity-0 group-hover:opacity-10 transition-opacity"></div>
+<div class="flex justify-between items-start mb-12 relative z-10">
+<h3 class="font-h3 text-h3 text-on-background">Blackjack</h3>
+<span class="bg-surface-dim text-secondary px-3 py-1 rounded-full text-xs font-bold border border-secondary">LIVE</span>
+</div>
+<div class="mt-auto relative z-10">
+<p class="text-on-surface-variant font-body-md mb-4">Min Bet: 0.01 ETH</p>
+<button class="w-full bg-surface-bright text-on-surface border-2 border-outline-variant font-button py-2 rounded-full hover:border-primary-container transition-colors">Join Table</button>
+</div>
+</div>
+<!-- Game Card 2 -->
+<div class="bg-surface-container-high rounded-xl border-2 border-outline-variant p-6 hard-drop hover:-translate-y-1 transition-transform relative overflow-hidden group lg:col-span-2 bg-[url('https://images.unsplash.com/photo-1541278107931-e006523892df?q=80&amp;w=2940&amp;auto=format&amp;fit=crop')] bg-cover bg-center" data-alt="A stylized flat vector graphic representing a Texas Hold'em poker table seen from a top-down perspective. The table felt is a rich, deep blue with thick black outlines and gold trim. Vector chips and cards are scattered playfully. The overall aesthetic is retro-pop digital, with no photorealistic elements, relying on solid colors, hard shadows, and halftone textures to convey a premium club atmosphere.">
+<div class="absolute inset-0 bg-background/80 group-hover:bg-background/60 transition-colors"></div>
+<div class="relative z-10 h-full flex flex-col justify-between">
+<div class="flex justify-between items-start mb-12">
+<div>
+<h3 class="font-h3 text-h3 text-on-background">Texas Hold'em</h3>
+<p class="text-primary-container font-label-caps mt-1">Tournament Active</p>
+</div>
+<span class="bg-surface-dim text-secondary px-3 py-1 rounded-full text-xs font-bold border border-secondary">324 Players</span>
+</div>
+<div class="mt-auto flex gap-4 items-center">
+<div class="flex -space-x-4">
+<div class="w-10 h-10 rounded-full bg-surface-container border-2 border-black hard-drop flex items-center justify-center text-xs font-bold bg-primary text-black">A</div>
+<div class="w-10 h-10 rounded-full bg-surface-container border-2 border-black hard-drop flex items-center justify-center text-xs font-bold bg-secondary text-black">B</div>
+<div class="w-10 h-10 rounded-full bg-surface-container border-2 border-black hard-drop flex items-center justify-center text-xs font-bold bg-tertiary-container text-black">C</div>
+</div>
+<button class="ml-auto bg-primary-container text-black font-button py-2 px-6 rounded-full border-2 border-black hard-drop btn-plump">Enter Lobby</button>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Stats Dashboard & Markets -->
+<section class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-16">
+<!-- Stats -->
+<div class="col-span-1 flex flex-col gap-6">
+<div class="bg-surface-container-high rounded-xl border-2 border-outline-variant p-6 hard-drop">
+<h4 class="font-label-caps text-label-caps text-on-surface-variant mb-2 uppercase">Global Volume (24h)</h4>
+<p class="font-h2 text-h2 text-primary-container">$2.4M</p>
+<div class="mt-4 h-4 bg-surface-container border-2 border-black rounded-full overflow-hidden w-full flex">
+<div class="w-[70%] bg-primary-container h-full border-r-2 border-black"></div>
+</div>
+</div>
+<div class="bg-surface-container-high rounded-xl border-2 border-outline-variant p-6 hard-drop">
+<h4 class="font-label-caps text-label-caps text-on-surface-variant mb-2 uppercase">Active Players</h4>
+<p class="font-h2 text-h2 text-secondary">14,203</p>
+<p class="text-sm text-green-400 mt-2 font-bold">+12% from yesterday</p>
+</div>
+</div>
+<!-- Prediction Markets Widget -->
+<div class="col-span-1 lg:col-span-2 bg-surface-container rounded-xl border-2 border-outline-variant p-8 hard-drop-lg relative overflow-hidden">
+<div class="absolute -right-10 -top-10 text-9xl text-surface-container-high opacity-50 rotate-12 pointer-events-none">
+<span class="material-symbols-outlined" style="font-size: inherit;">query_stats</span>
+</div>
+<h3 class="font-h3 text-h3 text-on-background mb-6 relative z-10">Trending Predictions</h3>
+<div class="space-y-4 relative z-10">
+<!-- Market Item -->
+<div class="bg-surface-dim border-2 border-outline-variant rounded-lg p-4 flex flex-col sm:flex-row justify-between items-center gap-4 hover:border-secondary transition-colors">
+<div>
+<p class="font-bold text-on-background">ETH to hit $4k by Friday?</p>
+<p class="text-sm text-on-surface-variant mt-1">Pool: $124,500</p>
+</div>
+<div class="flex gap-2 w-full sm:w-auto">
+<button class="flex-1 sm:flex-none bg-surface-bright hover:bg-green-900/30 text-green-400 border-2 border-green-900/50 px-4 py-2 rounded font-bold transition-colors">YES 64%</button>
+<button class="flex-1 sm:flex-none bg-surface-bright hover:bg-red-900/30 text-red-400 border-2 border-red-900/50 px-4 py-2 rounded font-bold transition-colors">NO 36%</button>
+</div>
+</div>
+<!-- Market Item -->
+<div class="bg-surface-dim border-2 border-outline-variant rounded-lg p-4 flex flex-col sm:flex-row justify-between items-center gap-4 hover:border-secondary transition-colors">
+<div>
+<p class="font-bold text-on-background">Will Team Liquid win the major?</p>
+<p class="text-sm text-on-surface-variant mt-1">Pool: $89,200</p>
+</div>
+<div class="flex gap-2 w-full sm:w-auto">
+<button class="flex-1 sm:flex-none bg-surface-bright hover:bg-green-900/30 text-green-400 border-2 border-green-900/50 px-4 py-2 rounded font-bold transition-colors">YES 42%</button>
+<button class="flex-1 sm:flex-none bg-surface-bright hover:bg-red-900/30 text-red-400 border-2 border-red-900/50 px-4 py-2 rounded font-bold transition-colors">NO 58%</button>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Rewards Highlight Bar -->
+<section class="bg-surface-container-highest border-y-2 border-outline-variant py-4 px-8 flex items-center gap-8 overflow-x-auto whitespace-nowrap mb-16 shadow-[0px_4px_0px_0px_rgba(0,0,0,1)]">
+<span class="font-label-caps text-secondary uppercase font-bold flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">campaign</span>
+                        Recent Winners
+                    </span>
+<div class="w-px h-6 bg-outline-variant"></div>
+<p class="text-on-background"><span class="font-bold text-primary-container">0x7F...3a1</span> won <span class="font-bold text-green-400">2.4 ETH</span> on Blackjack</p>
+<div class="w-2 h-2 rounded-full bg-outline-variant"></div>
+<p class="text-on-background"><span class="font-bold text-primary-container">Player404</span> hit jackpot <span class="font-bold text-green-400">1,200 USDC</span></p>
+<div class="w-2 h-2 rounded-full bg-outline-variant"></div>
+<p class="text-on-background"><span class="font-bold text-primary-container">CryptoKing</span> predicted <span class="font-bold text-green-400">0.8 ETH</span></p>
+</section>
+</div>
+</main>
+</div>
+<!-- Footer -->
+<footer class="w-full py-12 px-8 flex flex-col md:flex-row justify-between items-center gap-8 full-width border-t-2 bg-slate-950 border-slate-800 flat no shadows z-50">
+<div class="text-lg text-yellow-400 font-black italic">
+            Retro-Modern Web3 Play
+        </div>
+<div class="flex flex-wrap justify-center gap-6">
+<a class="font-['Space_Grotesk'] text-xs font-black uppercase tracking-widest text-slate-500 hover:text-yellow-400 transition-colors underline-offset-4 hover:underline" href="#">Whitepaper</a>
+<a class="font-['Space_Grotesk'] text-xs font-black uppercase tracking-widest text-slate-500 hover:text-yellow-400 transition-colors underline-offset-4 hover:underline" href="#">Tokenomics</a>
+<a class="font-['Space_Grotesk'] text-xs font-black uppercase tracking-widest text-slate-500 hover:text-yellow-400 transition-colors underline-offset-4 hover:underline" href="#">Audit Report</a>
+<a class="font-['Space_Grotesk'] text-xs font-black uppercase tracking-widest text-slate-500 hover:text-yellow-400 transition-colors underline-offset-4 hover:underline" href="#">Privacy</a>
+<a class="font-['Space_Grotesk'] text-xs font-black uppercase tracking-widest text-slate-500 hover:text-yellow-400 transition-colors underline-offset-4 hover:underline" href="#">Terms</a>
+</div>
+<div class="font-['Space_Grotesk'] text-xs font-black uppercase tracking-widest text-slate-500">
+            © 2024 RETRO-MODERN WEB3 PLAY. PROVABLY FAIR.
+        </div>
+</footer>
+</body></html>

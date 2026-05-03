@@ -1,14 +1,9 @@
 import type { ReactNode } from 'react';
-import Link from 'next/link';
 import { redirect } from "next/navigation";
 
-import { LocaleSwitcher } from '@/components/locale-switcher';
-import { LogoutForm } from '@/components/logout-form';
-import { buttonVariants } from '@/components/ui/button';
 import { getServerTranslations } from '@/lib/i18n/server';
-import { cn } from '@/lib/utils';
+import { AppShellFrame } from '@/modules/app/components/app-shell-frame';
 import { CurrentSessionProvider } from '@/modules/app/components/current-session-provider';
-import { NotificationsBell } from '@/modules/app/components/notifications-bell';
 import { requireCurrentUserSession } from '@/modules/app/server/current-session';
 
 export default async function ProtectedAppLayout({
@@ -19,62 +14,63 @@ export default async function ProtectedAppLayout({
   if (currentSession.legal.requiresAcceptance) {
     redirect("/legal");
   }
-  const navItems = [
-    { href: '/app', label: t('common.dashboard') },
-    { href: '/app/rewards', label: t('app.navRewards') },
-    { href: '/app/wallet', label: t('app.navWallet') },
-    { href: '/app/verification', label: 'KYC' },
-    { href: '/app/security', label: t('app.navSecurity') },
-    { href: '/app/notifications', label: t('app.navNotifications') },
-    { href: '/app/community', label: t('app.navCommunity') },
-    { href: '/app/markets', label: t('app.navMarkets') },
-    { href: '/app/slot', label: t('app.navGacha') },
-    { href: '/app/quick-eight', label: t('app.navQuickEight') },
-    { href: '/app/holdem', label: t('app.navHoldem') },
-    { href: '/app/blackjack', label: t('app.navBlackjack') },
-    { href: '/app/fairness', label: t('app.navFairness') },
+  const topNav = [
+    { href: '/app', label: t('common.dashboard'), icon: 'dashboard' as const, match: 'exact' as const },
+    {
+      href: '/app/holdem',
+      label: 'Tables',
+      icon: 'tables' as const,
+      prefixes: ['/app/holdem', '/app/blackjack', '/app/slot', '/app/quick-eight'],
+    },
+    { href: '/app/markets', label: t('app.navMarkets'), icon: 'markets' as const, match: 'prefix' as const },
+    { href: '/app/wallet', label: t('app.navWallet'), icon: 'wallet' as const, match: 'prefix' as const },
+    { href: '/app/fairness', label: t('app.navFairness'), icon: 'fairness' as const, match: 'prefix' as const },
+  ];
+  const railPrimary = [
+    { href: '/app/community', label: t('app.navCommunity'), icon: 'community' as const },
+    { href: '/app/rewards', label: t('app.navRewards'), icon: 'rewards' as const },
+    { href: '/app/notifications', label: t('app.navNotifications'), icon: 'notifications' as const },
+    { href: '/app/markets/portfolio', label: 'Portfolio', icon: 'portfolio' as const },
+  ];
+  const railSecondary = [
+    { href: '/app/profile', label: t('app.navProfile'), icon: 'profile' as const },
+    { href: '/app/security', label: t('app.navSecurity'), icon: 'security' as const },
+    { href: '/app/verification', label: 'KYC', icon: 'kyc' as const },
+  ];
+  const mobileTabs = [
+    { href: '/app', label: t('app.navHome'), icon: 'home' as const, match: 'exact' as const },
+    { href: '/app/markets', label: t('app.navMarkets'), icon: 'markets' as const, match: 'prefix' as const },
+    {
+      href: '/app/holdem',
+      label: t('app.navGames'),
+      icon: 'games' as const,
+      prefixes: ['/app/holdem', '/app/blackjack', '/app/slot', '/app/quick-eight', '/app/gacha'],
+    },
+    { href: '/app/community', label: t('app.navCommunity'), icon: 'community' as const, match: 'prefix' as const },
+    {
+      href: '/app/profile',
+      label: t('app.navProfile'),
+      icon: 'profile' as const,
+      prefixes: ['/app/profile', '/app/security', '/app/wallet', '/app/rewards', '/app/verification', '/app/notifications', '/app/payments'],
+    },
   ];
 
   return (
     <CurrentSessionProvider value={currentSession}>
-      <main className="min-h-app-screen bg-slate-950 text-slate-100">
-        <div className="page-safe-x page-safe-y mx-auto flex w-full max-w-7xl flex-col gap-6">
-          <header className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 shadow-[0_24px_80px_rgba(15,23,42,0.35)]">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-              <div className="min-w-0 space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-200/75">
-                  {t('app.shellTitle')}
-                </p>
-                <p className="break-all text-sm text-slate-400 sm:break-normal">
-                  {t('app.signedInAs', { email: currentSession.user.email })}
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {navItems.map((item) => (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={cn(
-                        buttonVariants({ variant: 'ghost', size: 'sm' }),
-                        'rounded-full border border-white/10 bg-white/[0.03] text-slate-200 hover:bg-white/[0.08] hover:text-white'
-                      )}
-                    >
-                      {item.label}
-                    </Link>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3">
-                <NotificationsBell />
-                <LocaleSwitcher />
-                <LogoutForm label={t('common.signOut')} />
-              </div>
-            </div>
-          </header>
-
-          {children as ReactNode}
-        </div>
-      </main>
+      <AppShellFrame
+        currentSession={currentSession}
+        brandLabel={t('marketing.nav.brand')}
+        shellTitle={t('app.shellTitle')}
+        signedInAsLabel={t('app.signedInAs', { email: currentSession.user.email })}
+        dailySpinLabel="Daily Spin"
+        signOutLabel={t('common.signOut')}
+        topNav={topNav}
+        railPrimary={railPrimary}
+        railSecondary={railSecondary}
+        mobileTabs={mobileTabs}
+      >
+        {children as ReactNode}
+      </AppShellFrame>
     </CurrentSessionProvider>
   );
 }

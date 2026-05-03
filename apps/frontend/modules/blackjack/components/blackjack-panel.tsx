@@ -103,6 +103,13 @@ const copy = {
     dealerFeedEmpty: "The dealer will narrate the hand here once the cards are moving.",
     dealerAiTag: "AI",
     dealerRuleTag: "Rule",
+    potentialReturn: "Potential return",
+    splitHands: "Split hands",
+    tableRulesTitle: "Table rules",
+    stageTitle: "Table view",
+    stakeDockTitle: "Seat the next hand",
+    stageHint:
+      "Set the stake, review the table rules, then open the next hand from the dock below.",
   },
   "zh-CN": {
     title: "二十一点",
@@ -155,6 +162,12 @@ const copy = {
     dealerFeedEmpty: "发牌后，智能荷官会在这里播报动作、节奏和简短解说。",
     dealerAiTag: "AI",
     dealerRuleTag: "规则",
+    potentialReturn: "潜在回报",
+    splitHands: "分牌手牌",
+    tableRulesTitle: "牌桌规则",
+    stageTitle: "牌桌视图",
+    stakeDockTitle: "开启下一手",
+    stageHint: "先设置下注、查看牌桌规则，再从下方控制坞发起下一手牌局。",
   },
 } as const;
 
@@ -274,18 +287,66 @@ const playerHandTone = {
   push: "border-amber-300/30 bg-amber-300/10 text-amber-100",
 } as const;
 
-function CardFace(props: { card: BlackjackCardView; hiddenLabel: string }) {
+function getActionLabel(
+  locale: keyof typeof copy,
+  action: BlackjackAction,
+) {
+  const c = copy[locale];
+  return action === "hit"
+    ? c.hit
+    : action === "stand"
+      ? c.stand
+      : action === "double"
+        ? c.double
+        : c.split;
+}
+
+function getActionTone(action: BlackjackAction) {
+  switch (action) {
+    case "stand":
+      return "border-[var(--retro-ink)] bg-[#ffd7d2] text-[var(--retro-ink)] hover:bg-[#ffc5bd]";
+    case "hit":
+      return "border-[var(--retro-ink)] bg-[var(--retro-orange)] text-[var(--retro-ivory)] hover:bg-[var(--retro-orange-soft)]";
+    case "split":
+      return "border-[var(--retro-ink)] bg-[#a6a1ff] text-[var(--retro-ivory)] hover:bg-[#928cff]";
+    case "double":
+      return "border-[var(--retro-ink)] bg-[rgba(255,255,255,0.92)] text-[var(--retro-orange)] hover:bg-white";
+    default:
+      return "border-[var(--retro-ink)] bg-white text-[var(--retro-ink)]";
+  }
+}
+
+function formatProjectedReturn(
+  stakeAmount: string,
+  multiplier: string,
+) {
+  const stake = Number(stakeAmount);
+  const payoutMultiplier = Number(multiplier);
+
+  if (!Number.isFinite(stake) || !Number.isFinite(payoutMultiplier)) {
+    return "0.00";
+  }
+
+  return (stake * payoutMultiplier).toFixed(2);
+}
+
+function CardFace(props: {
+  card: BlackjackCardView;
+  hiddenLabel: string;
+  className?: string;
+}) {
   const hidden = props.card.hidden || !props.card.rank || !props.card.suit;
   const suit = props.card.suit ? suitSymbols[props.card.suit] : "•";
 
   return (
     <div
       className={cn(
-        "flex h-24 w-16 flex-col justify-between rounded-2xl border p-3 text-left shadow-[0_12px_28px_rgba(15,23,42,0.24)]",
+        "flex h-36 w-24 flex-col justify-between rounded-[1.35rem] border-2 p-3 text-left shadow-[6px_6px_0px_0px_rgba(15,17,31,0.32)]",
         hidden
-          ? "border-slate-700 bg-slate-900 text-slate-500"
-          : "border-slate-700 bg-white text-slate-950",
+          ? "border-[#202745] bg-[linear-gradient(180deg,rgba(17,23,45,0.98),rgba(9,11,27,1))] text-slate-500"
+          : "border-[var(--retro-ink)] bg-[var(--retro-ivory)] text-slate-950",
         !hidden && isRedSuit(props.card) ? "text-rose-600" : null,
+        props.className,
       )}
     >
       {hidden ? (
@@ -294,45 +355,116 @@ function CardFace(props: { card: BlackjackCardView; hiddenLabel: string }) {
         </div>
       ) : (
         <>
-          <span className="text-sm font-bold">{props.card.rank}</span>
-          <span className="self-end text-lg">{suit}</span>
+          <span className="text-xl font-bold leading-none">{props.card.rank}</span>
+          <span className="self-end text-2xl">{suit}</span>
         </>
       )}
     </div>
   );
 }
 
-function HandBlock(props: {
-  locale: keyof typeof copy;
+function cardRotation(index: number, total: number, reversed = false) {
+  const midpoint = (total - 1) / 2;
+  const direction = reversed ? -1 : 1;
+  return (index - midpoint) * 7 * direction;
+}
+
+function TableCardFan(props: {
+  cards: BlackjackCardView[];
+  hiddenLabel: string;
+  reversed?: boolean;
+}) {
+  return (
+    <div className="flex min-h-[12rem] items-end justify-center">
+      {props.cards.map((card, index) => (
+        <div
+          key={`${card.rank ?? "hidden"}-${card.suit ?? "unknown"}-${index}`}
+          className={cn("relative", index === 0 ? "" : "-ml-7")}
+          style={{
+            transform: `rotate(${cardRotation(index, props.cards.length, props.reversed)}deg) translateY(${Math.abs(
+              cardRotation(index, props.cards.length, props.reversed),
+            ) * 0.6}px)`,
+            zIndex: index + 1,
+          }}
+        >
+          <CardFace card={card} hiddenLabel={props.hiddenLabel} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TableScorePill(props: {
   label: string;
-  hand: BlackjackGame["dealerHand"];
+  scoreLabel: string;
+  scoreValue: string | number;
+  accent: "dealer" | "player";
+}) {
+  return (
+    <div
+      className={cn(
+        "inline-flex items-center gap-3 rounded-full border-2 px-6 py-2 shadow-[6px_6px_0px_0px_rgba(15,17,31,0.28)]",
+        props.accent === "player"
+          ? "border-[var(--retro-ink)] bg-[var(--retro-orange)] text-[var(--retro-ivory)]"
+          : "border-[var(--retro-ink)] bg-[rgba(255,255,255,0.92)] text-[var(--retro-ink)]",
+      )}
+    >
+      <span className="text-[1.45rem] font-semibold uppercase tracking-[0.14em]">
+        {props.label}
+      </span>
+      <span
+        className={cn(
+          "grid min-h-[2.75rem] min-w-[2.75rem] place-items-center rounded-full border-2 px-3 text-lg font-semibold",
+          props.accent === "player"
+            ? "border-[var(--retro-ink)] bg-[rgba(255,255,255,0.92)] text-[var(--retro-orange)]"
+            : "border-[rgba(184,75,9,0.24)] bg-[#ffe6dd] text-[var(--retro-orange)]",
+        )}
+      >
+        {props.scoreValue}
+      </span>
+      <span className="sr-only">
+        {props.scoreLabel}: {props.scoreValue}
+      </span>
+    </div>
+  );
+}
+
+function TableStatusRibbon(props: {
+  locale: keyof typeof copy;
+  game: BlackjackGame;
 }) {
   const c = copy[props.locale];
-  const totalLabel = props.hand.total === null ? c.visibleTotal : c.total;
-  const totalValue = props.hand.total ?? props.hand.visibleTotal ?? "—";
 
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-medium text-slate-100">{props.label}</p>
-        <span className="rounded-full border border-slate-700 px-3 py-1 text-xs font-medium text-slate-300">
-          {totalLabel}: {totalValue}
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.2rem] border border-[rgba(15,17,31,0.14)] bg-white/74 px-4 py-3 text-sm text-[rgba(15,17,31,0.68)]">
+      <div className="flex flex-wrap items-center gap-2">
+        <span
+          className={cn(
+            "rounded-full border px-3 py-1 text-xs font-semibold",
+            statusTone[props.game.status],
+          )}
+        >
+          {getStatusLabel(props.locale, props.game.status)}
         </span>
+        {props.game.linkedGroup ? (
+          <span className="rounded-full border border-[rgba(15,17,31,0.12)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[rgba(15,17,31,0.56)]">
+            {c.hand} {props.game.linkedGroup.executionIndex}/{props.game.linkedGroup.executionCount}
+          </span>
+        ) : null}
       </div>
-      <div className="mt-4 flex flex-wrap gap-3">
-        {props.hand.cards.map((card, index) => (
-          <CardFace
-            key={`${card.rank ?? "hidden"}-${card.suit ?? "unknown"}-${index}`}
-            card={card}
-            hiddenLabel={c.hidden}
-          />
-        ))}
+      <div className="flex flex-wrap items-center gap-3 text-xs font-semibold uppercase tracking-[0.16em] text-[rgba(15,17,31,0.48)]">
+        <span>
+          {c.tableId}: {props.game.table.tableId}
+        </span>
+        <span>
+          {c.currentBet}: {formatAmount(props.game.totalStake)}
+        </span>
       </div>
     </div>
   );
 }
 
-function PlayerHandBlock(props: {
+function SplitHandSummary(props: {
   locale: keyof typeof copy;
   hand: BlackjackGame["playerHands"][number];
 }) {
@@ -342,10 +474,10 @@ function PlayerHandBlock(props: {
   return (
     <div
       className={cn(
-        "rounded-2xl border p-4 transition-colors",
+        "rounded-[1.4rem] border-2 p-4 transition-colors",
         props.hand.active
-          ? "border-cyan-400/45 bg-cyan-400/10"
-          : "border-slate-800 bg-slate-900/70",
+          ? "border-[var(--retro-gold)] bg-[rgba(255,213,61,0.08)] shadow-[4px_4px_0px_0px_rgba(15,17,31,0.45)]"
+          : "border-[#202745] bg-[rgba(7,10,23,0.72)]",
       )}
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -362,12 +494,12 @@ function PlayerHandBlock(props: {
             >
               {getPlayerHandStateLabel(props.locale, props.hand.state)}
             </span>
-            <span className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300">
+            <span className="rounded-full border-2 border-[#202745] bg-[rgba(9,11,27,0.58)] px-3 py-1 text-xs text-slate-200">
               {c.currentBet}: {formatAmount(props.hand.stakeAmount)}
             </span>
           </div>
         </div>
-        <span className="rounded-full border border-slate-700 px-3 py-1 text-xs font-medium text-slate-300">
+        <span className="rounded-full border-2 border-[#202745] bg-[rgba(9,11,27,0.58)] px-3 py-1 text-xs font-medium text-slate-200">
           {c.total}: {totalValue}
         </span>
       </div>
@@ -377,6 +509,7 @@ function PlayerHandBlock(props: {
             key={`${props.hand.index}-${card.rank ?? "hidden"}-${card.suit ?? "unknown"}-${index}`}
             card={card}
             hiddenLabel={c.hidden}
+            className="h-28 w-20 rounded-[1.15rem] text-base shadow-[4px_4px_0px_0px_rgba(15,17,31,0.24)]"
           />
         ))}
       </div>
@@ -406,7 +539,7 @@ function TableBlock(props: {
   const c = copy[props.locale];
 
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+    <div className="retro-panel-dark rounded-[1.45rem] border-none p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <p className="text-sm font-medium text-slate-100">{c.tableTitle}</p>
@@ -519,6 +652,12 @@ export function BlackjackPanel({
       numericStake * (overview?.playMode.appliedMultiplier ?? 1)
     ).toFixed(2);
   })();
+  const projectedStakeReturn = effectiveStakePreview
+    ? formatProjectedReturn(
+        effectiveStakePreview,
+        currentConfig.winPayoutMultiplier,
+      )
+    : null;
 
   async function refreshOverview() {
     const response = await browserUserApiClient.getBlackjackOverview();
@@ -667,258 +806,468 @@ export function BlackjackPanel({
   }
 
   return (
-    <Card className="border-slate-800 bg-slate-950/90 text-slate-100 shadow-[0_24px_80px_rgba(15,23,42,0.45)]">
-      <CardHeader className="space-y-4">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="space-y-2">
-            <CardTitle className="text-xl">{c.title}</CardTitle>
-            <CardDescription className="max-w-2xl text-slate-400">
-              {c.description}
-            </CardDescription>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-sm font-medium text-emerald-200">
-              {c.balance}: {formatAmount(overview?.balance ?? "0")}
-            </span>
-            {overview ? (
-              <span className="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1 text-sm text-slate-300">
-                {c.fairness}: {shortenCommitHash(overview.fairness.commitHash)}
-              </span>
-            ) : null}
-          </div>
-        </div>
+    <div className="space-y-6">
+      <Card className="overflow-hidden rounded-[1.95rem] border-none bg-transparent shadow-none">
+        <div className="relative overflow-hidden rounded-[1.95rem] border-2 border-[var(--retro-ink)] bg-[linear-gradient(180deg,rgba(253,249,244,0.98),rgba(244,238,231,0.98))] shadow-[8px_8px_0px_0px_rgba(15,17,31,0.94)]">
+          <div className="pointer-events-none absolute inset-0 retro-dot-overlay opacity-20" />
 
-        <div className="flex flex-wrap gap-2 text-xs">
-          <span className="rounded-full border border-slate-700 px-3 py-1 text-slate-300">
-            {c.minStake}: {currentConfig.minStake}
-          </span>
-          <span className="rounded-full border border-slate-700 px-3 py-1 text-slate-300">
-            {c.maxStake}: {currentConfig.maxStake}
-          </span>
-          <span className="rounded-full border border-slate-700 px-3 py-1 text-slate-300">
-            {c.natural}: {currentConfig.naturalPayoutMultiplier}x
-          </span>
-          <span className="rounded-full border border-slate-700 px-3 py-1 text-slate-300">
-            {c.dealerRule}:{" "}
-            {currentConfig.dealerHitsSoft17 ? c.hitSoft17 : c.standSoft17}
-          </span>
-          <span className="rounded-full border border-slate-700 px-3 py-1 text-slate-300">
-            {c.doubleRule}:{" "}
-            {formatToggle(locale, currentConfig.doubleDownAllowed)}
-          </span>
-          <span className="rounded-full border border-slate-700 px-3 py-1 text-slate-300">
-            {c.splitAcesRule}:{" "}
-            {formatToggle(locale, currentConfig.splitAcesAllowed)}
-          </span>
-          <span className="rounded-full border border-slate-700 px-3 py-1 text-slate-300">
-            {c.hitSplitAcesRule}:{" "}
-            {formatToggle(locale, currentConfig.hitSplitAcesAllowed)}
-          </span>
-          <span className="rounded-full border border-slate-700 px-3 py-1 text-slate-300">
-            {c.resplitRule}:{" "}
-            {formatToggle(locale, currentConfig.resplitAllowed)}
-          </span>
-          <span className="rounded-full border border-slate-700 px-3 py-1 text-slate-300">
-            {c.maxSplitHands}: {currentConfig.maxSplitHands}
-          </span>
-          <span className="rounded-full border border-slate-700 px-3 py-1 text-slate-300">
-            {c.tenValueSplitRule}:{" "}
-            {formatToggle(locale, currentConfig.splitTenValueCardsAllowed)}
-          </span>
-          <span className="rounded-full border border-slate-700 px-3 py-1 text-slate-300">
-            {c.singleHand}
-          </span>
-        </div>
-
-        <PlayModeSwitcher
-          gameKey="blackjack"
-          snapshot={overview?.playMode ?? null}
-          disabled={loading || disabled || activeGames.length > 0}
-          loading={updatingPlayMode}
-          onSelect={(type) => void handleChangePlayMode(type)}
-        />
-      </CardHeader>
-
-      <CardContent className="space-y-5">
-        {activeGames.length === 0 ? (
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-              <div className="max-w-xs flex-1 space-y-2">
-                <label className="text-sm font-medium text-slate-100">
-                  {c.stake}
-                </label>
-                <Input
-                  value={stakeAmount}
-                  onChange={(event) => setStakeAmount(event.target.value)}
-                  inputMode="decimal"
-                  placeholder={currentConfig.minStake}
-                  className="border-slate-700 bg-slate-950 text-slate-100"
-                />
-                <p className="text-xs text-slate-400">
-                  {c.minStake} {currentConfig.minStake} / {c.maxStake}{" "}
-                  {currentConfig.maxStake}
-                </p>
-                {effectiveStakePreview ? (
-                  <p className="text-xs text-emerald-300/90">
-                    {c.effectiveStake}: {effectiveStakePreview}
+          <CardHeader className="relative space-y-5 p-5 md:p-8">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="retro-panel flex items-center gap-4 rounded-[1.35rem] border-none px-4 py-4">
+                <div className="grid h-12 w-12 place-items-center rounded-full border-2 border-[var(--retro-ink)] bg-[var(--retro-orange)] text-xl font-black text-[var(--retro-ivory)]">
+                  $
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[rgba(15,17,31,0.56)]">
+                    {c.balance}
                   </p>
-                ) : null}
+                  <p className="text-2xl font-semibold text-[var(--retro-orange)]">
+                    {formatAmount(overview?.balance ?? "0")}
+                  </p>
+                </div>
               </div>
-              <Button
-                onClick={handleStart}
-                disabled={loading || disabled}
-                className="sm:min-w-[10rem]"
-              >
-                {actingAction?.action === "start" ? c.starting : c.start}
-              </Button>
-            </div>
-            <p className="mt-4 text-sm text-slate-400">{c.noActive}</p>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {activeGames.map((game) => (
-              <div
-                key={game.id}
-                className="space-y-4 rounded-3xl border border-slate-800 bg-slate-900/40 p-4"
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  {game.linkedGroup ? (
-                    <span className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300">
-                      {c.hand} {game.linkedGroup.executionIndex}/
-                      {game.linkedGroup.executionCount}
-                    </span>
-                  ) : null}
-                  <div
-                    className={cn(
-                      "inline-flex rounded-full border px-3 py-1 text-xs font-semibold",
-                      statusTone[game.status],
-                    )}
-                  >
-                    {getStatusLabel(locale, game.status)}
+
+              {overview ? (
+                <div className="retro-panel flex items-center gap-3 rounded-[1.35rem] border-none px-4 py-4">
+                  <div className="grid h-11 w-11 place-items-center rounded-full border border-[rgba(97,88,255,0.28)] bg-[rgba(97,88,255,0.14)] text-[var(--retro-violet)]">
+                    ◌
                   </div>
-                </div>
-
-                <TableBlock locale={locale} game={game} />
-
-                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
-                  <HandBlock
-                    locale={locale}
-                    label={c.dealer}
-                    hand={game.dealerHand}
-                  />
-                  <div className="space-y-4">
-                    {game.playerHands.map((hand) => (
-                      <PlayerHandBlock
-                        key={`${game.id}-${hand.index}`}
-                        locale={locale}
-                        hand={hand}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                {game.availableActions.length > 0 ? (
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-                    <p className="text-sm font-medium text-slate-100">
-                      {c.actions}
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[rgba(15,17,31,0.56)]">
+                      {c.fairness}
                     </p>
-                    <div className="mt-3 flex flex-wrap gap-3">
-                      {game.availableActions.map((action) => (
-                        <Button
-                          key={`${game.id}-${action}`}
-                          type="button"
-                          onClick={() => void handleAction(game.id, action)}
-                          disabled={loading || disabled}
-                          variant={action === "double" ? "outline" : "default"}
-                          className={
-                            action === "double"
-                              ? "border-slate-700 bg-slate-950 text-slate-100 hover:bg-slate-900"
-                              : undefined
-                          }
-                        >
-                          {actingAction?.gameId === game.id &&
-                          actingAction.action === action
-                            ? c.acting
-                            : action === "hit"
-                              ? c.hit
-                              : action === "stand"
-                                ? c.stand
-                                : action === "double"
-                                  ? c.double
-                                  : c.split}
-                        </Button>
-                      ))}
+                    <p className="text-sm font-medium text-[rgba(15,17,31,0.7)]">
+                      {shortenCommitHash(overview.fairness.commitHash)}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="space-y-2">
+              <CardTitle className="text-[2.7rem] leading-[0.94] tracking-[-0.05em] text-[var(--retro-ink)] md:text-[4.1rem]">
+                {c.title}
+              </CardTitle>
+              <CardDescription className="max-w-3xl text-base leading-7 text-[rgba(15,17,31,0.7)]">
+                {c.description}
+              </CardDescription>
+            </div>
+          </CardHeader>
+
+          <CardContent className="relative space-y-6 p-5 pt-0 md:p-8 md:pt-0">
+            {disabledReason ? (
+              <p className="rounded-[1rem] border-2 border-[var(--retro-gold)] bg-[#fff2bf] px-3 py-2 text-sm text-[var(--retro-ink)]">
+                {disabledReason}
+              </p>
+            ) : null}
+            {error ? (
+              <p className="rounded-[1rem] border-2 border-[var(--retro-red)] bg-[#ffebe6] px-3 py-2 text-sm text-[var(--retro-ink)]">
+                {error}
+              </p>
+            ) : null}
+
+            {activeGames.length === 0 ? (
+              <div className="space-y-5">
+                <div
+                  className="rounded-[1.85rem] border border-[rgba(15,17,31,0.14)] bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.94),rgba(247,240,233,0.98))] px-5 py-8 md:px-8 md:py-10"
+                  data-testid="blackjack-table-stage"
+                >
+                  <div className="flex min-h-[38rem] flex-col items-center justify-between">
+                    <div className="space-y-4 text-center">
+                      <TableScorePill
+                        label={c.dealer}
+                        scoreLabel={c.visibleTotal}
+                        scoreValue="?"
+                        accent="dealer"
+                      />
+                      <div className="flex min-h-[12rem] items-end justify-center gap-0">
+                        {[0, 1].map((index) => (
+                          <div
+                            key={`idle-dealer-${index}`}
+                            className={index === 0 ? "" : "-ml-7"}
+                            style={{
+                              transform: `rotate(${index === 0 ? -7 : 6}deg) translateY(${index === 0 ? 8 : 0}px)`,
+                              zIndex: index + 1,
+                            }}
+                          >
+                            <CardFace
+                              card={{ rank: null, suit: null, hidden: true }}
+                              hiddenLabel={c.hidden}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-4 text-center">
+                      <div className="mx-auto flex h-28 w-28 flex-col items-center justify-center rounded-full border-2 border-[var(--retro-ink)] bg-[var(--retro-orange)] text-[var(--retro-ivory)] shadow-[8px_8px_0px_0px_rgba(15,17,31,0.94)]">
+                        <span className="text-[0.62rem] font-semibold uppercase tracking-[0.2em] opacity-80">
+                          {c.currentBet}
+                        </span>
+                        <span className="mt-2 text-[2rem] font-semibold leading-none">
+                          {effectiveStakePreview ? formatAmount(effectiveStakePreview) : "0.00"}
+                        </span>
+                      </div>
+                      {projectedStakeReturn ? (
+                        <div className="inline-flex items-center gap-2 rounded-[0.8rem] border border-[rgba(184,75,9,0.16)] bg-white/78 px-4 py-2 text-sm text-[rgba(15,17,31,0.68)]">
+                          <span>{c.potentialReturn}:</span>
+                          <span className="font-semibold text-[var(--retro-violet)]">
+                            {formatAmount(projectedStakeReturn)}
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="space-y-4 text-center">
+                      <div className="flex min-h-[12rem] items-end justify-center gap-0">
+                        {[0, 1].map((index) => (
+                          <div
+                            key={`idle-player-${index}`}
+                            className={index === 0 ? "" : "-ml-7"}
+                            style={{
+                              transform: `rotate(${index === 0 ? -6 : 7}deg) translateY(${index === 0 ? 0 : 8}px)`,
+                              zIndex: index + 1,
+                            }}
+                          >
+                            <CardFace
+                              card={{ rank: null, suit: null, hidden: true }}
+                              hiddenLabel={c.hidden}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      <TableScorePill
+                        label={c.you}
+                        scoreLabel={c.total}
+                        scoreValue="?"
+                        accent="player"
+                      />
                     </div>
                   </div>
-                ) : null}
-
-                <DealerFeed
-                  aiLabel={c.dealerAiTag}
-                  dealerLabel={c.aiDealer}
-                  emptyLabel={c.dealerFeedEmpty}
-                  events={game.dealerEvents}
-                  ruleLabel={c.dealerRuleTag}
-                  title={c.dealerFeedTitle}
-                />
-              </div>
-            ))}
-          </div>
-        )}
-
-        {disabledReason ? (
-          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-            {disabledReason}
-          </p>
-        ) : null}
-        {error ? <p className="text-sm text-red-400">{error}</p> : null}
-
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-medium text-slate-100">{c.recent}</p>
-            {overview?.recentGames.length ? (
-              <span className="text-xs text-slate-400">
-                {overview.recentGames.length}
-              </span>
-            ) : null}
-          </div>
-
-          {overview?.recentGames.length ? (
-            <div className="mt-4 grid gap-3">
-              {overview.recentGames.map((game) => (
-                <div
-                  key={game.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3"
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span
-                      className={cn(
-                        "rounded-full border px-3 py-1 text-xs font-semibold",
-                        statusTone[game.status],
-                      )}
-                    >
-                      {getStatusLabel(locale, game.status)}
-                    </span>
-                    <span className="text-sm text-slate-300">
-                      {c.stake} {formatAmount(game.totalStake)}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-4 text-sm text-slate-300">
-                    <span>
-                      {c.points} P {formatPlayerTotals(game)} / D{" "}
-                      {game.dealerTotal}
-                    </span>
-                    <span className="font-medium text-emerald-200">
-                      {c.payout} {formatAmount(game.payoutAmount)}
-                    </span>
-                  </div>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-4 text-sm text-slate-400">{c.noRecent}</p>
-          )}
+
+                <div
+                  className="mx-auto w-full max-w-4xl rounded-[1.8rem] border-2 border-[var(--retro-ink)] bg-[rgba(255,255,255,0.72)] p-4 shadow-[8px_8px_0px_0px_rgba(15,17,31,0.94)]"
+                  data-testid="blackjack-action-dock"
+                >
+                  <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[rgba(15,17,31,0.56)]">
+                    {c.stakeDockTitle}
+                  </p>
+                  <div className="mt-4 grid gap-4 lg:grid-cols-[1.2fr,0.8fr]">
+                    <div className="space-y-3">
+                      <label className="text-sm font-medium text-[var(--retro-ink)]">
+                        {c.stake}
+                      </label>
+                      <Input
+                        value={stakeAmount}
+                        onChange={(event) => setStakeAmount(event.target.value)}
+                        inputMode="decimal"
+                        placeholder={currentConfig.minStake}
+                        className="retro-field h-12"
+                      />
+                      <div className="flex flex-wrap gap-2 text-xs text-[rgba(15,17,31,0.58)]">
+                        <span>
+                          {c.minStake} {currentConfig.minStake}
+                        </span>
+                        <span>•</span>
+                        <span>
+                          {c.maxStake} {currentConfig.maxStake}
+                        </span>
+                        {effectiveStakePreview ? (
+                          <>
+                            <span>•</span>
+                            <span>
+                              {c.effectiveStake}: {formatAmount(effectiveStakePreview)}
+                            </span>
+                          </>
+                        ) : null}
+                      </div>
+                      <p className="text-sm text-[rgba(15,17,31,0.62)]">
+                        {c.stageHint}
+                      </p>
+                    </div>
+                    <div className="flex items-end">
+                      <Button
+                        onClick={handleStart}
+                        disabled={loading || disabled}
+                        variant="arcadeDark"
+                        className="h-14 w-full"
+                      >
+                        {actingAction?.action === "start" ? c.starting : c.start}
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="mt-4 text-sm text-[rgba(15,17,31,0.54)]">{c.noActive}</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-8">
+                {activeGames.map((game) => {
+                  const primaryHand =
+                    game.playerHands.find((hand) => hand.active) ??
+                    (game.activeHandIndex !== null
+                      ? game.playerHands[game.activeHandIndex]
+                      : null) ??
+                    game.playerHands[0];
+                  const splitHands = game.playerHands.filter(
+                    (hand) => hand.index !== primaryHand.index,
+                  );
+                  const dealerTotalLabel =
+                    game.dealerHand.total === null ? c.visibleTotal : c.total;
+                  const dealerTotalValue =
+                    game.dealerHand.total ?? game.dealerHand.visibleTotal ?? "—";
+                  const playerTotalValue =
+                    primaryHand.total ?? primaryHand.visibleTotal ?? "—";
+                  const projectedReturn = formatProjectedReturn(
+                    game.totalStake,
+                    currentConfig.winPayoutMultiplier,
+                  );
+                  const actionOrder: BlackjackAction[] = [
+                    "stand",
+                    "hit",
+                    "split",
+                    "double",
+                  ];
+
+                  return (
+                    <article key={game.id} className="space-y-5">
+                      <TableStatusRibbon locale={locale} game={game} />
+
+                      <div
+                        className="rounded-[1.85rem] border border-[rgba(15,17,31,0.14)] bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.94),rgba(247,240,233,0.98))] px-5 py-8 md:px-8 md:py-10"
+                        data-testid="blackjack-table-stage"
+                      >
+                        <div className="flex min-h-[40rem] flex-col items-center justify-between gap-6">
+                          <div className="space-y-4 text-center">
+                            <TableScorePill
+                              label={c.dealer}
+                              scoreLabel={dealerTotalLabel}
+                              scoreValue={dealerTotalValue}
+                              accent="dealer"
+                            />
+                            <TableCardFan
+                              cards={game.dealerHand.cards}
+                              hiddenLabel={c.hidden}
+                              reversed
+                            />
+                          </div>
+
+                          <div className="space-y-4 text-center">
+                            <div className="mx-auto flex h-28 w-28 flex-col items-center justify-center rounded-full border-2 border-[var(--retro-ink)] bg-[var(--retro-orange)] text-[var(--retro-ivory)] shadow-[8px_8px_0px_0px_rgba(15,17,31,0.94)]">
+                              <span className="text-[0.62rem] font-semibold uppercase tracking-[0.2em] opacity-80">
+                                {c.currentBet}
+                              </span>
+                              <span className="mt-2 text-[2rem] font-semibold leading-none">
+                                {formatAmount(game.totalStake)}
+                              </span>
+                            </div>
+                            <div className="inline-flex items-center gap-2 rounded-[0.8rem] border border-[rgba(184,75,9,0.16)] bg-white/78 px-4 py-2 text-sm text-[rgba(15,17,31,0.68)]">
+                              <span>{c.potentialReturn}:</span>
+                              <span className="font-semibold text-[var(--retro-violet)]">
+                                {formatAmount(projectedReturn)}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="space-y-4 text-center">
+                            <TableCardFan
+                              cards={primaryHand.cards}
+                              hiddenLabel={c.hidden}
+                            />
+                            <TableScorePill
+                              label={c.you}
+                              scoreLabel={c.total}
+                              scoreValue={playerTotalValue}
+                              accent="player"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {splitHands.length > 0 ? (
+                        <div className="space-y-3">
+                          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[rgba(15,17,31,0.56)]">
+                            {c.splitHands}
+                          </p>
+                          <div className="grid gap-4 lg:grid-cols-2">
+                            {splitHands.map((hand) => (
+                              <SplitHandSummary
+                                key={`${game.id}-${hand.index}`}
+                                locale={locale}
+                                hand={hand}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      <div
+                        className="mx-auto w-full max-w-5xl rounded-[1.8rem] border-2 border-[var(--retro-ink)] bg-[rgba(255,255,255,0.72)] p-4 shadow-[8px_8px_0px_0px_rgba(15,17,31,0.94)]"
+                        data-testid="blackjack-action-dock"
+                      >
+                        <div className="grid gap-3 md:grid-cols-4">
+                          {actionOrder.map((action) => {
+                            const enabled = game.availableActions.includes(action);
+                            return (
+                              <button
+                                key={`${game.id}-${action}`}
+                                type="button"
+                                onClick={() => void handleAction(game.id, action)}
+                                disabled={!enabled || loading || disabled}
+                                className={cn(
+                                  "rounded-[1.2rem] border-2 px-4 py-5 text-center shadow-[4px_4px_0px_0px_rgba(15,17,31,0.94)] transition-[transform,background-color,box-shadow,opacity]",
+                                  getActionTone(action),
+                                  enabled && !loading && !disabled
+                                    ? "hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_rgba(15,17,31,0.94)]"
+                                    : "cursor-not-allowed opacity-45",
+                                )}
+                              >
+                                <span className="block text-[1.65rem] font-semibold uppercase tracking-[0.08em]">
+                                  {actingAction?.gameId === game.id &&
+                                  actingAction.action === action
+                                    ? "..."
+                                    : getActionLabel(locale, action)}
+                                </span>
+                                <span className="mt-2 block text-[0.72rem] font-semibold uppercase tracking-[0.22em] opacity-75">
+                                  {c.actions}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <DealerFeed
+                        aiLabel={c.dealerAiTag}
+                        dealerLabel={c.aiDealer}
+                        emptyLabel={c.dealerFeedEmpty}
+                        events={game.dealerEvents}
+                        ruleLabel={c.dealerRuleTag}
+                        title={c.dealerFeedTitle}
+                      />
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
         </div>
-      </CardContent>
-    </Card>
+      </Card>
+
+      <div className="grid gap-6 xl:grid-cols-[1.02fr,0.98fr]">
+        <Card className="retro-panel-dark rounded-[1.8rem] border-none">
+          <CardHeader>
+            <CardTitle className="text-[1.6rem] text-white">
+              {c.tableRulesTitle}
+            </CardTitle>
+            <CardDescription className="text-slate-300">
+              {c.stageTitle}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <PlayModeSwitcher
+              gameKey="blackjack"
+              snapshot={overview?.playMode ?? null}
+              disabled={loading || disabled || activeGames.length > 0}
+              loading={updatingPlayMode}
+              onSelect={(type) => void handleChangePlayMode(type)}
+            />
+
+            {activeGames.length > 0 ? (
+              <TableBlock locale={locale} game={activeGames[0]!} />
+            ) : null}
+
+            <div className="flex flex-wrap gap-2 text-xs">
+              <span className="rounded-full border-2 border-[#202745] bg-[rgba(255,255,255,0.04)] px-3 py-1 text-slate-300">
+                {c.minStake}: {currentConfig.minStake}
+              </span>
+              <span className="rounded-full border-2 border-[#202745] bg-[rgba(255,255,255,0.04)] px-3 py-1 text-slate-300">
+                {c.maxStake}: {currentConfig.maxStake}
+              </span>
+              <span className="rounded-full border-2 border-[#202745] bg-[rgba(255,255,255,0.04)] px-3 py-1 text-slate-300">
+                {c.natural}: {currentConfig.naturalPayoutMultiplier}x
+              </span>
+              <span className="rounded-full border-2 border-[#202745] bg-[rgba(255,255,255,0.04)] px-3 py-1 text-slate-300">
+                {c.dealerRule}:{" "}
+                {currentConfig.dealerHitsSoft17 ? c.hitSoft17 : c.standSoft17}
+              </span>
+              <span className="rounded-full border-2 border-[#202745] bg-[rgba(255,255,255,0.04)] px-3 py-1 text-slate-300">
+                {c.doubleRule}:{" "}
+                {formatToggle(locale, currentConfig.doubleDownAllowed)}
+              </span>
+              <span className="rounded-full border-2 border-[#202745] bg-[rgba(255,255,255,0.04)] px-3 py-1 text-slate-300">
+                {c.splitAcesRule}:{" "}
+                {formatToggle(locale, currentConfig.splitAcesAllowed)}
+              </span>
+              <span className="rounded-full border-2 border-[#202745] bg-[rgba(255,255,255,0.04)] px-3 py-1 text-slate-300">
+                {c.hitSplitAcesRule}:{" "}
+                {formatToggle(locale, currentConfig.hitSplitAcesAllowed)}
+              </span>
+              <span className="rounded-full border-2 border-[#202745] bg-[rgba(255,255,255,0.04)] px-3 py-1 text-slate-300">
+                {c.resplitRule}:{" "}
+                {formatToggle(locale, currentConfig.resplitAllowed)}
+              </span>
+              <span className="rounded-full border-2 border-[#202745] bg-[rgba(255,255,255,0.04)] px-3 py-1 text-slate-300">
+                {c.maxSplitHands}: {currentConfig.maxSplitHands}
+              </span>
+              <span className="rounded-full border-2 border-[#202745] bg-[rgba(255,255,255,0.04)] px-3 py-1 text-slate-300">
+                {c.tenValueSplitRule}:{" "}
+                {formatToggle(locale, currentConfig.splitTenValueCardsAllowed)}
+              </span>
+              <span className="rounded-full border-2 border-[#202745] bg-[rgba(255,255,255,0.04)] px-3 py-1 text-slate-300">
+                {c.singleHand}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="retro-panel-dark rounded-[1.8rem] border-none">
+          <CardHeader>
+            <div className="flex items-center justify-between gap-3">
+              <CardTitle className="text-[1.6rem] text-white">{c.recent}</CardTitle>
+              {overview?.recentGames.length ? (
+                <span className="text-xs text-slate-400">{overview.recentGames.length}</span>
+              ) : null}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {overview?.recentGames.length ? (
+              <div className="grid gap-3">
+                {overview.recentGames.map((game) => (
+                  <div
+                    key={game.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-[1.15rem] border-2 border-[#202745] bg-[rgba(7,10,23,0.72)] px-4 py-3"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={cn(
+                          "rounded-full border px-3 py-1 text-xs font-semibold",
+                          statusTone[game.status],
+                        )}
+                      >
+                        {getStatusLabel(locale, game.status)}
+                      </span>
+                      <span className="text-sm text-slate-300">
+                        {c.stake} {formatAmount(game.totalStake)}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-4 text-sm text-slate-300">
+                      <span>
+                        {c.points} P {formatPlayerTotals(game)} / D {game.dealerTotal}
+                      </span>
+                      <span className="font-medium text-emerald-200">
+                        {c.payout} {formatAmount(game.payoutAmount)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400">{c.noRecent}</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   );
 }

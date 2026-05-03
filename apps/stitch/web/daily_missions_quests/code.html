@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+
+<html class="" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Retro-Modern Web3 Play - Missions</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&amp;family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        /* Custom styles to enhance the retro-pop feel */
+        .hard-shadow {
+            box-shadow: 4px 4px 0px 0px rgba(0,0,0,1);
+        }
+        .hard-shadow-lg {
+            box-shadow: 8px 8px 0px 0px rgba(0,0,0,1);
+        }
+        .button-press:active {
+            transform: translate(2px, 2px);
+            box-shadow: 2px 2px 0px 0px rgba(0,0,0,1);
+        }
+        .halftone-bg {
+            background-image: radial-gradient(#111125 15%, transparent 16%), radial-gradient(#111125 15%, transparent 16%);
+            background-size: 10px 10px;
+            background-position: 0 0, 5px 5px;
+        }
+    </style>
+<script id="tailwind-config">tailwind.config = {darkMode: "class", theme: {extend: {colors: {"surface-bright": "#fdf8f8", "outline-variant": "#dfc0b5", "on-secondary-fixed": "#0f0069", "primary-fixed": "#ffdbce", "surface-dim": "#ddd9d8", "tertiary-fixed-dim": "#dfc566", "surface-container-low": "#f7f2f2", "on-tertiary-container": "#4c3e00", "tertiary-fixed": "#fce17e", "surface-tint": "#a73a00", primary: "#7f2a00", "on-secondary": "#ffffff", "surface-container-highest": "#e6e1e1", "on-primary-fixed-variant": "#802a00", "surface-container": "#f1edec", "on-primary": "#ffffff", "surface-variant": "#e6e1e1", outline: "#8c7168", "surface-container-lowest": "#ffffff", tertiary: "#705d00", "secondary-fixed-dim": "#c3c0ff", "on-tertiary-fixed": "#221b00", "error-container": "#ffdad6", error: "#ba1a1a", "surface-container-high": "#ece7e7", "on-error-container": "#93000a", "on-primary-fixed": "#370e00", "inverse-on-surface": "#f4f0ef", "on-tertiary": "#ffffff", "on-surface-variant": "#58423a", "on-secondary-container": "#fffbff", "on-background": "#1c1b1b", secondary: "#4b41e1", "inverse-surface": "#313030", background: "#fdf8f8", "secondary-fixed": "#e2dfff", "primary-container": "#a73a00", "on-primary-container": "#ffcebc", "secondary-container": "#655dfb", "inverse-primary": "#ffb599", surface: "#fdf8f8", "on-tertiary-fixed-variant": "#544600", "on-error": "#ffffff", "primary-fixed-dim": "#ffb599", "on-surface": "#1c1b1b", "on-secondary-fixed-variant": "#3322cc", "tertiary-container": "#c2aa4e"}, borderRadius: {DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px"}, spacing: {xl: "32px", "container-max": "1440px", gutter: "16px", base: "8px", xs: "4px", sm: "8px", lg: "24px", md: "16px", margin: "20px", unit: "4px"}, fontFamily: {h2: ["Space Grotesk"], button: ["Space Grotesk"], h1: ["Space Grotesk"], "body-md": ["Be Vietnam Pro"], "label-caps": ["Space Grotesk"], h3: ["Space Grotesk"], "body-lg": ["Be Vietnam Pro"], "headline-xl": ["Plus Jakarta Sans"], "label-bold": ["Be Vietnam Pro"], "label-sm": ["Be Vietnam Pro"], "headline-md": ["Plus Jakarta Sans"], "headline-lg": ["Plus Jakarta Sans"]}, fontSize: {h2: ["48px", {lineHeight: "1.2", letterSpacing: "-0.01em", fontWeight: "700"}], button: ["16px", {lineHeight: "1.0", fontWeight: "600"}], h1: ["64px", {lineHeight: "1.1", letterSpacing: "-0.02em", fontWeight: "700"}], "body-md": ["16px", {lineHeight: "24px", fontWeight: "400"}], "label-caps": ["14px", {lineHeight: "1.2", letterSpacing: "0.05em", fontWeight: "700"}], h3: ["32px", {lineHeight: "1.2", fontWeight: "600"}], "body-lg": ["18px", {lineHeight: "28px", fontWeight: "400"}], "headline-xl": ["40px", {lineHeight: "48px", letterSpacing: "-0.02em", fontWeight: "800"}], "label-bold": ["14px", {lineHeight: "20px", fontWeight: "700"}], "label-sm": ["12px", {lineHeight: "16px", fontWeight: "500"}], "headline-md": ["24px", {lineHeight: "30px", fontWeight: "700"}], "headline-lg": ["32px", {lineHeight: "38px", letterSpacing: "-0.01em", fontWeight: "800"}]}}}};</script>
+</head>
+<body class="bg-background text-on-surface font-body-md min-h-screen flex flex-col md:flex-row">
+<!-- SideNavBar (Hidden on Mobile, flex on Desktop) -->
+<nav class="hidden md:flex bg-slate-900 border-r-2 border-slate-800 shadow-[4px_0px_0px_0px_rgba(0,0,0,1)] fixed left-0 top-0 h-screen w-64 flex-col p-4 z-40">
+<!-- Brand / Header (If any, usually top nav handles this, but side nav can have a header) -->
+<div class="mb-8 mt-4 px-2">
+<h2 class="font-h3 text-h3 text-primary-fixed uppercase">Player Hub</h2>
+<p class="font-label-caps text-label-caps text-on-surface-variant">Legendary Rank</p>
+</div>
+<div class="flex-1 space-y-2">
+<!-- Inactive -->
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform font-['Space_Grotesk'] text-sm font-bold uppercase" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+                Social
+            </a>
+<!-- Active (Missions matches page intent) -->
+<a class="flex items-center gap-4 bg-yellow-400 text-black p-3 rounded-lg border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] font-['Space_Grotesk'] text-sm font-bold uppercase" href="#">
+<span class="material-symbols-outlined" data-icon="military_tech">military_tech</span>
+                Missions
+            </a>
+<!-- Inactive -->
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform font-['Space_Grotesk'] text-sm font-bold uppercase" href="#">
+<span class="material-symbols-outlined" data-icon="leaderboard">leaderboard</span>
+                Leaderboard
+            </a>
+<!-- Inactive -->
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform font-['Space_Grotesk'] text-sm font-bold uppercase" href="#">
+<span class="material-symbols-outlined" data-icon="psychology">psychology</span>
+                Strategy
+            </a>
+<!-- Inactive -->
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform font-['Space_Grotesk'] text-sm font-bold uppercase" href="#">
+<span class="material-symbols-outlined" data-icon="help_center">help_center</span>
+                Support
+            </a>
+</div>
+<!-- CTA -->
+<div class="mt-auto mb-4">
+<button class="w-full bg-primary-container text-on-primary-container border-2 border-black py-3 rounded-lg hard-shadow font-button text-button uppercase button-press transition-all duration-100">
+                Daily Spin
+            </button>
+</div>
+<!-- Footer Links -->
+<div class="space-y-2 border-t-2 border-slate-800 pt-4">
+<a class="flex items-center gap-4 text-slate-400 p-2 hover:text-slate-100 font-['Space_Grotesk'] text-xs font-bold uppercase" href="#">
+<span class="material-symbols-outlined text-lg" data-icon="verified_user">verified_user</span>
+                Audit Log
+            </a>
+<a class="flex items-center gap-4 text-slate-400 p-2 hover:text-slate-100 font-['Space_Grotesk'] text-xs font-bold uppercase" href="#">
+<span class="material-symbols-outlined text-lg" data-icon="enhanced_encryption">enhanced_encryption</span>
+                Security
+            </a>
+</div>
+</nav>
+<!-- Main Content Wrapper -->
+<div class="flex-1 flex flex-col md:ml-64 w-full min-h-screen">
+<!-- TopAppBar (Web & Mobile) -->
+<header class="bg-slate-950 docked full-width top-0 border-b-2 border-slate-800 shadow-[0px_4px_0px_0px_rgba(0,0,0,1)] flex justify-between items-center w-full px-8 h-20 z-50 sticky">
+<!-- Brand Logo -->
+<div class="flex items-center gap-4">
+<!-- Mobile Menu Icon (Only visible on mobile) -->
+<button class="md:hidden text-primary-fixed">
+<span class="material-symbols-outlined text-3xl">menu</span>
+</button>
+<div class="text-2xl font-black text-yellow-400 italic border-2 border-yellow-400 px-3 py-1 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                    Retro-Modern Web3 Play
+                </div>
+</div>
+<!-- Navigation Links (Hidden on Mobile) -->
+<nav class="hidden md:flex items-center gap-6">
+<a class="text-slate-400 font-medium font-['Space_Grotesk'] uppercase tracking-tighter font-bold hover:text-yellow-300 hover:bg-slate-900 active:translate-y-1 active:shadow-none transition-all duration-100 px-2 py-1" href="#">Lobby</a>
+<a class="text-slate-400 font-medium font-['Space_Grotesk'] uppercase tracking-tighter font-bold hover:text-yellow-300 hover:bg-slate-900 active:translate-y-1 active:shadow-none transition-all duration-100 px-2 py-1" href="#">Tables</a>
+<a class="text-slate-400 font-medium font-['Space_Grotesk'] uppercase tracking-tighter font-bold hover:text-yellow-300 hover:bg-slate-900 active:translate-y-1 active:shadow-none transition-all duration-100 px-2 py-1" href="#">Predictions</a>
+<a class="text-slate-400 font-medium font-['Space_Grotesk'] uppercase tracking-tighter font-bold hover:text-yellow-300 hover:bg-slate-900 active:translate-y-1 active:shadow-none transition-all duration-100 px-2 py-1" href="#">Wallet</a>
+<a class="text-slate-400 font-medium font-['Space_Grotesk'] uppercase tracking-tighter font-bold hover:text-yellow-300 hover:bg-slate-900 active:translate-y-1 active:shadow-none transition-all duration-100 px-2 py-1" href="#">Fairness</a>
+</nav>
+<!-- Trailing Actions -->
+<div class="flex items-center gap-4">
+<div class="hidden md:flex items-center gap-2 text-yellow-400">
+<button class="hover:text-yellow-300 hover:bg-slate-900 p-1 rounded transition-colors">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="hover:text-yellow-300 hover:bg-slate-900 p-1 rounded transition-colors">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+</div>
+<button class="bg-primary-container text-on-primary-container border-2 border-black px-4 py-2 font-button text-button uppercase hard-shadow button-press">
+                    Connect Wallet
+                </button>
+</div>
+</header>
+<!-- Canvas Area -->
+<main class="flex-1 p-gutter bg-surface overflow-y-auto">
+<div class="max-w-container-max mx-auto space-y-lg">
+<!-- Hero Section: Progress & Streak -->
+<section class="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
+<!-- XP Progress Card -->
+<div class="lg:col-span-2 bg-surface-container border-2 border-outline-variant hard-shadow p-md relative overflow-hidden halftone-bg">
+<div class="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-md">
+<div>
+<h1 class="font-h1 text-h1 text-primary-fixed mb-2">Daily Quests</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant">Complete missions to earn XP and unlock legendary rewards.</p>
+</div>
+<div class="bg-surface-dim border-2 border-outline-variant p-4 text-center min-w-[120px] hard-shadow">
+<span class="font-label-caps text-label-caps text-tertiary-fixed block mb-1">Current Level</span>
+<span class="font-h2 text-h2 text-primary-container">42</span>
+</div>
+</div>
+<!-- Progress Bar -->
+<div class="mt-8 relative z-10">
+<div class="flex justify-between font-label-caps text-label-caps text-on-surface mb-2">
+<span>XP Progress</span>
+<span class="text-primary-fixed">8,500 / 10,000 XP</span>
+</div>
+<!-- Segmented Retro Bar -->
+<div class="h-8 w-full bg-surface-dim border-2 border-outline-variant flex p-1 gap-1">
+<div class="h-full bg-primary-container flex-1"></div>
+<div class="h-full bg-primary-container flex-1"></div>
+<div class="h-full bg-primary-container flex-1"></div>
+<div class="h-full bg-primary-container flex-1"></div>
+<div class="h-full bg-primary-container flex-1"></div>
+<div class="h-full bg-primary-container flex-1"></div>
+<div class="h-full bg-primary-container flex-1"></div>
+<div class="h-full bg-primary-container flex-1"></div>
+<div class="h-full bg-surface-bright flex-1"></div>
+<div class="h-full bg-surface-bright flex-1"></div>
+</div>
+</div>
+</div>
+<!-- Bonus Streak Card -->
+<div class="bg-secondary-container border-2 border-secondary hard-shadow p-md flex flex-col items-center justify-center text-center">
+<span class="material-symbols-outlined text-6xl text-primary-fixed mb-4" data-icon="local_fire_department" data-weight="fill">local_fire_department</span>
+<h3 class="font-h3 text-h3 text-on-secondary-container mb-2">Bonus Streak</h3>
+<div class="font-h1 text-h1 text-primary-fixed mb-4">7 Days</div>
+<p class="font-label-caps text-label-caps text-secondary-fixed">Next reward multiplier: 1.5x</p>
+</div>
+</section>
+<!-- Bento Grid: Quests & History -->
+<section class="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+<!-- Active Quests (Main Canvas) -->
+<div class="lg:col-span-8 space-y-md">
+<div class="flex justify-between items-end border-b-2 border-outline-variant pb-2">
+<h2 class="font-h2 text-h2 text-on-surface">Active Missions</h2>
+<span class="font-label-caps text-label-caps text-surface-tint">Resets in 04:23:11</span>
+</div>
+<!-- Quest Card 1: Claimable -->
+<div class="bg-surface-container-high border-2 border-primary-fixed hard-shadow flex flex-col sm:flex-row gap-4 p-4 relative">
+<!-- Rarity Badge -->
+<div class="absolute -top-3 -left-3 bg-primary-container text-on-primary-container border-2 border-black px-3 py-1 font-label-caps text-label-caps rounded-full hard-shadow text-xs">
+                                RARE
+                            </div>
+<div class="bg-surface-dim border-2 border-outline-variant p-4 flex items-center justify-center min-w-[80px] h-[80px]">
+<span class="material-symbols-outlined text-4xl text-primary-fixed" data-icon="playing_cards">playing_cards</span>
+</div>
+<div class="flex-1 flex flex-col justify-center">
+<h3 class="font-h3 text-h3 text-on-surface text-xl mb-1">Win 5 Blackjack Hands</h3>
+<div class="w-full bg-surface-dim h-4 border border-outline-variant mt-2">
+<div class="bg-primary-fixed h-full w-full"></div>
+</div>
+<span class="font-label-caps text-label-caps text-primary-fixed mt-1 text-right block">5 / 5 Complete</span>
+</div>
+<div class="flex flex-col justify-center items-end sm:items-center min-w-[120px] gap-2 border-l-0 sm:border-l-2 border-outline-variant pl-4">
+<div class="font-label-caps text-label-caps text-tertiary-fixed flex items-center gap-1">
+<span class="material-symbols-outlined text-sm" data-icon="toll">toll</span>
+                                    +500 XP
+                                </div>
+<button class="w-full bg-primary-container text-on-primary-container border-2 border-black py-2 px-4 font-button text-button uppercase hard-shadow button-press">
+                                    Claim
+                                </button>
+</div>
+</div>
+<!-- Quest Card 2: In Progress -->
+<div class="bg-surface-container border-2 border-outline-variant hard-shadow flex flex-col sm:flex-row gap-4 p-4">
+<div class="bg-surface-dim border-2 border-outline-variant p-4 flex items-center justify-center min-w-[80px] h-[80px]">
+<span class="material-symbols-outlined text-4xl text-tertiary-fixed-dim" data-icon="casino">casino</span>
+</div>
+<div class="flex-1 flex flex-col justify-center">
+<h3 class="font-h3 text-h3 text-on-surface text-xl mb-1">Spin the Slots 50 Times</h3>
+<div class="w-full bg-surface-dim h-4 border border-outline-variant mt-2">
+<div class="bg-tertiary-container h-full w-[40%]"></div>
+</div>
+<span class="font-label-caps text-label-caps text-on-surface-variant mt-1 text-right block">20 / 50 Spins</span>
+</div>
+<div class="flex flex-col justify-center items-end sm:items-center min-w-[120px] gap-2 border-l-0 sm:border-l-2 border-outline-variant pl-4">
+<div class="font-label-caps text-label-caps text-tertiary-fixed flex items-center gap-1">
+<span class="material-symbols-outlined text-sm" data-icon="toll">toll</span>
+                                    +250 XP
+                                </div>
+<button class="w-full bg-surface-bright text-on-surface border-2 border-outline-variant py-2 px-4 font-button text-button uppercase opacity-50 cursor-not-allowed">
+                                    In Progress
+                                </button>
+</div>
+</div>
+<!-- Quest Card 3: In Progress -->
+<div class="bg-surface-container border-2 border-outline-variant hard-shadow flex flex-col sm:flex-row gap-4 p-4 relative">
+<!-- Rarity Badge -->
+<div class="absolute -top-3 -left-3 bg-secondary-container text-on-secondary-container border-2 border-secondary px-3 py-1 font-label-caps text-label-caps rounded-full hard-shadow text-xs">
+                                EPIC
+                            </div>
+<div class="bg-surface-dim border-2 border-outline-variant p-4 flex items-center justify-center min-w-[80px] h-[80px]">
+<span class="material-symbols-outlined text-4xl text-secondary" data-icon="payments">payments</span>
+</div>
+<div class="flex-1 flex flex-col justify-center">
+<h3 class="font-h3 text-h3 text-on-surface text-xl mb-1">Deposit $100 in Crypto</h3>
+<div class="w-full bg-surface-dim h-4 border border-outline-variant mt-2">
+<div class="bg-secondary h-full w-[0%]"></div>
+</div>
+<span class="font-label-caps text-label-caps text-on-surface-variant mt-1 text-right block">0 / $100</span>
+</div>
+<div class="flex flex-col justify-center items-end sm:items-center min-w-[120px] gap-2 border-l-0 sm:border-l-2 border-outline-variant pl-4">
+<div class="font-label-caps text-label-caps text-tertiary-fixed flex items-center gap-1">
+<span class="material-symbols-outlined text-sm" data-icon="toll">toll</span>
+                                    +1000 XP
+                                </div>
+<button class="w-full bg-surface-bright text-on-surface border-2 border-outline-variant py-2 px-4 font-button text-button uppercase opacity-50 cursor-not-allowed">
+                                    In Progress
+                                </button>
+</div>
+</div>
+</div>
+<!-- Sidebar: Weekly Milestones & History -->
+<div class="lg:col-span-4 space-y-md">
+<!-- Weekly Milestone Container -->
+<div class="bg-surface-container-highest border-2 border-outline-variant hard-shadow p-md">
+<h2 class="font-h3 text-h3 text-on-surface mb-4 border-b-2 border-outline-variant pb-2">Weekly Milestone</h2>
+<div class="bg-surface-dim border-2 border-outline-variant p-4 text-center mb-4 relative overflow-hidden halftone-bg">
+<div class="relative z-10">
+<span class="material-symbols-outlined text-5xl text-primary-fixed mb-2" data-icon="diamond">diamond</span>
+<div class="font-label-caps text-label-caps text-on-surface">Complete 15 Daily Quests</div>
+<div class="font-h2 text-h2 text-primary-fixed mt-1">12 / 15</div>
+</div>
+</div>
+<button class="w-full bg-surface-bright text-on-surface border-2 border-outline-variant py-3 font-button text-button uppercase button-press">
+                                View Weekly Rewards
+                            </button>
+</div>
+<!-- Quest History Mini-List -->
+<div class="bg-surface-container border-2 border-outline-variant hard-shadow p-md">
+<h2 class="font-label-caps text-label-caps text-on-surface-variant mb-4 uppercase">Recent History</h2>
+<ul class="space-y-4">
+<li class="flex items-center gap-3">
+<div class="bg-surface-dim border border-outline-variant p-1 rounded-full">
+<span class="material-symbols-outlined text-sm text-primary-fixed" data-icon="check">check</span>
+</div>
+<div class="flex-1">
+<div class="font-body-md text-sm text-on-surface">Log in for 3 days straight</div>
+<div class="font-label-caps text-xs text-on-surface-variant">Yesterday</div>
+</div>
+</li>
+<li class="flex items-center gap-3">
+<div class="bg-surface-dim border border-outline-variant p-1 rounded-full">
+<span class="material-symbols-outlined text-sm text-primary-fixed" data-icon="check">check</span>
+</div>
+<div class="flex-1">
+<div class="font-body-md text-sm text-on-surface">Play a game of Poker</div>
+<div class="font-label-caps text-xs text-on-surface-variant">2 days ago</div>
+</div>
+</li>
+<li class="flex items-center gap-3 opacity-60">
+<div class="bg-surface-dim border border-outline-variant p-1 rounded-full">
+<span class="material-symbols-outlined text-sm text-error" data-icon="close">close</span>
+</div>
+<div class="flex-1">
+<div class="font-body-md text-sm text-on-surface">Win $50 in Predictions</div>
+<div class="font-label-caps text-xs text-on-surface-variant">Expired</div>
+</div>
+</li>
+</ul>
+<a class="block text-center mt-4 font-label-caps text-label-caps text-primary-fixed hover:underline underline-offset-4" href="#">Full History →</a>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- Footer -->
+<footer class="bg-slate-950 full-width border-t-2 border-slate-800 w-full py-12 px-8 flex flex-col md:flex-row justify-between items-center gap-8 mt-auto z-10">
+<div class="text-lg text-yellow-400 font-black italic">
+                Retro-Modern Web3 Play
+            </div>
+<nav class="flex flex-wrap justify-center gap-6">
+<a class="text-slate-500 font-['Space_Grotesk'] text-xs font-black uppercase tracking-widest hover:text-yellow-400 transition-colors underline-offset-4 hover:underline" href="#">Whitepaper</a>
+<a class="text-slate-500 font-['Space_Grotesk'] text-xs font-black uppercase tracking-widest hover:text-yellow-400 transition-colors underline-offset-4 hover:underline" href="#">Tokenomics</a>
+<a class="text-slate-500 font-['Space_Grotesk'] text-xs font-black uppercase tracking-widest hover:text-yellow-400 transition-colors underline-offset-4 hover:underline" href="#">Audit Report</a>
+<a class="text-slate-500 font-['Space_Grotesk'] text-xs font-black uppercase tracking-widest hover:text-yellow-400 transition-colors underline-offset-4 hover:underline" href="#">Privacy</a>
+<a class="text-slate-500 font-['Space_Grotesk'] text-xs font-black uppercase tracking-widest hover:text-yellow-400 transition-colors underline-offset-4 hover:underline" href="#">Terms</a>
+</nav>
+<div class="text-slate-500 font-['Space_Grotesk'] text-xs font-black uppercase tracking-widest text-center">
+                © 2024 RETRO-MODERN WEB3 PLAY. PROVABLY FAIR.
+            </div>
+</footer>
+</div>
+</body></html>

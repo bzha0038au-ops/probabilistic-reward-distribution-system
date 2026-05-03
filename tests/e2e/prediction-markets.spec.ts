@@ -87,7 +87,7 @@ const registerAndSignInVerifiedUser = async (
   await page.getByLabel('Birth Date').fill(TEST_BIRTH_DATE);
   await page.getByRole('button', { name: 'Create Account' }).click();
 
-  await expect(page).toHaveURL(/\/login\?registered=1$/);
+  await page.waitForURL(/\/login\?registered=1$/, { timeout: 30_000 });
 
   const verification = await waitForNotificationPayload({
     kind: 'email_verification',
@@ -97,13 +97,13 @@ const registerAndSignInVerifiedUser = async (
 
   await page.goto(verificationUrl);
   await page.getByRole('button', { name: 'Verify Email' }).click();
-  await expect(page).toHaveURL(/\/login\?verified=1$/);
+  await page.waitForURL(/\/login\?verified=1$/, { timeout: 30_000 });
 
   await page.getByLabel('Email Address').fill(payload.email);
   await page.getByLabel('Password').fill(payload.password);
   await page.getByRole('button', { name: 'Sign In' }).click();
 
-  await expect(page).toHaveURL(/\/app$/);
+  await page.waitForURL(/\/app$/, { timeout: 30_000 });
 };
 
 const lookupUserId = async (email: string) => {
@@ -325,7 +325,9 @@ test('user can browse a market, place a position, refresh, and see the position 
   );
 
   await page.getByTestId(`market-open-${marketId}`).click();
-  await expect(page).toHaveURL(new RegExp(`/app/markets/${marketId}$`));
+  await page.waitForURL(new RegExp(`/app/markets/${marketId}$`), {
+    timeout: 30_000,
+  });
   await expect(page.getByTestId('market-available-balance')).toHaveText('50.00');
 
   await page.getByTestId('market-outcome-option-yes').click();

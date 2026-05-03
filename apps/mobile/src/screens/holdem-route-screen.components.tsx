@@ -46,14 +46,23 @@ function isRedSuit(card: HoldemCardView) {
   return card.suit === "hearts" || card.suit === "diamonds";
 }
 
-export function PlayingCard(props: { card: HoldemCardView }) {
+export function PlayingCard(props: {
+  card: HoldemCardView;
+  size?: "default" | "hero" | "compact";
+}) {
   const hidden = props.card.hidden || !props.card.rank || !props.card.suit;
   const suit = props.card.suit ? suitSymbols[props.card.suit] : "•";
+  const size = props.size ?? "default";
 
   return (
     <View
       style={[
         styles.playingCard,
+        size === "hero"
+          ? styles.playingCardHero
+          : size === "compact"
+            ? styles.playingCardCompact
+            : null,
         hidden ? styles.playingCardHidden : null,
       ]}
     >
@@ -64,6 +73,7 @@ export function PlayingCard(props: { card: HoldemCardView }) {
           <Text
             style={[
               styles.playingCardLabel,
+              size === "hero" ? styles.playingCardLabelHero : null,
               isRedSuit(props.card) ? styles.playingCardLabelRed : null,
             ]}
           >
@@ -72,6 +82,7 @@ export function PlayingCard(props: { card: HoldemCardView }) {
           <Text
             style={[
               styles.playingCardSuit,
+              size === "hero" ? styles.playingCardSuitHero : null,
               isRedSuit(props.card) ? styles.playingCardLabelRed : null,
             ]}
           >
@@ -261,10 +272,7 @@ export function HoldemRouteSummary(props: {
   formatAmount: HoldemAmountFormatter;
 }) {
   return (
-    <SectionCard
-      title={props.screenCopy.routeTitle}
-      subtitle={props.screenCopy.routeSubtitle}
-    >
+    <SectionCard title={props.screenCopy.routeTitle}>
       <RouteSwitcher
         styles={props.styles}
         currentRoute={props.currentRoute}

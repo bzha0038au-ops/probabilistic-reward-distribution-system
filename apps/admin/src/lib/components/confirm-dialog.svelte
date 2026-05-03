@@ -31,15 +31,61 @@
   }>()
 
   const canConfirm = $derived(breakGlassCode.trim() !== "")
+  const stepUpReady = $derived(stepUpHint === null)
 </script>
 
 {#if open}
   <div class="modal modal-open" role="dialog" aria-modal="true">
-    <div class="modal-box max-w-lg">
+    <div class="modal-box max-w-lg border-[var(--admin-border-strong)]">
       <div class="space-y-4">
         <div>
-          <h3 class="text-lg font-semibold text-slate-900">{title}</h3>
-          <p class="mt-2 text-sm leading-6 text-slate-600">{description}</p>
+          <p
+            class="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-[var(--admin-primary)]"
+          >
+            Break-Glass Verification
+          </p>
+          <h3
+            class="mt-2 font-['Newsreader'] text-[2rem] leading-none text-[var(--admin-ink)]"
+          >
+            {title}
+          </h3>
+          <p class="mt-3 text-sm leading-7 text-[var(--admin-muted)]">
+            {description}
+          </p>
+        </div>
+
+        <div
+          class="admin-guarded-action admin-guarded-action--danger space-y-3"
+        >
+          <div>
+            <p
+              class="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-[var(--admin-primary)]"
+            >
+              Command Control
+            </p>
+            <p class="mt-2 text-sm leading-6 text-[var(--admin-muted)]">
+              This action is recorded with step-up verification and a
+              break-glass code before submission.
+            </p>
+          </div>
+          <div class="space-y-2 text-sm text-[var(--admin-ink)]">
+            <div class="flex items-center justify-between gap-3">
+              <span>Step-up code</span>
+              <span
+                class={`badge ${stepUpReady ? "badge-success" : "badge-warning"}`}
+              >
+                {stepUpReady ? "attached" : "required"}
+              </span>
+            </div>
+            <div class="flex items-center justify-between gap-3">
+              <span>Break-glass code</span>
+              <span
+                class={`badge ${canConfirm ? "badge-success" : "badge-warning"}`}
+              >
+                {canConfirm ? "present" : "required"}
+              </span>
+            </div>
+          </div>
         </div>
 
         {#if stepUpHint}
@@ -67,7 +113,9 @@
         </label>
       </div>
 
-      <div class="modal-action">
+      <div
+        class="modal-action admin-modal-actions mt-6 border-t border-[var(--admin-border)] pt-5"
+      >
         <button
           class="btn btn-ghost"
           type="button"
@@ -78,7 +126,7 @@
           {cancelLabel}
         </button>
         <button
-          class="btn btn-primary"
+          class="btn btn-error"
           type="button"
           disabled={!canConfirm}
           onclick={() => {

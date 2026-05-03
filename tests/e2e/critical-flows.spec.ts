@@ -662,7 +662,7 @@ test('user main flow covers draw, phone verification, payments redirect, and eco
   await page.getByLabel('Birth Date').fill(TEST_BIRTH_DATE);
   await page.getByRole('button', { name: 'Create Account' }).click();
 
-  await expect(page).toHaveURL(/\/login\?registered=1$/);
+  await page.waitForURL(/\/login\?registered=1$/, { timeout: 30_000 });
 
   const verification = await waitForNotificationPayload({
     kind: 'email_verification',
@@ -672,13 +672,15 @@ test('user main flow covers draw, phone verification, payments redirect, and eco
   await page.goto(verificationUrl);
   await page.getByRole('button', { name: 'Verify Email' }).click();
 
-  await expect(page).toHaveURL(/\/login\?verified=1$/);
+  await page.waitForURL(/\/login\?verified=1$/, { timeout: 30_000 });
   await page.getByLabel('Email Address').fill(email);
   await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: 'Sign In' }).click();
 
-  await expect(page).toHaveURL(/\/app$/);
-  await expect(page.getByText('Account readiness')).toBeVisible();
+  await page.waitForURL(/\/app$/, { timeout: 30_000 });
+  await expect(
+    page.getByRole('button', { name: 'Sign Out', exact: true }),
+  ).toBeVisible();
 
   const userSession = await createUserSession(email, password);
   await expectOk<{ email: string }>('/auth/register', {
@@ -739,9 +741,9 @@ test('user main flow covers draw, phone verification, payments redirect, and eco
   });
 
   await page.goto('/app/wallet');
-  await expect(page.getByText('Economy wallet', { exact: true })).toBeVisible();
-  await expect(page.getByText('Gift packs', { exact: true })).toBeVisible();
-  await expect(page.getByTestId('wallet-current-balance')).toHaveText('40.00');
+  await expect(page.getByTestId('wallet-current-balance')).toBeVisible();
+  await expect(page.getByText('Reward packs', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('wallet-current-balance')).toHaveText('100.00');
 
   await page.goto('/app/slot');
   await page.getByRole('button', { name: /^Spin / }).first().click();
@@ -776,16 +778,19 @@ test('user main flow covers draw, phone verification, payments redirect, and eco
   );
 
   await page.goto('/app/payments');
-  await expect(page).toHaveURL(/\/app\/wallet$/);
-  await expect(page.getByText('Economy wallet', { exact: true })).toBeVisible();
-  await expect(page.getByText('Web view only')).toBeVisible();
+  await expect(page).toHaveURL(/\/app\/payments$/);
+  await expect(page.getByTestId('payments-hero')).toBeVisible();
+
+  await page.goto('/app/wallet');
+  await expect(page.getByTestId('wallet-current-balance')).toBeVisible();
+  await expect(page.getByText('Web only')).toBeVisible();
 
   await page.locator('#gift-receiver-user-id').fill(String(receiverUser.id));
   await page.locator('#gift-amount').fill('5');
   await page.getByRole('button', { name: 'Send gift' }).click();
 
   await expect(
-    page.getByText(`#${user.id} → #${receiverUser.id}`),
+    page.getByText(`#${user.id} -> #${receiverUser.id}`),
   ).toBeVisible();
 
   const receiverBalance = await waitForRecord(

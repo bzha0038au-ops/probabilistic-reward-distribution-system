@@ -5,284 +5,91 @@ import type {
   HandHistory,
   HoldemSignedEvidenceBundle,
 } from "@reward/shared-types/hand-history";
-import type { HoldemCardView } from "@reward/shared-types/holdem";
-import {
-  buildHoldemReplayData,
-  findReplayParticipant,
-  type HoldemReplayData,
-  type HoldemReplayEvent,
-} from "@reward/user-core";
+import { buildHoldemReplayData } from "@reward/user-core";
 
 import type { MobileRouteScreens } from "../route-copy";
-import { mobileFeedbackTheme, mobilePalette as palette } from "../theme";
+import {
+  mobileChromeTheme,
+  mobileFeedbackTheme,
+  mobilePalette as palette,
+  mobileRadii,
+  mobileSpacing,
+  mobileTypeScale,
+  mobileTypography,
+} from "../theme";
 import { ActionButton } from "../ui";
+import { PlayingCard } from "./holdem-route-screen.components";
+import {
+  describeReplayEvent,
+  formatReplayTimestamp,
+  getReplaySeatLabel,
+  getReplayStageLabel,
+} from "./holdem-route-screen.helpers";
 
-const suitSymbols = {
-  spades: "♠",
-  hearts: "♥",
-  diamonds: "♦",
-  clubs: "♣",
-} as const;
-
-function isRedSuit(card: HoldemCardView) {
-  return card.suit === "hearts" || card.suit === "diamonds";
-}
-
-function PlayingCard(props: { card: HoldemCardView }) {
-  const hidden = props.card.hidden || !props.card.rank || !props.card.suit;
-  const suit = props.card.suit ? suitSymbols[props.card.suit] : "•";
-
+function StatCard(props: {
+  label: string;
+  value: string;
+  hint?: string;
+  accent?: "default" | "success" | "info";
+}) {
   return (
-    <View style={[styles.playingCard, hidden ? styles.playingCardHidden : null]}>
-      {hidden ? (
-        <Text style={styles.playingCardBack}>HOLD</Text>
-      ) : (
-        <>
-          <Text
-            style={[
-              styles.playingCardLabel,
-              isRedSuit(props.card) ? styles.playingCardLabelRed : null,
-            ]}
-          >
-            {props.card.rank}
-          </Text>
-          <Text
-            style={[
-              styles.playingCardSuit,
-              isRedSuit(props.card) ? styles.playingCardLabelRed : null,
-            ]}
-          >
-            {suit}
-          </Text>
-        </>
-      )}
+    <View style={styles.statCard}>
+      <Text style={styles.statLabel}>{props.label}</Text>
+      <Text
+        style={[
+          styles.statValue,
+          props.accent === "success"
+            ? styles.statValueSuccess
+            : props.accent === "info"
+              ? styles.statValueInfo
+              : null,
+        ]}
+      >
+        {props.value}
+      </Text>
+      {props.hint ? <Text style={styles.statHint}>{props.hint}</Text> : null}
     </View>
   );
 }
 
-function formatReplayTimestamp(value: string | Date | null | undefined) {
-  if (!value) {
-    return "--";
-  }
-
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value instanceof Date ? value.toISOString() : value;
-  }
-
-  return date.toLocaleString();
+function DetailRow(props: { label: string; value: string }) {
+  return (
+    <View style={styles.detailRow}>
+      <Text style={styles.detailLabel}>{props.label}</Text>
+      <Text style={styles.detailValue}>{props.value}</Text>
+    </View>
+  );
 }
 
-function getReplayStageLabel(
-  stage: string | null,
-  copy: MobileRouteScreens["holdem"],
-) {
-  switch (stage) {
-    case "preflop":
-      return copy.stagePreflop;
-    case "flop":
-      return copy.stageFlop;
-    case "turn":
-      return copy.stageTurn;
-    case "river":
-      return copy.stageRiver;
-    case "showdown":
-      return copy.stageShowdown;
-    default:
-      return stage ?? "--";
-  }
-}
-
-function getReplayActionLabel(
-  action: string | null,
-  copy: MobileRouteScreens["holdem"],
-) {
-  const normalized = action?.toLowerCase().replace(/[\s-]/g, "_") ?? null;
-
-  switch (normalized) {
-    case "fold":
-      return copy.fold;
-    case "check":
-      return copy.check;
-    case "call":
-      return copy.call;
-    case "bet":
-      return copy.bet;
-    case "raise":
-      return copy.raise;
-    case "all_in":
-      return copy.allIn;
-    default:
-      return action ?? "--";
-  }
-}
-
-function getReplayEventLabel(
-  type: string,
-  copy: MobileRouteScreens["holdem"],
-) {
-  switch (type) {
-    case "hand_started":
-      return copy.eventHandStarted;
-    case "hole_cards_dealt":
-      return copy.eventCardsDealt;
-    case "small_blind_posted":
-      return copy.eventSmallBlindPosted;
-    case "big_blind_posted":
-      return copy.eventBigBlindPosted;
-    case "turn_started":
-      return copy.eventTurnStarted;
-    case "turn_timed_out":
-      return copy.eventTurnTimedOut;
-    case "player_acted":
-      return copy.eventPlayerActed;
-    case "board_revealed":
-      return copy.eventBoardRevealed;
-    case "fairness_revealed":
-      return copy.eventFairnessRevealed;
-    case "showdown_resolved":
-      return copy.eventShowdownResolved;
-    case "hand_won_by_fold":
-      return copy.eventHandWonByFold;
-    case "hand_settled":
-      return copy.eventHandSettled;
-    default:
-      return type;
-  }
-}
-
-function getReplaySeatLabel(
-  replay: HoldemReplayData,
-  seatIndex: number | null,
-  copy: MobileRouteScreens["holdem"],
-) {
-  if (seatIndex === null) {
-    return "--";
-  }
-
-  const participant = findReplayParticipant(replay, seatIndex);
-  const baseLabel =
-    participant?.displayName ?? `${copy.openSeat} ${seatIndex + 1}`;
-
-  return replay.viewerSeatIndex === seatIndex
-    ? `${baseLabel} · ${copy.you}`
-    : baseLabel;
-}
-
-function getReplayWinnerLabels(
-  replay: HoldemReplayData,
-  seatIndexes: number[],
-  copy: MobileRouteScreens["holdem"],
-) {
-  return seatIndexes.map((seatIndex) => getReplaySeatLabel(replay, seatIndex, copy));
-}
-
-function describeReplayEvent(
-  replay: HoldemReplayData,
-  event: HoldemReplayEvent,
-  copy: MobileRouteScreens["holdem"],
-) {
-  const winnerLabels =
-    event.winnerSeatIndexes.length > 0
-      ? getReplayWinnerLabels(replay, event.winnerSeatIndexes, copy).join(", ")
-      : null;
-  const actorLabel = getReplaySeatLabel(replay, event.seatIndex, copy);
-  const cards =
-    event.type === "board_revealed"
-      ? (event.newCards.length > 0 ? event.newCards : event.boardCards)
-      : event.type === "hole_cards_dealt"
-        ? (findReplayParticipant(replay, replay.viewerSeatIndex)?.holeCards ?? [])
-        : [];
-
-  switch (event.type) {
-    case "hand_started":
-      return {
-        title: getReplayEventLabel(event.type, copy),
-        detail: [
-          replay.handNumber !== null
-            ? `${copy.hand} #${replay.handNumber}`
+function ReplayChip(props: {
+  label: string;
+  tone?: "default" | "info" | "gold";
+}) {
+  return (
+    <View
+      style={[
+        styles.replayChip,
+        props.tone === "info"
+          ? styles.replayChipInfo
+          : props.tone === "gold"
+            ? styles.replayChipGold
             : null,
-          getReplayStageLabel(event.stage ?? replay.stage, copy),
-        ]
-          .filter(Boolean)
-          .join(" · "),
-        cards,
-      };
-    case "small_blind_posted":
-    case "big_blind_posted":
-      return {
-        title: getReplayEventLabel(event.type, copy),
-        detail: [actorLabel, event.amount].filter(Boolean).join(" · "),
-        cards,
-      };
-    case "turn_started":
-      return {
-        title: getReplayEventLabel(event.type, copy),
-        detail: [
-          actorLabel,
-          getReplayStageLabel(event.stage ?? replay.stage, copy),
-          event.turnDeadlineAt ? formatReplayTimestamp(event.turnDeadlineAt) : null,
-        ]
-          .filter(Boolean)
-          .join(" · "),
-        cards,
-      };
-    case "turn_timed_out":
-      return {
-        title: getReplayEventLabel(event.type, copy),
-        detail: [
-          actorLabel,
-          event.timeoutAction ? getReplayActionLabel(event.timeoutAction, copy) : null,
-        ]
-          .filter(Boolean)
-          .join(" · "),
-        cards,
-      };
-    case "player_acted":
-      return {
-        title: getReplayEventLabel(event.type, copy),
-        detail: [
-          actorLabel,
-          getReplayActionLabel(event.action ?? event.lastAction, copy),
-          event.amount,
-        ]
-          .filter(Boolean)
-          .join(" · "),
-        cards,
-      };
-    case "board_revealed":
-      return {
-        title: getReplayEventLabel(event.type, copy),
-        detail: getReplayStageLabel(event.stage ?? replay.stage, copy),
-        cards,
-      };
-    case "showdown_resolved":
-    case "hand_won_by_fold":
-    case "hand_settled":
-      return {
-        title: getReplayEventLabel(event.type, copy),
-        detail: [
-          winnerLabels ? `${copy.winners}: ${winnerLabels}` : null,
-          event.type === "hand_settled" && replay.totalRakeAmount
-            ? `${copy.replayRake}: ${replay.totalRakeAmount}`
-            : null,
-        ]
-          .filter(Boolean)
-          .join(" · "),
-        cards,
-      };
-    default:
-      return {
-        title: getReplayEventLabel(event.type, copy),
-        detail: [
-          event.stage ? getReplayStageLabel(event.stage, copy) : null,
-          winnerLabels ? `${copy.winners}: ${winnerLabels}` : null,
-        ]
-          .filter(Boolean)
-          .join(" · "),
-        cards,
-      };
-  }
+      ]}
+    >
+      <Text
+        style={[
+          styles.replayChipLabel,
+          props.tone === "info"
+            ? styles.replayChipLabelInfo
+            : props.tone === "gold"
+              ? styles.replayChipLabelGold
+              : null,
+        ]}
+      >
+        {props.label}
+      </Text>
+    </View>
+  );
 }
 
 export function HoldemReplayDetail(props: {
@@ -304,15 +111,7 @@ export function HoldemReplayDetail(props: {
     setEvidenceBundle(null);
   }, [props.history.roundId]);
 
-  if (!replay) {
-    return (
-      <View style={styles.errorCard}>
-        <Text style={styles.errorLabel}>{props.screenCopy.replayFailed}</Text>
-      </View>
-    );
-  }
-
-  const loadEvidenceBundle = useCallback(async () => {
+  const ensureEvidenceBundle = useCallback(async () => {
     if (evidenceBundle) {
       return evidenceBundle;
     }
@@ -333,7 +132,7 @@ export function HoldemReplayDetail(props: {
   ]);
 
   const copyDisputePayload = useCallback(async () => {
-    const bundle = await loadEvidenceBundle();
+    const bundle = await ensureEvidenceBundle();
     if (!bundle) {
       return;
     }
@@ -347,13 +146,13 @@ export function HoldemReplayDetail(props: {
       setArtifactStatus(props.screenCopy.replayArtifactFailed);
     }
   }, [
-    loadEvidenceBundle,
+    ensureEvidenceBundle,
     props.screenCopy.replayArtifactCopied,
     props.screenCopy.replayArtifactFailed,
   ]);
 
   const exportHandEvidence = useCallback(async () => {
-    const bundle = await loadEvidenceBundle();
+    const bundle = await ensureEvidenceBundle();
     if (!bundle) {
       return;
     }
@@ -368,85 +167,135 @@ export function HoldemReplayDetail(props: {
       setArtifactStatus(props.screenCopy.replayArtifactFailed);
     }
   }, [
-    loadEvidenceBundle,
+    ensureEvidenceBundle,
     props.history.roundId,
     props.screenCopy.replayArtifactExported,
     props.screenCopy.replayArtifactFailed,
   ]);
 
+  if (!replay) {
+    return (
+      <View style={[styles.bannerCard, styles.bannerDanger]}>
+        <Text style={[styles.bannerText, styles.bannerTextDanger]}>
+          {props.screenCopy.replayFailed}
+        </Text>
+      </View>
+    );
+  }
+
+  const artifactFailed =
+    artifactStatus === props.screenCopy.replayArtifactFailed;
+
   return (
     <View style={styles.root}>
-      <View style={styles.header}>
-        <View style={styles.headerBody}>
-          <Text style={styles.sectionLabel}>{props.screenCopy.replaySummary}</Text>
-          <Text style={styles.title}>
-            {props.screenCopy.hand} #{replay.handNumber ?? "--"} ·{" "}
-            {getReplayStageLabel(replay.stage, props.screenCopy)}
-          </Text>
-          <Text style={styles.subtitle}>{replay.tableName ?? "--"}</Text>
+      <View style={styles.heroCard}>
+        <View style={styles.heroHeader}>
+          <View style={styles.heroCopy}>
+            <Text style={styles.eyebrow}>{props.screenCopy.replaySummary}</Text>
+            <Text style={styles.heroTitle}>
+              {props.screenCopy.hand} #{replay.handNumber ?? "--"}
+            </Text>
+            <Text style={styles.heroSubtitle}>{replay.tableName ?? "--"}</Text>
+          </View>
+          <ActionButton
+            label={props.screenCopy.replayBackToTable}
+            onPress={props.onBack}
+            variant="secondary"
+            compact
+          />
         </View>
-        <ActionButton
-          label={props.screenCopy.replayBackToTable}
-          onPress={props.onBack}
-          variant="secondary"
-          compact
-        />
-      </View>
 
-      <View style={styles.actionRow}>
-        <ActionButton
-          label={props.screenCopy.copyDisputePayload}
-          onPress={() => void copyDisputePayload()}
-          variant="secondary"
-          compact
-        />
-        <ActionButton
-          label={props.screenCopy.exportHandEvidence}
-          onPress={() => void exportHandEvidence()}
-          compact
-        />
+        <View style={styles.chipRow}>
+          <ReplayChip
+            label={getReplayStageLabel(replay.stage, props.screenCopy)}
+            tone="gold"
+          />
+          <ReplayChip
+            label={`${props.screenCopy.replayParticipants} ${replay.participants.length}`}
+          />
+          <ReplayChip
+            label={`${props.screenCopy.replayTimeline} ${replay.events.length}`}
+            tone="info"
+          />
+        </View>
+
+        <View style={styles.actionRow}>
+          <ActionButton
+            label={props.screenCopy.copyDisputePayload}
+            onPress={() => void copyDisputePayload()}
+            variant="secondary"
+            compact
+          />
+          <ActionButton
+            label={props.screenCopy.exportHandEvidence}
+            onPress={() => void exportHandEvidence()}
+            compact
+          />
+        </View>
       </View>
 
       {artifactStatus ? (
-        <View style={styles.statusCard}>
-          <Text style={styles.statusLabel}>{artifactStatus}</Text>
+        <View
+          style={[
+            styles.bannerCard,
+            artifactFailed ? styles.bannerDanger : styles.bannerInfo,
+          ]}
+        >
+          <Text
+            style={[
+              styles.bannerText,
+              artifactFailed ? styles.bannerTextDanger : styles.bannerTextInfo,
+            ]}
+          >
+            {artifactStatus}
+          </Text>
         </View>
       ) : null}
 
+      <View style={styles.statGrid}>
+        <StatCard
+          label={props.screenCopy.replayStake}
+          value={props.formatAmount(replay.stakeAmount)}
+        />
+        <StatCard
+          label={props.screenCopy.replayPayout}
+          value={props.formatAmount(replay.payoutAmount)}
+          accent={replay.payoutAmount !== "0.00" ? "success" : "default"}
+        />
+        <StatCard
+          label={props.screenCopy.replayStartedAt}
+          value={formatReplayTimestamp(replay.startedAt)}
+        />
+        <StatCard
+          label={props.screenCopy.replaySettledAt}
+          value={formatReplayTimestamp(replay.settledAt)}
+        />
+      </View>
+
       {evidenceBundle ? (
-        <View style={styles.blockCard}>
-          <Text style={styles.sectionLabel}>
+        <View style={styles.sectionCard}>
+          <Text style={styles.eyebrow}>
             {props.screenCopy.replayBundleSummary}
           </Text>
-          <Text style={styles.eventTitle}>{evidenceBundle.summaryPage.title}</Text>
-          <Text style={styles.participantMeta}>
+          <Text style={styles.sectionTitle}>
+            {evidenceBundle.summaryPage.title}
+          </Text>
+          <Text style={styles.sectionBody}>
             {evidenceBundle.summaryPage.subtitle}
           </Text>
-          <View style={styles.disputeList}>
-            <View style={styles.disputeRow}>
-              <Text style={styles.disputeLabel}>
-                {props.screenCopy.replayBundleExportedAt}
-              </Text>
-              <Text style={styles.disputeValue}>
-                {formatReplayTimestamp(evidenceBundle.exportedAt)}
-              </Text>
-            </View>
-            <View style={styles.disputeRow}>
-              <Text style={styles.disputeLabel}>
-                {props.screenCopy.replayBundleKeyId}
-              </Text>
-              <Text style={styles.disputeValue}>
-                {evidenceBundle.signature.keyId}
-              </Text>
-            </View>
-            <View style={styles.disputeRow}>
-              <Text style={styles.disputeLabel}>
-                {props.screenCopy.replayBundleDigest}
-              </Text>
-              <Text style={styles.disputeValue}>
-                {evidenceBundle.signature.payloadDigest}
-              </Text>
-            </View>
+          <View style={styles.detailList}>
+            <DetailRow
+              label={props.screenCopy.replayBundleExportedAt}
+              value={formatReplayTimestamp(evidenceBundle.exportedAt)}
+            />
+            <DetailRow
+              label={props.screenCopy.replayBundleKeyId}
+              value={evidenceBundle.signature.keyId}
+            />
+            <DetailRow
+              label={props.screenCopy.replayBundleDigest}
+              value={evidenceBundle.signature.payloadDigest}
+            />
           </View>
           <Text style={styles.bundleMarkdown}>
             {evidenceBundle.summaryPage.markdown}
@@ -454,109 +303,87 @@ export function HoldemReplayDetail(props: {
         </View>
       ) : null}
 
-      <View style={styles.metaGrid}>
-        <View style={styles.metaCard}>
-          <Text style={styles.metaLabel}>{props.screenCopy.replayStake}</Text>
-          <Text style={styles.metaValue}>
-            {props.formatAmount(replay.stakeAmount)}
+      <View style={styles.panelRow}>
+        <View style={[styles.sectionCard, styles.panelCard]}>
+          <Text style={styles.eyebrow}>{props.screenCopy.fairness}</Text>
+          <Text style={styles.sectionTitle}>
+            {props.screenCopy.replayBundleDigest}
           </Text>
-        </View>
-        <View style={styles.metaCard}>
-          <Text style={styles.metaLabel}>{props.screenCopy.replayPayout}</Text>
-          <Text style={styles.metaValue}>
-            {props.formatAmount(replay.payoutAmount)}
-          </Text>
-        </View>
-        <View style={styles.metaCard}>
-          <Text style={styles.metaLabel}>{props.screenCopy.replayStartedAt}</Text>
-          <Text style={styles.metaValue}>
-            {formatReplayTimestamp(replay.startedAt)}
-          </Text>
-        </View>
-        <View style={styles.metaCard}>
-          <Text style={styles.metaLabel}>{props.screenCopy.replaySettledAt}</Text>
-          <Text style={styles.metaValue}>
-            {formatReplayTimestamp(replay.settledAt)}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.gridRow}>
-        <View style={styles.blockCard}>
-          <Text style={styles.metaLabel}>{props.screenCopy.fairness}</Text>
-          <Text style={styles.fairnessValue}>
-            {replay.fairnessCommitHash ?? "--"}
+          <Text style={styles.hashText}>{replay.fairnessCommitHash ?? "--"}</Text>
+          <Text style={styles.sectionBody}>
+            {props.screenCopy.replaySupportHint}
           </Text>
         </View>
 
-        <View style={styles.blockCard}>
-          <Text style={styles.metaLabel}>{props.screenCopy.replayDispute}</Text>
-          <View style={styles.disputeList}>
-            <View style={styles.disputeRow}>
-              <Text style={styles.disputeLabel}>{props.screenCopy.replayRoundId}</Text>
-              <Text style={styles.disputeValue}>{props.history.roundId}</Text>
-            </View>
-            <View style={styles.disputeRow}>
-              <Text style={styles.disputeLabel}>
-                {props.screenCopy.replayReferenceId}
-              </Text>
-              <Text style={styles.disputeValue}>#{props.history.referenceId}</Text>
-            </View>
-            <View style={styles.disputeRow}>
-              <Text style={styles.disputeLabel}>{props.screenCopy.replayEventCount}</Text>
-              <Text style={styles.disputeValue}>{props.history.events.length}</Text>
-            </View>
+        <View style={[styles.sectionCard, styles.panelCard]}>
+          <Text style={styles.eyebrow}>{props.screenCopy.replayDispute}</Text>
+          <View style={styles.detailList}>
+            <DetailRow
+              label={props.screenCopy.replayRoundId}
+              value={props.history.roundId}
+            />
+            <DetailRow
+              label={props.screenCopy.replayReferenceId}
+              value={`#${props.history.referenceId}`}
+            />
+            <DetailRow
+              label={props.screenCopy.replayEventCount}
+              value={String(props.history.events.length)}
+            />
           </View>
-          <Text style={styles.supportHint}>{props.screenCopy.replaySupportHint}</Text>
         </View>
       </View>
 
-      <View style={styles.block}>
-        <Text style={styles.sectionLabel}>{props.screenCopy.board}</Text>
+      <View style={styles.sectionCard}>
+        <Text style={styles.eyebrow}>{props.screenCopy.board}</Text>
+        <Text style={styles.sectionTitle}>
+          {getReplayStageLabel(replay.stage, props.screenCopy)}
+        </Text>
         <View style={styles.cardRow}>
           {replay.boardCards.length > 0 ? (
             replay.boardCards.map((card, index) => (
               <PlayingCard key={`board-${index}`} card={card} />
             ))
           ) : (
-            <Text style={styles.placeholderText}>{props.screenCopy.stagePreflop}</Text>
+            <Text style={styles.placeholderText}>
+              {props.screenCopy.stagePreflop}
+            </Text>
           )}
         </View>
       </View>
 
       {replay.pots.length > 0 ? (
-        <View style={styles.gridRow}>
-          {replay.pots.map((pot) => (
-            <View
-              key={`pot-${pot.kind}-${pot.potIndex}`}
-              style={styles.blockCard}
-            >
-              <Text style={styles.metaLabel}>
-                {pot.kind === "main"
-                  ? props.screenCopy.mainPot
-                  : `${props.screenCopy.sidePot} ${pot.potIndex}`}
-              </Text>
-              <Text style={styles.metaValue}>
-                {props.formatAmount(pot.amount)}
-              </Text>
-              <Text style={styles.metaHint}>
-                {props.screenCopy.replayRake}: {props.formatAmount(pot.rakeAmount)}
-              </Text>
-            </View>
-          ))}
+        <View style={styles.sectionBlock}>
+          <Text style={styles.eyebrow}>{props.screenCopy.mainPot}</Text>
+          <View style={styles.statGrid}>
+            {replay.pots.map((pot) => (
+              <StatCard
+                key={`pot-${pot.kind}-${pot.potIndex}`}
+                label={
+                  pot.kind === "main"
+                    ? props.screenCopy.mainPot
+                    : `${props.screenCopy.sidePot} ${pot.potIndex}`
+                }
+                value={props.formatAmount(pot.amount)}
+                hint={`${props.screenCopy.replayRake}: ${props.formatAmount(
+                  pot.rakeAmount,
+                )}`}
+              />
+            ))}
+          </View>
         </View>
       ) : null}
 
-      <View style={styles.block}>
-        <Text style={styles.sectionLabel}>{props.screenCopy.replayParticipants}</Text>
-        <View style={styles.column}>
+      <View style={styles.sectionBlock}>
+        <Text style={styles.eyebrow}>{props.screenCopy.replayParticipants}</Text>
+        <View style={styles.stackColumn}>
           {replay.participants.map((participant) => (
             <View
               key={`participant-${participant.seatIndex}`}
-              style={styles.blockCard}
+              style={styles.participantCard}
             >
               <View style={styles.rowBetween}>
-                <View style={styles.headerBody}>
+                <View style={styles.participantHeader}>
                   <Text style={styles.participantTitle}>
                     {getReplaySeatLabel(
                       replay,
@@ -569,9 +396,7 @@ export function HoldemReplayDetail(props: {
                   </Text>
                 </View>
                 {participant.winner ? (
-                  <Text style={styles.participantWinner}>
-                    {props.screenCopy.winners}
-                  </Text>
+                  <ReplayChip label={props.screenCopy.winners} tone="gold" />
                 ) : null}
               </View>
 
@@ -586,58 +411,60 @@ export function HoldemReplayDetail(props: {
                 </View>
               ) : null}
 
-              <View style={styles.metaGrid}>
-                <View style={styles.metaCard}>
-                  <Text style={styles.metaLabel}>
-                    {props.screenCopy.totalCommitted}
-                  </Text>
-                  <Text style={styles.metaValue}>
-                    {participant.contributionAmount
+              <View style={styles.statGrid}>
+                <StatCard
+                  label={props.screenCopy.totalCommitted}
+                  value={
+                    participant.contributionAmount
                       ? props.formatAmount(participant.contributionAmount)
-                      : "--"}
-                  </Text>
-                </View>
-                <View style={styles.metaCard}>
-                  <Text style={styles.metaLabel}>
-                    {props.screenCopy.replayPayout}
-                  </Text>
-                  <Text style={styles.metaValue}>
-                    {participant.payoutAmount
+                      : "--"
+                  }
+                />
+                <StatCard
+                  label={props.screenCopy.replayPayout}
+                  value={
+                    participant.payoutAmount
                       ? props.formatAmount(participant.payoutAmount)
-                      : "--"}
-                  </Text>
-                </View>
-                <View style={styles.metaCard}>
-                  <Text style={styles.metaLabel}>{props.screenCopy.stack}</Text>
-                  <Text style={styles.metaValue}>
-                    {participant.stackAfter
+                      : "--"
+                  }
+                  accent={participant.winner ? "success" : "default"}
+                />
+                <StatCard
+                  label={props.screenCopy.stack}
+                  value={
+                    participant.stackAfter
                       ? props.formatAmount(participant.stackAfter)
-                      : "--"}
-                  </Text>
-                </View>
+                      : "--"
+                  }
+                />
               </View>
             </View>
           ))}
         </View>
       </View>
 
-      <View style={styles.block}>
-        <Text style={styles.sectionLabel}>{props.screenCopy.replayTimeline}</Text>
-        <View style={styles.column}>
+      <View style={styles.sectionBlock}>
+        <Text style={styles.eyebrow}>{props.screenCopy.replayTimeline}</Text>
+        <View style={styles.stackColumn}>
           {replay.events.map((event) => {
-            const description = describeReplayEvent(replay, event, props.screenCopy);
+            const description = describeReplayEvent(
+              replay,
+              event,
+              props.screenCopy,
+            );
+
             return (
-              <View key={`event-${event.sequence}`} style={styles.blockCard}>
+              <View key={`event-${event.sequence}`} style={styles.timelineCard}>
                 <View style={styles.rowBetween}>
-                  <View style={styles.headerBody}>
-                    <Text style={styles.eventTitle}>{description.title}</Text>
-                    <Text style={styles.participantMeta}>
+                  <View style={styles.timelineCopy}>
+                    <Text style={styles.timelineTitle}>{description.title}</Text>
+                    <Text style={styles.timelineDetail}>
                       {description.detail || "--"}
                     </Text>
                   </View>
-                  <View style={styles.eventStamp}>
-                    <Text style={styles.eventStampText}>#{event.sequence}</Text>
-                    <Text style={styles.eventStampText}>
+                  <View style={styles.timelineStamp}>
+                    <Text style={styles.timelineStampText}>#{event.sequence}</Text>
+                    <Text style={styles.timelineStampText}>
                       {formatReplayTimestamp(event.createdAt)}
                     </Text>
                   </View>
@@ -664,229 +491,278 @@ export function HoldemReplayDetail(props: {
 
 const styles = StyleSheet.create({
   root: {
-    gap: 14,
+    gap: mobileSpacing.lg,
+  },
+  heroCard: {
+    gap: mobileSpacing.lg,
+    borderRadius: mobileRadii.xl,
+    borderWidth: mobileChromeTheme.borderWidth,
+    borderColor: palette.border,
+    backgroundColor: mobileFeedbackTheme.infoHero.backgroundColor,
+    padding: mobileSpacing.xl,
+    ...mobileChromeTheme.cardShadow,
+  },
+  heroHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: mobileSpacing.md,
+  },
+  heroCopy: {
+    flex: 1,
+    gap: mobileSpacing.xs,
+  },
+  eyebrow: {
+    color: palette.textMuted,
+    fontSize: mobileTypeScale.fontSize.labelXs,
+    fontWeight: "700",
+    letterSpacing: mobileTypeScale.letterSpacing.caps,
+    textTransform: "uppercase",
+  },
+  heroTitle: {
+    color: palette.text,
+    fontSize: mobileTypeScale.fontSize.hero,
+    fontWeight: "800",
+  },
+  heroSubtitle: {
+    color: palette.textMuted,
+    fontSize: mobileTypeScale.fontSize.body,
+    lineHeight: mobileTypeScale.lineHeight.body,
+  },
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: mobileSpacing.sm,
+  },
+  replayChip: {
+    borderRadius: mobileRadii.full,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.panel,
+    paddingHorizontal: mobileSpacing.lg,
+    paddingVertical: mobileSpacing.sm,
+  },
+  replayChipInfo: {
+    backgroundColor: mobileFeedbackTheme.info.backgroundColor,
+  },
+  replayChipGold: {
+    backgroundColor: mobileFeedbackTheme.gold.backgroundColor,
+  },
+  replayChipLabel: {
+    color: palette.text,
+    fontSize: mobileTypeScale.fontSize.labelSm,
+    fontWeight: "700",
+  },
+  replayChipLabelInfo: {
+    color: mobileFeedbackTheme.info.accentColor,
+  },
+  replayChipLabelGold: {
+    color: mobileFeedbackTheme.gold.accentColor,
   },
   actionRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10,
+    gap: mobileSpacing.md,
   },
-  header: {
+  bannerCard: {
+    borderRadius: mobileRadii.xl,
+    borderWidth: mobileChromeTheme.borderWidth,
+    paddingHorizontal: mobileSpacing.xl,
+    paddingVertical: mobileSpacing.lg,
+  },
+  bannerInfo: {
+    borderColor: mobileFeedbackTheme.info.borderColor,
+    backgroundColor: mobileFeedbackTheme.info.backgroundColor,
+    ...mobileChromeTheme.cardShadowSm,
+  },
+  bannerDanger: {
+    borderColor: mobileFeedbackTheme.danger.borderColor,
+    backgroundColor: mobileFeedbackTheme.danger.backgroundColor,
+    ...mobileChromeTheme.cardShadowSm,
+  },
+  bannerText: {
+    fontSize: mobileTypeScale.fontSize.body,
+    lineHeight: mobileTypeScale.lineHeight.body,
+  },
+  bannerTextInfo: {
+    color: mobileFeedbackTheme.info.accentColor,
+  },
+  bannerTextDanger: {
+    color: mobileFeedbackTheme.danger.accentColor,
+  },
+  statGrid: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 12,
+    flexWrap: "wrap",
+    gap: mobileSpacing.md,
   },
-  headerBody: {
-    flex: 1,
-    gap: 4,
+  statCard: {
+    flexGrow: 1,
+    minWidth: 140,
+    gap: mobileSpacing.sm,
+    borderRadius: mobileRadii.xl,
+    borderWidth: mobileChromeTheme.borderWidth,
+    borderColor: palette.border,
+    backgroundColor: palette.panelMuted,
+    padding: mobileSpacing.xl,
+    ...mobileChromeTheme.cardShadowSm,
   },
-  title: {
+  statLabel: {
+    color: palette.textMuted,
+    fontSize: mobileTypeScale.fontSize.labelXs,
+    fontWeight: "700",
+    letterSpacing: mobileTypeScale.letterSpacing.caps,
+    textTransform: "uppercase",
+  },
+  statValue: {
     color: palette.text,
-    fontSize: 18,
+    fontSize: mobileTypeScale.fontSize.bodyLg,
+    fontWeight: "700",
+  },
+  statValueSuccess: {
+    color: palette.success,
+  },
+  statValueInfo: {
+    color: mobileFeedbackTheme.info.accentColor,
+  },
+  statHint: {
+    color: palette.textMuted,
+    fontSize: mobileTypeScale.fontSize.labelSm,
+    lineHeight: 19,
+  },
+  sectionBlock: {
+    gap: mobileSpacing.md,
+  },
+  sectionCard: {
+    gap: mobileSpacing.md,
+    borderRadius: mobileRadii.xl,
+    borderWidth: mobileChromeTheme.borderWidth,
+    borderColor: palette.border,
+    backgroundColor: palette.panel,
+    padding: mobileSpacing.xl,
+    ...mobileChromeTheme.cardShadowSm,
+  },
+  panelRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: mobileSpacing.md,
+  },
+  panelCard: {
+    flex: 1,
+    minWidth: 180,
+  },
+  sectionTitle: {
+    color: palette.text,
+    fontSize: mobileTypeScale.fontSize.titleBase,
     fontWeight: "800",
   },
-  subtitle: {
+  sectionBody: {
     color: palette.textMuted,
-    fontSize: 13,
+    fontSize: mobileTypeScale.fontSize.body,
+    lineHeight: mobileTypeScale.lineHeight.body,
   },
-  sectionLabel: {
-    color: palette.textMuted,
-    fontSize: 12,
-    fontWeight: "700",
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
+  detailList: {
+    gap: mobileSpacing.sm,
   },
-  metaGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  metaCard: {
-    flex: 1,
-    minWidth: 120,
-    gap: 4,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.panelMuted,
-    padding: 12,
-  },
-  metaLabel: {
-    color: palette.textMuted,
-    fontSize: 11,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-  },
-  metaValue: {
-    color: palette.text,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  metaHint: {
-    color: palette.textMuted,
-    fontSize: 12,
-  },
-  block: {
-    gap: 10,
-  },
-  statusCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.panelMuted,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  statusLabel: {
-    color: palette.text,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  bundleMarkdown: {
-    color: palette.textMuted,
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  gridRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  blockCard: {
-    flex: 1,
-    minWidth: 140,
-    gap: 10,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.panelMuted,
-    padding: 12,
-  },
-  fairnessValue: {
-    color: palette.text,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  disputeList: {
-    gap: 8,
-  },
-  disputeRow: {
+  detailRow: {
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
-    gap: 12,
+    gap: mobileSpacing.md,
   },
-  disputeLabel: {
+  detailLabel: {
     color: palette.textMuted,
-    fontSize: 13,
+    fontSize: mobileTypeScale.fontSize.labelSm,
   },
-  disputeValue: {
+  detailValue: {
     color: palette.text,
     flexShrink: 1,
-    fontSize: 13,
+    fontFamily: mobileTypography.mono,
+    fontSize: mobileTypeScale.fontSize.labelSm,
     fontWeight: "700",
     textAlign: "right",
   },
-  supportHint: {
+  bundleMarkdown: {
     color: palette.textMuted,
-    fontSize: 12,
-    lineHeight: 18,
+    fontSize: mobileTypeScale.fontSize.labelSm,
+    lineHeight: 20,
+  },
+  hashText: {
+    color: mobileFeedbackTheme.infoHero.accentColor,
+    fontFamily: mobileTypography.mono,
+    fontSize: mobileTypeScale.fontSize.labelSm,
+    lineHeight: 20,
   },
   cardRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10,
+    gap: mobileSpacing.md,
   },
   placeholderText: {
     color: palette.textMuted,
-    fontSize: 14,
+    fontSize: mobileTypeScale.fontSize.body,
   },
-  column: {
-    gap: 10,
+  stackColumn: {
+    gap: mobileSpacing.md,
+  },
+  participantCard: {
+    gap: mobileSpacing.md,
+    borderRadius: mobileRadii.xl,
+    borderWidth: mobileChromeTheme.borderWidth,
+    borderColor: palette.border,
+    backgroundColor: palette.panelMuted,
+    padding: mobileSpacing.xl,
+    ...mobileChromeTheme.cardShadowSm,
   },
   rowBetween: {
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
-    gap: 12,
+    gap: mobileSpacing.md,
+  },
+  participantHeader: {
+    flex: 1,
+    gap: mobileSpacing.xs,
   },
   participantTitle: {
     color: palette.text,
-    fontSize: 14,
-    fontWeight: "700",
+    fontSize: mobileTypeScale.fontSize.bodyLg,
+    fontWeight: "800",
   },
   participantMeta: {
     color: palette.textMuted,
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: mobileTypeScale.fontSize.body,
+    lineHeight: mobileTypeScale.lineHeight.body,
   },
-  participantWinner: {
-    color: mobileFeedbackTheme.success.accentColor,
-    fontSize: 12,
-    fontWeight: "700",
+  timelineCard: {
+    gap: mobileSpacing.md,
+    borderRadius: mobileRadii.xl,
+    borderWidth: mobileChromeTheme.borderWidth,
+    borderColor: palette.border,
+    backgroundColor: palette.panel,
+    padding: mobileSpacing.xl,
+    ...mobileChromeTheme.cardShadowSm,
   },
-  eventTitle: {
+  timelineCopy: {
+    flex: 1,
+    gap: mobileSpacing.xs,
+  },
+  timelineTitle: {
     color: palette.text,
-    fontSize: 14,
-    fontWeight: "700",
+    fontSize: mobileTypeScale.fontSize.bodyLg,
+    fontWeight: "800",
   },
-  eventStamp: {
+  timelineDetail: {
+    color: palette.textMuted,
+    fontSize: mobileTypeScale.fontSize.body,
+    lineHeight: mobileTypeScale.lineHeight.body,
+  },
+  timelineStamp: {
     alignItems: "flex-end",
     gap: 2,
   },
-  eventStampText: {
+  timelineStampText: {
     color: palette.textMuted,
-    fontSize: 11,
-  },
-  errorCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: mobileFeedbackTheme.danger.borderColor,
-    backgroundColor: mobileFeedbackTheme.danger.backgroundColor,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  errorLabel: {
-    color: mobileFeedbackTheme.danger.accentColor,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  playingCard: {
-    width: 64,
-    height: 92,
-    justifyContent: "space-between",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: "#fffdf7",
-    paddingHorizontal: 10,
-    paddingVertical: 9,
-  },
-  playingCardBack: {
-    color: palette.textMuted,
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 1,
-    textAlign: "center",
-  },
-  playingCardHidden: {
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: palette.input,
-  },
-  playingCardLabel: {
-    color: "#111827",
-    fontSize: 15,
-    fontWeight: "800",
-  },
-  playingCardLabelRed: {
-    color: "#be123c",
-  },
-  playingCardSuit: {
-    alignSelf: "flex-end",
-    color: "#111827",
-    fontSize: 20,
-    fontWeight: "700",
+    fontFamily: mobileTypography.mono,
+    fontSize: mobileTypeScale.fontSize.labelXs,
   },
 });

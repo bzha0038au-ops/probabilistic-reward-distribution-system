@@ -11,6 +11,14 @@ const communityCopy = {
     openWeb: 'Open web community',
     webFallback:
       'If captcha is enabled for your account tier, use the web community page on this device to complete the human check.',
+    searchPlaceholder: 'Search games or topics...',
+    searchEmpty: 'No visible threads match this search yet.',
+    trendingTitle: 'Trending now',
+    trendingSubtitle:
+      'The busiest visible topics stay pinned here so you can jump into live conversation faster.',
+    hotBadge: 'Hot',
+    tapToOpen: 'Tap to open the thread and join replies.',
+    selectedBadge: 'Live thread',
     createTitle: 'Start a thread',
     createSubtitle:
       'Threads publish immediately unless anti-spam policy pushes the submission into admin review.',
@@ -75,6 +83,13 @@ const communityCopy = {
     openWeb: '打开 Web 社区页',
     webFallback:
       '如果当前账号层级启用了 captcha，请直接在这台设备上打开 Web 社区页完成人机校验。',
+    searchPlaceholder: '搜索游戏或话题...',
+    searchEmpty: '当前搜索下还没有匹配的可见主题。',
+    trendingTitle: '热门讨论',
+    trendingSubtitle: '把当前最活跃的可见主题固定出来，方便你直接跳进讨论。',
+    hotBadge: '热门',
+    tapToOpen: '点开主题，直接查看详情并参与回复。',
+    selectedBadge: '当前讨论',
     createTitle: '发起主题',
     createSubtitle:
       '正常内容会即时发布；命中反垃圾策略时会自动进入管理员审核。',

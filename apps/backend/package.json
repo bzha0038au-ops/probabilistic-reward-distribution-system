@@ -20,6 +20,7 @@
     "admin:promote": "node scripts/promote-admin.js",
     "user:reset-password": "node scripts/reset-password.js",
     "seed:manual": "tsx scripts/seed-manual.ts",
+    "repair:local-dev-state": "tsx scripts/repair-local-dev-state.ts",
     "seed:iap-products": "sh ../../scripts/run-tsx.sh scripts/seed-iap-products.ts",
     "seed:saas-portal-demo": "tsx scripts/seed-saas-portal-demo.ts",
     "verify:decision-class-billing": "tsx scripts/verify-decision-class-billing.ts",

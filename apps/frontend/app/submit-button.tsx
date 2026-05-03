@@ -3,20 +3,28 @@
 import { useFormStatus } from 'react-dom';
 
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 export function SubmitButton({
   children,
   loadingLabel,
   idleLabel,
+  className,
 }: {
   children: string;
   loadingLabel: string;
   idleLabel: string;
+  className?: string;
 }) {
   const { pending } = useFormStatus();
 
   return (
-    <Button type={pending ? 'button' : 'submit'} disabled={pending}>
+    <Button
+      type={pending ? 'button' : 'submit'}
+      variant="arcade"
+      className={cn('w-full', className)}
+      disabled={pending}
+    >
       {children}
       {pending && (
         <svg

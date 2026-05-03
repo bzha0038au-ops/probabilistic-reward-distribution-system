@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Notifications</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;700;800&amp;family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-highest": "#e5e2e1",
+                        "tertiary": "#705d00",
+                        "surface-container-high": "#eae7e7",
+                        "on-secondary-container": "#fffbff",
+                        "secondary-fixed-dim": "#c3c0ff",
+                        "on-secondary-fixed-variant": "#3323cc",
+                        "surface-container": "#f0eded",
+                        "secondary-fixed": "#e2dfff",
+                        "inverse-on-surface": "#f3f0ef",
+                        "surface-tint": "#a73a00",
+                        "on-tertiary-fixed": "#221b00",
+                        "on-surface": "#1c1b1b",
+                        "on-tertiary-fixed-variant": "#544600",
+                        "on-error": "#ffffff",
+                        "on-secondary": "#ffffff",
+                        "primary-fixed": "#ffdbce",
+                        "on-error-container": "#93000a",
+                        "on-primary-container": "#521800",
+                        "primary-container": "#ff5c00",
+                        "on-primary": "#ffffff",
+                        "on-surface-variant": "#5b4137",
+                        "tertiary-fixed-dim": "#e9c400",
+                        "on-background": "#1c1b1b",
+                        "on-tertiary-container": "#4c3e00",
+                        "primary-fixed-dim": "#ffb59a",
+                        "on-primary-fixed-variant": "#802a00",
+                        "outline": "#8f7065",
+                        "secondary": "#4b41e1",
+                        "tertiary-container": "#caa900",
+                        "outline-variant": "#e4beb1",
+                        "surface-dim": "#dcd9d9",
+                        "surface": "#fcf9f8",
+                        "on-tertiary": "#ffffff",
+                        "inverse-surface": "#313030",
+                        "on-primary-fixed": "#370e00",
+                        "secondary-container": "#645efb",
+                        "background": "#fcf9f8",
+                        "surface-container-lowest": "#ffffff",
+                        "error": "#ba1a1a",
+                        "primary": "#a73a00",
+                        "surface-variant": "#e5e2e1",
+                        "inverse-primary": "#ffb59a",
+                        "surface-container-low": "#f6f3f2",
+                        "on-secondary-fixed": "#0f0069",
+                        "tertiary-fixed": "#ffe170",
+                        "error-container": "#ffdad6",
+                        "surface-bright": "#fcf9f8"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xs": "4px",
+                        "lg": "24px",
+                        "md": "16px",
+                        "sm": "8px",
+                        "margin": "20px",
+                        "xl": "32px",
+                        "gutter": "16px",
+                        "unit": "4px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Plus Jakarta Sans"],
+                        "label-bold": ["Be Vietnam Pro"],
+                        "body-lg": ["Be Vietnam Pro"],
+                        "body-md": ["Be Vietnam Pro"],
+                        "headline-xl": ["Plus Jakarta Sans"],
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "label-sm": ["Be Vietnam Pro"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["32px", { "lineHeight": "38px", "letterSpacing": "-0.01em", "fontWeight": "800" }],
+                        "label-bold": ["14px", { "lineHeight": "20px", "fontWeight": "700" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-xl": ["40px", { "lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "800" }],
+                        "headline-md": ["24px", { "lineHeight": "30px", "fontWeight": "700" }],
+                        "label-sm": ["12px", { "lineHeight": "16px", "fontWeight": "500" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background min-h-screen flex flex-col font-body-md">
+<!-- TopAppBar -->
+<header class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-4 h-16 bg-white dark:bg-slate-900 border-b-2 border-slate-950 shadow-[0px_4px_0px_0px_rgba(2,6,23,1)]">
+<div class="flex items-center gap-sm">
+<div class="w-8 h-8 rounded-full bg-surface-variant overflow-hidden border-2 border-slate-950 flex items-center justify-center">
+<img alt="User Profile Avatar" class="w-full h-full object-cover" data-alt="A close up studio portrait of a young person with vibrant, expressive features against a solid, brightly lit background. The style is highly energetic and playful, fitting a retro-pop aesthetic with high contrast and sharp details." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB2vY1j8HDUv7Zb3A-s34S5gCBlx8xXFdbuxUME54AtnRxyfZJBhN_JLi-60BguoB3JrMCi1sRLGt-Vvf3YQpd51m30G7dUl5n1nddWYH6p53Fr388LMEFPcgsiViHEh3DfpiiBNjk8gKt8G_tbkKDqJT-ut3UlGZgTlsvgYbb_9_wrgZjJj9dr229Elahxnoh6UxzHU2CSUKrbdVI9LtFyQg8MAtimk-PlM_rfsiP6kcV9RRhYgNs7MpOlCmyQnQq3QmbfqRNh9kuK"/>
+</div>
+<h1 class="font-headline-lg text-headline-lg uppercase tracking-tight text-slate-950 dark:text-white">REWARDS HUB</h1>
+</div>
+<div class="flex items-center">
+<span class="font-label-bold text-label-bold text-[#FF5C00] bg-surface-container-highest px-3 py-1 rounded-full border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(2,6,23,1)]">$1,240.50</span>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-1 mt-16 mb-20 md:mb-0 p-4 max-w-3xl mx-auto w-full flex flex-col gap-md">
+<div class="flex items-center justify-between mt-sm mb-xs">
+<h2 class="font-headline-md text-headline-md">Notifications</h2>
+<button class="font-label-sm text-label-sm text-primary hover:underline">Mark all as read</button>
+</div>
+<!-- Filter Chips -->
+<div class="flex gap-sm overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide snap-x">
+<button class="snap-start whitespace-nowrap px-4 py-2 rounded-full border-2 border-slate-950 bg-secondary text-white font-label-bold text-label-bold">All</button>
+<button class="snap-start whitespace-nowrap px-4 py-2 rounded-full border-2 border-slate-950 bg-white hover:bg-surface-variant font-label-bold text-label-bold text-slate-950">Rewards</button>
+<button class="snap-start whitespace-nowrap px-4 py-2 rounded-full border-2 border-slate-950 bg-white hover:bg-surface-variant font-label-bold text-label-bold text-slate-950">Updates</button>
+<button class="snap-start whitespace-nowrap px-4 py-2 rounded-full border-2 border-slate-950 bg-white hover:bg-surface-variant font-label-bold text-label-bold text-slate-950">Community</button>
+</div>
+<!-- Notification List -->
+<div class="flex flex-col gap-sm">
+<!-- Reward Result Notification -->
+<div class="bg-white border-2 border-slate-950 rounded-lg p-4 shadow-[4px_4px_0px_0px_rgba(2,6,23,1)] flex gap-4 items-start relative">
+<div class="absolute top-4 right-4 w-2 h-2 rounded-full bg-primary-container"></div>
+<div class="w-12 h-12 flex-shrink-0 bg-primary-fixed rounded-lg border-2 border-slate-950 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-2xl" data-icon="redeem" data-weight="fill" style="font-variation-settings: 'FILL' 1;">redeem</span>
+</div>
+<div class="flex-1">
+<div class="flex items-center gap-2 mb-1">
+<span class="font-label-bold text-label-sm text-primary uppercase tracking-wide">Reward Result</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant ml-auto mr-4">2m ago</span>
+</div>
+<h3 class="font-headline-sm text-body-lg font-bold mb-1">Epic Loot Box Opened!</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">You unlocked the Legendary Golden Ticket. Tap to view your new power-ups and claim them to your wallet.</p>
+</div>
+</div>
+<!-- Game Update Notification -->
+<div class="bg-white border-2 border-slate-950 rounded-lg p-4 shadow-[4px_4px_0px_0px_rgba(2,6,23,1)] flex gap-4 items-start opacity-70">
+<div class="w-12 h-12 flex-shrink-0 bg-secondary-fixed rounded-lg border-2 border-slate-950 flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined text-2xl" data-icon="system_update_alt">system_update_alt</span>
+</div>
+<div class="flex-1">
+<div class="flex items-center gap-2 mb-1">
+<span class="font-label-bold text-label-sm text-secondary uppercase tracking-wide">Game Update</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant ml-auto">1h ago</span>
+</div>
+<h3 class="font-headline-sm text-body-lg font-bold mb-1">Season 5 is Live</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">Dive into the new Cyber Metropolis map. New quests and boosted XP are waiting for you.</p>
+</div>
+</div>
+<!-- Community Reply Notification -->
+<div class="bg-surface-container-low border-2 border-slate-950 rounded-lg p-4 flex gap-4 items-start">
+<div class="w-12 h-12 flex-shrink-0 bg-tertiary-fixed rounded-lg border-2 border-slate-950 flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined text-2xl" data-icon="forum">forum</span>
+</div>
+<div class="flex-1">
+<div class="flex items-center gap-2 mb-1">
+<span class="font-label-bold text-label-sm text-tertiary uppercase tracking-wide">Community</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant ml-auto">Yesterday</span>
+</div>
+<h3 class="font-headline-sm text-body-lg font-bold mb-1">Player99 replied to your post</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">"That strategy actually worked flawlessly on the boss level, thanks for the tip!"</p>
+<div class="mt-2 p-2 bg-surface border-2 border-slate-950 rounded italic font-body-sm text-sm">
+                        "Stuck on level 42? Try using the..."
+                    </div>
+</div>
+</div>
+<!-- Reward Result Notification -->
+<div class="bg-surface-container-low border-2 border-slate-950 rounded-lg p-4 flex gap-4 items-start">
+<div class="w-12 h-12 flex-shrink-0 bg-primary-fixed rounded-lg border-2 border-slate-950 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-2xl" data-icon="toll" data-weight="fill" style="font-variation-settings: 'FILL' 1;">toll</span>
+</div>
+<div class="flex-1">
+<div class="flex items-center gap-2 mb-1">
+<span class="font-label-bold text-label-sm text-primary uppercase tracking-wide">Daily Bonus</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant ml-auto">2 days ago</span>
+</div>
+<h3 class="font-headline-sm text-body-lg font-bold mb-1">Streak Maintained!</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">You've logged in for 7 days straight. +500 Coins added to your balance.</p>
+</div>
+</div>
+</div>
+</main>
+<!-- Desktop Navigation Drawer (Hidden on Mobile) -->
+<nav class="hidden md:flex flex-col h-full w-80 border-r-2 border-slate-950 p-6 bg-white dark:bg-slate-900 fixed top-16 left-0 z-40">
+<ul class="flex flex-col gap-2">
+<li class="flex items-center gap-4 p-3 rounded-lg text-slate-950 dark:text-slate-300 border-2 border-transparent hover:border-slate-950 hover:bg-slate-50 cursor-pointer">
+<span class="material-symbols-outlined" data-icon="sports_esports">sports_esports</span>
+<span class="font-plus-jakarta-sans font-bold">Lobby</span>
+</li>
+<li class="flex items-center gap-4 p-3 rounded-lg text-slate-950 dark:text-slate-300 border-2 border-transparent hover:border-slate-950 hover:bg-slate-50 cursor-pointer">
+<span class="material-symbols-outlined" data-icon="casino">casino</span>
+<span class="font-plus-jakarta-sans font-bold">Gacha</span>
+</li>
+<li class="flex items-center gap-4 p-3 rounded-lg text-slate-950 dark:text-slate-300 border-2 border-transparent hover:border-slate-950 hover:bg-slate-50 cursor-pointer">
+<span class="material-symbols-outlined" data-icon="account_balance_wallet">account_balance_wallet</span>
+<span class="font-plus-jakarta-sans font-bold">Wallet</span>
+</li>
+<li class="flex items-center gap-4 p-3 rounded-lg text-slate-950 dark:text-slate-300 border-2 border-transparent hover:border-slate-950 hover:bg-slate-50 cursor-pointer">
+<span class="material-symbols-outlined" data-icon="groups">groups</span>
+<span class="font-plus-jakarta-sans font-bold">Social</span>
+</li>
+<!-- Active State for Notifications (Intent Match) -->
+<li class="flex items-center gap-4 p-3 rounded-lg bg-[#FF5C00] text-white border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(2,6,23,1)] active:translate-x-[2px] transition-all cursor-pointer">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="font-plus-jakarta-sans font-bold">Notifications</span>
+</li>
+<li class="flex items-center gap-4 p-3 rounded-lg text-slate-950 dark:text-slate-300 border-2 border-transparent hover:border-slate-950 hover:bg-slate-50 cursor-pointer mt-auto">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-plus-jakarta-sans font-bold">Settings</span>
+</li>
+</ul>
+</nav>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-2 py-3 bg-white dark:bg-slate-900 border-t-2 border-slate-950">
+<button class="flex flex-col items-center justify-center text-slate-950 dark:text-slate-300 p-1 hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-95 transition-transform">
+<span class="material-symbols-outlined" data-icon="sports_esports">sports_esports</span>
+<span class="font-plus-jakarta-sans text-[10px] font-bold uppercase mt-1">Lobby</span>
+</button>
+<button class="flex flex-col items-center justify-center text-slate-950 dark:text-slate-300 p-1 hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-95 transition-transform">
+<span class="material-symbols-outlined" data-icon="casino">casino</span>
+<span class="font-plus-jakarta-sans text-[10px] font-bold uppercase mt-1">Gacha</span>
+</button>
+<button class="flex flex-col items-center justify-center text-slate-950 dark:text-slate-300 p-1 hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-95 transition-transform">
+<span class="material-symbols-outlined" data-icon="account_balance_wallet">account_balance_wallet</span>
+<span class="font-plus-jakarta-sans text-[10px] font-bold uppercase mt-1">Wallet</span>
+</button>
+<button class="flex flex-col items-center justify-center text-slate-950 dark:text-slate-300 p-1 hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-95 transition-transform">
+<span class="material-symbols-outlined" data-icon="groups">groups</span>
+<span class="font-plus-jakarta-sans text-[10px] font-bold uppercase mt-1">Social</span>
+</button>
+<!-- Active State for Menu/Settings area -->
+<button class="flex flex-col items-center justify-center bg-[#FF5C00] text-white border-2 border-slate-950 rounded-lg p-1 shadow-[2px_2px_0px_0px_rgba(2,6,23,1)] active:scale-95 transition-transform">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+<span class="font-plus-jakarta-sans text-[10px] font-bold uppercase mt-1">Menu</span>
+</button>
+</nav>
+</body></html>

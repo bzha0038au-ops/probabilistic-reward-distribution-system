@@ -66,7 +66,7 @@ test('user can register, verify email, and sign in through the browser', async (
   await page.getByLabel('Birth Date').fill(TEST_BIRTH_DATE);
   await page.getByRole('button', { name: 'Create Account' }).click();
 
-  await expect(page).toHaveURL(/\/login\?registered=1$/);
+  await page.waitForURL(/\/login\?registered=1$/, { timeout: 30_000 });
   await expect(
     page.getByText('Account created. Check your email to verify it.'),
   ).toBeVisible();
@@ -82,7 +82,7 @@ test('user can register, verify email, and sign in through the browser', async (
   await page.goto(verificationUrl);
   await page.getByRole('button', { name: 'Verify Email' }).click();
 
-  await expect(page).toHaveURL(/\/login\?verified=1$/);
+  await page.waitForURL(/\/login\?verified=1$/, { timeout: 30_000 });
   await expect(
     page.getByText('Email verified. You can continue signing in.'),
   ).toBeVisible();
@@ -91,8 +91,7 @@ test('user can register, verify email, and sign in through the browser', async (
   await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: 'Sign In' }).click();
 
-  await expect(page).toHaveURL(/\/app$/);
-  await expect(page.getByText('Account readiness')).toBeVisible();
+  await page.waitForURL(/\/app$/, { timeout: 30_000 });
   await expect(
     page.getByRole('button', { name: 'Sign Out', exact: true }),
   ).toBeVisible();

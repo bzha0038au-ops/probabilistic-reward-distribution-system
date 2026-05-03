@@ -35,6 +35,7 @@ import {
   formatRakePolicyLabel,
   formatTableTypeLabel,
   getActionLabel,
+  getSeatStatusLabel,
   parseTimeMs,
   resolveSeatTimeBankRemainingMs,
   type HoldemAmountFormatter,
@@ -82,8 +83,43 @@ type HoldemLobbyPanelProps = {
 };
 
 export function HoldemLobbyPanel(props: HoldemLobbyPanelProps) {
+  const lobbyTables = props.holdemTables?.tables ?? [];
+  const activeTableCount = lobbyTables.filter(
+    (table) => table.status === "active",
+  ).length;
+  const waitingTableCount = lobbyTables.filter(
+    (table) => table.status !== "active",
+  ).length;
+  const availableSeatCount = lobbyTables.reduce(
+    (sum, table) => sum + Math.max(table.maxSeats - table.occupiedSeats, 0),
+    0,
+  );
+
   return (
     <>
+      {lobbyTables.length > 0 ? (
+        <View style={styles.lobbySummaryRow}>
+          <View style={[styles.lobbySummaryCard, styles.lobbySummaryCardGold]}>
+            <Text style={styles.lobbySummaryLabel}>
+              {props.screenCopy.activeStatus}
+            </Text>
+            <Text style={styles.lobbySummaryValue}>{activeTableCount}</Text>
+          </View>
+          <View style={styles.lobbySummaryCard}>
+            <Text style={styles.lobbySummaryLabel}>
+              {props.screenCopy.waitingStatus}
+            </Text>
+            <Text style={styles.lobbySummaryValue}>{waitingTableCount}</Text>
+          </View>
+          <View style={styles.lobbySummaryCard}>
+            <Text style={styles.lobbySummaryLabel}>
+              {props.screenCopy.seatCount}
+            </Text>
+            <Text style={styles.lobbySummaryValue}>{availableSeatCount}</Text>
+          </View>
+        </View>
+      ) : null}
+
       <View style={styles.fieldStack}>
         <View style={props.uiStyles.field}>
           <Text style={props.uiStyles.fieldLabel}>
@@ -217,7 +253,7 @@ export function HoldemLobbyPanel(props: HoldemLobbyPanelProps) {
           </>
         ) : null}
 
-        <View style={props.uiStyles.inlineActions}>
+        <View style={styles.lobbyActionStack}>
           <ActionButton
             label={
               props.actingHoldem === "create"
@@ -226,8 +262,31 @@ export function HoldemLobbyPanel(props: HoldemLobbyPanelProps) {
             }
             onPress={props.onCreateHoldemTable}
             disabled={props.actingHoldem !== null || !props.emailVerified}
+            fullWidth
             testID="holdem-create-table-button"
           />
+          <View style={styles.lobbyActionMetaRow}>
+            <View style={styles.lobbyActionMetaCard}>
+              <Text style={styles.lobbyActionMetaLabel}>
+                {props.screenCopy.tableType}
+              </Text>
+              <Text style={styles.lobbyActionMetaValue}>
+                {formatTableTypeLabel(
+                  props.screenCopy,
+                  props.holdemCreateTableType,
+                )}
+              </Text>
+            </View>
+            <View style={styles.lobbyActionMetaCard}>
+              <Text style={styles.lobbyActionMetaLabel}>
+                {props.screenCopy.buyInAmount}
+              </Text>
+              <Text style={styles.lobbyActionMetaValue}>
+                {props.effectiveBuyInPreview ??
+                  props.formatAmount(props.holdemBuyInAmount || "0.00")}
+              </Text>
+            </View>
+          </View>
           <ActionButton
             label={
               props.loadingHoldemLobby
@@ -236,7 +295,7 @@ export function HoldemLobbyPanel(props: HoldemLobbyPanelProps) {
             }
             onPress={props.onRefreshHoldemLobby}
             variant="secondary"
-            compact
+            fullWidth
             testID="holdem-refresh-lobby-button"
           />
         </View>
@@ -250,8 +309,8 @@ export function HoldemLobbyPanel(props: HoldemLobbyPanelProps) {
               {props.screenCopy.refreshingTable}
             </Text>
           </View>
-        ) : props.holdemTables?.tables.length ? (
-          props.holdemTables.tables.map((table) => (
+        ) : lobbyTables.length ? (
+          lobbyTables.map((table) => (
             <Pressable
               key={`table-${table.id}`}
               onPress={() => props.onSelectHoldemTable(table.id)}
@@ -265,33 +324,65 @@ export function HoldemLobbyPanel(props: HoldemLobbyPanelProps) {
             >
               <View style={styles.lobbyCardHeader}>
                 <View style={styles.lobbyCardBody}>
-                  <Text style={styles.lobbyCardTitle}>{table.name}</Text>
+                  <View style={styles.lobbyCardTitleRow}>
+                    <Text style={styles.lobbyCardTitle}>{table.name}</Text>
+                    <View
+                      style={[
+                        styles.lobbyStatusChip,
+                        table.status === "active"
+                          ? styles.lobbyStatusChipActive
+                          : styles.lobbyStatusChipWaiting,
+                      ]}
+                    >
+                      <Text style={styles.lobbyStatusChipLabel}>
+                        {table.status === "active"
+                          ? props.screenCopy.activeStatus
+                          : props.screenCopy.waitingStatus}
+                      </Text>
+                    </View>
+                  </View>
                   <Text style={styles.lobbyCardMeta}>
-                    {props.screenCopy.summaryStatus}:{" "}
-                    {table.status === "active"
-                      ? props.screenCopy.activeStatus
-                      : props.screenCopy.waitingStatus}
+                    {props.screenCopy.tableType}:{" "}
+                    {formatTableTypeLabel(props.screenCopy, table.tableType)}
                   </Text>
                 </View>
-                <Text style={styles.lobbyCardCount}>
-                  {table.occupiedSeats}/{table.maxSeats}
-                </Text>
+                <View style={styles.lobbyCardCountBadge}>
+                  <Text style={styles.lobbyCardCount}>
+                    {table.occupiedSeats}/{table.maxSeats}
+                  </Text>
+                  <Text style={styles.lobbyCardCountLabel}>
+                    {props.screenCopy.seatCount}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.lobbyCardMetaRow}>
+                <View style={styles.lobbyCardMetaCard}>
+                  <Text style={styles.lobbyCardMetaLabel}>
+                    {props.screenCopy.blinds}
+                  </Text>
+                  <Text style={styles.lobbyCardMetaValue}>
+                    {props.formatAmount(table.smallBlind)} /{" "}
+                    {props.formatAmount(table.bigBlind)}
+                  </Text>
+                </View>
+                <View style={styles.lobbyCardMetaCard}>
+                  <Text style={styles.lobbyCardMetaLabel}>
+                    {props.screenCopy.rakePolicy}
+                  </Text>
+                  <Text style={styles.lobbyCardMetaValue}>
+                    {formatRakePolicyLabel({
+                      copy: props.screenCopy,
+                      formatAmount: props.formatAmount,
+                      table,
+                    })}
+                  </Text>
+                </View>
               </View>
               <Text style={styles.lobbyCardMeta}>
-                {props.screenCopy.blinds} {props.formatAmount(table.smallBlind)} /{" "}
-                {props.formatAmount(table.bigBlind)}
-              </Text>
-              <Text style={styles.lobbyCardMeta}>
-                {props.screenCopy.tableType}:{" "}
-                {formatTableTypeLabel(props.screenCopy, table.tableType)}
-              </Text>
-              <Text style={styles.lobbyCardMeta}>
-                {props.screenCopy.rakePolicy}:{" "}
-                {formatRakePolicyLabel({
-                  copy: props.screenCopy,
-                  formatAmount: props.formatAmount,
-                  table,
-                })}
+                {props.screenCopy.summaryStatus}:{" "}
+                {table.status === "active"
+                  ? props.screenCopy.activeStatus
+                  : props.screenCopy.waitingStatus}
               </Text>
             </Pressable>
           ))
@@ -305,6 +396,7 @@ export function HoldemLobbyPanel(props: HoldemLobbyPanelProps) {
 
 type HoldemActiveTablePanelProps = {
   activeTable: HoldemTable;
+  balance: string;
   canStart: boolean;
   chatDraft: string;
   clockNowMs: number;
@@ -355,12 +447,78 @@ export function HoldemActiveTablePanel(props: HoldemActiveTablePanelProps) {
     heroSeat,
     props.clockNowMs,
   );
-  const pendingActorTimeBankMs = resolveSeatTimeBankRemainingMs(
-    props.activeTable,
-    pendingActorSeat,
-    props.clockNowMs,
+  const featuredOpponent =
+    pendingActorSeat &&
+    pendingActorSeat.userId !== null &&
+    pendingActorSeat.seatIndex !== props.activeTable.heroSeatIndex
+      ? pendingActorSeat
+      : props.activeTable.seats.find(
+          (seat) =>
+            seat.userId !== null &&
+            seat.seatIndex !== props.activeTable.heroSeatIndex,
+        ) ?? null;
+  const mainPot =
+    props.activeTable.pots.find((pot) => pot.kind === "main") ??
+    props.activeTable.pots[0] ??
+    null;
+  const sidePots = mainPot
+    ? props.activeTable.pots.filter((pot) => pot !== mainPot)
+    : props.activeTable.pots;
+  const heroCards =
+    heroSeat?.cards.length && heroSeat.cards.length > 0
+      ? heroSeat.cards
+      : [
+          { rank: null, suit: null, hidden: true },
+          { rank: null, suit: null, hidden: true },
+        ];
+  const opponentCards =
+    featuredOpponent?.cards.length && featuredOpponent.cards.length > 0
+      ? featuredOpponent.cards
+      : [
+          { rank: null, suit: null, hidden: true },
+          { rank: null, suit: null, hidden: true },
+        ];
+  const availableActions = props.activeTable.availableActions;
+  const actionAmountValue = (() => {
+    const value = Number(props.holdemActionAmount || "0");
+    return Number.isFinite(value) && value > 0
+      ? props.formatAmount(value.toFixed(2))
+      : null;
+  })();
+  const showActionAmountField = Boolean(
+    availableActions?.actions.some(
+      (action) => action === "raise" || action === "bet",
+    ),
   );
+  const getActionButtonLabel = (action: HoldemAction) => {
+    if (action === "call") {
+      const toCall = availableActions?.toCall ?? "0.00";
+      return toCall === "0.00"
+        ? props.screenCopy.call
+        : `${props.screenCopy.call}\n${props.formatAmount(toCall)}`;
+    }
+    if (action === "raise") {
+      return `${props.screenCopy.raise}\n${
+        actionAmountValue ??
+        (availableActions?.minimumRaiseTo
+          ? props.formatAmount(availableActions.minimumRaiseTo)
+          : "--")
+      }`;
+    }
+    if (action === "bet") {
+      return `${props.screenCopy.bet}\n${actionAmountValue ?? "--"}`;
+    }
+    if (action === "all_in") {
+      return heroSeat
+        ? `${props.screenCopy.allIn}\n${props.formatAmount(heroSeat.stackAmount)}`
+        : props.screenCopy.allIn;
+    }
 
+    return getActionLabel(action, props.screenCopy);
+  };
+  const tableActionStatus = heroSeat
+    ? getSeatStatusLabel(heroSeat, props.screenCopy)
+    : props.screenCopy.noSelection;
   return (
     <>
       <View style={styles.tableHero}>
@@ -386,6 +544,149 @@ export function HoldemActiveTablePanel(props: HoldemActiveTablePanelProps) {
           />
         </View>
 
+        <View style={styles.stageChipRow}>
+          <View style={[styles.stageChip, styles.stageChipGold]}>
+            <Text style={styles.stageChipText}>
+              {props.screenCopy.blinds} {props.formatAmount(props.activeTable.smallBlind)} /{" "}
+              {props.formatAmount(props.activeTable.bigBlind)}
+            </Text>
+          </View>
+          <View style={styles.stageChip}>
+            <Text style={styles.stageChipText}>
+              {props.screenCopy.tableType}:{" "}
+              {formatTableTypeLabel(props.screenCopy, props.activeTable.tableType)}
+            </Text>
+          </View>
+          <View style={styles.stageChip}>
+            <Text style={styles.stageChipText}>
+              {props.screenCopy.rakePolicy}:{" "}
+              {formatRakePolicyLabel({
+                copy: props.screenCopy,
+                formatAmount: props.formatAmount,
+                table: props.activeTable,
+              })}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.tableSurface}>
+          <View style={styles.tableSurfaceInner} />
+          <View style={styles.tableSurfaceFairnessBadge}>
+            <Text style={styles.tableSurfaceFairnessKicker}>
+              {props.screenCopy.fairness}
+            </Text>
+            <Text style={styles.tableSurfaceFairnessValue}>
+              {props.activeTable.fairness?.commitHash.slice(0, 12) ?? "--"}
+            </Text>
+          </View>
+          {featuredOpponent ? (
+            <View style={styles.tableSurfaceTopSeat}>
+              <View style={styles.tableSurfaceTopAvatar}>
+                <Text style={styles.tableSurfaceTopAvatarLabel}>
+                  {(featuredOpponent.displayName ?? "P").slice(0, 1).toUpperCase()}
+                </Text>
+              </View>
+              <View style={styles.tableSurfaceTopName}>
+                <Text style={styles.tableHeroTitle}>
+                  {featuredOpponent.displayName ?? `Seat ${featuredOpponent.seatIndex + 1}`}
+                </Text>
+              </View>
+              <View style={styles.tableSurfaceTopStack}>
+                <Text style={styles.tableMetaValue}>
+                  {props.formatAmount(featuredOpponent.stackAmount)}
+                </Text>
+              </View>
+              <View style={styles.tableSurfaceTopCards}>
+                {opponentCards.slice(0, 2).map((card, index) => (
+                  <View
+                    key={`featured-opponent-card-${featuredOpponent.seatIndex}-${index}`}
+                    style={
+                      index === 0
+                        ? styles.tableSurfaceTiltLeft
+                        : styles.tableSurfaceTiltRight
+                    }
+                  >
+                    <PlayingCard card={card} size="compact" />
+                  </View>
+                ))}
+              </View>
+            </View>
+          ) : null}
+
+          <View style={styles.tablePotBadge}>
+            <Text style={styles.tablePotLabel}>
+              {mainPot?.kind === "main"
+                ? props.screenCopy.mainPot
+                : props.screenCopy.currentBet}
+            </Text>
+            <Text style={styles.tablePotValue}>
+              {props.formatAmount(
+                mainPot?.amount ??
+                  props.activeTable.availableActions?.currentBet ??
+                  "0.00",
+              )}
+            </Text>
+          </View>
+
+          <View style={styles.boardWrap}>
+            <View style={styles.boardRow}>
+              {Array.from({ length: 5 }, (_, index) => (
+                props.activeTable.communityCards[index] ? (
+                  <PlayingCard
+                    key={`board-${index}`}
+                    card={props.activeTable.communityCards[index]}
+                  />
+                ) : (
+                  <View
+                    key={`board-placeholder-${index}`}
+                    style={styles.boardPlaceholderCard}
+                  >
+                    <Text style={styles.boardPlaceholderLabel}>?</Text>
+                  </View>
+                )
+              ))}
+            </View>
+          </View>
+
+          {heroSeat ? (
+            <View style={styles.tableSurfaceHeroSeat}>
+              <View style={styles.tableSurfaceHeroCards}>
+                {heroCards.slice(0, 2).map((card, index) => (
+                  <View
+                    key={`hero-card-${heroSeat.seatIndex}-${index}`}
+                    style={
+                      index === 0
+                        ? styles.tableSurfaceHeroTiltLeft
+                        : styles.tableSurfaceHeroTiltRight
+                    }
+                  >
+                    <PlayingCard card={card} size="hero" />
+                  </View>
+                ))}
+              </View>
+              <View style={styles.tableSurfaceHeroAvatar}>
+                <Text style={styles.tableSurfaceHeroAvatarGlyph}>
+                  {props.screenCopy.you.slice(0, 1)}
+                </Text>
+              </View>
+              <View style={styles.tableSurfaceHeroLabel}>
+                <Text style={styles.tableHeroTitle}>
+                  {heroSeat.displayName ?? props.screenCopy.you}
+                </Text>
+              </View>
+              <View style={styles.tableSurfaceHeroStatus}>
+                <Text style={styles.stageChipText}>{tableActionStatus}</Text>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.tableHeroJoinPrompt}>
+              <Text style={styles.tableHeroJoinPromptText}>
+                {props.screenCopy.noSelection}
+              </Text>
+            </View>
+          )}
+        </View>
+
         <View style={styles.tableMetaRow}>
           <View style={styles.tableMetaCard}>
             <Text style={styles.tableMetaLabel}>
@@ -395,43 +696,6 @@ export function HoldemActiveTablePanel(props: HoldemActiveTablePanelProps) {
               {props.formatAmount(
                 props.activeTable.availableActions?.currentBet ?? "0.00",
               )}
-            </Text>
-          </View>
-          <View style={styles.tableMetaCard}>
-            <Text style={styles.tableMetaLabel}>
-              {props.screenCopy.blinds}
-            </Text>
-            <Text style={styles.tableMetaValue}>
-              {props.formatAmount(props.activeTable.smallBlind)} /{" "}
-              {props.formatAmount(props.activeTable.bigBlind)}
-            </Text>
-          </View>
-          <View style={styles.tableMetaCard}>
-            <Text style={styles.tableMetaLabel}>
-              {props.screenCopy.tableType}
-            </Text>
-            <Text style={styles.tableMetaValue}>
-              {formatTableTypeLabel(props.screenCopy, props.activeTable.tableType)}
-            </Text>
-          </View>
-          <View style={styles.tableMetaCard}>
-            <Text style={styles.tableMetaLabel}>
-              {props.screenCopy.rakePolicy}
-            </Text>
-            <Text style={styles.tableMetaValue}>
-              {formatRakePolicyLabel({
-                copy: props.screenCopy,
-                formatAmount: props.formatAmount,
-                table: props.activeTable,
-              })}
-            </Text>
-          </View>
-          <View style={styles.tableMetaCard}>
-            <Text style={styles.tableMetaLabel}>
-              {props.screenCopy.fairness}
-            </Text>
-            <Text style={styles.tableMetaValue}>
-              {props.activeTable.fairness?.commitHash.slice(0, 12) ?? "--"}
             </Text>
           </View>
           <View style={styles.tableMetaCard}>
@@ -447,29 +711,25 @@ export function HoldemActiveTablePanel(props: HoldemActiveTablePanelProps) {
               {props.screenCopy.timeBank}
             </Text>
             <Text style={styles.tableMetaValue}>
-              {formatDurationMs(pendingActorTimeBankMs)}
+              {formatDurationMs(heroTimeBankMs)}
+            </Text>
+          </View>
+          <View style={styles.tableMetaCard}>
+            <Text style={styles.tableMetaLabel}>
+              {props.screenCopy.summaryStatus}
+            </Text>
+            <Text style={styles.tableMetaValue}>
+              {pendingActorSeat?.displayName ??
+                (pendingActorSeat
+                  ? `${props.screenCopy.openSeat} ${pendingActorSeat.seatIndex + 1}`
+                  : "—")}
             </Text>
           </View>
         </View>
 
-        <View style={styles.boardRow}>
-          {Array.from({ length: 5 }, (_, index) => (
-            <PlayingCard
-              key={`board-${index}`}
-              card={
-                props.activeTable.communityCards[index] ?? {
-                  rank: null,
-                  suit: null,
-                  hidden: true,
-                }
-              }
-            />
-          ))}
-        </View>
-
-        <View style={styles.potGrid}>
-          {props.activeTable.pots.length > 0 ? (
-            props.activeTable.pots.map((pot) => (
+        {sidePots.length > 0 ? (
+          <View style={styles.potGrid}>
+            {sidePots.map((pot) => (
               <View
                 key={`${pot.kind}-${pot.potIndex}`}
                 style={styles.potCard}
@@ -483,15 +743,9 @@ export function HoldemActiveTablePanel(props: HoldemActiveTablePanelProps) {
                   {props.formatAmount(pot.amount)}
                 </Text>
               </View>
-            ))
-          ) : (
-            <View style={styles.potCardWide}>
-              <Text style={styles.emptyStateLabel}>
-                {props.screenCopy.noRecentHands}
-              </Text>
-            </View>
-          )}
-        </View>
+            ))}
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.seatList}>
@@ -507,6 +761,23 @@ export function HoldemActiveTablePanel(props: HoldemActiveTablePanelProps) {
       </View>
 
       <View style={styles.actionPanel}>
+        <View style={styles.actionSummaryRow}>
+          <View style={styles.actionSummaryCard}>
+            <Text style={styles.actionSummaryLabel}>
+              {props.screenCopy.summaryBalance}
+            </Text>
+            <Text style={styles.actionSummaryValue}>
+              {props.formatAmount(props.balance)}
+            </Text>
+          </View>
+          <View style={[styles.actionSummaryCard, styles.actionSummaryCardGold]}>
+            <Text style={styles.actionSummaryLabel}>{props.screenCopy.toCall}</Text>
+            <Text style={[styles.actionSummaryValue, styles.actionSummaryValueGold]}>
+              {props.formatAmount(availableActions?.toCall ?? "0.00")}
+            </Text>
+          </View>
+        </View>
+
         {!heroSeated ? (
           <ActionButton
             label={
@@ -516,125 +787,119 @@ export function HoldemActiveTablePanel(props: HoldemActiveTablePanelProps) {
             }
             onPress={() => props.onJoinHoldemTable(props.activeTable.id)}
             disabled={props.actingHoldem !== null || !props.emailVerified}
+            fullWidth
             testID="holdem-join-table-button"
           />
         ) : (
-          <View style={props.uiStyles.inlineActions}>
-            <ActionButton
-              label={
-                props.actingHoldem === "leave"
-                  ? props.screenCopy.leavingTable
-                  : props.screenCopy.leaveTable
-              }
-              onPress={() => props.onLeaveHoldemTable(props.activeTable.id)}
-              disabled={props.actingHoldem !== null}
-              variant="secondary"
-              testID="holdem-leave-table-button"
-            />
-            {heroSeat ? (
+          <View style={styles.tableControlGrid}>
+            <View style={styles.actionButtonCellWide}>
               <ActionButton
                 label={
-                  heroSeat.sittingOut
-                    ? props.actingHoldem === "sitIn"
-                      ? props.screenCopy.sittingInTable
-                      : props.screenCopy.sitInTable
-                    : props.actingHoldem === "sitOut"
-                      ? props.screenCopy.sittingOutTable
-                      : props.screenCopy.sitOutTable
+                  props.actingHoldem === "leave"
+                    ? props.screenCopy.leavingTable
+                    : props.screenCopy.leaveTable
                 }
-                onPress={() =>
-                  props.onSetHoldemSeatMode(
-                    props.activeTable.id,
-                    !heroSeat.sittingOut,
-                  )
-                }
+                onPress={() => props.onLeaveHoldemTable(props.activeTable.id)}
                 disabled={props.actingHoldem !== null}
                 variant="secondary"
-                testID="holdem-toggle-seat-mode-button"
+                fullWidth
+                testID="holdem-leave-table-button"
               />
+            </View>
+            {heroSeat ? (
+              <View style={styles.actionButtonCellWide}>
+                <ActionButton
+                  label={
+                    heroSeat.sittingOut
+                      ? props.actingHoldem === "sitIn"
+                        ? props.screenCopy.sittingInTable
+                        : props.screenCopy.sitInTable
+                      : props.actingHoldem === "sitOut"
+                        ? props.screenCopy.sittingOutTable
+                        : props.screenCopy.sitOutTable
+                  }
+                  onPress={() =>
+                    props.onSetHoldemSeatMode(
+                      props.activeTable.id,
+                      !heroSeat.sittingOut,
+                    )
+                  }
+                  disabled={props.actingHoldem !== null}
+                  variant="secondary"
+                  fullWidth
+                  testID="holdem-toggle-seat-mode-button"
+                />
+              </View>
             ) : null}
             {props.activeTable.status === "waiting" && props.canStart ? (
-              <ActionButton
-                label={
-                  props.actingHoldem === "start"
-                    ? props.screenCopy.startingHand
-                    : props.screenCopy.startHand
-                }
-                onPress={() => props.onStartHoldemTable(props.activeTable.id)}
-                disabled={props.actingHoldem !== null}
-                testID="holdem-start-hand-button"
-              />
+              <View style={styles.actionButtonCellWide}>
+                <ActionButton
+                  label={
+                    props.actingHoldem === "start"
+                      ? props.screenCopy.startingHand
+                      : props.screenCopy.startHand
+                  }
+                  onPress={() => props.onStartHoldemTable(props.activeTable.id)}
+                  disabled={props.actingHoldem !== null}
+                  fullWidth
+                  testID="holdem-start-hand-button"
+                />
+              </View>
             ) : null}
           </View>
         )}
 
-        {heroSeat ? (
-          <View style={styles.tableMetaRow}>
-            <View style={styles.tableMetaCard}>
-              <Text style={styles.tableMetaLabel}>
-                {props.screenCopy.timeBank}
-              </Text>
-              <Text style={styles.tableMetaValue}>
-                {formatDurationMs(heroTimeBankMs)}
-              </Text>
-            </View>
+        {showActionAmountField ? (
+          <View style={styles.actionAmountCard}>
+            <Text style={styles.actionAmountLabel}>
+              {props.screenCopy.actionAmount}
+            </Text>
+            <TextInput
+              value={props.holdemActionAmount}
+              onChangeText={props.onChangeHoldemActionAmount}
+              style={props.uiStyles.input}
+              keyboardType="decimal-pad"
+              autoCorrect={false}
+              placeholderTextColor={palette.textMuted}
+              testID="holdem-action-amount-input"
+            />
+            <Text style={props.uiStyles.gachaHint}>
+              {props.screenCopy.amountHint}
+            </Text>
           </View>
         ) : null}
 
-        <View style={props.uiStyles.field}>
-          <Text style={props.uiStyles.fieldLabel}>
-            {props.screenCopy.actionAmount}
-          </Text>
-          <TextInput
-            value={props.holdemActionAmount}
-            onChangeText={props.onChangeHoldemActionAmount}
-            style={props.uiStyles.input}
-            keyboardType="decimal-pad"
-            autoCorrect={false}
-            placeholderTextColor={palette.textMuted}
-            testID="holdem-action-amount-input"
-          />
-          <Text style={props.uiStyles.gachaHint}>
-            {props.screenCopy.amountHint}
-          </Text>
-        </View>
-
-        {props.activeTable.availableActions ? (
+        {availableActions ? (
           <>
-            <View style={styles.tableMetaRow}>
-              <View style={styles.tableMetaCard}>
-                <Text style={styles.tableMetaLabel}>
-                  {props.screenCopy.toCall}
-                </Text>
-                <Text style={styles.tableMetaValue}>
-                  {props.formatAmount(props.activeTable.availableActions.toCall)}
-                </Text>
-              </View>
-              <View style={styles.tableMetaCard}>
-                <Text style={styles.tableMetaLabel}>
-                  {props.screenCopy.minRaiseTo}
-                </Text>
-                <Text style={styles.tableMetaValue}>
-                  {props.activeTable.availableActions.minimumRaiseTo
-                    ? props.formatAmount(
-                        props.activeTable.availableActions.minimumRaiseTo,
-                      )
-                    : "--"}
-                </Text>
-              </View>
-            </View>
-
             <View style={styles.actionButtonGrid}>
-              {props.activeTable.availableActions.actions.map((action) => (
-                <ActionButton
+              {availableActions.actions.map((action) => (
+                <View
                   key={action}
-                  label={getActionLabel(action, props.screenCopy)}
-                  onPress={() => props.onActOnHoldemTable(props.activeTable.id, action)}
-                  disabled={props.actingHoldem !== null}
-                  variant={action === "fold" ? "secondary" : "primary"}
-                  compact
-                  testID={buildTestId("holdem-action-button", action)}
-                />
+                  style={[
+                    action === "raise" ||
+                    action === "bet" ||
+                    action === "all_in"
+                      ? styles.actionButtonCellWide
+                      : styles.actionButtonCell,
+                  ]}
+                >
+                  <ActionButton
+                    label={getActionButtonLabel(action)}
+                    onPress={() =>
+                      props.onActOnHoldemTable(props.activeTable.id, action)
+                    }
+                    disabled={props.actingHoldem !== null}
+                    variant={
+                      action === "fold"
+                        ? "secondary"
+                        : action === "check" || action === "call"
+                          ? "gold"
+                          : "primary"
+                    }
+                    fullWidth
+                    testID={buildTestId("holdem-action-button", action)}
+                  />
+                </View>
               ))}
             </View>
           </>

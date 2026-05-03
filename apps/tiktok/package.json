@@ -1,0 +1,27 @@
+{
+  "name": "@reward/tiktok",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@reward/shared-types": "workspace:*",
+    "@reward/user-core": "workspace:*"
+  },
+  "scripts": {
+    "dev": "vite --host localhost --port 3004",
+    "build": "vite build && node ./scripts/inline-entry-assets.mjs",
+    "preview": "vite preview --host 0.0.0.0 --port 4174",
+    "check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "pnpm run check",
+    "minis:debug": "ttdx minis debug",
+    "minis:build": "pnpm run build && ttdx minis build"
+  },
+  "devDependencies": {
+    "@tiktok-minis/cli": "^1.2.0",
+    "jsdom": "27.4.0",
+    "typescript": "^5.5.0",
+    "vite": "^6.4.2",
+    "vitest": "4.1.5"
+  }
+}

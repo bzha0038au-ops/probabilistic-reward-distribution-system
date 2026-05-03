@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+
+<html class="" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Squad Hub - Retro-Modern Web3 Play</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&amp;family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700&amp;family=Space+Grotesk:wght@600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">tailwind.config = {darkMode: "class", theme: {extend: {colors: {"surface-bright": "#fdf8f8", "outline-variant": "#dfc0b5", "on-secondary-fixed": "#0f0069", "primary-fixed": "#ffdbce", "surface-dim": "#ddd9d8", "tertiary-fixed-dim": "#dfc566", "surface-container-low": "#f7f2f2", "on-tertiary-container": "#4c3e00", "tertiary-fixed": "#fce17e", "surface-tint": "#a73a00", primary: "#7f2a00", "on-secondary": "#ffffff", "surface-container-highest": "#e6e1e1", "on-primary-fixed-variant": "#802a00", "surface-container": "#f1edec", "on-primary": "#ffffff", "surface-variant": "#e6e1e1", outline: "#8c7168", "surface-container-lowest": "#ffffff", tertiary: "#705d00", "secondary-fixed-dim": "#c3c0ff", "on-tertiary-fixed": "#221b00", "error-container": "#ffdad6", error: "#ba1a1a", "surface-container-high": "#ece7e7", "on-error-container": "#93000a", "on-primary-fixed": "#370e00", "inverse-on-surface": "#f4f0ef", "on-tertiary": "#ffffff", "on-surface-variant": "#58423a", "on-secondary-container": "#fffbff", "on-background": "#1c1b1b", secondary: "#4b41e1", "inverse-surface": "#313030", background: "#fdf8f8", "secondary-fixed": "#e2dfff", "primary-container": "#a73a00", "on-primary-container": "#ffcebc", "secondary-container": "#655dfb", "inverse-primary": "#ffb599", surface: "#fdf8f8", "on-tertiary-fixed-variant": "#544600", "on-error": "#ffffff", "primary-fixed-dim": "#ffb599", "on-surface": "#1c1b1b", "on-secondary-fixed-variant": "#3322cc", "tertiary-container": "#c2aa4e"}, borderRadius: {DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px"}, spacing: {xl: "32px", "container-max": "1440px", gutter: "16px", base: "8px", xs: "4px", sm: "8px", lg: "24px", md: "16px", margin: "20px", unit: "4px"}, fontFamily: {h2: ["Space Grotesk"], button: ["Space Grotesk"], h1: ["Space Grotesk"], "body-md": ["Be Vietnam Pro"], "label-caps": ["Space Grotesk"], h3: ["Space Grotesk"], "body-lg": ["Be Vietnam Pro"], "headline-xl": ["Plus Jakarta Sans"], "label-bold": ["Be Vietnam Pro"], "label-sm": ["Be Vietnam Pro"], "headline-md": ["Plus Jakarta Sans"], "headline-lg": ["Plus Jakarta Sans"]}, fontSize: {h2: ["48px", {lineHeight: "1.2", letterSpacing: "-0.01em", fontWeight: "700"}], button: ["16px", {lineHeight: "1.0", fontWeight: "600"}], h1: ["64px", {lineHeight: "1.1", letterSpacing: "-0.02em", fontWeight: "700"}], "body-md": ["16px", {lineHeight: "24px", fontWeight: "400"}], "label-caps": ["14px", {lineHeight: "1.2", letterSpacing: "0.05em", fontWeight: "700"}], h3: ["32px", {lineHeight: "1.2", fontWeight: "600"}], "body-lg": ["18px", {lineHeight: "28px", fontWeight: "400"}], "headline-xl": ["40px", {lineHeight: "48px", letterSpacing: "-0.02em", fontWeight: "800"}], "label-bold": ["14px", {lineHeight: "20px", fontWeight: "700"}], "label-sm": ["12px", {lineHeight: "16px", fontWeight: "500"}], "headline-md": ["24px", {lineHeight: "30px", fontWeight: "700"}], "headline-lg": ["32px", {lineHeight: "38px", letterSpacing: "-0.01em", fontWeight: "800"}]}}}};</script>
+</head>
+<body class="bg-background text-on-surface font-body-md antialiased min-h-screen flex flex-col">
+<!-- TopAppBar -->
+<header class="flex justify-between items-center w-full px-8 h-20 z-50 bg-slate-950 full-width top-0 border-b-2 border-slate-800 shadow-[0px_4px_0px_0px_rgba(0,0,0,1)] font-['Space_Grotesk'] uppercase tracking-tighter font-bold text-yellow-400">
+<div class="flex items-center gap-8">
+<div class="text-2xl font-black text-yellow-400 italic border-2 border-yellow-400 px-3 py-1 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">Retro-Modern Web3 Play</div>
+<nav class="hidden md:flex items-center gap-6">
+<a class="text-slate-400 font-medium hover:text-yellow-300 hover:bg-slate-900 active:translate-y-1 active:shadow-none transition-all duration-100 px-2 py-1" href="#">Lobby</a>
+<a class="text-slate-400 font-medium hover:text-yellow-300 hover:bg-slate-900 active:translate-y-1 active:shadow-none transition-all duration-100 px-2 py-1" href="#">Tables</a>
+<a class="text-slate-400 font-medium hover:text-yellow-300 hover:bg-slate-900 active:translate-y-1 active:shadow-none transition-all duration-100 px-2 py-1" href="#">Predictions</a>
+<a class="text-slate-400 font-medium hover:text-yellow-300 hover:bg-slate-900 active:translate-y-1 active:shadow-none transition-all duration-100 px-2 py-1" href="#">Wallet</a>
+<a class="text-slate-400 font-medium hover:text-yellow-300 hover:bg-slate-900 active:translate-y-1 active:shadow-none transition-all duration-100 px-2 py-1" href="#">Fairness</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2">
+<button class="p-2 text-yellow-400 hover:text-yellow-300 hover:bg-slate-900 active:translate-y-1 transition-all duration-100 rounded-full">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="p-2 text-yellow-400 hover:text-yellow-300 hover:bg-slate-900 active:translate-y-1 transition-all duration-100 rounded-full">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+</div>
+<button class="bg-primary-container text-on-primary-container font-button px-6 py-3 border-2 border-on-primary-container shadow-[4px_4px_0px_0px_rgba(112,94,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_rgba(112,94,0,1)] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-all duration-100 rounded-DEFAULT">Connect Wallet</button>
+</div>
+</header>
+<div class="flex flex-1 overflow-hidden">
+<!-- SideNavBar -->
+<aside class="hidden md:flex flex-col fixed left-0 top-20 h-[calc(100vh-5rem)] p-4 z-40 bg-slate-900 border-r-2 border-slate-800 shadow-[4px_0px_0px_0px_rgba(0,0,0,1)] w-64 rounded-none font-['Space_Grotesk'] text-sm font-bold uppercase text-yellow-400">
+<div class="mb-8 px-2">
+<h2 class="text-xl font-black text-yellow-400 tracking-tighter">Player Hub</h2>
+<p class="text-slate-400 text-xs mt-1">Legendary Rank</p>
+</div>
+<nav class="flex-1 flex flex-col gap-2">
+<a class="flex items-center gap-4 bg-yellow-400 text-black p-3 rounded-lg border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:bg-slate-800 hover:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="group" data-weight="fill" style="font-variation-settings: 'FILL' 1;">group</span>
+                    Social
+                </a>
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="military_tech">military_tech</span>
+                    Missions
+                </a>
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="leaderboard">leaderboard</span>
+                    Leaderboard
+                </a>
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="psychology">psychology</span>
+                    Strategy
+                </a>
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="help_center">help_center</span>
+                    Support
+                </a>
+</nav>
+<div class="mt-auto pt-4 border-t border-slate-800 flex flex-col gap-2">
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform text-xs" href="#">
+<span class="material-symbols-outlined text-sm" data-icon="verified_user">verified_user</span>
+                    Audit Log
+                </a>
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform text-xs" href="#">
+<span class="material-symbols-outlined text-sm" data-icon="enhanced_encryption">enhanced_encryption</span>
+                    Security
+                </a>
+<button class="mt-4 bg-primary-container text-on-primary-container font-button px-4 py-2 border-2 border-on-primary-container shadow-[4px_4px_0px_0px_rgba(112,94,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_rgba(112,94,0,1)] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-all duration-100 rounded-DEFAULT w-full">Daily Spin</button>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="flex-1 md:ml-64 p-gutter overflow-y-auto">
+<div class="max-w-container-max mx-auto space-y-md">
+<!-- Page Header -->
+<div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b-2 border-outline-variant pb-base">
+<div>
+<h1 class="font-h1 text-h1 text-primary-fixed uppercase">Squad Hub</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant">Manage your affiliate network and track earnings.</p>
+</div>
+<div class="bg-surface-container-high border-2 border-primary-container p-sm rounded-DEFAULT shadow-[4px_4px_0px_0px_rgba(255,215,0,1)] flex items-center gap-4">
+<div class="flex flex-col">
+<span class="font-label-caps text-label-caps text-on-surface-variant uppercase">Current Tier</span>
+<span class="font-h3 text-h3 text-primary-fixed uppercase">Gold Partner</span>
+</div>
+<span class="material-symbols-outlined text-4xl text-primary-container" data-icon="stars" data-weight="fill" style="font-variation-settings: 'FILL' 1;">stars</span>
+</div>
+</div>
+<!-- Invite Link Generator -->
+<section class="bg-surface-container border-2 border-secondary-container rounded-lg p-md shadow-[8px_8px_0px_0px_rgba(107,19,175,1)] relative overflow-hidden">
+<!-- Retro Halftone Texture Overlay -->
+<div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 8px 8px;"></div>
+<div class="relative z-10 flex flex-col md:flex-row gap-8 items-center justify-between">
+<div class="flex-1 space-y-sm">
+<h2 class="font-h2 text-h2 text-secondary-fixed uppercase">Expand Your Squad</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Generate your unique referral link to invite players. Earn a percentage of their wagers forever.</p>
+<div class="flex flex-col sm:flex-row gap-2 mt-4">
+<div class="flex-1 relative">
+<input class="w-full bg-surface-dim border-2 border-outline-variant text-primary font-body-md p-3 focus:border-primary-container focus:ring-0 rounded-DEFAULT" readonly="" type="text" value="https://retroweb3.play/ref/legendary_player_99"/>
+</div>
+<button class="bg-secondary-container text-on-background font-button px-6 py-3 border-2 border-on-background shadow-[4px_4px_0px_0px_rgba(226,224,252,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_rgba(226,224,252,1)] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-all duration-100 rounded-DEFAULT flex items-center justify-center gap-2">
+<span class="material-symbols-outlined" data-icon="content_copy">content_copy</span>
+                                    Copy Link
+                                </button>
+</div>
+</div>
+<div class="w-48 h-48 bg-surface-variant border-2 border-outline-variant flex items-center justify-center shadow-[4px_4px_0px_0px_rgba(77,71,50,1)] rounded-DEFAULT">
+<!-- Placeholder for actual QR code image -->
+<img alt="QR Code for referral link" class="w-40 h-40 object-cover" data-alt="A stylized, high-contrast QR code rendered in bright yellow against a deep, dark blue background. The QR code has sharp, crisp edges and a slightly distressed, retro-digital texture, fitting perfectly into a flat vector, comic-book inspired UI. It is framed by a thick, dark border, reinforcing the premium, tactile collectible aesthetic of the platform." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB9u8_OieUyWMmJimwd97WKbdUIlJK4cTCtLEOVvJLeNKyWs1oXKI_6sV656KYek1Do--To7jEIPwAOoTVmzr9tY4Omxm0cGjh3jAQNlSw_W2qLWy5xSZ2inKSFcZrOJVnGqh04wsG6HYbdfRWESFJX1pOk9IFFHcYpCzlpdfoc6DlEfbx7GydZ6gcUfmHdJhXKb8wT8lktzau5xquFUZPbYfrr4Yr-YcPNMRxIw06U5EBWADBwtaUaUfzAZ1Rj2Us8AQvhN0Z2NJ2n"/>
+</div>
+</div>
+</section>
+<!-- Key Metrics Grid -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-md">
+<!-- Metric Card 1 -->
+<div class="bg-surface-container-high border-2 border-primary-container rounded-DEFAULT p-sm shadow-[4px_4px_0px_0px_rgba(255,215,0,1)] flex flex-col gap-2">
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="font-label-caps text-label-caps uppercase">Total Squad Members</span>
+</div>
+<div class="font-h1 text-h1 text-primary-fixed">1,204</div>
+<div class="text-sm text-tertiary-fixed flex items-center gap-1">
+<span class="material-symbols-outlined text-sm" data-icon="arrow_upward">arrow_upward</span>
+                            +12 this week
+                        </div>
+</div>
+<!-- Metric Card 2 -->
+<div class="bg-surface-container-high border-2 border-secondary-container rounded-DEFAULT p-sm shadow-[4px_4px_0px_0px_rgba(107,19,175,1)] flex flex-col gap-2">
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span class="font-label-caps text-label-caps uppercase">Total Earnings (USDT)</span>
+</div>
+<div class="font-h1 text-h1 text-secondary-fixed">8,450.25</div>
+<div class="text-sm text-tertiary-fixed flex items-center gap-1">
+<span class="material-symbols-outlined text-sm" data-icon="arrow_upward">arrow_upward</span>
+                            +350.00 this week
+                        </div>
+</div>
+<!-- Metric Card 3 -->
+<div class="bg-surface-container-high border-2 border-tertiary-container rounded-DEFAULT p-sm shadow-[4px_4px_0px_0px_rgba(203,218,255,1)] flex flex-col gap-2">
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined" data-icon="percent">percent</span>
+<span class="font-label-caps text-label-caps uppercase">Current Commission Rate</span>
+</div>
+<div class="font-h1 text-h1 text-tertiary-fixed">15%</div>
+<div class="text-sm text-on-surface-variant">Next tier at 10,000 USDT volume</div>
+</div>
+</div>
+<!-- Commission Progress Tier -->
+<section class="bg-surface-container border-2 border-outline-variant p-md shadow-[4px_4px_0px_0px_rgba(77,71,50,1)] rounded-DEFAULT">
+<h3 class="font-h3 text-h3 text-primary-fixed uppercase mb-4 border-b-2 border-outline-variant pb-2 inline-block">Tier Progress: Platinum Partner</h3>
+<div class="space-y-4">
+<div class="flex justify-between font-label-caps text-label-caps text-on-surface-variant uppercase">
+<span>Current Volume: 8,450 USDT</span>
+<span>Target: 10,000 USDT</span>
+</div>
+<!-- Segmented Progress Bar -->
+<div class="w-full h-8 bg-surface-dim border-2 border-outline-variant flex rounded-sm overflow-hidden">
+<div class="h-full bg-primary-container border-r-2 border-outline-variant w-1/5"></div>
+<div class="h-full bg-primary-container border-r-2 border-outline-variant w-1/5"></div>
+<div class="h-full bg-primary-container border-r-2 border-outline-variant w-1/5"></div>
+<div class="h-full bg-primary-container border-r-2 border-outline-variant w-[24.5%]"></div>
+<div class="h-full bg-transparent w-[15.5%] relative">
+<!-- Target Indicator -->
+<div class="absolute right-0 top-0 bottom-0 w-2 bg-secondary-container"></div>
+</div>
+</div>
+<p class="font-body-md text-sm text-on-surface-variant">Reach Platinum to unlock 20% commission rates and exclusive VIP table access for your top squad members.</p>
+</div>
+</section>
+<!-- Dual Layout: Recent Activity & Team Performance -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-md">
+<!-- Squad Members Activity List -->
+<div class="bg-surface-container border-2 border-outline-variant p-sm shadow-[4px_4px_0px_0px_rgba(77,71,50,1)] rounded-DEFAULT flex flex-col">
+<div class="flex justify-between items-center mb-4 border-b-2 border-outline-variant pb-2">
+<h3 class="font-h3 text-h3 text-primary uppercase">Recent Squad Activity</h3>
+<button class="text-primary-container font-button uppercase hover:underline underline-offset-4">View All</button>
+</div>
+<div class="flex-1 space-y-2 overflow-y-auto max-h-[400px] pr-2">
+<!-- List Item 1 -->
+<div class="flex items-center justify-between p-3 bg-surface-variant border-2 border-surface-bright rounded-DEFAULT hover:border-primary-container transition-colors">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 bg-secondary-container border-2 border-on-background rounded-full flex items-center justify-center font-h3 text-lg text-on-background shadow-[2px_2px_0px_0px_rgba(226,224,252,1)]">
+                                        JD
+                                    </div>
+<div>
+<div class="font-label-caps text-label-caps text-primary uppercase">JackpotDan</div>
+<div class="text-xs text-on-surface-variant">Joined 2 hours ago</div>
+</div>
+</div>
+<div class="text-right">
+<div class="font-label-caps text-label-caps text-primary-fixed uppercase">+50 USDT</div>
+<div class="text-xs text-on-surface-variant">Wagered</div>
+</div>
+</div>
+<!-- List Item 2 -->
+<div class="flex items-center justify-between p-3 bg-surface-variant border-2 border-surface-bright rounded-DEFAULT hover:border-primary-container transition-colors">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 bg-primary-container border-2 border-on-primary-container rounded-full flex items-center justify-center font-h3 text-lg text-on-primary-container shadow-[2px_2px_0px_0px_rgba(112,94,0,1)]">
+                                        CS
+                                    </div>
+<div>
+<div class="font-label-caps text-label-caps text-primary uppercase">CryptoSarah</div>
+<div class="text-xs text-on-surface-variant">Played Crash</div>
+</div>
+</div>
+<div class="text-right">
+<div class="font-label-caps text-label-caps text-secondary-fixed uppercase">+120 USDT</div>
+<div class="text-xs text-on-surface-variant">Wagered</div>
+</div>
+</div>
+<!-- List Item 3 -->
+<div class="flex items-center justify-between p-3 bg-surface-variant border-2 border-surface-bright rounded-DEFAULT hover:border-primary-container transition-colors">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 bg-surface-bright border-2 border-outline-variant rounded-full flex items-center justify-center font-h3 text-lg text-primary shadow-[2px_2px_0px_0px_rgba(77,71,50,1)]">
+                                        W3
+                                    </div>
+<div>
+<div class="font-label-caps text-label-caps text-primary uppercase">Web3Whale</div>
+<div class="text-xs text-on-surface-variant">Played Roulette</div>
+</div>
+</div>
+<div class="text-right">
+<div class="font-label-caps text-label-caps text-tertiary-fixed uppercase">+1,050 USDT</div>
+<div class="text-xs text-on-surface-variant">Wagered</div>
+</div>
+</div>
+<!-- List Item 4 -->
+<div class="flex items-center justify-between p-3 bg-surface-variant border-2 border-surface-bright rounded-DEFAULT hover:border-primary-container transition-colors">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 bg-secondary-container border-2 border-on-background rounded-full flex items-center justify-center font-h3 text-lg text-on-background shadow-[2px_2px_0px_0px_rgba(226,224,252,1)]">
+                                        NN
+                                    </div>
+<div>
+<div class="font-label-caps text-label-caps text-primary uppercase">NeonNinja</div>
+<div class="text-xs text-on-surface-variant">Joined 1 day ago</div>
+</div>
+</div>
+<div class="text-right">
+<div class="font-label-caps text-label-caps text-primary-fixed uppercase">New</div>
+<div class="text-xs text-on-surface-variant">Account</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Team Performance Chart Area -->
+<div class="bg-surface-container border-2 border-outline-variant p-sm shadow-[4px_4px_0px_0px_rgba(77,71,50,1)] rounded-DEFAULT flex flex-col">
+<div class="flex justify-between items-center mb-4 border-b-2 border-outline-variant pb-2">
+<h3 class="font-h3 text-h3 text-primary uppercase">Team Performance</h3>
+<div class="flex gap-2">
+<button class="bg-surface-variant border-2 border-outline-variant text-primary px-3 py-1 font-label-caps text-xs rounded-sm hover:border-primary-container">1W</button>
+<button class="bg-primary-container border-2 border-on-primary-container text-on-primary-container px-3 py-1 font-label-caps text-xs rounded-sm shadow-[2px_2px_0px_0px_rgba(112,94,0,1)]">1M</button>
+<button class="bg-surface-variant border-2 border-outline-variant text-primary px-3 py-1 font-label-caps text-xs rounded-sm hover:border-primary-container">ALL</button>
+</div>
+</div>
+<!-- Decorative Chart Representation -->
+<div class="flex-1 min-h-[300px] border-2 border-surface-bright bg-surface-dim relative overflow-hidden flex items-end p-4 gap-2">
+<!-- Background Grid Lines -->
+<div class="absolute inset-0 flex flex-col justify-between pointer-events-none p-4">
+<div class="w-full border-b border-surface-bright border-dashed opacity-50"></div>
+<div class="w-full border-b border-surface-bright border-dashed opacity-50"></div>
+<div class="w-full border-b border-surface-bright border-dashed opacity-50"></div>
+<div class="w-full border-b border-surface-bright border-dashed opacity-50"></div>
+</div>
+<!-- Bar Chart Columns -->
+<div class="w-1/6 bg-secondary-container border-2 border-on-secondary-container h-[20%] relative z-10 shadow-[2px_0px_0px_0px_rgba(212,165,255,1)]"></div>
+<div class="w-1/6 bg-primary-container border-2 border-on-primary-container h-[40%] relative z-10 shadow-[2px_0px_0px_0px_rgba(112,94,0,1)]"></div>
+<div class="w-1/6 bg-secondary-container border-2 border-on-secondary-container h-[35%] relative z-10 shadow-[2px_0px_0px_0px_rgba(212,165,255,1)]"></div>
+<div class="w-1/6 bg-primary-container border-2 border-on-primary-container h-[60%] relative z-10 shadow-[2px_0px_0px_0px_rgba(112,94,0,1)]"></div>
+<div class="w-1/6 bg-secondary-container border-2 border-on-secondary-container h-[85%] relative z-10 shadow-[2px_0px_0px_0px_rgba(212,165,255,1)]"></div>
+<div class="w-1/6 bg-primary-container border-2 border-on-primary-container h-[70%] relative z-10 shadow-[2px_0px_0px_0px_rgba(112,94,0,1)]"></div>
+</div>
+<div class="flex justify-between mt-2 font-label-caps text-xs text-on-surface-variant px-4">
+<span>W1</span>
+<span>W2</span>
+<span>W3</span>
+<span>W4</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- Footer -->
+<footer class="w-full py-12 px-8 flex flex-col md:flex-row justify-between items-center gap-8 bg-slate-950 full-width border-t-2 border-slate-800 flat no shadows font-['Space_Grotesk'] text-xs font-black uppercase tracking-widest text-yellow-400 mt-auto z-50">
+<div class="text-lg text-yellow-400">
+            © 2024 RETRO-MODERN WEB3 PLAY. PROVABLY FAIR.
+        </div>
+<nav class="flex flex-wrap justify-center gap-6">
+<a class="text-slate-500 hover:text-yellow-400 transition-colors underline-offset-4 hover:underline" href="#">Whitepaper</a>
+<a class="text-slate-500 hover:text-yellow-400 transition-colors underline-offset-4 hover:underline" href="#">Tokenomics</a>
+<a class="text-slate-500 hover:text-yellow-400 transition-colors underline-offset-4 hover:underline" href="#">Audit Report</a>
+<a class="text-slate-500 hover:text-yellow-400 transition-colors underline-offset-4 hover:underline" href="#">Privacy</a>
+<a class="text-slate-500 hover:text-yellow-400 transition-colors underline-offset-4 hover:underline" href="#">Terms</a>
+</nav>
+</footer>
+</body></html>

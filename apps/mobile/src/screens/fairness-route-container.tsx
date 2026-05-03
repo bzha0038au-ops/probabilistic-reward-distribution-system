@@ -19,6 +19,7 @@ export function FairnessRouteContainer(props: FairnessRouteContainerProps) {
       apiBaseUrl={apiBaseUrl}
       message={message}
       error={error}
+      compactHero
     >
       <FairnessRouteScreen {...screenProps} />
     </AppScreenShell>

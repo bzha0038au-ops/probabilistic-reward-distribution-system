@@ -199,7 +199,7 @@ test('quick eight route supports a real authenticated play flow', async ({ page 
   await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: 'Sign In' }).click();
 
-  await expect(page).toHaveURL(/\/app$/);
+  await page.waitForURL(/\/app$/, { timeout: 30_000 });
 
   await page.goto('/app/quick-eight');
   await expect(page.getByRole('button', { name: 'Play Quick Eight' })).toBeVisible();

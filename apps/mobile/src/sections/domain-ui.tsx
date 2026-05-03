@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import {
+  mobileChromeTheme,
   mobilePalette,
   mobileRadii,
   mobileSpacing,
@@ -12,11 +13,23 @@ type WalletAssetCardProps = {
   label: string;
   value: string;
   detailRows: Array<{ label: string; value: string }>;
+  tone?: "blue" | "gold" | "peach" | "panel";
 };
 
 export function WalletAssetCard(props: WalletAssetCardProps) {
   return (
-    <View style={styles.walletAssetCard}>
+    <View
+      style={[
+        styles.walletAssetCard,
+        props.tone === "gold"
+          ? styles.walletAssetCardGold
+          : props.tone === "peach"
+            ? styles.walletAssetCardPeach
+            : props.tone === "panel"
+              ? styles.walletAssetCardPanel
+              : styles.walletAssetCardBlue,
+      ]}
+    >
       <Text style={styles.walletAssetTitle}>{props.label}</Text>
       <Text style={styles.walletAssetValue}>{props.value}</Text>
       {props.detailRows.map((row, index) => (
@@ -33,20 +46,41 @@ type WalletHistoryEntryCardProps = {
   title: string;
   accentValue: string;
   detailLines: string[];
+  tone?: "success" | "danger" | "blue" | "panel";
 };
 
 export function WalletHistoryEntryCard(props: WalletHistoryEntryCardProps) {
+  const metaText = props.detailLines.filter(Boolean).join(" · ");
+
   return (
-    <View style={styles.walletHistoryCard}>
+    <View
+      style={[
+        styles.walletHistoryCard,
+        props.tone === "success"
+          ? styles.walletHistoryCardSuccess
+          : props.tone === "danger"
+            ? styles.walletHistoryCardDanger
+            : props.tone === "blue"
+              ? styles.walletHistoryCardBlue
+              : null,
+      ]}
+    >
       <View style={styles.walletHistoryHeader}>
         <Text style={styles.walletHistoryTitle}>{props.title}</Text>
-        <Text style={styles.walletHistoryAmount}>{props.accentValue}</Text>
+        <Text
+          style={[
+            styles.walletHistoryAmount,
+            props.tone === "danger"
+              ? styles.walletHistoryAmountDanger
+              : props.tone === "success"
+                ? styles.walletHistoryAmountSuccess
+                : null,
+          ]}
+      >
+        {props.accentValue}
+      </Text>
       </View>
-      {props.detailLines.map((line, index) => (
-        <Text key={`${line}:${index}`} style={styles.walletHistoryMeta}>
-          {line}
-        </Text>
-      ))}
+      {metaText ? <Text style={styles.walletHistoryMeta}>{metaText}</Text> : null}
     </View>
   );
 }
@@ -54,11 +88,25 @@ export function WalletHistoryEntryCard(props: WalletHistoryEntryCardProps) {
 type RewardSummaryCardProps = {
   label: string;
   value: string | number;
+  tone?: "gold" | "blue" | "peach" | "success" | "panel";
 };
 
 export function RewardSummaryCard(props: RewardSummaryCardProps) {
   return (
-    <View style={styles.rewardSummaryCard}>
+    <View
+      style={[
+        styles.rewardSummaryCard,
+        props.tone === "gold"
+          ? styles.rewardSummaryCardGold
+          : props.tone === "blue"
+            ? styles.rewardSummaryCardBlue
+            : props.tone === "peach"
+              ? styles.rewardSummaryCardPeach
+              : props.tone === "success"
+                ? styles.rewardSummaryCardSuccess
+                : styles.rewardSummaryCardPanel,
+      ]}
+    >
       <Text style={styles.rewardSummaryLabel}>{props.label}</Text>
       <Text style={styles.rewardSummaryValue}>{props.value}</Text>
     </View>
@@ -75,11 +123,23 @@ type RewardMissionCardProps = {
   progressPercent: number;
   metaLines: string[];
   action?: ReactNode;
+  tone?: "gold" | "blue" | "success" | "muted";
 };
 
 export function RewardMissionCard(props: RewardMissionCardProps) {
   return (
-    <View style={styles.rewardMissionCard}>
+    <View
+      style={[
+        styles.rewardMissionCard,
+        props.tone === "gold"
+          ? styles.rewardMissionCardGold
+          : props.tone === "success"
+            ? styles.rewardMissionCardSuccess
+            : props.tone === "muted"
+              ? styles.rewardMissionCardMuted
+              : styles.rewardMissionCardBlue,
+      ]}
+    >
       <View style={styles.rewardMissionHeader}>
         <View style={styles.rewardMissionHeading}>
           <View style={styles.rewardMissionBadgeRow}>
@@ -152,10 +212,23 @@ const styles = StyleSheet.create({
     minWidth: "44%",
     gap: mobileSpacing.sm,
     borderRadius: mobileRadii.xl,
-    borderWidth: 1,
+    borderWidth: mobileChromeTheme.borderWidth,
     borderColor: mobilePalette.border,
-    backgroundColor: mobilePalette.panelMuted,
+    backgroundColor: "#dfe1ff",
     padding: mobileSpacing.xl,
+    ...mobileChromeTheme.cardShadowSm,
+  },
+  walletAssetCardBlue: {
+    backgroundColor: "#dfe1ff",
+  },
+  walletAssetCardGold: {
+    backgroundColor: "#ffe58b",
+  },
+  walletAssetCardPeach: {
+    backgroundColor: "#ffd9d2",
+  },
+  walletAssetCardPanel: {
+    backgroundColor: "#fff8ef",
   },
   walletAssetTitle: {
     color: mobilePalette.text,
@@ -163,7 +236,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   walletAssetValue: {
-    color: mobilePalette.text,
+    color: mobilePalette.accentMuted,
     fontSize: mobileSpacing["5xl"],
     fontWeight: "800",
   },
@@ -185,12 +258,22 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   walletHistoryCard: {
-    gap: mobileSpacing["2xs"],
+    gap: mobileSpacing.xs,
     borderRadius: mobileRadii.lg,
-    borderWidth: 1,
+    borderWidth: mobileChromeTheme.borderWidth,
     borderColor: mobilePalette.border,
-    backgroundColor: mobilePalette.panelMuted,
-    padding: mobileSpacing.lg,
+    backgroundColor: mobilePalette.panel,
+    padding: mobileSpacing.md,
+    ...mobileChromeTheme.cardShadowSm,
+  },
+  walletHistoryCardSuccess: {
+    backgroundColor: "#d8f5e3",
+  },
+  walletHistoryCardDanger: {
+    backgroundColor: "#ffd9d2",
+  },
+  walletHistoryCardBlue: {
+    backgroundColor: "#dfe1ff",
   },
   walletHistoryHeader: {
     flexDirection: "row",
@@ -201,27 +284,50 @@ const styles = StyleSheet.create({
   walletHistoryTitle: {
     flex: 1,
     color: mobilePalette.text,
-    fontSize: mobileTypeScale.fontSize.body,
+    fontSize: mobileTypeScale.fontSize.labelSm,
     fontWeight: "700",
   },
   walletHistoryAmount: {
-    color: mobilePalette.accent,
-    fontSize: mobileTypeScale.fontSize.body,
+    color: mobilePalette.accentMuted,
+    fontSize: mobileTypeScale.fontSize.labelSm,
     fontWeight: "700",
+  },
+  walletHistoryAmountSuccess: {
+    color: "#157347",
+  },
+  walletHistoryAmountDanger: {
+    color: "#d92d20",
   },
   walletHistoryMeta: {
     color: mobilePalette.textMuted,
     fontSize: mobileTypeScale.fontSize.labelXs,
+    lineHeight: mobileTypeScale.lineHeight.label,
   },
   rewardSummaryCard: {
     flexGrow: 1,
     minWidth: "30%",
     gap: mobileSpacing["2xs"],
     borderRadius: mobileRadii.xl,
-    borderWidth: 1,
+    borderWidth: mobileChromeTheme.borderWidth,
     borderColor: mobilePalette.border,
-    backgroundColor: mobilePalette.panelMuted,
+    backgroundColor: "#fff8ef",
     padding: mobileSpacing.xl,
+    ...mobileChromeTheme.cardShadowSm,
+  },
+  rewardSummaryCardGold: {
+    backgroundColor: "#ffe58b",
+  },
+  rewardSummaryCardBlue: {
+    backgroundColor: "#dfe1ff",
+  },
+  rewardSummaryCardPeach: {
+    backgroundColor: "#ffd9d2",
+  },
+  rewardSummaryCardSuccess: {
+    backgroundColor: "#d8f5e3",
+  },
+  rewardSummaryCardPanel: {
+    backgroundColor: "#fff8ef",
   },
   rewardSummaryLabel: {
     color: mobilePalette.textMuted,
@@ -230,17 +336,30 @@ const styles = StyleSheet.create({
     letterSpacing: mobileTypeScale.letterSpacing.subtle,
   },
   rewardSummaryValue: {
-    color: mobilePalette.text,
+    color: mobilePalette.accentMuted,
     fontSize: mobileTypeScale.fontSize.titleSm,
     fontWeight: "800",
   },
   rewardMissionCard: {
     gap: mobileSpacing.lg,
     borderRadius: mobileRadii.xl,
-    borderWidth: 1,
+    borderWidth: mobileChromeTheme.borderWidth,
     borderColor: mobilePalette.border,
-    backgroundColor: mobilePalette.panelMuted,
+    backgroundColor: mobilePalette.panel,
     padding: mobileSpacing.xl,
+    ...mobileChromeTheme.cardShadow,
+  },
+  rewardMissionCardGold: {
+    backgroundColor: "#ffe58b",
+  },
+  rewardMissionCardBlue: {
+    backgroundColor: "#dfe1ff",
+  },
+  rewardMissionCardSuccess: {
+    backgroundColor: "#d8f5e3",
+  },
+  rewardMissionCardMuted: {
+    backgroundColor: "#efe6df",
   },
   rewardMissionHeader: {
     flexDirection: "row",
@@ -271,6 +390,12 @@ const styles = StyleSheet.create({
   rewardAmountBlock: {
     alignItems: "flex-end",
     gap: mobileSpacing.xs,
+    borderRadius: mobileRadii.lg,
+    borderWidth: mobileChromeTheme.borderWidth,
+    borderColor: mobilePalette.border,
+    backgroundColor: "#ffe58b",
+    paddingHorizontal: mobileSpacing.md,
+    paddingVertical: mobileSpacing.sm,
   },
   rewardAmountLabel: {
     color: mobilePalette.textMuted,
@@ -279,7 +404,7 @@ const styles = StyleSheet.create({
     letterSpacing: mobileTypeScale.letterSpacing.subtle,
   },
   rewardAmountValue: {
-    color: mobilePalette.text,
+    color: mobilePalette.accentMuted,
     fontSize: mobileTypeScale.fontSize.bodyLg,
     fontWeight: "700",
   },
@@ -294,15 +419,17 @@ const styles = StyleSheet.create({
     fontSize: mobileTypeScale.fontSize.labelXs,
   },
   rewardProgressTrack: {
+    borderWidth: mobileChromeTheme.borderWidth,
+    borderColor: mobilePalette.border,
     height: mobileSpacing.sm,
     overflow: "hidden",
     borderRadius: mobileRadii.full,
-    backgroundColor: mobilePalette.input,
+    backgroundColor: "#efe2d9",
   },
   rewardProgressFill: {
     height: "100%",
     borderRadius: mobileRadii.full,
-    backgroundColor: mobilePalette.accent,
+    backgroundColor: "#ffd200",
   },
   rewardMissionFooter: {
     flexDirection: "row",
@@ -322,10 +449,11 @@ const styles = StyleSheet.create({
   securitySessionCard: {
     gap: mobileSpacing.sm,
     borderRadius: mobileRadii.xl,
-    borderWidth: 1,
+    borderWidth: mobileChromeTheme.borderWidth,
     borderColor: mobilePalette.border,
-    backgroundColor: mobilePalette.panelMuted,
+    backgroundColor: mobilePalette.panel,
     padding: mobileSpacing.xl,
+    ...mobileChromeTheme.cardShadowSm,
   },
   securitySessionHeader: {
     flexDirection: "row",

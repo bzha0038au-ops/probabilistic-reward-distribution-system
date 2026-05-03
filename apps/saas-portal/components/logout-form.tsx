@@ -3,12 +3,19 @@
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 type LogoutResponse =
   | { ok: true; redirectTo: string }
   | { ok: false; error: { message: string; code?: string } };
 
-export function LogoutForm({ label }: { label: string }) {
+export function LogoutForm({
+  className,
+  label,
+}: {
+  className?: string;
+  label: string;
+}) {
   const [pending, setPending] = useState(false);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -36,7 +43,12 @@ export function LogoutForm({ label }: { label: string }) {
 
   return (
     <form onSubmit={handleSubmit}>
-      <Button type="submit" variant="outline" className="w-full sm:w-auto" disabled={pending}>
+      <Button
+        type="submit"
+        variant="outline"
+        className={cn("w-full sm:w-auto", className)}
+        disabled={pending}
+      >
         {label}
       </Button>
     </form>

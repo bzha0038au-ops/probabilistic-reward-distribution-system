@@ -23,6 +23,11 @@ type UseRewardCenterOptions = {
   setMessage: (message: string | null) => void;
 };
 
+type RewardClaimReceipt = {
+  missionId: RewardMissionId;
+  grantedAmount: string;
+};
+
 export function useRewardCenter(options: UseRewardCenterOptions) {
   const {
     api,
@@ -39,11 +44,18 @@ export function useRewardCenter(options: UseRewardCenterOptions) {
   const [loadingRewardCenter, setLoadingRewardCenter] = useState(false);
   const [claimingMissionId, setClaimingMissionId] =
     useState<RewardMissionId | null>(null);
+  const [lastClaimReceipt, setLastClaimReceipt] =
+    useState<RewardClaimReceipt | null>(null);
 
   const resetRewardCenter = useCallback(() => {
     setRewardCenter(null);
     setLoadingRewardCenter(false);
     setClaimingMissionId(null);
+    setLastClaimReceipt(null);
+  }, []);
+
+  const dismissClaimReceipt = useCallback(() => {
+    setLastClaimReceipt(null);
   }, []);
 
   const refreshRewardCenter = useCallback(
@@ -110,6 +122,10 @@ export function useRewardCenter(options: UseRewardCenterOptions) {
         return;
       }
 
+      setLastClaimReceipt({
+        missionId: response.data.missionId,
+        grantedAmount: response.data.grantedAmount,
+      });
       setMessage(
         `Reward claimed: +${formatAmount(response.data.grantedAmount)} bonus.`,
       );
@@ -130,6 +146,8 @@ export function useRewardCenter(options: UseRewardCenterOptions) {
   return {
     claimingMissionId,
     claimReward,
+    dismissClaimReceipt,
+    lastClaimReceipt,
     loadingRewardCenter,
     refreshRewardCenter,
     resetRewardCenter,

@@ -3,6 +3,7 @@
 import "@testing-library/jest-dom/vitest";
 import {
   cleanup,
+  fireEvent,
   render,
   screen,
   waitFor,
@@ -152,5 +153,23 @@ describe("PredictionMarketPortfolioPage", () => {
     expect(within(item).queryByText("Sold")).not.toBeNull();
     expect(within(item).queryByText(/^Sold:/)).not.toBeNull();
     expect(item.textContent ?? "").toContain("6.00");
+  });
+
+  it("reloads history with the selected status filter", async () => {
+    renderPredictionMarketPortfolioPage();
+
+    await screen.findByTestId("markets-portfolio-item-71");
+
+    fireEvent.click(screen.getByTestId("markets-portfolio-filter-open"));
+
+    await waitFor(() => {
+      expect(
+        browserUserApiClientMock.getPredictionMarketHistory,
+      ).toHaveBeenLastCalledWith({
+        status: "open",
+        page: 1,
+        limit: 10,
+      });
+    });
   });
 });

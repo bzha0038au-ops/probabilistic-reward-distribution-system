@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+
+<html class="" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Retro-Modern Web3 Play - Community Hub</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&amp;family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&amp;family=Space+Grotesk:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">tailwind.config = {darkMode: "class", theme: {extend: {colors: {tertiary: "#705d00", error: "#ba1a1a", "surface-container-lowest": "#ffffff", "inverse-on-surface": "#f4f0ef", "on-primary": "#ffffff", "surface-variant": "#e6e1e1", secondary: "#4b41e1", "on-secondary": "#ffffff", "tertiary-fixed": "#fce17e", "on-tertiary": "#ffffff", "primary-container": "#a73a00", "tertiary-container": "#c2aa4e", "secondary-container": "#655dfb", "surface-container-low": "#f7f2f2", "on-tertiary-container": "#4c3e00", "on-secondary-container": "#fffbff", "on-primary-container": "#ffcebc", "tertiary-fixed-dim": "#dfc566", "secondary-fixed-dim": "#c3c0ff", "on-surface-variant": "#58423a", "surface-container": "#f1edec", primary: "#7f2a00", "on-error": "#ffffff", "surface-container-highest": "#e6e1e1", "on-background": "#1c1b1b", surface: "#fdf8f8", "on-primary-fixed": "#370e00", "surface-tint": "#a73a00", "primary-fixed-dim": "#ffb599", "inverse-surface": "#313030", "error-container": "#ffdad6", "on-primary-fixed-variant": "#802a00", "on-surface": "#1c1b1b", "inverse-primary": "#ffb599", "surface-dim": "#ddd9d8", "surface-container-high": "#ece7e7", "on-tertiary-fixed": "#221b00", "primary-fixed": "#ffdbce", "outline-variant": "#dfc0b5", "on-tertiary-fixed-variant": "#544600", "surface-bright": "#fdf8f8", background: "#fdf8f8", "secondary-fixed": "#e2dfff", "on-error-container": "#93000a", outline: "#8c7168", "on-secondary-fixed": "#0f0069", "on-secondary-fixed-variant": "#3322cc"}, borderRadius: {DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px"}, spacing: {xs: "4px", sm: "8px", md: "16px", xl: "32px", base: "8px", gutter: "16px", "container-max": "1440px", lg: "24px", margin: "20px", unit: "4px"}, fontFamily: {h1: ["Space Grotesk"], h3: ["Space Grotesk"], button: ["Space Grotesk"], "body-md": ["Be Vietnam Pro"], "body-lg": ["Be Vietnam Pro"], "label-caps": ["Space Grotesk"], h2: ["Space Grotesk"], "headline-xl": ["Plus Jakarta Sans"], "label-bold": ["Be Vietnam Pro"], "label-sm": ["Be Vietnam Pro"], "headline-md": ["Plus Jakarta Sans"], "headline-lg": ["Plus Jakarta Sans"]}, fontSize: {h1: ["64px", {lineHeight: "1.1", letterSpacing: "-0.02em", fontWeight: "700"}], h3: ["32px", {lineHeight: "1.2", fontWeight: "600"}], button: ["16px", {lineHeight: "1.0", fontWeight: "600"}], "body-md": ["16px", {lineHeight: "24px", fontWeight: "400"}], "body-lg": ["18px", {lineHeight: "28px", fontWeight: "400"}], "label-caps": ["14px", {lineHeight: "1.2", letterSpacing: "0.05em", fontWeight: "700"}], h2: ["48px", {lineHeight: "1.2", letterSpacing: "-0.01em", fontWeight: "700"}], "headline-xl": ["40px", {lineHeight: "48px", letterSpacing: "-0.02em", fontWeight: "800"}], "label-bold": ["14px", {lineHeight: "20px", fontWeight: "700"}], "label-sm": ["12px", {lineHeight: "16px", fontWeight: "500"}], "headline-md": ["24px", {lineHeight: "30px", fontWeight: "700"}], "headline-lg": ["32px", {lineHeight: "38px", letterSpacing: "-0.01em", fontWeight: "800"}]}}}};</script>
+<style>
+        .halftone-bg {
+            background-image: radial-gradient(circle, #333348 2px, transparent 2px);
+            background-size: 8px 8px;
+        }
+        .hard-drop {
+            box-shadow: 4px 4px 0px 0px rgba(0,0,0,1);
+        }
+        .hard-drop-lg {
+            box-shadow: 8px 8px 0px 0px rgba(0,0,0,1);
+        }
+        .retro-stroke {
+            border: 2px solid #000;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-md min-h-screen flex flex-col">
+<!-- TopAppBar -->
+<header class="flex justify-between items-center w-full px-8 h-20 z-50 bg-slate-950 border-b-2 border-slate-800 shadow-[0px_4px_0px_0px_rgba(0,0,0,1)] font-['Space_Grotesk'] uppercase tracking-tighter font-bold">
+<div class="flex items-center gap-8">
+<div class="text-2xl font-black text-yellow-400 italic border-2 border-yellow-400 px-3 py-1 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                Retro-Modern Web3 Play
+            </div>
+<nav class="hidden md:flex gap-6">
+<a class="text-slate-400 font-medium hover:text-yellow-300 hover:bg-slate-900 transition-all duration-100" href="#">Lobby</a>
+<a class="text-slate-400 font-medium hover:text-yellow-300 hover:bg-slate-900 transition-all duration-100" href="#">Tables</a>
+<a class="text-slate-400 font-medium hover:text-yellow-300 hover:bg-slate-900 transition-all duration-100" href="#">Predictions</a>
+<a class="text-slate-400 font-medium hover:text-yellow-300 hover:bg-slate-900 transition-all duration-100" href="#">Wallet</a>
+<a class="text-slate-400 font-medium hover:text-yellow-300 hover:bg-slate-900 transition-all duration-100" href="#">Fairness</a>
+<!-- We're in a Community Hub context, which isn't one of the core navs, so none are active -->
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-slate-400 hover:text-yellow-300">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-slate-400 hover:text-yellow-300">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<button class="bg-yellow-400 text-on-primary-container px-6 py-3 retro-stroke hard-drop active:translate-y-1 active:shadow-none transition-all duration-100">
+                Connect Wallet
+            </button>
+</div>
+</header>
+<div class="flex flex-1">
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-20 h-[calc(100vh-5rem)] flex flex-col p-4 z-40 bg-slate-900 border-r-2 border-slate-800 shadow-[4px_0px_0px_0px_rgba(0,0,0,1)] w-64">
+<div class="mb-8 p-4">
+<h2 class="font-h3 text-h3 text-primary-container">Player Hub</h2>
+<p class="font-label-caps text-label-caps text-slate-400">Legendary Rank</p>
+</div>
+<button class="mb-8 w-full bg-yellow-400 text-black font-button text-button py-3 retro-stroke hard-drop hover:bg-yellow-300 active:translate-y-1 active:shadow-none transition-all">
+                Daily Spin
+            </button>
+<nav class="flex-1 flex flex-col gap-2 font-['Space_Grotesk'] text-sm font-bold uppercase">
+<a class="flex items-center gap-4 bg-yellow-400 text-black p-3 rounded-lg border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]" href="#">
+<span class="material-symbols-outlined">group</span> Social
+                </a>
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg transition-transform hover:translate-x-1" href="#">
+<span class="material-symbols-outlined">military_tech</span> Missions
+                </a>
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg transition-transform hover:translate-x-1" href="#">
+<span class="material-symbols-outlined">leaderboard</span> Leaderboard
+                </a>
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg transition-transform hover:translate-x-1" href="#">
+<span class="material-symbols-outlined">psychology</span> Strategy
+                </a>
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg transition-transform hover:translate-x-1" href="#">
+<span class="material-symbols-outlined">help_center</span> Support
+                </a>
+</nav>
+<div class="mt-auto border-t border-slate-800 pt-4 flex flex-col gap-2 font-['Space_Grotesk'] text-sm font-bold uppercase">
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg transition-transform hover:translate-x-1" href="#">
+<span class="material-symbols-outlined">verified_user</span> Audit Log
+                </a>
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg transition-transform hover:translate-x-1" href="#">
+<span class="material-symbols-outlined">enhanced_encryption</span> Security
+                </a>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-64 flex-1 p-gutter bg-surface min-h-screen">
+<div class="max-w-[container-max] mx-auto">
+<!-- Hero Section -->
+<div class="bg-secondary-container retro-stroke hard-drop-lg p-lg mb-12 relative overflow-hidden halftone-bg">
+<div class="relative z-10 flex justify-between items-end">
+<div>
+<h1 class="font-h1 text-h1 text-primary-container mb-4">COMMUNITY HUB</h1>
+<p class="font-body-lg text-body-lg text-on-secondary-container max-w-2xl">
+                                Join the discussion, share strategies, and make predictions. The meta is always shifting.
+                            </p>
+</div>
+<button class="bg-primary-container text-on-primary-container font-button text-button px-8 py-4 retro-stroke hard-drop hover:bg-yellow-300 active:translate-y-1 active:translate-x-1 active:shadow-none transition-all">
+                            NEW THREAD
+                        </button>
+</div>
+</div>
+<div class="grid grid-cols-12 gap-gutter">
+<!-- Main Forum Threads (Left 8 cols) -->
+<div class="col-span-12 lg:col-span-8 flex flex-col gap-6">
+<!-- Category Filters -->
+<div class="flex gap-4 mb-4 overflow-x-auto pb-2">
+<button class="bg-primary-container text-on-primary-container font-label-caps text-label-caps px-6 py-2 rounded-full retro-stroke hard-drop">All Topics</button>
+<button class="bg-surface-variant text-on-surface font-label-caps text-label-caps px-6 py-2 rounded-full retro-stroke hover:bg-surface-bright transition-colors">Strategy Talk</button>
+<button class="bg-surface-variant text-on-surface font-label-caps text-label-caps px-6 py-2 rounded-full retro-stroke hover:bg-surface-bright transition-colors">Market Predictions</button>
+<button class="bg-surface-variant text-on-surface font-label-caps text-label-caps px-6 py-2 rounded-full retro-stroke hover:bg-surface-bright transition-colors">Game Tips</button>
+</div>
+<!-- Thread Item 1 -->
+<div class="bg-surface-container retro-stroke hard-drop p-6 flex gap-6 group hover:bg-surface-container-high transition-colors cursor-pointer">
+<div class="flex flex-col items-center gap-2 w-16">
+<button class="text-slate-400 hover:text-primary-container"><span class="material-symbols-outlined">arrow_upward</span></button>
+<span class="font-h3 text-h3 text-primary-container">248</span>
+<button class="text-slate-400 hover:text-error"><span class="material-symbols-outlined">arrow_downward</span></button>
+</div>
+<div class="flex-1">
+<div class="flex gap-2 mb-2">
+<span class="bg-secondary text-on-secondary font-label-caps text-[10px] px-2 py-1 rounded-full border border-on-secondary">Strategy Talk</span>
+<span class="text-slate-400 text-xs flex items-center">Posted by @0xAlphaDog • 2h ago</span>
+</div>
+<h3 class="font-h2 text-[24px] text-white mb-2 group-hover:text-primary-container transition-colors">Optimal Staking Ratios for the New 'Neon Nights' Roulette Pool</h3>
+<p class="font-body-md text-body-md text-slate-300 line-clamp-2 mb-4">
+                                    I've been running some simulations on the new pool mechanics. If you're splitting your stake, you want to heavily bias towards the odd multipliers. Here's the math...
+                                </p>
+<div class="flex items-center gap-6 text-slate-400 font-label-caps text-xs">
+<span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">chat_bubble</span> 42 Comments</span>
+<span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">visibility</span> 1.2k Views</span>
+<span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">share</span> Share</span>
+</div>
+</div>
+</div>
+<!-- Thread Item 2 -->
+<div class="bg-surface-container retro-stroke hard-drop p-6 flex gap-6 group hover:bg-surface-container-high transition-colors cursor-pointer">
+<div class="flex flex-col items-center gap-2 w-16">
+<button class="text-slate-400 hover:text-primary-container"><span class="material-symbols-outlined">arrow_upward</span></button>
+<span class="font-h3 text-h3 text-primary-container">185</span>
+<button class="text-slate-400 hover:text-error"><span class="material-symbols-outlined">arrow_downward</span></button>
+</div>
+<div class="flex-1">
+<div class="flex gap-2 mb-2">
+<span class="bg-error text-on-error font-label-caps text-[10px] px-2 py-1 rounded-full border border-on-error">Market Predictions</span>
+<span class="text-slate-400 text-xs flex items-center">Posted by @WhaleWatcher • 5h ago</span>
+</div>
+<h3 class="font-h2 text-[24px] text-white mb-2 group-hover:text-primary-container transition-colors">Why the $PLAY Token will break ATH before Q3 ends</h3>
+<p class="font-body-md text-body-md text-slate-300 line-clamp-2 mb-4">
+                                    Looking at the volume on the Fairness contracts, we're seeing unprecedented interaction from dormant wallets. This usually precedes a massive accumulation phase.
+                                </p>
+<div class="flex items-center gap-6 text-slate-400 font-label-caps text-xs">
+<span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">chat_bubble</span> 89 Comments</span>
+<span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">visibility</span> 3.4k Views</span>
+<span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">share</span> Share</span>
+</div>
+</div>
+</div>
+<!-- Thread Item 3 -->
+<div class="bg-surface-container retro-stroke hard-drop p-6 flex gap-6 group hover:bg-surface-container-high transition-colors cursor-pointer">
+<div class="flex flex-col items-center gap-2 w-16">
+<button class="text-slate-400 hover:text-primary-container"><span class="material-symbols-outlined text-primary-container">arrow_upward</span></button>
+<span class="font-h3 text-h3 text-primary-container">92</span>
+<button class="text-slate-400 hover:text-error"><span class="material-symbols-outlined">arrow_downward</span></button>
+</div>
+<div class="flex-1">
+<div class="flex gap-2 mb-2">
+<span class="bg-tertiary-container text-on-tertiary-container font-label-caps text-[10px] px-2 py-1 rounded-full border border-on-tertiary-container">Game Tips</span>
+<span class="text-slate-400 text-xs flex items-center">Posted by @NoobSlayer99 • 1d ago</span>
+</div>
+<h3 class="font-h2 text-[24px] text-white mb-2 group-hover:text-primary-container transition-colors">Beginner's Guide to reading the Fairness Hashes</h3>
+<p class="font-body-md text-body-md text-slate-300 line-clamp-2 mb-4">
+                                    A lot of people ask how we know the deck isn't rigged. Here is a simple, step-by-step guide to verifying the client seed against the server hash yourself.
+                                </p>
+<div class="flex items-center gap-6 text-slate-400 font-label-caps text-xs">
+<span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">chat_bubble</span> 15 Comments</span>
+<span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">visibility</span> 800 Views</span>
+<span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">share</span> Share</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Sidebar (Right 4 cols) -->
+<div class="col-span-12 lg:col-span-4 flex flex-col gap-6">
+<!-- Top Contributors Bento Card -->
+<div class="bg-surface-container retro-stroke hard-drop p-6 relative overflow-hidden">
+<div class="absolute top-0 right-0 p-4 opacity-10">
+<span class="material-symbols-outlined text-9xl">military_tech</span>
+</div>
+<h3 class="font-h3 text-[24px] text-primary-container mb-6 relative z-10 border-b-2 border-slate-700 pb-2">Top Contributors</h3>
+<ul class="flex flex-col gap-4 relative z-10">
+<li class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-secondary retro-stroke flex items-center justify-center text-on-secondary font-bold">A</div>
+<span class="font-label-caps text-label-caps text-white">@0xAlphaDog</span>
+</div>
+<span class="text-primary-container font-bold text-sm bg-surface-variant px-2 py-1 rounded retro-stroke">1.2k pts</span>
+</li>
+<li class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-error retro-stroke flex items-center justify-center text-on-error font-bold">W</div>
+<span class="font-label-caps text-label-caps text-white">@WhaleWatcher</span>
+</div>
+<span class="text-primary-container font-bold text-sm bg-surface-variant px-2 py-1 rounded retro-stroke">980 pts</span>
+</li>
+<li class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-tertiary-container retro-stroke flex items-center justify-center text-on-tertiary-container font-bold">N</div>
+<span class="font-label-caps text-label-caps text-white">@NoobSlayer99</span>
+</div>
+<span class="text-primary-container font-bold text-sm bg-surface-variant px-2 py-1 rounded retro-stroke">750 pts</span>
+</li>
+</ul>
+</div>
+<!-- Active Discussions Bento Card -->
+<div class="bg-surface-container retro-stroke hard-drop p-6">
+<h3 class="font-h3 text-[24px] text-primary-container mb-6 border-b-2 border-slate-700 pb-2">Active Discussions</h3>
+<div class="flex flex-col gap-4">
+<a class="group block" href="#">
+<h4 class="font-body-md font-bold text-white group-hover:text-primary-container transition-colors text-sm mb-1">Has anyone hit the 100x multiplier today?</h4>
+<p class="text-xs text-slate-400">12 mins ago • 45 replies</p>
+</a>
+<a class="group block" href="#">
+<h4 class="font-body-md font-bold text-white group-hover:text-primary-container transition-colors text-sm mb-1">New UI looks sick, but where is the auto-bet?</h4>
+<p class="text-xs text-slate-400">1 hour ago • 12 replies</p>
+</a>
+<a class="group block" href="#">
+<h4 class="font-body-md font-bold text-white group-hover:text-primary-container transition-colors text-sm mb-1">ETH gas fees eating into my small stack strategy.</h4>
+<p class="text-xs text-slate-400">3 hours ago • 89 replies</p>
+</a>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- Footer -->
+<footer class="w-full py-12 px-8 flex flex-col md:flex-row justify-between items-center gap-8 bg-slate-950 border-t-2 border-slate-800 z-50">
+<div class="text-lg text-yellow-400 font-['Space_Grotesk'] font-black uppercase">
+            Retro-Modern Web3 Play
+        </div>
+<nav class="flex gap-6 font-['Space_Grotesk'] text-xs font-black uppercase tracking-widest">
+<a class="text-slate-500 hover:text-yellow-400 transition-colors underline-offset-4 hover:underline" href="#">Whitepaper</a>
+<a class="text-slate-500 hover:text-yellow-400 transition-colors underline-offset-4 hover:underline" href="#">Tokenomics</a>
+<a class="text-slate-500 hover:text-yellow-400 transition-colors underline-offset-4 hover:underline" href="#">Audit Report</a>
+<a class="text-slate-500 hover:text-yellow-400 transition-colors underline-offset-4 hover:underline" href="#">Privacy</a>
+<a class="text-slate-500 hover:text-yellow-400 transition-colors underline-offset-4 hover:underline" href="#">Terms</a>
+</nav>
+<div class="text-slate-500 font-['Space_Grotesk'] text-xs font-black uppercase tracking-widest">
+            © 2024 RETRO-MODERN WEB3 PLAY. PROVABLY FAIR.
+        </div>
+</footer>
+</body></html>

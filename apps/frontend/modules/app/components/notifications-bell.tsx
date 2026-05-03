@@ -8,7 +8,13 @@ import { buttonVariants } from "@/components/ui/button";
 import { browserUserApiClient } from "@/lib/api/user-client";
 import { cn } from "@/lib/utils";
 
-export function NotificationsBell() {
+export function NotificationsBell({
+  className,
+  badgeClassName,
+}: {
+  className?: string;
+  badgeClassName?: string;
+}) {
   const t = useTranslations();
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -42,11 +48,17 @@ export function NotificationsBell() {
       className={cn(
         buttonVariants({ variant: "ghost", size: "sm" }),
         "relative rounded-full border border-white/10 bg-white/[0.03] px-4 text-slate-200 hover:bg-white/[0.08] hover:text-white",
+        className,
       )}
     >
       <span className="text-base leading-none">🔔</span>
       {unreadCount > 0 ? (
-        <span className="ml-2 rounded-full bg-cyan-400 px-2 py-0.5 text-[11px] font-semibold text-slate-950">
+        <span
+          className={cn(
+            "ml-2 rounded-full bg-cyan-400 px-2 py-0.5 text-[11px] font-semibold text-slate-950",
+            badgeClassName,
+          )}
+        >
           {unreadCount}
         </span>
       ) : null}

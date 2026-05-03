@@ -71,6 +71,9 @@
     "navHoldem": "德州",
     "navBlackjack": "二十一点",
     "navFairness": "公平性",
+    "navHome": "首页",
+    "navGames": "游戏",
+    "navProfile": "个人中心",
     "navRewards": "奖励",
     "navWallet": "钱包",
     "navPayments": "出款",
@@ -81,11 +84,33 @@
     "notificationBellLabel": "打开通知中心",
     "notificationsTitle": "通知中心",
     "notificationsDescription": "KYC 审核、提现进度、预测市场结算等事件会统一进入这里。",
+    "notificationsCommandTitle": "指挥中心",
+    "notificationsCommandDescription": "把账户安全提醒、游戏结算和待处理事项集中到一个玩家活动面板里。",
     "notificationsEmpty": "还没有通知。",
+    "notificationsEmptyFiltered": "当前筛选下还没有通知。",
     "notificationsUnreadCount": "未读 {count} 条",
+    "notificationsUnreadBadge": "未读",
+    "notificationsReadBadge": "已读",
     "notificationsMarkRead": "标记已读",
     "notificationsReadAll": "全部已读",
     "notificationsRefresh": "刷新通知",
+    "notificationsFilterAll": "全部提醒",
+    "notificationsFilterRewards": "奖励",
+    "notificationsFilterGames": "游戏",
+    "notificationsFilterMarket": "市场",
+    "notificationsFilterSecurity": "安全",
+    "notificationsFilterAccount": "账户",
+    "notificationsFilterGame": "对局结果",
+    "notificationsFilterSystem": "系统",
+    "notificationsSummaryUnread": "未读队列",
+    "notificationsSummarySecurity": "安全提醒",
+    "notificationsSummaryGame": "游戏更新",
+    "notificationsSummaryAction": "待处理",
+    "notificationsActionQueueTitle": "待处理队列",
+    "notificationsActionQueueDescription": "仍然需要玩家处理的未读通知。",
+    "notificationsAllCaughtUp": "当前可见提醒都已经处理完了。",
+    "notificationsNewestTitle": "通知总览",
+    "notificationsNewestDescription": "当前通知结构的实时计数。",
     "verificationGateTitle": "请先完成邮箱验证",
     "verificationGateDescription": "当前账号可以登录，但在邮箱验证完成前，高风险操作会继续被拦截。",
     "verificationGateBody": "请先验证当前邮箱，再继续进行抽奖等受保护操作。如有需要，可以重新发送验证邮件。",
@@ -104,7 +129,33 @@
     "description": "你可以直接发主题、公开回复，后端反垃圾策略会决定内容是即时展示，还是自动进入 admin 审核队列。",
     "antiSpamBadge": "KYC 分层频控",
     "reviewBadge": "自动审核队列",
+    "summaryThreads": "在线主题",
+    "summaryPosts": "可见帖子",
+    "summaryOpen": "开放主题",
+    "summaryLocked": "锁定主题",
+    "searchLabel": "搜索主题",
+    "searchPlaceholder": "按标题或作者编号搜索",
+    "filterAll": "全部",
+    "filterOpen": "开放中",
+    "filterLocked": "已锁定",
+    "filterActive": "高活跃",
+    "filterStrategy": "策略",
+    "filterMarket": "市场",
+    "filterGeneral": "综合",
+    "noMatchesTitle": "当前筛选下没有主题。",
+    "noMatchesDescription": "换一个关键词，或者切回更宽的筛选条件试试。",
+    "previewStrategy": "这一手应该在什么节奏下打出来？",
+    "previewMarket": "你会怎么判断下一段市场走势？",
+    "previewGeneral": "打开这条讨论，看看玩家们这一轮在聊什么。",
+    "previewLocked": "这个主题已暂停回复，但你仍然可以查看已有讨论。",
+    "scoreLabel": "帖子",
+    "replyCount": "{count} 条回复",
+    "topContributorsTitle": "活跃贡献者",
+    "topContributorsEmpty": "等有可见主题开始活跃后，这里会自动出现贡献者排行。",
+    "activeDiscussionsTitle": "活跃讨论",
+    "activeDiscussionEmpty": "玩家开始发帖后，下一条活跃讨论会出现在这里。",
     "createTitle": "发起主题",
+    "createClose": "收起发帖",
     "createDescription": "正常内容会即时发布；命中 spam 信号或策略阈值时会进入审核。",
     "listTitle": "最新主题",
     "listDescription": "这里只显示当前可见的主题。被自动隐藏的内容要等管理员恢复后才会重新出现。",
@@ -160,6 +211,17 @@
     "banner": "当期卡池",
     "gachaTitle": "老虎机",
     "gachaDescription": "把现有奖池引擎直接落成可玩的老虎机体验：三轴演出、即时出结果、展示保底进度，并在底层继续保留可验证公平性的 commit。",
+    "gachaRouteTitle": "扭蛋",
+    "gachaRouteSubtitle": "奖励抽取",
+    "gachaLuckyStreak": "幸运连击",
+    "gachaBonusLabel": "倍率",
+    "gachaDrawCta": "抽取",
+    "gachaNextReveal": "下次揭晓",
+    "gachaGiftPacks": "礼物包",
+    "gachaHistory": "记录",
+    "gachaRecentWins": "最近奖励",
+    "gachaRecentWinsSubtitle": "这条入口和实时卡池里的最新亮点",
+    "gachaPoolFallback": "当前卡池",
     "title": "老虎机",
     "subtitle": "每次旋转都直接跑在已提交 commit 的抽奖引擎上。转轴只是前端演出，真实结果仍按实时奖池、fairness epoch 和钱包账本结算。",
     "modeLabel": "老虎机",
@@ -282,6 +344,7 @@
     "portfolioEmptyFilteredDescription": "当前筛选条件下还没有对应记录。",
     "portfolioMarketCount": "市场数",
     "portfolioPositionCount": "仓位数",
+    "marketCountValue": "{count} 个市场",
     "portfolioPageValue": "第 {page} 页",
     "openPortfolio": "我的市场",
     "browseMarkets": "浏览市场",
@@ -293,6 +356,12 @@
     "loadingDetail": "正在加载市场详情...",
     "loadingPortfolio": "正在加载你的市场历史...",
     "loadFailed": "加载市场数据失败。",
+    "summaryLiveMarkets": "进行中市场",
+    "summaryTotalPool": "实时总分池",
+    "summaryPositionCount": "未结算仓位",
+    "filterOpenNow": "开放中",
+    "filterEndingSoon": "即将锁定",
+    "filterLargestPool": "最大分池",
     "emptyTitle": "当前没有可浏览的市场。",
     "emptyDescription": "等下一轮市场开放后再回来，或联系运营发布一个新市场。",
     "openMarket": "打开市场",
@@ -318,6 +387,15 @@
     "poolBreakdown": "分池明细",
     "poolDescription": "每个结果会显示当前下注金额，以及它占整个共用池子的比例。",
     "poolShareValue": "占总池 {share}",
+    "resolutionSourceLabel": "结算来源",
+    "rulesLabel": "规则",
+    "tradePreviewTitle": "交易预览",
+    "tradePreviewDescription": "先选择结果、查看当前盘口，再进入完整市场页正式提交仓位。",
+    "probabilityBoard": "概率面板",
+    "previewStakeLabel": "预估下注额",
+    "impliedPriceLabel": "当前盘口",
+    "estimateSharesLabel": "预计份额",
+    "potentialReturnLabel": "潜在回报",
     "betTitle": "下注",
     "betDescription": "选择一个结果、输入下注金额，并把资金锁到该市场直到结算或取消。赢家派奖按 pari-mutuel 方式在扣除抽水后分配。",
     "marketLockedNotice": "这个市场当前已经停止接收新的仓位。",
@@ -375,110 +453,129 @@
   "marketing": {
     "nav": {
       "brand": "奖池引擎",
-      "dashboard": "仪表盘",
+      "games": "玩法",
+      "rewards": "奖励",
+      "fairness": "公平性",
+      "dashboard": "玩家中心",
       "signIn": "登录",
-      "getStarted": "立即开始"
+      "getStarted": "立即开始",
+      "themeLight": "亮色",
+      "themeDark": "夜间"
     },
     "hero": {
-      "badge": "概率奖赏分发",
-      "title": "事务安全的抽奖引擎，支持可配置概率与账本准确性。",
-      "description": "构建基于钱包的抽奖、动态奖池与运营可视化，适配并发控制、审计与清晰的服务边界。",
-      "primaryCta": "启动演示",
-      "secondaryCta": "查看控制台",
+      "badge": "赛季奖励已上线",
+      "title": "在可验证公平的牌桌与奖励玩法中开局、开包，并追踪每一次胜利。",
+      "description": "在二十一点、快八、德州、奖励抽取和预测市场之间切换，钱包、任务与公平性证明都收进同一个浏览器玩法界面。",
+      "primaryCta": "立即开局",
+      "secondaryCta": "查看实时玩法",
       "stats": {
-        "transactionIntegrity": "事务完整性",
-        "modularDomains": "模块化领域",
-        "paymentRisk": "支付风险"
+        "transactionIntegrity": "公平玩法",
+        "modularDomains": "进行中玩法",
+        "paymentRisk": "每日任务"
+      },
+      "signalLabels": {
+        "proof": "证明",
+        "live": "实时",
+        "daily": "每日",
+        "sessionFlow": "节奏"
       },
       "card1": {
-        "title": "抽奖引擎快照",
-        "description": "余额锁定 → 加权抽取 → 库存锁定 → 账本记录",
+        "title": "今日热门入口",
+        "description": "桌游、奖励、任务和预测玩法集中展示。",
         "items": [
-          { "label": "钱包余额校验", "value": "原子级" },
-          { "label": "奖品资格过滤", "value": "动态" },
-          { "label": "库存锁定", "value": "行级" },
-          { "label": "账本记录", "value": "可靠" }
+          { "label": "二十一点", "value": "进行中" },
+          { "label": "快八", "value": "火热" },
+          { "label": "德州", "value": "牌桌" },
+          { "label": "预测市场", "value": "开放" }
         ]
       },
       "card2": {
-        "title": "运营控制面板",
-        "description": "调整权重、监控奖池余额、审计抽奖数据。",
-        "body": "配置变更可追踪且即时生效，抽奖引擎实时同步。"
+        "title": "今日奖励进度",
+        "description": "签到奖励、钱包快照与公平性检查。",
+        "body": "任务领取、活动记录和结果哈希验证都能在同一个实时玩法界面里完成。"
       }
     },
     "stack": {
-      "title": "现代技术栈驱动",
-      "description": "该作品集系统强调类型安全、事务一致性与快速迭代。",
+      "title": "当前牌桌信号",
+      "lead": "决定本轮体验的实时玩法面板。",
+      "description": "决定本轮体验的关键入口与证明面板。",
       "items": [
-        "Next.js App Router",
-        "PostgreSQL",
-        "Auth.js",
-        "Drizzle ORM",
-        "Shadcn UI",
-        "Row-Level Locking"
+        "二十一点牌桌",
+        "快八选号",
+        "德州牌局",
+        "奖励抽取",
+        "预测市场",
+        "公平性验证"
       ]
     },
     "metrics": [
       {
-        "value": "6+",
-        "label": "已接入核心模块",
-        "detail": "用户、钱包、奖品、抽奖引擎、分析、系统配置。"
+        "value": "14.2K",
+        "label": "活跃玩家",
+        "detail": "玩家正在不同牌桌、市场和奖励循环之间切换。"
       },
       {
-        "value": "100%",
-        "label": "事务覆盖率",
-        "detail": "所有抽奖都在原子事务内完成。"
+        "value": "96%",
+        "label": "即时结算回合",
+        "detail": "多数玩法都会立刻完成结算并同步钱包与账本。"
       },
       {
-        "value": "0",
-        "label": "真实支付风险",
-        "detail": "仅虚拟余额，适合作品集展示。"
+        "value": "24h",
+        "label": "奖励事件节奏",
+        "detail": "每日任务、精选掉落和公平性检查持续滚动。"
       }
     ],
+    "metricsPanel": {
+      "kicker": "实时看板",
+      "badge": "持续在线",
+      "supportTitle": "奖励节奏",
+      "supportLead": "玩家会一直停留在同一个奖励循环里。",
+      "supportDescription": "任务、牌桌和公平性证明彼此贴近，首页会读起来像同一个产品，而不是几块分散的产品壳层。"
+    },
     "features": {
-      "eyebrow": "核心模块",
-      "title": "端到端打通的奖赏平台",
-      "description": "借助落地页结构，突出数据一致性、并发控制与运营工具，使项目具备作品集价值。",
+      "eyebrow": "玩家循环",
+      "title": "一个产品，覆盖完整玩家路径",
+      "description": "首页应该把玩家引到真正会反复使用的页面：牌桌、钱包、奖励、社区与公平性。",
       "rows": [
         {
-          "title": "钱包与账本完整性",
-          "description": "每次抽奖都使用原子余额锁、不可变账本与完整审计轨迹。",
+          "title": "以牌桌为核心的大厅",
+          "description": "从首页直接进入二十一点、快八和德州独立玩法页，同时明确展示奖励信号与实时热度。",
           "image": "/assets/landing/feature.svg",
           "bullets": [
-            { "label": "原子更新", "copy": "抽奖过程中锁定余额与库存。" },
-            { "label": "清晰审计", "copy": "交易记录不可篡改、可追溯。" }
+            { "label": "实时风险感知", "copy": "每个入口都能快速传达节奏、状态与热度。" },
+            { "label": "奖励区间", "copy": "玩家在进入前就能判断哪条路线更活跃。" }
           ]
         },
         {
-          "title": "动态奖池控制",
-          "description": "权重配置、阈值门控与库存锁定，避免超卖并保持概率更新实时。",
+          "title": "钱包、奖励与进度",
+          "description": "把点券和奖励做成玩法循环的一部分，而不是银行后台。任务、余额和奖励历史都应该是有参与感的。",
           "image": "/assets/landing/feature2.svg",
           "reverse": true,
           "bullets": [
-            { "label": "原子更新", "copy": "抽奖过程中锁定余额与库存。" },
-            { "label": "清晰审计", "copy": "交易记录不可篡改、可追溯。" }
+            { "label": "任务看板", "copy": "每日目标和连击应与钱包并列，而不是藏在深层页面。" },
+            { "label": "钱包记录", "copy": "账本记录应该读起来像奖励日志，而不是后台表格。" }
           ]
         },
         {
-          "title": "分析视图",
-          "description": "实时查看抽奖量、派奖分布、奖池余额与用户消费排行。",
+          "title": "公平性与社区信任",
+          "description": "让证明页和玩家讨论持续可见，产品才会显得透明、活跃且可信。",
           "image": "/assets/landing/feature3.svg",
           "bullets": [
-            { "label": "原子更新", "copy": "抽奖过程中锁定余额与库存。" },
-            { "label": "清晰审计", "copy": "交易记录不可篡改、可追溯。" }
+            { "label": "每条路线都有证明", "copy": "公平性检查应始终贴近它验证的结果。" },
+            { "label": "社区活跃感", "copy": "玩家应看到真实讨论，而不是一页空白支持中心。" }
           ]
         }
       ]
     },
     "cta": {
-      "title": "准备好压力测试引擎了吗？",
-      "description": "启动演示、配置奖品，观察账本实时更新。",
+      "title": "准备好入座了吗？",
+      "description": "创建账号后，在牌桌、市场、奖励和公平性页面之间顺畅切换。",
       "primary": "创建账号",
-      "secondary": "打开控制台"
+      "secondary": "查看玩法大厅"
     },
     "footer": {
-      "copyright": "© 2026 奖池引擎。作品集原型。",
-      "app": "应用",
+      "copyright": "© 2026 奖池引擎。奖励驱动玩法平台。",
+      "app": "玩家中心",
       "signIn": "登录"
     }
   }

@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Consumer Finance Operations - Terminal 01</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&amp;family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&amp;family=Newsreader:wght@400;500;700;900&amp;family=Space+Grotesk:wght@500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">tailwind.config = {darkMode: "class", theme: {extend: {colors: {"primary-container": "#ff7941", primary: "#a23800", tertiary: "#6d5a00", "on-error-container": "#570008", error: "#b31b25", "primary-fixed-dim": "#ee6d36", "on-primary-fixed": "#000000", "surface-container-low": "#f4f0ef", "secondary-fixed": "#cfcdff", "inverse-primary": "#ff7941", "error-container": "#fb5151", "on-primary-fixed-variant": "#531900", "surface-dim": "#d8d3d3", "secondary-container": "#cfcdff", "outline-variant": "#b0acac", outline: "#797676", "surface-tint": "#a23800", "on-surface": "#302e2e", "on-tertiary-fixed-variant": "#6d5a00", "on-tertiary-fixed": "#4c3e00", "on-error": "#ffefee", "on-secondary-container": "#3423cd", "inverse-surface": "#0f0e0e", "surface-container-high": "#e6e1e1", "on-surface-variant": "#5d5b5b", "on-secondary": "#f4f1ff", surface: "#faf5f5", "on-tertiary": "#fff2cd", "on-secondary-fixed-variant": "#3e32d5", "surface-bright": "#faf5f5", "tertiary-fixed-dim": "#edd372", "tertiary-container": "#fce17e", "primary-fixed": "#ff7941", "on-tertiary-container": "#615000", "on-secondary-fixed": "#2000b0", secondary: "#4a40e0", "surface-container": "#ece7e7", "on-background": "#302e2e", "tertiary-fixed": "#fce17e", "on-primary": "#ffefeb", background: "#faf5f5", "surface-container-lowest": "#ffffff", "surface-variant": "#e0dcdb", "inverse-on-surface": "#9f9c9c", "on-primary-container": "#431200", "surface-container-highest": "#e0dcdb", "secondary-fixed-dim": "#c0bdff", "tertiary-dim": "#5f4e00", "error-dim": "#9f0519", "secondary-dim": "#3d30d4", "primary-dim": "#8e3000"}, borderRadius: {DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px"}, spacing: {sm: "8px", xs: "4px", base: "4px", lg: "24px", gutter: "16px", md: "16px", xl: "32px", "container-margin": "32px", unit: "4px", margin: "20px"}, fontFamily: {"h1-editorial": ["Newsreader"], "body-standard": ["Inter"], "data-mono": ["Space Grotesk"], "body-strong": ["Inter"], "display-editorial": ["Newsreader"], "label-caps": ["Space Grotesk"], "headline-md": ["Plus Jakarta Sans"], "headline-xl": ["Plus Jakarta Sans"], "body-md": ["Be Vietnam Pro"], "body-lg": ["Be Vietnam Pro"], "headline-lg": ["Plus Jakarta Sans"], "label-bold": ["Be Vietnam Pro"], "label-sm": ["Be Vietnam Pro"]}, fontSize: {"h1-editorial": ["28px", {lineHeight: "1.2", fontWeight: "500"}], "body-standard": ["14px", {lineHeight: "1.5", fontWeight: "400"}], "data-mono": ["13px", {lineHeight: "1.2", letterSpacing: "0.02em", fontWeight: "500"}], "body-strong": ["14px", {lineHeight: "1.5", fontWeight: "600"}], "display-editorial": ["42px", {lineHeight: "1.1", letterSpacing: "-0.02em", fontWeight: "400"}], "label-caps": ["11px", {lineHeight: "1", letterSpacing: "0.08em", fontWeight: "700"}], "headline-md": ["24px", {lineHeight: "30px", fontWeight: "700"}], "headline-xl": ["40px", {lineHeight: "48px", letterSpacing: "-0.02em", fontWeight: "800"}], "body-md": ["16px", {lineHeight: "24px", fontWeight: "400"}], "body-lg": ["18px", {lineHeight: "28px", fontWeight: "400"}], "headline-lg": ["32px", {lineHeight: "38px", letterSpacing: "-0.01em", fontWeight: "800"}], "label-bold": ["14px", {lineHeight: "20px", fontWeight: "700"}], "label-sm": ["12px", {lineHeight: "16px", fontWeight: "500"}]}}}};</script>
+<style>
+        .material-symbols-outlined {
+            font-family: 'Material Symbols Outlined';
+            font-weight: normal;
+            font-style: normal;
+            font-size: 20px;
+            display: inline-block;
+            line-height: 1;
+            text-transform: none;
+            letter-spacing: normal;
+            word-wrap: normal;
+            white-space: nowrap;
+            direction: ltr;
+        }
+        /* Custom scrollbar for terminal feel */
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #e5e2df;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-standard overflow-hidden">
+<!-- Subtle Grain Overlay -->
+<svg class="fixed inset-0 pointer-events-none z-[100] opacity-[0.015] mix-blend-multiply w-full h-full">
+<filter id="noise">
+<feturbulence basefrequency="0.9" numoctaves="4" stitchtiles="stitch" type="fractalNoise"></feturbulence>
+</filter>
+<rect filter="url(#noise)" height="100%" width="100%"></rect>
+</svg>
+<!-- TopNavBar (JSON Injected) -->
+<header class="fixed w-full top-0 h-12 z-50 bg-stone-950 dark:bg-black font-newsreader tracking-tight text-sm border-b border-stone-800 flat no-shadows flex justify-between items-center px-8">
+<div class="flex items-center gap-6">
+<span class="font-newsreader font-black uppercase tracking-widest text-white text-sm">Reward Admin</span>
+<div class="relative flex items-center text-stone-500">
+<span class="material-symbols-outlined absolute left-2 text-[16px]">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-white pl-8 text-sm placeholder:text-stone-600 w-64" placeholder="Search operations..." type="text"/>
+</div>
+</div>
+<nav class="flex h-full">
+<a class="h-full flex items-center px-4 text-white font-bold border-b border-white hover:text-stone-200 transition-colors active:scale-95 duration-200" href="#">FinanceOps</a>
+<a class="h-full flex items-center px-4 text-stone-500 font-medium hover:text-stone-200 transition-colors active:scale-95 duration-200" href="#">SaaS-Ops</a>
+</nav>
+<div class="flex items-center gap-4 text-[#5F634F]">
+<span class="font-data-mono text-[10px] tracking-widest border border-[#5F634F]/30 px-2 py-0.5 rounded-sm">PROD</span>
+<div class="flex gap-3">
+<button class="hover:text-stone-200 transition-colors active:scale-95 duration-200"><span class="material-symbols-outlined" data-icon="notifications">notifications</span></button>
+<button class="hover:text-stone-200 transition-colors active:scale-95 duration-200"><span class="material-symbols-outlined" data-icon="settings">settings</span></button>
+</div>
+<img alt="Operator Identity" class="w-6 h-6 rounded-full grayscale opacity-80 border border-stone-700 ml-2" data-alt="A tightly cropped, high-contrast black and white portrait of a focused professional operator in a sterile environment. Lighting is dramatic and cinematic, highlighting sharp features and a serious expression. The background is completely dark, isolating the subject in a utilitarian style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAROLsFRI2buFIgPMO3Ic0ttImWy7GKbkAobOWJDvKjslunXdc6g36u75-LJbBmjXzw4ietSu0_W2h-mnDgxWUp3uzHXQukj_NrMzG9XISbVi1t8cCakPR2T23tlVfh2D-3BGDjk3R3vxDhKGrMdjxQ5VJaR3P3RHURuLgaHhFHjtbo6aJbfci6Rw7gxNVKv2OsPNgx5NM68pgObUavvSNK_KODRdiCdcKaUNdrv5jKyUzcocPDtc-wi-SE-eGxicisif6oTaaYqB_U"/>
+</div>
+</header>
+<!-- SideNavBar (JSON Injected) -->
+<aside class="fixed left-0 top-0 h-full w-64 rounded-none bg-[#F2EFE9] dark:bg-stone-900/95 backdrop-blur-md font-newsreader text-sm uppercase tracking-wider border-r border-stone-300 dark:border-stone-700 inset-shadow-sm flex flex-col pt-16 pb-8 overflow-y-auto z-40 transition-all duration-300 ease-in-out">
+<div class="px-6 mb-8 mt-4">
+<div class="flex items-center gap-3 mb-4">
+<img alt="Operator" class="w-10 h-10 rounded border border-stone-300" data-alt="A minimal, desaturated portrait of a technical systems operator in a soft-lit room. The image feels candid but highly composed, utilizing a neutral color palette that blends seamlessly into a light-mode administrative interface. Subtle depth of field." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBEF1KBbDXYeqIWDOiV5a9dWvXrOyoz769JQVGw5McwIPDCeb_IOIahIQ6J8N4c4MbVmh9iYdodH5OvnDevMIwcT-tx4hlIw-imxvpJ4snIDOmwnSm5RY0XY4IfdmgjcucLmZgR3YQLOL1Ww8if0ODXFdxzI3i5sLBCEExj_n6ukyjAiALrbBBFcK0W6tp7XTV1DBtbsGE9yOanKezXXx7P-oWyGKdZzxhPDJbs4R5XaR6zNnoc9_holxUa_SphiWi_S-cXTT4es3Nt"/>
+<div>
+<div class="text-[#5F634F] font-bold tracking-tight">System Engine</div>
+<div class="text-[10px] text-stone-500 font-data-mono normal-case tracking-wider">Terminal Tier 01</div>
+</div>
+</div>
+<div class="bg-stone-200/50 border border-stone-300 px-3 py-1.5 flex items-center justify-between">
+<span class="text-[10px] font-bold text-stone-600">MFA Verified</span>
+<span class="material-symbols-outlined text-[14px] text-stone-500">lock_open</span>
+</div>
+</div>
+<nav class="flex-1 space-y-0.5">
+<a class="flex items-center gap-3 py-2 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900" href="#">
+<span class="material-symbols-outlined text-[18px]">settings_input_component</span> Config
+            </a>
+<a class="flex items-center gap-3 py-2 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900" href="#">
+<span class="material-symbols-outlined text-[18px]">gavel</span> Legal
+            </a>
+<a class="flex items-center gap-3 py-2 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900" href="#">
+<span class="material-symbols-outlined text-[18px]">hub</span> Providers
+            </a>
+<a class="flex items-center gap-3 py-2 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900" href="#">
+<span class="material-symbols-outlined text-[18px]">military_tech</span> Prizes
+            </a>
+<a class="flex items-center gap-3 py-2 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900" href="#">
+<span class="material-symbols-outlined text-[18px]">account_balance</span> Reconciliation
+            </a>
+<a class="flex items-center gap-3 py-2 text-stone-950 dark:text-white font-bold border-l-2 border-[#5F634F] bg-stone-200/50 dark:bg-stone-800/50 pl-4" href="#">
+<span class="material-symbols-outlined text-[18px]">payments</span> Finance
+            </a>
+<a class="flex items-center gap-3 py-2 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900" href="#">
+<span class="material-symbols-outlined text-[18px]">trending_up</span> Economy
+            </a>
+<a class="flex items-center gap-3 py-2 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900" href="#">
+<span class="material-symbols-outlined text-[18px]">fingerprint</span> KYC
+            </a>
+<a class="flex items-center gap-3 py-2 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900" href="#">
+<span class="material-symbols-outlined text-[18px]">group</span> Users
+            </a>
+<a class="flex items-center gap-3 py-2 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900" href="#">
+<span class="material-symbols-outlined text-[18px]">business</span> SaaS
+            </a>
+<a class="flex items-center gap-3 py-2 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900" href="#">
+<span class="material-symbols-outlined text-[18px]">list_alt</span> Audit
+            </a>
+<a class="flex items-center gap-3 py-2 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900" href="#">
+<span class="material-symbols-outlined text-[18px]">verified_user</span> AML
+            </a>
+<a class="flex items-center gap-3 py-2 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900" href="#">
+<span class="material-symbols-outlined text-[18px]">security</span> Collusion
+            </a>
+</nav>
+<div class="mt-auto px-4 space-y-1">
+<a class="flex items-center gap-3 py-1.5 text-[11px] text-stone-500 hover:text-stone-900" href="#">
+<span class="material-symbols-outlined text-[14px]">help</span> Help
+            </a>
+<a class="flex items-center gap-3 py-1.5 text-[11px] text-stone-500 hover:text-stone-900" href="#">
+<span class="material-symbols-outlined text-[14px]">description</span> Docs
+            </a>
+</div>
+</aside>
+<!-- Main Workspace -->
+<main class="ml-64 pt-12 h-screen flex flex-col relative">
+<!-- Workspace Header -->
+<div class="px-container-margin py-lg border-b border-outline-variant bg-surface">
+<div class="flex justify-between items-end">
+<div>
+<div class="font-data-mono text-label-caps text-on-surface-variant mb-2 uppercase flex items-center gap-2">
+<span class="w-1.5 h-1.5 bg-primary rounded-full"></span> Workspace: financeOps
+                    </div>
+<h1 class="font-h1-editorial text-h1-editorial text-on-surface">Deposits &amp; Withdrawals</h1>
+</div>
+<div class="flex gap-3">
+<button class="px-4 py-2 border border-outline-variant text-on-surface font-data-mono text-data-mono hover:bg-surface-variant transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]">filter_list</span> Filter
+                    </button>
+<button class="px-4 py-2 bg-on-surface text-surface font-data-mono text-data-mono hover:bg-on-surface-variant transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]">download</span> Export Ledger
+                    </button>
+</div>
+</div>
+</div>
+<!-- High-Density Data Table -->
+<div class="flex-1 overflow-auto bg-surface-container-low p-container-margin relative">
+<div class="border border-outline-variant bg-surface rounded-DEFAULT inset-shadow-sm">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b border-outline-variant bg-surface-container text-on-surface-variant font-label-caps text-label-caps uppercase tracking-wider">
+<th class="py-3 px-4 w-12 text-center"><span class="material-symbols-outlined text-[14px]">check_box_outline_blank</span></th>
+<th class="py-3 px-4">Transaction ID</th>
+<th class="py-3 px-4">Timestamp (UTC)</th>
+<th class="py-3 px-4">User Alias</th>
+<th class="py-3 px-4 text-right">Amount</th>
+<th class="py-3 px-4">Provider</th>
+<th class="py-3 px-4">Status</th>
+<th class="py-3 px-4 text-right">Risk Score</th>
+</tr>
+</thead>
+<tbody class="font-data-mono text-data-mono text-on-surface divide-y divide-outline-variant">
+<!-- Row 1 (Standard) -->
+<tr class="hover:bg-surface-variant/50 transition-colors cursor-pointer">
+<td class="py-3 px-4 text-center text-outline"><span class="material-symbols-outlined text-[14px]">check_box_outline_blank</span></td>
+<td class="py-3 px-4 text-primary">0x8aF92...c2D</td>
+<td class="py-3 px-4 text-on-surface-variant">24-10-27 14:32:11</td>
+<td class="py-3 px-4 font-body-standard text-body-standard">U-9942-X</td>
+<td class="py-3 px-4 text-right">+ $4,250.00</td>
+<td class="py-3 px-4 font-body-standard text-body-standard text-on-surface-variant">Stripe Corp</td>
+<td class="py-3 px-4">
+<span class="inline-flex items-center px-2 py-0.5 bg-primary-container text-on-primary-container font-label-caps text-[10px] rounded uppercase">Settled</span>
+</td>
+<td class="py-3 px-4 text-right text-on-surface-variant">12</td>
+</tr>
+<!-- Row 2 (Selected / High Risk) -->
+<tr class="bg-surface-variant/80 border-l-2 border-l-primary hover:bg-surface-variant transition-colors cursor-pointer">
+<td class="py-3 px-4 text-center text-primary"><span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">check_box</span></td>
+<td class="py-3 px-4 text-primary font-bold">0x4bE11...a9F</td>
+<td class="py-3 px-4 text-on-surface-variant">24-10-27 14:28:05</td>
+<td class="py-3 px-4 font-body-standard text-body-standard">U-1102-Z</td>
+<td class="py-3 px-4 text-right text-error">- $12,500.00</td>
+<td class="py-3 px-4 font-body-standard text-body-standard text-on-surface-variant">Bank Transfer</td>
+<td class="py-3 px-4">
+<span class="inline-flex items-center px-2 py-0.5 bg-surface-dim text-on-surface font-label-caps text-[10px] rounded uppercase border border-outline-variant">Review Req</span>
+</td>
+<td class="py-3 px-4 text-right text-error font-bold">89</td>
+</tr>
+<!-- Row 3 (Pending) -->
+<tr class="hover:bg-surface-variant/50 transition-colors cursor-pointer">
+<td class="py-3 px-4 text-center text-outline"><span class="material-symbols-outlined text-[14px]">check_box_outline_blank</span></td>
+<td class="py-3 px-4 text-primary">0x1cF33...b7A</td>
+<td class="py-3 px-4 text-on-surface-variant">24-10-27 14:15:22</td>
+<td class="py-3 px-4 font-body-standard text-body-standard">U-4412-A</td>
+<td class="py-3 px-4 text-right">+ $150.00</td>
+<td class="py-3 px-4 font-body-standard text-body-standard text-on-surface-variant">PayPal Inc</td>
+<td class="py-3 px-4">
+<span class="inline-flex items-center px-2 py-0.5 bg-secondary-container text-on-secondary-container font-label-caps text-[10px] rounded uppercase">Pending</span>
+</td>
+<td class="py-3 px-4 text-right text-on-surface-variant">04</td>
+</tr>
+<!-- Row 4 (Standard) -->
+<tr class="hover:bg-surface-variant/50 transition-colors cursor-pointer">
+<td class="py-3 px-4 text-center text-outline"><span class="material-symbols-outlined text-[14px]">check_box_outline_blank</span></td>
+<td class="py-3 px-4 text-primary">0x9dE44...f2B</td>
+<td class="py-3 px-4 text-on-surface-variant">24-10-27 13:50:01</td>
+<td class="py-3 px-4 font-body-standard text-body-standard">U-8821-B</td>
+<td class="py-3 px-4 text-right">- $3,100.00</td>
+<td class="py-3 px-4 font-body-standard text-body-standard text-on-surface-variant">Stripe Corp</td>
+<td class="py-3 px-4">
+<span class="inline-flex items-center px-2 py-0.5 bg-primary-container text-on-primary-container font-label-caps text-[10px] rounded uppercase">Settled</span>
+</td>
+<td class="py-3 px-4 text-right text-on-surface-variant">15</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Side Drawer Overlay (Simulating Open State) -->
+<div class="absolute inset-0 bg-on-background/5 backdrop-blur-[1px] z-10 pointer-events-none"></div>
+<!-- Right Side Drawer (Action Panel) -->
+<aside class="absolute right-0 top-0 h-full w-[45%] bg-surface/95 backdrop-blur-md border-l border-outline-variant shadow-[-8px_0_24px_rgba(0,0,0,0.05)] z-20 flex flex-col pointer-events-auto">
+<!-- Drawer Header -->
+<div class="p-lg border-b border-outline-variant flex justify-between items-start">
+<div>
+<div class="font-label-caps text-label-caps text-error mb-1 uppercase flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">warning</span> Action Required
+                    </div>
+<h2 class="font-h1-editorial text-[22px] font-medium leading-tight text-on-surface">Withdrawal Request Analysis</h2>
+<p class="font-data-mono text-data-mono text-on-surface-variant mt-2">ID: 0x4bE11899a9F</p>
+</div>
+<button class="text-outline hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<!-- Drawer Content (Scrollable) -->
+<div class="flex-1 overflow-y-auto p-lg space-y-8">
+<!-- Data Key-Values Grid -->
+<div class="grid grid-cols-2 gap-6">
+<div>
+<div class="font-label-caps text-label-caps text-on-surface-variant uppercase mb-1">Requested Amount</div>
+<div class="font-data-mono text-[18px] text-error font-medium">- $12,500.00</div>
+</div>
+<div>
+<div class="font-label-caps text-label-caps text-on-surface-variant uppercase mb-1">User Alias</div>
+<div class="font-body-standard text-body-strong text-on-surface">U-1102-Z <span class="text-outline font-normal ml-1">(Tier 2)</span></div>
+</div>
+<div>
+<div class="font-label-caps text-label-caps text-on-surface-variant uppercase mb-1">Destination Routing</div>
+<div class="font-data-mono text-data-mono text-on-surface">CHASE-8842-***</div>
+</div>
+<div>
+<div class="font-label-caps text-label-caps text-on-surface-variant uppercase mb-1">Risk Heuristics</div>
+<div class="font-body-standard text-body-standard text-error bg-error-container/30 px-2 py-1 inline-block border border-error/20">
+                            Velocity Anomaly Detected
+                        </div>
+</div>
+</div>
+<!-- Separation Line -->
+<div class="h-px w-full bg-outline-variant"></div>
+<!-- Security Context / Write Gating -->
+<div class="bg-surface-container-lowest border border-outline-variant p-md">
+<div class="flex items-center justify-between mb-4">
+<h3 class="font-body-strong text-body-strong text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">admin_panel_settings</span> Operational Authorization
+                        </h3>
+<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-primary-container/20 text-primary font-label-caps text-[10px] rounded border border-primary/20">
+<span class="material-symbols-outlined text-[12px]">verified</span> TOTP Verified
+                        </span>
+</div>
+<p class="font-body-standard text-body-standard text-on-surface-variant mb-4">
+                        This action exceeds standard threshold parameters. Manual override requires break-glass rationale.
+                    </p>
+<div class="relative">
+<label class="font-label-caps text-label-caps text-on-surface-variant uppercase block mb-1">Break-glass Justification Log</label>
+<input class="w-full bg-transparent border-0 border-b border-outline-variant focus:border-primary focus:ring-0 px-0 py-2 font-data-mono text-data-mono text-on-surface placeholder:text-outline transition-colors" placeholder="Enter case file or rationale..." type="text"/>
+</div>
+</div>
+</div>
+<!-- Drawer Footer (Actions) -->
+<div class="p-lg border-t border-outline-variant bg-surface-container-low flex flex-col gap-3">
+<button class="w-full py-3 bg-on-surface text-surface font-label-caps text-label-caps uppercase tracking-widest hover:bg-on-surface-variant transition-all active:scale-[0.98] border border-on-surface flex items-center justify-center gap-2 relative overflow-hidden group">
+<span class="absolute left-0 top-0 bottom-0 w-1 bg-surface opacity-50 group-hover:w-full transition-all duration-500 ease-out z-0"></span>
+<span class="material-symbols-outlined text-[16px] relative z-10">done_all</span>
+<span class="relative z-10">Hold to Approve Withdrawal</span>
+</button>
+<div class="flex gap-3">
+<button class="flex-1 py-2 border border-error text-error font-label-caps text-label-caps uppercase tracking-wider hover:bg-error/5 transition-colors">
+                        Reject Transaction
+                    </button>
+<button class="flex-1 py-2 border border-outline text-on-surface-variant font-label-caps text-label-caps uppercase tracking-wider hover:bg-surface-variant transition-colors">
+                        Provider Override
+                    </button>
+</div>
+</div>
+</aside>
+</main>
+</body></html>

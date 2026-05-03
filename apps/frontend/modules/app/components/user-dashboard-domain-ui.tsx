@@ -18,11 +18,11 @@ export function DashboardFeedbackNotice({
   return (
     <div
       className={cn(
-        'rounded-xl border px-4 py-3 text-sm',
+        'rounded-[1.3rem] border-2 px-4 py-3 text-sm shadow-[3px_3px_0px_0px_rgba(15,17,31,0.12)]',
         tone === 'success'
           ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
           : tone === 'warning'
-            ? 'border-amber-200 bg-amber-50 text-amber-950'
+            ? 'border-[var(--retro-gold)] bg-[#fff6d8] text-[var(--retro-ink)]'
             : 'border-red-300 bg-red-50 text-red-900',
         className,
       )}
@@ -49,13 +49,15 @@ export function WalletSummaryCard({
   return (
     <div
       className={cn(
-        'rounded-xl border border-slate-200 bg-slate-50 px-5 py-4',
+        'retro-panel rounded-[1.45rem] border-none px-5 py-4',
         className,
       )}
     >
-      <p className="text-sm text-slate-500">{label}</p>
+      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--retro-orange)]">
+        {label}
+      </p>
       <p
-        className="mt-2 text-3xl font-semibold text-slate-950"
+        className="mt-3 text-3xl font-semibold tracking-tight text-[var(--retro-ink)]"
         data-testid={valueTestId}
       >
         {value}
@@ -88,17 +90,19 @@ export function WalletActivityCard({
   afterValue,
 }: WalletActivityCardProps) {
   return (
-    <div className="rounded-xl border border-slate-200 px-4 py-3">
+    <div className="retro-panel rounded-[1.35rem] border-none px-4 py-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="font-medium text-slate-950">{title}</p>
-          <p className="mt-1 text-sm text-slate-500">{timestamp}</p>
+          <p className="font-medium text-[var(--retro-ink)]">{title}</p>
+          <p className="mt-1 text-sm text-[rgba(15,17,31,0.62)]">{timestamp}</p>
         </div>
         <div className="text-right">
           <p
             className={cn(
               'font-semibold',
-              amountTone === 'negative' ? 'text-rose-600' : 'text-emerald-600',
+              amountTone === 'negative'
+                ? 'text-[var(--retro-red)]'
+                : 'text-[var(--retro-green)]',
             )}
           >
             {amount}
@@ -108,7 +112,7 @@ export function WalletActivityCard({
           ) : null}
         </div>
       </div>
-      <div className="mt-3 grid gap-1 text-sm text-slate-500 sm:grid-cols-2">
+      <div className="mt-3 grid gap-1 text-sm text-[rgba(15,17,31,0.62)] sm:grid-cols-2">
         <p>
           {beforeLabel}: {beforeValue}
         </p>
@@ -127,9 +131,11 @@ type RewardSummaryCardProps = {
 
 export function RewardSummaryCard({ label, value }: RewardSummaryCardProps) {
   return (
-    <div className="rounded-xl border border-white/80 bg-white/80 px-4 py-4 shadow-sm">
-      <p className="text-sm text-slate-500">{label}</p>
-      <p className="mt-2 text-2xl font-semibold text-slate-950">{value}</p>
+    <div className="retro-panel rounded-[1.35rem] border-none px-4 py-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--retro-orange)]">
+        {label}
+      </p>
+      <p className="mt-2 text-2xl font-semibold text-[var(--retro-ink)]">{value}</p>
     </div>
   );
 }
@@ -158,37 +164,37 @@ export function RewardMissionCard({
   action,
 }: RewardMissionCardProps) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm">
+    <div className="retro-panel rounded-[1.55rem] border-none p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h4 className="text-base font-semibold text-slate-950">{title}</h4>
+            <h4 className="text-base font-semibold text-[var(--retro-ink)]">{title}</h4>
             {statusBadges}
           </div>
-          <p className="text-sm text-slate-600">{description}</p>
+          <p className="text-sm leading-6 text-[rgba(15,17,31,0.68)]">{description}</p>
         </div>
         <div className="text-right">
-          <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+          <p className="text-xs uppercase tracking-[0.18em] text-[var(--retro-orange)]">
             {rewardLabel}
           </p>
-          <p className="text-lg font-semibold text-slate-950">{rewardAmount}</p>
+          <p className="text-lg font-semibold text-[var(--retro-ink)]">{rewardAmount}</p>
         </div>
       </div>
 
       <div className="mt-4 space-y-2">
-        <div className="flex items-center justify-between text-xs text-slate-500">
+        <div className="flex items-center justify-between text-xs text-[rgba(15,17,31,0.62)]">
           <span>{progressLabel}</span>
           <span>{progressPercent}%</span>
         </div>
-        <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+        <div className="h-2 overflow-hidden rounded-full bg-[rgba(15,17,31,0.08)]">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-amber-400 via-orange-400 to-cyan-500 transition-[width]"
+            className="h-full rounded-full bg-gradient-to-r from-[var(--retro-gold)] via-[var(--retro-orange)] to-[var(--retro-violet)] transition-[width]"
             style={{ width: `${progressPercent}%` }}
           />
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-[rgba(15,17,31,0.62)]">
         <div className="space-y-1">{metaLines}</div>
         {action}
       </div>
@@ -212,17 +218,17 @@ export function SecuritySessionCard({
   action,
 }: SecuritySessionCardProps) {
   return (
-    <div className="rounded-lg border border-slate-200 px-4 py-3 text-sm text-slate-700">
+    <div className="retro-panel rounded-[1.35rem] border-none px-4 py-4 text-sm text-[rgba(15,17,31,0.74)]">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="font-medium text-slate-950">{title}</p>
+          <p className="font-medium text-[var(--retro-ink)]">{title}</p>
           {userAgent ? (
-            <p className="mt-1 break-all text-slate-500">{userAgent}</p>
+            <p className="mt-1 break-all text-[rgba(15,17,31,0.58)]">{userAgent}</p>
           ) : null}
         </div>
         {badge}
       </div>
-      <div className="mt-3 grid gap-1 text-slate-500">{details}</div>
+      <div className="mt-3 grid gap-1 text-[rgba(15,17,31,0.62)]">{details}</div>
       {action ? <div className="mt-4">{action}</div> : null}
     </div>
   );

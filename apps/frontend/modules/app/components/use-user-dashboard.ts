@@ -23,7 +23,7 @@ type UserDashboardCopy =
 type UseUserDashboardOptions = {
   initialCurrentSession: CurrentUserSessionResponse;
   copy: UserDashboardCopy;
-  view?: "overview" | "rewards" | "wallet" | "security";
+  view?: "overview" | "profile" | "rewards" | "wallet" | "security";
 };
 
 export type UserDashboardActivityEntry = {
@@ -124,10 +124,10 @@ export function useUserDashboard(options: UseUserDashboardOptions) {
     useState<RewardMissionId | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const needsWalletData = view === "wallet";
-  const needsActivityData = view === "wallet";
+  const needsWalletData = view === "wallet" || view === "profile";
+  const needsActivityData = view === "wallet" || view === "profile";
   const needsRewardCenter = view === "rewards";
-  const needsSessions = view === "security";
+  const needsSessions = view === "security" || view === "profile";
   const walletBalance = readBluckAvailableBalance(wallet);
   const emailVerified = Boolean(currentUser.emailVerifiedAt);
   const phoneVerified = Boolean(currentUser.phoneVerifiedAt);

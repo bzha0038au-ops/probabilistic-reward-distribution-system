@@ -22,7 +22,12 @@
 {#if paymentCapabilities}
   <section class="mt-6 card bg-base-100 shadow">
     <div class="card-body gap-4">
-      <div>
+      <div class="space-y-2">
+        <p
+          class="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-[var(--admin-primary)]"
+        >
+          Routing Status
+        </p>
         <h2 class="card-title">{t("finance.capabilities.title")}</h2>
         <p class="text-sm text-slate-500">
           {t("finance.capabilities.description")}
@@ -38,47 +43,81 @@
         </span>
       </div>
       <div class="grid gap-4 text-sm md:grid-cols-3">
-        <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+        <div
+          class="rounded-[0.95rem] border border-[var(--admin-border)] bg-[var(--admin-paper-strong)] p-4"
+        >
+          <p
+            class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500"
+          >
             {t("finance.capabilities.mode")}
           </p>
           <p class="mt-1 font-medium">
-            {support.paymentOperatingModeLabel(paymentCapabilities.operatingMode)}
+            {support.paymentOperatingModeLabel(
+              paymentCapabilities.operatingMode,
+            )}
           </p>
         </div>
-        <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+        <div
+          class="rounded-[0.95rem] border border-[var(--admin-border)] bg-[var(--admin-paper-strong)] p-4"
+        >
+          <p
+            class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500"
+          >
             {t("finance.capabilities.activeProviders")}
           </p>
-          <p class="mt-1 font-medium">{paymentCapabilities.activeProviderCount}</p>
+          <p class="mt-1 font-medium">
+            {paymentCapabilities.activeProviderCount}
+          </p>
         </div>
-        <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+        <div
+          class="rounded-[0.95rem] border border-[var(--admin-border)] bg-[var(--admin-paper-strong)] p-4"
+        >
+          <p
+            class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500"
+          >
             {t("finance.capabilities.configuredAdapters")}
           </p>
           <p class="mt-1 font-medium">
-            {support.formatAdapterList(paymentCapabilities.configuredProviderAdapters)}
+            {support.formatAdapterList(
+              paymentCapabilities.configuredProviderAdapters,
+            )}
           </p>
         </div>
-        <div class="md:col-span-3">
-          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+        <div
+          class="rounded-[0.95rem] border border-[var(--admin-border)] bg-[var(--admin-paper)] p-4 md:col-span-3"
+        >
+          <p
+            class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500"
+          >
             {t("finance.capabilities.registeredAdapters")}
           </p>
           <p class="mt-1 font-medium">
-            {support.formatAdapterList(paymentCapabilities.registeredAdapterKeys)}
+            {support.formatAdapterList(
+              paymentCapabilities.registeredAdapterKeys,
+            )}
           </p>
         </div>
-        <div class="md:col-span-3">
-          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+        <div
+          class="rounded-[0.95rem] border border-[var(--admin-border)] bg-[var(--admin-paper)] p-4 md:col-span-3"
+        >
+          <p
+            class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500"
+          >
             {t("finance.capabilities.implementedAdapters")}
           </p>
           <p class="mt-1 font-medium">
-            {support.formatAdapterList(paymentCapabilities.implementedAutomatedAdapters)}
+            {support.formatAdapterList(
+              paymentCapabilities.implementedAutomatedAdapters,
+            )}
           </p>
         </div>
       </div>
-      <div>
-        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+      <div
+        class="rounded-[0.95rem] border border-[var(--admin-border)] bg-[var(--admin-paper)] p-4"
+      >
+        <p
+          class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500"
+        >
           {t("finance.capabilities.missingCapabilities")}
         </p>
         <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-600">
@@ -87,9 +126,11 @@
           {/each}
         </ul>
       </div>
-      <div class="border-t border-slate-200 pt-4">
+      <div class="border-t border-base-300 pt-4">
         <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+          <p
+            class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500"
+          >
             {t("finance.capabilities.governanceTitle")}
           </p>
           <p class="mt-1 text-sm text-slate-500">
@@ -98,25 +139,31 @@
         </div>
         <div class="mt-4 grid gap-4 text-sm md:grid-cols-3">
           <div>
-            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+            <p
+              class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500"
+            >
               {t("finance.capabilities.editableFields")}
             </p>
             <p class="mt-1 font-medium">
               {support.formatAdapterList(
                 readStringArray(
-                  paymentCapabilities.providerConfigGovernance?.adminEditableFields,
+                  paymentCapabilities.providerConfigGovernance
+                    ?.adminEditableFields,
                 ).map(support.paymentConfigFieldLabel),
               )}
             </p>
           </div>
           <div>
-            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+            <p
+              class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500"
+            >
               {t("finance.capabilities.secretReferenceFields")}
             </p>
             <p class="mt-1 font-medium">
               {support.formatAdapterList(
                 readStringArray(
-                  paymentCapabilities.providerConfigGovernance?.secretReferenceFields,
+                  paymentCapabilities.providerConfigGovernance
+                    ?.secretReferenceFields,
                 ).map(support.paymentConfigFieldLabel),
               )}
             </p>
@@ -128,7 +175,9 @@
             </p>
           </div>
           <div>
-            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+            <p
+              class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500"
+            >
               {t("finance.capabilities.secretStorage")}
             </p>
             <p class="mt-1 font-medium">

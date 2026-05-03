@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>KYC Review - Operations</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&amp;family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">tailwind.config = {darkMode: "class", theme: {extend: {colors: {"on-surface": "#302e2e", "on-tertiary-container": "#615000", "surface-variant": "#e0dcdb", "primary-container": "#ff7941", "on-error-container": "#570008", tertiary: "#6d5a00", "surface-container": "#ece7e7", "on-primary-container": "#431200", "surface-tint": "#a23800", "inverse-primary": "#ff7941", "primary-fixed": "#ff7941", "on-primary-fixed-variant": "#531900", secondary: "#4a40e0", "on-primary": "#ffefeb", background: "#faf5f5", "inverse-surface": "#0f0e0e", "on-error": "#ffefee", "on-tertiary": "#fff2cd", "error-container": "#fb5151", "tertiary-fixed": "#fce17e", "on-surface-variant": "#5d5b5b", "surface-bright": "#faf5f5", "surface-container-highest": "#e0dcdb", error: "#b31b25", "secondary-fixed": "#cfcdff", "surface-dim": "#d8d3d3", "on-secondary-container": "#3423cd", "surface-container-lowest": "#ffffff", outline: "#797676", "secondary-fixed-dim": "#c0bdff", "on-tertiary-fixed": "#4c3e00", primary: "#a23800", "secondary-container": "#cfcdff", "on-tertiary-fixed-variant": "#6d5a00", "on-background": "#302e2e", "on-secondary": "#f4f1ff", "inverse-on-surface": "#9f9c9c", "primary-fixed-dim": "#ee6d36", "on-secondary-fixed-variant": "#3e32d5", "surface-container-low": "#f4f0ef", "outline-variant": "#b0acac", "surface-container-high": "#e6e1e1", "tertiary-container": "#fce17e", "on-primary-fixed": "#000000", surface: "#faf5f5", "tertiary-fixed-dim": "#edd372", "on-secondary-fixed": "#2000b0", "tertiary-dim": "#5f4e00", "error-dim": "#9f0519", "secondary-dim": "#3d30d4", "primary-dim": "#8e3000"}, borderRadius: {DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px"}, spacing: {md: "16px", lg: "24px", gutter: "16px", "container-margin": "32px", base: "4px", sm: "8px", xl: "32px", xs: "4px", unit: "4px", margin: "20px"}, fontFamily: {"label-caps": ["Space Grotesk"], "display-editorial": ["Newsreader"], "h1-editorial": ["Newsreader"], "body-standard": ["Inter"], "data-mono": ["Space Grotesk"], "body-strong": ["Inter"], "headline-md": ["Plus Jakarta Sans"], "headline-xl": ["Plus Jakarta Sans"], "body-md": ["Be Vietnam Pro"], "body-lg": ["Be Vietnam Pro"], "headline-lg": ["Plus Jakarta Sans"], "label-bold": ["Be Vietnam Pro"], "label-sm": ["Be Vietnam Pro"]}, fontSize: {"label-caps": ["11px", {lineHeight: "1", letterSpacing: "0.08em", fontWeight: "700"}], "display-editorial": ["42px", {lineHeight: "1.1", letterSpacing: "-0.02em", fontWeight: "400"}], "h1-editorial": ["28px", {lineHeight: "1.2", fontWeight: "500"}], "body-standard": ["14px", {lineHeight: "1.5", fontWeight: "400"}], "data-mono": ["13px", {lineHeight: "1.2", letterSpacing: "0.02em", fontWeight: "500"}], "body-strong": ["14px", {lineHeight: "1.5", fontWeight: "600"}], "headline-md": ["24px", {lineHeight: "30px", fontWeight: "700"}], "headline-xl": ["40px", {lineHeight: "48px", letterSpacing: "-0.02em", fontWeight: "800"}], "body-md": ["16px", {lineHeight: "24px", fontWeight: "400"}], "body-lg": ["18px", {lineHeight: "28px", fontWeight: "400"}], "headline-lg": ["32px", {lineHeight: "38px", letterSpacing: "-0.01em", fontWeight: "800"}], "label-bold": ["14px", {lineHeight: "20px", fontWeight: "700"}], "label-sm": ["12px", {lineHeight: "16px", fontWeight: "500"}]}}}};</script>
+<style>
+        body {
+            background-color: #fcf9f5;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.02'/%3E%3C/svg%3E");
+        }
+    </style>
+</head>
+<body class="text-on-surface antialiased flex flex-col min-h-screen">
+<header class="fixed w-full top-0 h-12 z-30 bg-stone-950 dark:bg-black border-b border-stone-800 flex justify-between items-center px-8">
+<div class="flex items-center gap-md">
+<div class="flex items-center gap-sm text-[#5F634F] font-newsreader tracking-tight text-sm">
+<span class="material-symbols-outlined text-[18px]">search</span>
+</div>
+<span class="font-newsreader font-black uppercase tracking-widest text-white text-sm">Reward Admin</span>
+</div>
+<nav class="hidden md:flex gap-lg">
+<a class="text-stone-500 font-medium font-newsreader tracking-tight text-sm hover:text-stone-200 transition-colors active:scale-95 duration-200" href="#">FinanceOps</a>
+<a class="text-stone-500 font-medium font-newsreader tracking-tight text-sm hover:text-stone-200 transition-colors active:scale-95 duration-200" href="#">SaaS-Ops</a>
+</nav>
+<div class="flex items-center gap-md text-[#5F634F] font-newsreader tracking-tight text-sm">
+<span class="font-medium text-stone-400">PROD</span>
+<div class="w-[1px] h-4 bg-stone-800 mx-sm"></div>
+<button class="hover:text-stone-200 transition-colors"><span class="material-symbols-outlined text-[20px]">notifications</span></button>
+<button class="hover:text-stone-200 transition-colors"><span class="material-symbols-outlined text-[20px]">settings</span></button>
+<img alt="Operator Identity" class="w-7 h-7 rounded-full object-cover ml-sm border border-stone-700" data-alt="A small, crisp portrait of an IT operations administrator with a serious, focused expression. The lighting is subtle and professional, resembling a corporate ID badge photo. The background is a stark, minimal dark gray, blending seamlessly into a dark mode interface. The overall mood is authoritative and secure." src="https://lh3.googleusercontent.com/aida-public/AB6AXuByVHM1SvG74pdqgbRSNFzdVScHiwUnVGU8bVAbzKMP8esweoClKOFZ9YG7M4LPDL8wczvcib57FYiEVW9DhOGXFW_UdsxoZqsR6Q9XHCyd0W2zT7yl7qt_LqFHU47aJDQA-WPNnYrnBd5J2atTo3EK0SqkE0Z1Xe4WhEJAlTLgBUpQYXYSZVAkH60Cp1SHuRz_ZJ-IYAUWBndcMmmsgSZXeLTFY4OU4bnVipV44D3IfMRZ0vqNs9LGS3qZYRiA9LILUz9ixcvqUo1E"/>
+</div>
+</header>
+<nav class="fixed left-0 top-0 h-full w-64 rounded-none border-r border-stone-300 dark:border-stone-700 shadow-[inset_0_0_10px_rgba(0,0,0,0.02)] bg-[#F2EFE9] dark:bg-stone-900/95 backdrop-blur-md flex flex-col pt-16 pb-8 overflow-y-auto z-20">
+<div class="px-6 mb-8 flex flex-col gap-xs">
+<span class="font-h1-editorial text-h1-editorial text-on-surface">System Engine</span>
+<span class="font-body-standard text-body-standard text-on-surface-variant">Terminal Tier 01</span>
+<div class="mt-sm inline-flex items-center gap-xs px-2 py-1 bg-surface-container-high border border-outline-variant rounded text-xs font-data-mono text-on-surface-variant w-fit">
+<span class="material-symbols-outlined text-[14px]">lock</span>
+                MFA Verified
+            </div>
+</div>
+<div class="flex flex-col flex-1">
+<a class="flex items-center gap-md py-3 px-6 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out font-newsreader text-sm uppercase tracking-wider" href="#">
+<span class="material-symbols-outlined text-[20px]">settings_input_component</span>
+                Config
+            </a>
+<a class="flex items-center gap-md py-3 px-6 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out font-newsreader text-sm uppercase tracking-wider" href="#">
+<span class="material-symbols-outlined text-[20px]">gavel</span>
+                Legal
+            </a>
+<a class="flex items-center gap-md py-3 px-6 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out font-newsreader text-sm uppercase tracking-wider" href="#">
+<span class="material-symbols-outlined text-[20px]">hub</span>
+                Providers
+            </a>
+<a class="flex items-center gap-md py-3 px-6 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out font-newsreader text-sm uppercase tracking-wider" href="#">
+<span class="material-symbols-outlined text-[20px]">military_tech</span>
+                Prizes
+            </a>
+<a class="flex items-center gap-md py-3 px-6 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out font-newsreader text-sm uppercase tracking-wider" href="#">
+<span class="material-symbols-outlined text-[20px]">account_balance</span>
+                Reconciliation
+            </a>
+<a class="flex items-center gap-md py-3 px-6 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out font-newsreader text-sm uppercase tracking-wider" href="#">
+<span class="material-symbols-outlined text-[20px]">payments</span>
+                Finance
+            </a>
+<a class="flex items-center gap-md py-3 px-6 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out font-newsreader text-sm uppercase tracking-wider" href="#">
+<span class="material-symbols-outlined text-[20px]">trending_up</span>
+                Economy
+            </a>
+<a class="flex items-center gap-md py-3 px-6 text-stone-950 dark:text-white font-bold border-l-2 border-[#5F634F] bg-stone-200/50 dark:bg-stone-800/50 transition-all duration-300 ease-in-out font-newsreader text-sm uppercase tracking-wider" href="#">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">fingerprint</span>
+                KYC
+            </a>
+<a class="flex items-center gap-md py-3 px-6 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out font-newsreader text-sm uppercase tracking-wider" href="#">
+<span class="material-symbols-outlined text-[20px]">group</span>
+                Users
+            </a>
+<a class="flex items-center gap-md py-3 px-6 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out font-newsreader text-sm uppercase tracking-wider" href="#">
+<span class="material-symbols-outlined text-[20px]">business</span>
+                SaaS
+            </a>
+<a class="flex items-center gap-md py-3 px-6 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out font-newsreader text-sm uppercase tracking-wider" href="#">
+<span class="material-symbols-outlined text-[20px]">list_alt</span>
+                Audit
+            </a>
+<a class="flex items-center gap-md py-3 px-6 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out font-newsreader text-sm uppercase tracking-wider" href="#">
+<span class="material-symbols-outlined text-[20px]">verified_user</span>
+                AML
+            </a>
+<a class="flex items-center gap-md py-3 px-6 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out font-newsreader text-sm uppercase tracking-wider" href="#">
+<span class="material-symbols-outlined text-[20px]">security</span>
+                Collusion
+            </a>
+</div>
+<div class="mt-auto flex flex-col pt-4 border-t border-stone-300 dark:border-stone-700">
+<a class="flex items-center gap-md py-2 px-6 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out font-newsreader text-sm uppercase tracking-wider" href="#">
+<span class="material-symbols-outlined text-[18px]">help</span>
+                Help
+            </a>
+<a class="flex items-center gap-md py-2 px-6 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out font-newsreader text-sm uppercase tracking-wider" href="#">
+<span class="material-symbols-outlined text-[18px]">description</span>
+                Docs
+            </a>
+</div>
+</nav>
+<main class="ml-64 pt-12 flex-1 flex flex-col">
+<div class="p-container-margin flex flex-col gap-lg flex-1">
+<div class="flex items-end justify-between border-b border-outline-variant pb-md">
+<div class="flex flex-col gap-xs">
+<div class="flex items-center gap-sm">
+<span class="font-data-mono text-data-mono text-on-surface-variant">APP-8849-XYZ</span>
+<div class="w-1 h-1 rounded-full bg-outline"></div>
+<span class="font-data-mono text-[11px] text-on-surface-variant">SUBMITTED: 14:32 UTC</span>
+</div>
+<h1 class="font-h1-editorial text-h1-editorial text-on-surface">KYC Case Review</h1>
+</div>
+<div class="bg-surface-container-low border border-outline-variant px-sm py-xs flex items-center gap-xs">
+<div class="w-2 h-2 rounded-full bg-[#e1e5cb] border border-[#474b38]"></div>
+<span class="font-label-caps text-label-caps text-on-surface uppercase tracking-widest">Pending Manual Verification</span>
+</div>
+</div>
+<div class="grid grid-cols-1 xl:grid-cols-12 gap-lg flex-1 items-start">
+<div class="xl:col-span-5 flex flex-col gap-sm sticky top-24">
+<div class="flex items-center justify-between">
+<h2 class="font-body-strong text-body-strong text-on-surface-variant">Identity Document</h2>
+<span class="font-data-mono text-[11px] text-outline">FRONT_SCAN.JPG</span>
+</div>
+<div class="bg-surface-container border border-outline-variant rounded-sm overflow-hidden relative flex flex-col h-[500px] shadow-[inset_0_0_20px_rgba(0,0,0,0.03)]">
+<div class="flex-1 w-full relative group">
+<img alt="Document Scan" class="w-full h-full object-cover transition-transform duration-500 scale-105" data-alt="A top-down, high-resolution scan of a modern European-style passport data page resting on a neutral gray studio background. The document features an intricate, secure holographic overlay and a neutral portrait of a young adult professional. Lighting is even and analytical, optimized for optical character recognition, with a cool, clinical color palette emphasizing whites, light blues, and security-ink greens to fit a high-trust verification interface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBEgo7lfuT1rugxdo1PF_Ms3LwC-W9pC7xzNKkiNP9cQnT7m3uOcYdi9FD0RyDgT-s0ypU1iqJwhXPApQn9_3GTeiOoJc1pR__z4Zf3J1JicSqg8zMw0JwmBvVXkFT3l_CAWsr9f9n1poKOqyNh2R4ShIqS9JBN42E9HN-lNLg7qjJbdjpBj22I-yda5rwWesu8ZowxMJBgyVvf5YaqafBVsxQYdaar4wpR_pi2oekYSunPmiaAnZQ70iy74UH0JbfL54KlMPMHvPpk"/>
+<div class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-inverse-surface/90 backdrop-blur border border-outline flex items-center gap-xs p-1 rounded">
+<button class="w-8 h-8 flex items-center justify-center text-inverse-on-surface hover:text-white transition-colors" title="Zoom Out">
+<span class="material-symbols-outlined text-[18px]">remove</span>
+</button>
+<div class="w-[1px] h-4 bg-outline-variant/30"></div>
+<button class="w-8 h-8 flex items-center justify-center text-inverse-on-surface hover:text-white transition-colors" title="Zoom In">
+<span class="material-symbols-outlined text-[18px]">add</span>
+</button>
+<div class="w-[1px] h-4 bg-outline-variant/30"></div>
+<button class="w-8 h-8 flex items-center justify-center text-inverse-on-surface hover:text-white transition-colors" title="Rotate Left">
+<span class="material-symbols-outlined text-[18px]">rotate_left</span>
+</button>
+<button class="w-8 h-8 flex items-center justify-center text-inverse-on-surface hover:text-white transition-colors" title="Rotate Right">
+<span class="material-symbols-outlined text-[18px]">rotate_right</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<div class="xl:col-span-7 flex flex-col gap-lg h-full">
+<div class="flex flex-wrap gap-md">
+<div class="flex flex-col bg-surface-container-lowest border border-outline-variant p-md rounded-sm min-w-[200px]">
+<span class="font-label-caps text-label-caps text-on-surface-variant uppercase mb-xs">Face Match Confidence</span>
+<div class="flex items-baseline gap-sm">
+<span class="font-display-editorial text-display-editorial text-primary">98.4%</span>
+<span class="material-symbols-outlined text-primary text-[16px]">check_circle</span>
+</div>
+</div>
+<div class="flex flex-col bg-surface-container-lowest border border-outline-variant p-md rounded-sm min-w-[200px]">
+<span class="font-label-caps text-label-caps text-on-surface-variant uppercase mb-xs">Document Authenticity</span>
+<div class="flex items-center gap-sm mt-1">
+<div class="bg-primary-fixed text-on-primary-fixed-variant px-sm py-1 font-body-strong text-[12px] border border-outline-variant rounded-sm flex items-center gap-xs w-fit">
+<span class="material-symbols-outlined text-[14px]">verified</span>
+                                    SYSTEM VERIFIED
+                                </div>
+</div>
+</div>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant rounded-sm flex flex-col flex-1 shadow-[0_2px_4px_rgba(0,0,0,0.01)]">
+<div class="p-md border-b border-outline-variant bg-surface-container-low flex items-center justify-between">
+<h3 class="font-body-strong text-body-strong text-on-surface">Data Comparison</h3>
+<button class="font-label-caps text-label-caps text-primary hover:text-on-surface transition-colors flex items-center gap-xs uppercase">
+<span class="material-symbols-outlined text-[14px]">history</span>
+                                View OCR Logs
+                            </button>
+</div>
+<div class="flex flex-col w-full">
+<div class="grid grid-cols-12 px-md py-sm border-b border-outline-variant bg-surface-container-lowest">
+<div class="col-span-3 font-label-caps text-label-caps text-on-surface-variant uppercase">Field</div>
+<div class="col-span-4 font-label-caps text-label-caps text-on-surface-variant uppercase">Extracted (OCR)</div>
+<div class="col-span-4 font-label-caps text-label-caps text-on-surface-variant uppercase">User Provided</div>
+<div class="col-span-1 text-right font-label-caps text-label-caps text-on-surface-variant uppercase">Match</div>
+</div>
+<div class="grid grid-cols-12 px-md py-sm border-b border-surface-variant items-center hover:bg-surface-container-low transition-colors">
+<div class="col-span-3 font-body-strong text-body-strong text-on-surface">First Name</div>
+<div class="col-span-4 font-data-mono text-data-mono text-on-surface-variant">ALEXANDER</div>
+<div class="col-span-4 font-data-mono text-data-mono text-on-surface-variant">ALEXANDER</div>
+<div class="col-span-1 flex justify-end">
+<span class="material-symbols-outlined text-primary text-[18px]">check</span>
+</div>
+</div>
+<div class="grid grid-cols-12 px-md py-sm border-b border-surface-variant items-center hover:bg-surface-container-low transition-colors">
+<div class="col-span-3 font-body-strong text-body-strong text-on-surface">Last Name</div>
+<div class="col-span-4 font-data-mono text-data-mono text-on-surface-variant">HARRINGTON</div>
+<div class="col-span-4 font-data-mono text-data-mono text-on-surface-variant">HARRINGTON</div>
+<div class="col-span-1 flex justify-end">
+<span class="material-symbols-outlined text-primary text-[18px]">check</span>
+</div>
+</div>
+<div class="grid grid-cols-12 px-md py-sm border-b border-surface-variant items-center bg-error-container/20 hover:bg-error-container/30 transition-colors">
+<div class="col-span-3 font-body-strong text-body-strong text-on-surface">Date of Birth</div>
+<div class="col-span-4 font-data-mono text-data-mono text-on-surface-variant">1992-04-12</div>
+<div class="col-span-4 font-data-mono text-data-mono text-error font-bold flex items-center gap-xs">
+                                    1992-04-21
+                                    <span class="material-symbols-outlined text-[14px]">warning</span>
+</div>
+<div class="col-span-1 flex justify-end">
+<span class="material-symbols-outlined text-error text-[18px]">close</span>
+</div>
+</div>
+<div class="grid grid-cols-12 px-md py-sm border-b border-surface-variant items-center hover:bg-surface-container-low transition-colors">
+<div class="col-span-3 font-body-strong text-body-strong text-on-surface">Document No.</div>
+<div class="col-span-4 font-data-mono text-data-mono text-on-surface-variant">P-88392011</div>
+<div class="col-span-4 font-data-mono text-data-mono text-on-surface-variant">P-88392011</div>
+<div class="col-span-1 flex justify-end">
+<span class="material-symbols-outlined text-primary text-[18px]">check</span>
+</div>
+</div>
+<div class="grid grid-cols-12 px-md py-sm items-center hover:bg-surface-container-low transition-colors">
+<div class="col-span-3 font-body-strong text-body-strong text-on-surface">Expiry Date</div>
+<div class="col-span-4 font-data-mono text-data-mono text-on-surface-variant">2030-11-05</div>
+<div class="col-span-4 font-data-mono text-data-mono text-on-surface-variant">2030-11-05</div>
+<div class="col-span-1 flex justify-end">
+<span class="material-symbols-outlined text-primary text-[18px]">check</span>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-auto pt-lg border-t border-outline-variant flex items-center justify-between bg-surface-bright p-md rounded-sm border border-outline-variant">
+<div class="flex flex-col">
+<span class="font-body-strong text-body-strong text-on-surface">Final Determination</span>
+<span class="font-body-standard text-[13px] text-on-surface-variant">This action binds the operational record.</span>
+</div>
+<div class="flex items-center gap-md">
+<button class="px-lg py-sm font-body-strong text-body-strong text-error border border-outline hover:border-error hover:bg-error-container/10 transition-colors flex items-center gap-xs rounded-sm">
+<span class="material-symbols-outlined text-[18px]">block</span>
+                                Reject (Reason Req.)
+                            </button>
+<button class="px-xl py-sm font-body-strong text-body-strong text-on-surface border-2 border-primary bg-primary-fixed hover:bg-primary hover:text-on-primary transition-colors flex items-center gap-sm rounded-sm group relative overflow-hidden">
+<span class="material-symbols-outlined text-[18px] group-hover:scale-110 transition-transform">gavel</span>
+                                Approve Identity
+                                <div class="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 pointer-events-none"></div>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

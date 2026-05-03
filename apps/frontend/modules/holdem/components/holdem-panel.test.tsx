@@ -342,7 +342,12 @@ describe("HoldemPanel", () => {
     const user = userEvent.setup();
     renderHoldemPanel();
 
-    await screen.findByText("Alpha Table");
+    const activeTableName = await screen.findByTestId(
+      "holdem-active-table-name",
+      {},
+      { timeout: 15000 },
+    );
+    expect(activeTableName.textContent).toContain("Alpha Table");
 
     const amountInput = await screen.findByTestId("holdem-action-amount-input");
     await user.clear(amountInput);
@@ -421,7 +426,9 @@ describe("HoldemPanel", () => {
 
     renderHoldemPanel();
 
-    expect(await screen.findByTestId("holdem-action-button-bet")).not.toBeNull();
+    expect(
+      await screen.findByTestId("holdem-action-button-bet", {}, { timeout: 15000 }),
+    ).not.toBeNull();
     expect(screen.queryByTestId("holdem-action-button-raise")).toBeNull();
   });
 

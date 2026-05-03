@@ -1,16 +1,24 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useLocale } from "@/components/i18n-provider";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { browserUserApiClient } from "@/lib/api/user-client";
-import { cn } from "@/lib/utils";
 import type {
   HandHistory,
   HoldemSignedEvidenceBundle,
 } from "@reward/shared-types/hand-history";
 import type { HoldemCardView } from "@reward/shared-types/holdem";
+
+import { useLocale } from "@/components/i18n-provider";
+import { Button } from "@/components/ui/button";
+import { CardContent } from "@/components/ui/card";
+import { browserUserApiClient } from "@/lib/api/user-client";
+import { cn } from "@/lib/utils";
+import {
+  GameMetricTile,
+  GamePill,
+  GameSectionBlock,
+  GameStatusNotice,
+  GameSurfaceCard,
+} from "@/modules/game/components/game-domain-ui";
 import {
   buildHoldemReplayData,
   findReplayParticipant,
@@ -149,6 +157,7 @@ function formatAmount(value: string) {
   if (!Number.isFinite(numeric)) {
     return value;
   }
+
   return numeric.toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -249,6 +258,28 @@ function getEventLabel(type: string, c: HoldemCopy) {
   }
 }
 
+function resolveReplayStatusTone(status: string) {
+  const normalized = status.toLowerCase();
+
+  if (normalized.includes("settled") || normalized.includes("won")) {
+    return "success" as const;
+  }
+
+  if (
+    normalized.includes("dispute") ||
+    normalized.includes("failed") ||
+    normalized.includes("cancel")
+  ) {
+    return "danger" as const;
+  }
+
+  if (normalized.includes("pending") || normalized.includes("active")) {
+    return "warning" as const;
+  }
+
+  return "neutral" as const;
+}
+
 function CardFace(props: { card: HoldemCardView }) {
   const hidden = props.card.hidden || !props.card.rank || !props.card.suit;
   const suit = props.card.suit ? suitSymbols[props.card.suit] : "•";
@@ -256,11 +287,11 @@ function CardFace(props: { card: HoldemCardView }) {
   return (
     <div
       className={cn(
-        "flex h-24 w-16 flex-col justify-between rounded-2xl border p-3 text-left shadow-[0_14px_26px_rgba(15,23,42,0.22)]",
+        "flex h-24 w-16 flex-col justify-between rounded-[1.2rem] border-2 p-3 text-left shadow-[4px_4px_0px_0px_rgba(15,17,31,0.18)]",
         hidden
-          ? "border-white/10 bg-slate-950/80 text-slate-500"
-          : "border-amber-100/70 bg-white text-slate-950",
-        !hidden && isRedSuit(props.card) ? "text-rose-600" : null,
+          ? "border-[#202745] bg-[linear-gradient(180deg,rgba(17,23,45,0.98),rgba(9,11,27,1))] text-[var(--retro-gold)]"
+          : "border-[rgba(15,17,31,0.94)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(246,240,234,0.98))] text-[var(--retro-ink)]",
+        !hidden && isRedSuit(props.card) ? "text-[var(--retro-red)]" : null,
       )}
     >
       {hidden ? (
@@ -287,8 +318,7 @@ function getReplaySeatLabel(
   }
 
   const participant = findReplayParticipant(replay, seatIndex);
-  const baseLabel =
-    participant?.displayName ?? `${c.openSeat} ${seatIndex + 1}`;
+  const baseLabel = participant?.displayName ?? `${c.openSeat} ${seatIndex + 1}`;
 
   return replay.viewerSeatIndex === seatIndex
     ? `${baseLabel} · ${c.hero}`
@@ -316,7 +346,9 @@ function describeReplayEvent(
   const actorLabel = getReplaySeatLabel(replay, event.seatIndex, c);
   const eventCards =
     event.type === "board_revealed"
-      ? (event.newCards.length > 0 ? event.newCards : event.boardCards)
+      ? event.newCards.length > 0
+        ? event.newCards
+        : event.boardCards
       : event.type === "hole_cards_dealt"
         ? (findReplayParticipant(replay, replay.viewerSeatIndex)?.holeCards ?? [])
         : [];
@@ -337,10 +369,7 @@ function describeReplayEvent(
     case "big_blind_posted":
       return {
         title: getEventLabel(event.type, c),
-        detail: [
-          actorLabel,
-          event.amount ? formatAmount(event.amount) : null,
-        ]
+        detail: [actorLabel, event.amount ? formatAmount(event.amount) : null]
           .filter(Boolean)
           .join(" · "),
         cards: eventCards,
@@ -434,17 +463,6 @@ export function HoldemReplayDetail(props: {
     setEvidenceBundle(null);
   }, [props.history.roundId]);
 
-  if (!replay) {
-    return (
-      <div className="rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-5 text-sm text-rose-100">
-        {c.replayUnavailable}
-      </div>
-    );
-  }
-
-  const isPage = props.mode === "page";
-  const fileSafeRoundId = props.history.roundId.replace(/[^a-zA-Z0-9_-]+/g, "-");
-
   const loadEvidenceBundle = useCallback(async () => {
     if (evidenceBundle) {
       return evidenceBundle;
@@ -486,6 +504,10 @@ export function HoldemReplayDetail(props: {
     }
 
     try {
+      const fileSafeRoundId = props.history.roundId.replace(
+        /[^a-zA-Z0-9_-]+/g,
+        "-",
+      );
       const blob = new Blob([JSON.stringify(bundle, null, 2)], {
         type: "application/json",
       });
@@ -499,352 +521,390 @@ export function HoldemReplayDetail(props: {
     } catch {
       setArtifactStatus(c.actionFailed);
     }
-  }, [c.actionExported, c.actionFailed, fileSafeRoundId, loadEvidenceBundle]);
+  }, [c.actionExported, c.actionFailed, loadEvidenceBundle, props.history.roundId]);
+
+  if (!replay) {
+    return (
+      <GameStatusNotice surface="light" tone="danger">
+        {c.replayUnavailable}
+      </GameStatusNotice>
+    );
+  }
+
+  const isPage = props.mode === "page";
+  const artifactTone =
+    artifactStatus === c.actionCopied || artifactStatus === c.actionExported
+      ? "success"
+      : "danger";
 
   return (
     <div
       className={cn(
-        "rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-4",
-        isPage ? "space-y-6" : "space-y-5",
+        "space-y-5",
+        isPage ? "" : "rounded-[1.65rem] border border-[rgba(15,17,31,0.12)] bg-white/58 p-1",
       )}
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.26em] text-cyan-100/80">
-            {c.replaySummary}
-          </p>
-          <p className="mt-1 text-lg font-semibold text-white">
-            {c.hand} #{replay.handNumber ?? "—"} · {getStageLabel(replay.stage, c)}
-          </p>
-          <p className="mt-1 text-sm text-slate-400">
-            {replay.tableName ?? "—"}
-          </p>
-        </div>
-        <Badge
-          variant="outline"
-          className="border-cyan-400/20 bg-cyan-400/10 text-cyan-100"
-        >
-          {replay.status}
-        </Badge>
-      </div>
-
-      <div className="flex flex-wrap gap-3">
-        <Button
-          type="button"
-          variant="outline"
-          className="rounded-full border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]"
-          onClick={() => void copyDisputePayload()}
-        >
-          {c.copyDisputePayload}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          className="rounded-full border-cyan-400/20 bg-cyan-400/10 text-cyan-100 hover:bg-cyan-400/20"
-          onClick={exportHandEvidence}
-        >
-          {c.exportHandEvidence}
-        </Button>
-      </div>
-
-      {artifactStatus ? (
-        <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-slate-200">
-          {artifactStatus}
-        </div>
-      ) : null}
-
-      {evidenceBundle ? (
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.26em] text-slate-500">
-                {c.bundleSummary}
-              </p>
-              <p className="mt-2 text-base font-semibold text-white">
-                {evidenceBundle.summaryPage.title}
-              </p>
-              <p className="mt-1 text-sm text-slate-400">
-                {evidenceBundle.summaryPage.subtitle}
-              </p>
-            </div>
-            <Badge
-              variant="outline"
-              className="border-white/10 bg-white/[0.04] text-slate-200"
-            >
-              {evidenceBundle.signature.algorithm}
-            </Badge>
-          </div>
-          <dl className="mt-4 grid gap-3 text-sm text-slate-200 md:grid-cols-3">
-            <div>
-              <dt className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
-                {c.bundleExportedAt}
-              </dt>
-              <dd className="mt-1 break-all font-semibold text-white">
-                {formatReplayTimestamp(evidenceBundle.exportedAt, resolvedLocale)}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
-                {c.bundleKeyId}
-              </dt>
-              <dd className="mt-1 break-all font-semibold text-white">
-                {evidenceBundle.signature.keyId}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
-                {c.bundleDigest}
-              </dt>
-              <dd className="mt-1 break-all font-semibold text-white">
-                {evidenceBundle.signature.payloadDigest}
-              </dd>
-            </div>
-          </dl>
-          <pre className="mt-4 whitespace-pre-wrap break-words rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-xs leading-6 text-slate-300">
-            {evidenceBundle.summaryPage.markdown}
-          </pre>
-        </div>
-      ) : null}
-
-      <dl className="grid gap-3 text-sm text-slate-200 md:grid-cols-2 xl:grid-cols-4">
-        <div>
-          <dt className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
-            {c.replayStake}
-          </dt>
-          <dd className="mt-1 font-semibold text-white">
-            {formatAmount(replay.stakeAmount)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
-            {c.replayPayout}
-          </dt>
-          <dd className="mt-1 font-semibold text-white">
-            {formatAmount(replay.payoutAmount)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
-            {c.replayStartedAt}
-          </dt>
-          <dd className="mt-1 font-semibold text-white">
-            {formatReplayTimestamp(replay.startedAt, resolvedLocale)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
-            {c.replaySettledAt}
-          </dt>
-          <dd className="mt-1 font-semibold text-white">
-            {formatReplayTimestamp(replay.settledAt, resolvedLocale)}
-          </dd>
-        </div>
-      </dl>
-
-      <div className="grid gap-4 lg:grid-cols-[1.2fr,0.8fr]">
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-          <p className="text-[11px] uppercase tracking-[0.26em] text-slate-500">
-            {c.fairness}
-          </p>
-          <p className="mt-2 break-all text-sm text-slate-200">
-            {replay.fairnessCommitHash ?? "—"}
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-          <p className="text-[11px] uppercase tracking-[0.26em] text-slate-500">
-            {c.replayDispute}
-          </p>
-          <dl className="mt-3 space-y-2 text-sm text-slate-200">
-            <div className="flex items-start justify-between gap-3">
-              <dt className="text-slate-500">{c.replayRoundId}</dt>
-              <dd className="max-w-[65%] break-all text-right font-semibold text-white">
-                {props.history.roundId}
-              </dd>
-            </div>
-            <div className="flex items-start justify-between gap-3">
-              <dt className="text-slate-500">{c.replayReferenceId}</dt>
-              <dd className="font-semibold text-white">
-                #{props.history.referenceId}
-              </dd>
-            </div>
-            <div className="flex items-start justify-between gap-3">
-              <dt className="text-slate-500">{c.replayEventCount}</dt>
-              <dd className="font-semibold text-white">
-                {props.history.events.length}
-              </dd>
-            </div>
-          </dl>
-          <p className="mt-3 text-xs text-slate-400">{c.replaySupportHint}</p>
-        </div>
-      </div>
-
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.26em] text-slate-400">
-          {c.board}
-        </p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {replay.boardCards.length > 0 ? (
-            replay.boardCards.map((card, index) => (
-              <CardFace key={`replay-board-${index}`} card={card} />
-            ))
-          ) : (
-            <div className="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-sm text-slate-400">
-              {c.stagePreflop}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {replay.pots.length > 0 ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {replay.pots.map((pot) => (
-            <div
-              key={`replay-pot-${pot.kind}-${pot.potIndex}`}
-              className="rounded-2xl border border-white/10 bg-black/20 p-4"
-            >
-              <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
-                {pot.kind === "main" ? c.pot : `${c.pot} ${pot.potIndex}`}
-              </p>
-              <p className="mt-2 text-lg font-semibold text-white">
-                {formatAmount(pot.amount)}
-              </p>
-              <p className="mt-1 text-xs text-slate-400">
-                {c.replayRake}: {formatAmount(pot.rakeAmount)}
-              </p>
-              {pot.winnerSeatIndexes.length > 0 ? (
-                <p className="mt-2 text-sm text-emerald-100">
-                  {c.winners}:{" "}
-                  {getReplayWinnerLabels(replay, pot.winnerSeatIndexes, c).join(", ")}
-                </p>
-              ) : null}
-            </div>
-          ))}
-        </div>
-      ) : null}
-
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.26em] text-slate-400">
-          {c.replayParticipants}
-        </p>
-        <div className="mt-3 space-y-3">
-          {replay.participants.map((participant) => (
-            <div
-              key={`replay-participant-${participant.seatIndex}`}
-              className="rounded-2xl border border-white/10 bg-black/20 p-4"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-white">
-                    {getReplaySeatLabel(replay, participant.seatIndex, c)}
-                  </p>
-                  <p className="mt-1 text-sm text-slate-400">
-                    {participant.bestHandLabel ?? participant.lastAction ?? "—"}
-                  </p>
+      <div className="grid gap-5 xl:grid-cols-[1.08fr,0.92fr]">
+        <GameSurfaceCard className="overflow-hidden" tone="light">
+          <CardContent className="retro-ivory-surface relative p-5 md:p-6">
+            <div className="pointer-events-none absolute inset-0 retro-dot-overlay opacity-15" />
+            <div className="relative space-y-5">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="space-y-3">
+                  <span className="retro-kicker">{c.replaySummary}</span>
+                  <div className="space-y-2">
+                    <h2 className="text-[2rem] font-semibold leading-tight tracking-[-0.04em] text-[var(--retro-ink)] md:text-[2.35rem]">
+                      {c.hand} #{replay.handNumber ?? "—"} ·{" "}
+                      {getStageLabel(replay.stage, c)}
+                    </h2>
+                    <p className="text-sm leading-6 text-[rgba(15,17,31,0.68)]">
+                      {replay.tableName ?? "—"}
+                    </p>
+                  </div>
                 </div>
-                {participant.winner ? (
-                  <Badge
-                    variant="outline"
-                    className="border-emerald-300/30 bg-emerald-300/10 text-emerald-100"
-                  >
-                    {c.winners}
-                  </Badge>
-                ) : null}
+
+                <GamePill surface="light" tone={resolveReplayStatusTone(replay.status)}>
+                  {replay.status}
+                </GamePill>
               </div>
 
-              {participant.holeCards.length > 0 ? (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {participant.holeCards.map((card, index) => (
-                    <CardFace
-                      key={`replay-hole-${participant.seatIndex}-${index}`}
-                      card={card}
-                    />
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <GameMetricTile
+                  tone="light"
+                  label={c.replayStake}
+                  value={formatAmount(replay.stakeAmount)}
+                  valueClassName="text-xl font-black tracking-[-0.03em] text-[var(--retro-orange)]"
+                />
+                <GameMetricTile
+                  tone="light"
+                  label={c.replayPayout}
+                  value={formatAmount(replay.payoutAmount)}
+                  valueClassName="text-xl font-black tracking-[-0.03em] text-[var(--retro-violet)]"
+                />
+                <GameMetricTile
+                  tone="light"
+                  label={c.replayStartedAt}
+                  value={formatReplayTimestamp(replay.startedAt, resolvedLocale)}
+                  valueClassName="mt-2 text-sm font-semibold text-[var(--retro-ink)]"
+                />
+                <GameMetricTile
+                  tone="light"
+                  label={c.replaySettledAt}
+                  value={formatReplayTimestamp(replay.settledAt, resolvedLocale)}
+                  valueClassName="mt-2 text-sm font-semibold text-[var(--retro-ink)]"
+                />
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <Button type="button" variant="arcadeDark" onClick={() => void copyDisputePayload()}>
+                  {c.copyDisputePayload}
+                </Button>
+                <Button type="button" variant="arcadeOutline" onClick={exportHandEvidence}>
+                  {c.exportHandEvidence}
+                </Button>
+              </div>
+
+              {artifactStatus ? (
+                <GameStatusNotice surface="light" tone={artifactTone}>
+                  {artifactStatus}
+                </GameStatusNotice>
+              ) : null}
+            </div>
+          </CardContent>
+        </GameSurfaceCard>
+
+        <GameSurfaceCard tone="dark">
+          <CardContent className="space-y-5 p-5 md:p-6">
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--retro-gold)]">
+                {c.replayDispute}
+              </p>
+              <div className="space-y-2">
+                <h3 className="text-[1.7rem] font-semibold tracking-[-0.03em] text-slate-50">
+                  {c.fairness}
+                </h3>
+                <p className="break-all font-mono text-sm leading-6 text-[var(--retro-gold)]">
+                  {replay.fairnessCommitHash ?? "—"}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <GameMetricTile
+                tone="dark"
+                label={c.replayRoundId}
+                value={
+                  <span className="break-all text-sm font-semibold text-slate-100">
+                    {props.history.roundId}
+                  </span>
+                }
+              />
+              <GameMetricTile
+                tone="dark"
+                label={c.replayReferenceId}
+                value={`#${props.history.referenceId}`}
+              />
+              <GameMetricTile
+                tone="dark"
+                label={c.replayEventCount}
+                value={props.history.events.length}
+              />
+            </div>
+
+            <p className="text-sm leading-6 text-slate-300">{c.replaySupportHint}</p>
+
+            {evidenceBundle ? (
+              <GameSectionBlock className="space-y-4" tone="dark">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--retro-gold)]">
+                      {c.bundleSummary}
+                    </p>
+                    <p className="mt-2 text-base font-semibold text-slate-50">
+                      {evidenceBundle.summaryPage.title}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-300">
+                      {evidenceBundle.summaryPage.subtitle}
+                    </p>
+                  </div>
+                  <GamePill surface="dark" tone="accent">
+                    {evidenceBundle.signature.algorithm}
+                  </GamePill>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <GameMetricTile
+                    tone="dark"
+                    label={c.bundleExportedAt}
+                    value={formatReplayTimestamp(
+                      evidenceBundle.exportedAt,
+                      resolvedLocale,
+                    )}
+                  />
+                  <GameMetricTile
+                    tone="dark"
+                    label={c.bundleKeyId}
+                    value={
+                      <span className="break-all text-sm font-semibold text-slate-100">
+                        {evidenceBundle.signature.keyId}
+                      </span>
+                    }
+                  />
+                  <GameMetricTile
+                    tone="dark"
+                    label={c.bundleDigest}
+                    value={
+                      <span className="break-all text-sm font-semibold text-slate-100">
+                        {evidenceBundle.signature.payloadDigest}
+                      </span>
+                    }
+                  />
+                </div>
+
+                <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-[1.15rem] border border-white/10 bg-[rgba(7,10,23,0.78)] p-4 text-xs leading-6 text-slate-300">
+                  {evidenceBundle.summaryPage.markdown}
+                </pre>
+              </GameSectionBlock>
+            ) : null}
+          </CardContent>
+        </GameSurfaceCard>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[1.02fr,0.98fr]">
+        <div className="space-y-5">
+          <GameSurfaceCard tone="light">
+            <CardContent className="space-y-5 p-5 md:p-6">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--retro-orange)]">
+                  {c.board}
+                </p>
+                <h3 className="text-[1.65rem] font-semibold tracking-[-0.03em] text-[var(--retro-ink)]">
+                  {getStageLabel(replay.stage, c)}
+                </h3>
+              </div>
+
+              <div className="retro-felt-surface rounded-[2.25rem] px-5 py-6">
+                <div className="flex flex-wrap gap-2">
+                  {replay.boardCards.length > 0 ? (
+                    replay.boardCards.map((card, index) => (
+                      <CardFace key={`replay-board-${index}`} card={card} />
+                    ))
+                  ) : (
+                    <div className="rounded-[1.15rem] border border-dashed border-white/18 bg-[rgba(7,10,23,0.28)] px-4 py-6 text-sm text-slate-200">
+                      {c.stagePreflop}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {replay.pots.length > 0 ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {replay.pots.map((pot) => (
+                    <GameSectionBlock
+                      key={`replay-pot-${pot.kind}-${pot.potIndex}`}
+                      tone="light"
+                    >
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--retro-orange)]">
+                        {pot.kind === "main" ? c.pot : `${c.pot} ${pot.potIndex}`}
+                      </p>
+                      <p className="mt-2 text-2xl font-black tracking-[-0.03em] text-[var(--retro-ink)]">
+                        {formatAmount(pot.amount)}
+                      </p>
+                      <p className="mt-2 text-sm text-[rgba(15,17,31,0.62)]">
+                        {c.replayRake}: {formatAmount(pot.rakeAmount)}
+                      </p>
+                      {pot.winnerSeatIndexes.length > 0 ? (
+                        <p className="mt-3 text-sm font-semibold text-[var(--retro-green)]">
+                          {c.winners}:{" "}
+                          {getReplayWinnerLabels(replay, pot.winnerSeatIndexes, c).join(", ")}
+                        </p>
+                      ) : null}
+                    </GameSectionBlock>
                   ))}
                 </div>
               ) : null}
+            </CardContent>
+          </GameSurfaceCard>
 
-              <dl className="mt-3 grid gap-3 text-sm text-slate-200 sm:grid-cols-3">
-                <div>
-                  <dt className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
-                    {c.totalCommitted}
-                  </dt>
-                  <dd className="mt-1 font-semibold text-white">
-                    {participant.contributionAmount
-                      ? formatAmount(participant.contributionAmount)
-                      : "—"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
-                    {c.replayPayout}
-                  </dt>
-                  <dd className="mt-1 font-semibold text-white">
-                    {participant.payoutAmount
-                      ? formatAmount(participant.payoutAmount)
-                      : "—"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
-                    {c.stack}
-                  </dt>
-                  <dd className="mt-1 font-semibold text-white">
-                    {participant.stackAfter
-                      ? formatAmount(participant.stackAfter)
-                      : "—"}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.26em] text-slate-400">
-          {c.replayTimeline}
-        </p>
-        <div className="mt-3 space-y-3">
-          {replay.events.map((event) => {
-            const description = describeReplayEvent(
-              replay,
-              event,
-              c,
-              resolvedLocale,
-            );
-
-            return (
-              <div
-                key={`replay-event-${event.sequence}`}
-                className="rounded-2xl border border-white/10 bg-black/20 p-4"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-white">{description.title}</p>
-                    <p className="mt-1 text-sm text-slate-400">
-                      {description.detail || "—"}
-                    </p>
-                  </div>
-                  <div className="text-right text-xs text-slate-500">
-                    <p>#{event.sequence}</p>
-                    <p>{formatReplayTimestamp(event.createdAt, resolvedLocale)}</p>
-                  </div>
-                </div>
-
-                {description.cards.length > 0 ? (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {description.cards.map((card, index) => (
-                      <CardFace
-                        key={`replay-event-card-${event.sequence}-${index}`}
-                        card={card}
-                      />
-                    ))}
-                  </div>
-                ) : null}
+          <GameSurfaceCard tone="light">
+            <CardContent className="space-y-4 p-5 md:p-6">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--retro-orange)]">
+                  {c.replayParticipants}
+                </p>
+                <h3 className="text-[1.65rem] font-semibold tracking-[-0.03em] text-[var(--retro-ink)]">
+                  {c.replayParticipants}
+                </h3>
               </div>
-            );
-          })}
+
+              <div className="space-y-3">
+                {replay.participants.map((participant) => (
+                  <div
+                    key={`replay-participant-${participant.seatIndex}`}
+                    className="rounded-[1.35rem] border border-[rgba(15,17,31,0.12)] bg-white/84 p-4 shadow-[3px_3px_0px_0px_rgba(15,17,31,0.12)]"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-[var(--retro-ink)]">
+                          {getReplaySeatLabel(replay, participant.seatIndex, c)}
+                        </p>
+                        <p className="mt-1 text-sm text-[rgba(15,17,31,0.58)]">
+                          {participant.bestHandLabel ?? participant.lastAction ?? "—"}
+                        </p>
+                      </div>
+                      {participant.winner ? (
+                        <GamePill surface="light" tone="success">
+                          {c.winners}
+                        </GamePill>
+                      ) : null}
+                    </div>
+
+                    {participant.holeCards.length > 0 ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {participant.holeCards.map((card, index) => (
+                          <CardFace
+                            key={`replay-hole-${participant.seatIndex}-${index}`}
+                            card={card}
+                          />
+                        ))}
+                      </div>
+                    ) : null}
+
+                    <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                      <GameMetricTile
+                        tone="light"
+                        label={c.totalCommitted}
+                        value={
+                          participant.contributionAmount
+                            ? formatAmount(participant.contributionAmount)
+                            : "—"
+                        }
+                        valueClassName="text-base font-black tracking-[-0.03em] text-[var(--retro-ink)]"
+                      />
+                      <GameMetricTile
+                        tone="light"
+                        label={c.replayPayout}
+                        value={
+                          participant.payoutAmount
+                            ? formatAmount(participant.payoutAmount)
+                            : "—"
+                        }
+                        valueClassName="text-base font-black tracking-[-0.03em] text-[var(--retro-violet)]"
+                      />
+                      <GameMetricTile
+                        tone="light"
+                        label={c.stack}
+                        value={
+                          participant.stackAfter
+                            ? formatAmount(participant.stackAfter)
+                            : "—"
+                        }
+                        valueClassName="text-base font-black tracking-[-0.03em] text-[var(--retro-orange)]"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </GameSurfaceCard>
         </div>
+
+        <GameSurfaceCard tone="dark">
+          <CardContent className="space-y-4 p-5 md:p-6">
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--retro-gold)]">
+                {c.replayTimeline}
+              </p>
+              <h3 className="text-[1.7rem] font-semibold tracking-[-0.03em] text-slate-50">
+                {c.replayTimeline}
+              </h3>
+            </div>
+
+            <div className="space-y-3">
+              {replay.events.map((event) => {
+                const description = describeReplayEvent(
+                  replay,
+                  event,
+                  c,
+                  resolvedLocale,
+                );
+
+                return (
+                  <div
+                    key={`replay-event-${event.sequence}`}
+                    className="rounded-[1.35rem] border border-white/10 bg-[rgba(255,255,255,0.04)] p-4"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-slate-50">
+                          {description.title}
+                        </p>
+                        <p className="mt-1 text-sm text-slate-300">
+                          {description.detail || "—"}
+                        </p>
+                      </div>
+                      <div className="text-right text-xs text-slate-400">
+                        <p>#{event.sequence}</p>
+                        <p>{formatReplayTimestamp(event.createdAt, resolvedLocale)}</p>
+                      </div>
+                    </div>
+
+                    {description.cards.length > 0 ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {description.cards.map((card, index) => (
+                          <CardFace
+                            key={`replay-event-card-${event.sequence}-${index}`}
+                            card={card}
+                          />
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </GameSurfaceCard>
       </div>
     </div>
   );

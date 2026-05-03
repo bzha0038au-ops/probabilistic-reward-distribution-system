@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+
+<html class="" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Retro-Modern Web3 Play - Player Profile</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&amp;family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;900&amp;family=Be+Vietnam+Pro:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">tailwind.config = {darkMode: "class", theme: {extend: {colors: {tertiary: "#705d00", error: "#ba1a1a", "surface-container-lowest": "#ffffff", "inverse-on-surface": "#f4f0ef", "on-primary": "#ffffff", "surface-variant": "#e6e1e1", secondary: "#4b41e1", "on-secondary": "#ffffff", "tertiary-fixed": "#fce17e", "on-tertiary": "#ffffff", "primary-container": "#a73a00", "tertiary-container": "#c2aa4e", "secondary-container": "#655dfb", "surface-container-low": "#f7f2f2", "on-tertiary-container": "#4c3e00", "on-secondary-container": "#fffbff", "on-primary-container": "#ffcebc", "tertiary-fixed-dim": "#dfc566", "secondary-fixed-dim": "#c3c0ff", "on-surface-variant": "#58423a", "surface-container": "#f1edec", primary: "#7f2a00", "on-error": "#ffffff", "surface-container-highest": "#e6e1e1", "on-background": "#1c1b1b", surface: "#fdf8f8", "on-primary-fixed": "#370e00", "surface-tint": "#a73a00", "primary-fixed-dim": "#ffb599", "inverse-surface": "#313030", "error-container": "#ffdad6", "on-primary-fixed-variant": "#802a00", "on-surface": "#1c1b1b", "inverse-primary": "#ffb599", "surface-dim": "#ddd9d8", "surface-container-high": "#ece7e7", "on-tertiary-fixed": "#221b00", "primary-fixed": "#ffdbce", "outline-variant": "#dfc0b5", "on-tertiary-fixed-variant": "#544600", "surface-bright": "#fdf8f8", background: "#fdf8f8", "secondary-fixed": "#e2dfff", "on-error-container": "#93000a", outline: "#8c7168", "on-secondary-fixed": "#0f0069", "on-secondary-fixed-variant": "#3322cc"}, borderRadius: {DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px"}, spacing: {xs: "4px", sm: "8px", md: "16px", xl: "32px", base: "8px", gutter: "16px", "container-max": "1440px", lg: "24px", margin: "20px", unit: "4px"}, fontFamily: {h1: ["Space Grotesk"], h3: ["Space Grotesk"], button: ["Space Grotesk"], "body-md": ["Be Vietnam Pro"], "body-lg": ["Be Vietnam Pro"], "label-caps": ["Space Grotesk"], h2: ["Space Grotesk"], "headline-xl": ["Plus Jakarta Sans"], "label-bold": ["Be Vietnam Pro"], "label-sm": ["Be Vietnam Pro"], "headline-md": ["Plus Jakarta Sans"], "headline-lg": ["Plus Jakarta Sans"]}, fontSize: {h1: ["64px", {lineHeight: "1.1", letterSpacing: "-0.02em", fontWeight: "700"}], h3: ["32px", {lineHeight: "1.2", fontWeight: "600"}], button: ["16px", {lineHeight: "1.0", fontWeight: "600"}], "body-md": ["16px", {lineHeight: "24px", fontWeight: "400"}], "body-lg": ["18px", {lineHeight: "28px", fontWeight: "400"}], "label-caps": ["14px", {lineHeight: "1.2", letterSpacing: "0.05em", fontWeight: "700"}], h2: ["48px", {lineHeight: "1.2", letterSpacing: "-0.01em", fontWeight: "700"}], "headline-xl": ["40px", {lineHeight: "48px", letterSpacing: "-0.02em", fontWeight: "800"}], "label-bold": ["14px", {lineHeight: "20px", fontWeight: "700"}], "label-sm": ["12px", {lineHeight: "16px", fontWeight: "500"}], "headline-md": ["24px", {lineHeight: "30px", fontWeight: "700"}], "headline-lg": ["32px", {lineHeight: "38px", letterSpacing: "-0.01em", fontWeight: "800"}]}}}};</script>
+<style>
+        .halftone-bg {
+            background-image: radial-gradient(circle at center, rgba(255, 255, 255, 0.05) 2px, transparent 2px);
+            background-size: 8px 8px;
+        }
+        .hard-drop-shadow {
+            box-shadow: 4px 4px 0px 0px rgba(0,0,0,1);
+        }
+        .hard-drop-shadow-lg {
+            box-shadow: 8px 8px 0px 0px rgba(0,0,0,1);
+        }
+        .btn-press:active {
+            transform: translate(2px, 2px);
+            box-shadow: 2px 2px 0px 0px rgba(0,0,0,1);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen flex flex-col antialiased selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopAppBar -->
+<header class="flex justify-between items-center w-full px-8 h-20 z-50 bg-slate-950 text-yellow-400 font-['Space_Grotesk'] uppercase tracking-tighter font-bold docked full-width top-0 border-b-2 border-slate-800 shadow-[0px_4px_0px_0px_rgba(0,0,0,1)] sticky">
+<div class="flex items-center gap-8">
+<a class="text-2xl font-black text-yellow-400 italic border-2 border-yellow-400 px-3 py-1 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:text-yellow-300 hover:bg-slate-900 active:translate-y-1 active:shadow-none transition-all duration-100" href="#">
+                Retro-Modern Web3 Play
+            </a>
+<nav class="hidden md:flex gap-6 h-full items-center">
+<a class="text-slate-400 font-medium hover:text-yellow-300 hover:bg-slate-900 active:translate-y-1 active:shadow-none transition-all duration-100 h-full flex items-center px-2" href="#">Lobby</a>
+<a class="text-slate-400 font-medium hover:text-yellow-300 hover:bg-slate-900 active:translate-y-1 active:shadow-none transition-all duration-100 h-full flex items-center px-2" href="#">Tables</a>
+<a class="text-slate-400 font-medium hover:text-yellow-300 hover:bg-slate-900 active:translate-y-1 active:shadow-none transition-all duration-100 h-full flex items-center px-2" href="#">Predictions</a>
+<a class="text-yellow-400 border-b-4 border-yellow-400 pb-1 h-full flex items-center px-2 hover:text-yellow-300 hover:bg-slate-900 active:translate-y-1 active:shadow-none transition-all duration-100" href="#">Wallet</a>
+<a class="text-slate-400 font-medium hover:text-yellow-300 hover:bg-slate-900 active:translate-y-1 active:shadow-none transition-all duration-100 h-full flex items-center px-2" href="#">Fairness</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex gap-2">
+<button class="text-slate-400 hover:text-yellow-300 hover:bg-slate-900 p-2 rounded active:translate-y-1 active:shadow-none transition-all duration-100">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">notifications</span>
+</button>
+<button class="text-slate-400 hover:text-yellow-300 hover:bg-slate-900 p-2 rounded active:translate-y-1 active:shadow-none transition-all duration-100">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">settings</span>
+</button>
+</div>
+<button class="bg-primary-container text-on-primary-container border-2 border-black hard-drop-shadow px-6 py-3 font-button text-button uppercase hover:bg-yellow-300 btn-press transition-all duration-100">
+                Connect Wallet
+            </button>
+</div>
+</header>
+<div class="flex flex-1 max-w-[1440px] mx-auto w-full relative">
+<!-- SideNavBar -->
+<aside class="hidden md:flex flex-col bg-slate-900 text-yellow-400 font-['Space_Grotesk'] text-sm font-bold uppercase h-full w-64 border-r-2 border-slate-800 rounded-none shadow-[4px_0px_0px_0px_rgba(0,0,0,1)] fixed left-0 top-20 h-[calc(100vh-5rem)] p-4 z-40">
+<div class="mb-8 px-3">
+<h2 class="text-white font-h3 text-h3 capitalize tracking-normal">Player Hub</h2>
+<p class="text-secondary font-label-caps text-label-caps mt-1">Legendary Rank</p>
+</div>
+<nav class="flex-1 flex flex-col gap-2">
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined">group</span> Social
+                </a>
+<a class="flex items-center gap-4 bg-yellow-400 text-black p-3 rounded-lg border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:bg-slate-800 hover:text-yellow-400 hover:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined">military_tech</span> Missions
+                </a>
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined">leaderboard</span> Leaderboard
+                </a>
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined">psychology</span> Strategy
+                </a>
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined">help_center</span> Support
+                </a>
+</nav>
+<div class="mt-auto mb-6">
+<button class="w-full bg-primary-container text-on-primary-container border-2 border-black hard-drop-shadow p-3 font-button text-button uppercase hover:bg-yellow-300 btn-press transition-all duration-100 flex items-center justify-center gap-2">
+<span class="material-symbols-outlined">casino</span> Daily Spin
+                </button>
+</div>
+<div class="flex flex-col gap-2 border-t-2 border-slate-800 pt-4">
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined">verified_user</span> Audit Log
+                </a>
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined">enhanced_encryption</span> Security
+                </a>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="flex-1 md:ml-64 p-8 flex flex-col gap-8">
+<!-- Hero Profile Card -->
+<section class="bg-surface-container border-2 border-slate-700 hard-drop-shadow-lg relative overflow-hidden group p-8 rounded flex flex-col md:flex-row gap-8 items-center halftone-bg">
+<div class="absolute top-0 right-0 w-32 h-32 bg-secondary opacity-10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+<div class="relative w-40 h-40 flex-shrink-0">
+<img alt="Player Avatar" class="w-full h-full object-cover rounded-full border-4 border-primary-container shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]" data-alt="A striking digital illustration of a futuristic, stylized character avatar used for a gaming profile. The avatar features vibrant, high-contrast colors with a bold retro-pop art style. Thick black outlines define the character's features, and halftone textures provide a printed comic-book feel. The color palette includes deep blacks, bright golds, and electric purples, conveying a premium and collectible aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAWYMJGMYQD2AihQZeVnqKnDVqFcP9K4tpeFYszNMBQN1M7bna2LpfAFG9JZIKfnWiPF2VINfS8_HJdxl1N7ykmiqWLe8Cb17CwFNxyzi8QgKvl1zF8DlESHnHngt3mQHHVBuGnOTMWSTTSVaI6BgLc4Hp1Pmvm2n1QRDb9xsoyNKRlqkjfkFQcMgvjtYq9bZpORU8Lf7EYdj_ej2uJK-5FBBEbxQ_so9DivJTzQXq9HJRsHhWDvVag93YXr1ZKIL-BVE7MOrTyhQHR"/>
+<div class="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-primary-container text-black font-label-caps text-label-caps px-4 py-1 rounded-full border-2 border-black whitespace-nowrap shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                        Lvl 99
+                    </div>
+</div>
+<div class="flex-1 text-center md:text-left">
+<div class="inline-flex items-center gap-2 bg-secondary/20 text-secondary border-2 border-secondary px-3 py-1 rounded-full font-label-caps text-label-caps mb-4">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">stars</span>
+                        Legendary Rank
+                    </div>
+<h1 class="font-h1 text-h1 text-white mb-2">CryptoKid_88</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl">
+                        A seasoned veteran of the Web3 tables. Known for aggressive plays and unpredictable strategies. Holding strong since Genesis block.
+                    </p>
+<div class="flex flex-wrap gap-4 mt-6 justify-center md:justify-start">
+<div class="bg-surface border-2 border-slate-700 px-6 py-3 rounded flex flex-col items-center shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+<span class="font-label-caps text-label-caps text-slate-400">Total Winnings</span>
+<span class="font-h3 text-h3 text-primary-container">4,250 </span>
+</div>
+<div class="bg-surface border-2 border-slate-700 px-6 py-3 rounded flex flex-col items-center shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+<span class="font-label-caps text-label-caps text-slate-400">Win Rate</span>
+<span class="font-h3 text-h3 text-secondary">68%</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Bento Grid Content -->
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
+<!-- Left Column (Win Rate & History) -->
+<div class="xl:col-span-2 flex flex-col gap-8">
+<!-- Stats / Chart Area -->
+<div class="bg-surface-container border-2 border-slate-700 hard-drop-shadow p-6 rounded">
+<div class="flex justify-between items-center mb-6 border-b-2 border-slate-800 pb-4">
+<h2 class="font-h3 text-h3 text-white flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary">monitoring</span> Performance
+                            </h2>
+<select class="bg-surface border-2 border-slate-700 text-white font-body-md text-body-md rounded px-4 py-2 focus:border-primary-container focus:ring-0 outline-none">
+<option>Last 30 Days</option>
+<option>All Time</option>
+</select>
+</div>
+<!-- Mock Chart Representation -->
+<div class="h-64 flex items-end gap-2 p-4 bg-surface rounded border-2 border-slate-800 relative halftone-bg">
+<!-- Grid lines -->
+<div class="absolute inset-0 flex flex-col justify-between p-4 pointer-events-none opacity-20">
+<div class="border-b-2 border-slate-600 w-full"></div>
+<div class="border-b-2 border-slate-600 w-full"></div>
+<div class="border-b-2 border-slate-600 w-full"></div>
+<div class="border-b-2 border-slate-600 w-full"></div>
+</div>
+<!-- Bars -->
+<div class="w-full bg-secondary border-2 border-black flex-1 rounded-t relative group transition-all hover:bg-secondary-container">
+<div class="absolute -top-10 left-1/2 -translate-x-1/2 bg-black text-white px-2 py-1 rounded text-xs opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 border border-slate-700">12 Wins</div>
+</div>
+<div class="w-full bg-error border-2 border-black h-[40%] rounded-t relative group transition-all hover:bg-error-container">
+<div class="absolute -top-10 left-1/2 -translate-x-1/2 bg-black text-white px-2 py-1 rounded text-xs opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 border border-slate-700">5 Losses</div>
+</div>
+<div class="w-full bg-secondary border-2 border-black h-[80%] rounded-t relative group transition-all hover:bg-secondary-container"></div>
+<div class="w-full bg-secondary border-2 border-black h-[90%] rounded-t relative group transition-all hover:bg-secondary-container"></div>
+<div class="w-full bg-error border-2 border-black h-[30%] rounded-t relative group transition-all hover:bg-error-container"></div>
+<div class="w-full bg-secondary border-2 border-black h-[100%] rounded-t relative group transition-all hover:bg-secondary-container"></div>
+<div class="w-full bg-secondary border-2 border-black h-[75%] rounded-t relative group transition-all hover:bg-secondary-container"></div>
+</div>
+</div>
+<!-- Game History -->
+<div class="bg-surface-container border-2 border-slate-700 hard-drop-shadow p-6 rounded flex-1">
+<div class="flex justify-between items-center mb-6">
+<h2 class="font-h3 text-h3 text-white flex items-center gap-2">
+<span class="material-symbols-outlined text-primary-container">history</span> Game History
+                            </h2>
+<button class="text-secondary hover:text-white font-label-caps text-label-caps transition-colors">View All</button>
+</div>
+<div class="flex flex-col gap-4">
+<!-- Win Row -->
+<div class="bg-surface border-2 border-slate-800 p-4 rounded flex items-center justify-between hover:border-slate-600 transition-colors">
+<div class="flex items-center gap-4">
+<div class="bg-secondary/20 p-2 rounded border-2 border-secondary text-secondary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">emoji_events</span>
+</div>
+<div>
+<h4 class="font-button text-button text-white">High Roller Texas Hold'em</h4>
+<p class="font-body-md text-sm text-slate-400">2 hours ago</p>
+</div>
+</div>
+<div class="text-right">
+<p class="font-button text-button text-primary-container">+ 450 </p>
+<p class="font-label-caps text-[10px] text-slate-500 uppercase">Victory</p>
+</div>
+</div>
+<!-- Loss Row -->
+<div class="bg-surface border-2 border-slate-800 p-4 rounded flex items-center justify-between hover:border-slate-600 transition-colors">
+<div class="flex items-center gap-4">
+<div class="bg-error/20 p-2 rounded border-2 border-error text-error">
+<span class="material-symbols-outlined">close</span>
+</div>
+<div>
+<h4 class="font-button text-button text-white">Neon Dice Roll</h4>
+<p class="font-body-md text-sm text-slate-400">5 hours ago</p>
+</div>
+</div>
+<div class="text-right">
+<p class="font-button text-button text-error">- 120 </p>
+<p class="font-label-caps text-[10px] text-slate-500 uppercase">Defeat</p>
+</div>
+</div>
+<!-- Win Row -->
+<div class="bg-surface border-2 border-slate-800 p-4 rounded flex items-center justify-between hover:border-slate-600 transition-colors">
+<div class="flex items-center gap-4">
+<div class="bg-secondary/20 p-2 rounded border-2 border-secondary text-secondary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">emoji_events</span>
+</div>
+<div>
+<h4 class="font-button text-button text-white">Cyber Slots</h4>
+<p class="font-body-md text-sm text-slate-400">Yesterday</p>
+</div>
+</div>
+<div class="text-right">
+<p class="font-button text-button text-primary-container">+ 80 </p>
+<p class="font-label-caps text-[10px] text-slate-500 uppercase">Victory</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Column (Trophy Room) -->
+<div class="bg-surface-container border-2 border-slate-700 hard-drop-shadow p-6 rounded flex flex-col">
+<div class="flex justify-between items-center mb-6 border-b-2 border-slate-800 pb-4">
+<h2 class="font-h3 text-h3 text-white flex items-center gap-2">
+<span class="material-symbols-outlined text-primary-container" style="font-variation-settings: 'FILL' 1;">diamond</span> Trophy Room
+                        </h2>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<!-- Legendary Badge -->
+<div class="bg-surface border-4 border-primary-container p-4 rounded text-center flex flex-col items-center gap-3 relative overflow-hidden group shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+<div class="absolute inset-0 bg-primary-container/10 halftone-bg opacity-50"></div>
+<div class="w-16 h-16 bg-gradient-to-br from-yellow-300 to-yellow-600 rounded-full flex items-center justify-center border-2 border-black z-10 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-black text-3xl" style="font-variation-settings: 'FILL' 1;">local_fire_department</span>
+</div>
+<div class="z-10">
+<p class="font-button text-button text-white mb-1">Hot Streak</p>
+<p class="font-label-caps text-[10px] text-primary-container bg-black/50 px-2 py-0.5 rounded inline-block">Legendary</p>
+</div>
+</div>
+<!-- Epic Badge -->
+<div class="bg-surface border-2 border-secondary p-4 rounded text-center flex flex-col items-center gap-3 relative overflow-hidden group shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+<div class="absolute inset-0 bg-secondary/5 halftone-bg opacity-50"></div>
+<div class="w-16 h-16 bg-gradient-to-br from-purple-400 to-purple-700 rounded-full flex items-center justify-center border-2 border-black z-10 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-white text-3xl" style="font-variation-settings: 'FILL' 1;">account_balance_wallet</span>
+</div>
+<div class="z-10">
+<p class="font-button text-button text-white mb-1">Whale Status</p>
+<p class="font-label-caps text-[10px] text-secondary bg-black/50 px-2 py-0.5 rounded inline-block">Epic</p>
+</div>
+</div>
+<!-- Rare Badge -->
+<div class="bg-surface border-2 border-tertiary-fixed-dim p-4 rounded text-center flex flex-col items-center gap-3 relative overflow-hidden group shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+<div class="w-16 h-16 bg-gradient-to-br from-blue-300 to-blue-600 rounded-full flex items-center justify-center border-2 border-black z-10 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-white text-3xl" style="font-variation-settings: 'FILL' 1;">rocket_launch</span>
+</div>
+<div class="z-10">
+<p class="font-button text-button text-white mb-1">Early Adopter</p>
+<p class="font-label-caps text-[10px] text-tertiary-fixed-dim bg-black/50 px-2 py-0.5 rounded inline-block">Rare</p>
+</div>
+</div>
+<!-- Locked Badge -->
+<div class="bg-surface border-2 border-slate-800 border-dashed p-4 rounded text-center flex flex-col items-center gap-3 opacity-50 grayscale">
+<div class="w-16 h-16 bg-slate-700 rounded-full flex items-center justify-center border-2 border-slate-900 z-10">
+<span class="material-symbols-outlined text-slate-400 text-3xl">lock</span>
+</div>
+<div class="z-10">
+<p class="font-button text-button text-slate-400 mb-1">Secret</p>
+<p class="font-label-caps text-[10px] text-slate-500 bg-black/50 px-2 py-0.5 rounded inline-block">???</p>
+</div>
+</div>
+</div>
+<div class="mt-8 bg-surface border-2 border-slate-700 p-4 rounded halftone-bg">
+<p class="font-label-caps text-label-caps text-slate-400 mb-2">Next Milestone</p>
+<div class="flex justify-between font-body-md text-sm text-white mb-1">
+<span>Level 100</span>
+<span>95%</span>
+</div>
+<div class="w-full h-4 bg-slate-900 border-2 border-black rounded-full overflow-hidden">
+<div class="h-full bg-primary-container w-[95%] border-r-2 border-black"></div>
+</div>
+<p class="font-body-md text-xs text-slate-500 mt-2 text-center">Only 50 XP to prestige!</p>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- Footer -->
+<footer class="w-full py-12 px-8 flex flex-col md:flex-row justify-between items-center gap-8 bg-slate-950 text-yellow-400 font-['Space_Grotesk'] text-xs font-black uppercase tracking-widest full-width border-t-2 border-slate-800 flat no shadows underline-offset-4 hover:underline mt-auto">
+<div class="text-lg text-yellow-400">
+            © 2024 RETRO-MODERN WEB3 PLAY. PROVABLY FAIR.
+        </div>
+<div class="flex gap-6 flex-wrap justify-center">
+<a class="text-slate-500 hover:text-yellow-400 transition-colors" href="#">Whitepaper</a>
+<a class="text-slate-500 hover:text-yellow-400 transition-colors" href="#">Tokenomics</a>
+<a class="text-slate-500 hover:text-yellow-400 transition-colors" href="#">Audit Report</a>
+<a class="text-slate-500 hover:text-yellow-400 transition-colors" href="#">Privacy</a>
+<a class="text-slate-500 hover:text-yellow-400 transition-colors" href="#">Terms</a>
+</div>
+</footer>
+</body></html>

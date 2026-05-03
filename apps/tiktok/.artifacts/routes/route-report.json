@@ -1,0 +1,185 @@
+[
+  {
+    "step": "initial",
+    "state": {
+      "origin": "top-left, x rightwards, y downwards",
+      "route": "#/play/intro",
+      "activeTab": "play",
+      "stage": "intro",
+      "scratchTotal": 20,
+      "displayCash": 20,
+      "scratchableSlot": null,
+      "revealedSlots": [],
+      "runCount": 0
+    },
+    "hash": "#/play/intro"
+  },
+  {
+    "step": "tab-story",
+    "state": {
+      "origin": "top-left, x rightwards, y downwards",
+      "route": "#/story",
+      "activeTab": "story",
+      "stage": "intro",
+      "scratchTotal": 20,
+      "displayCash": 20,
+      "scratchableSlot": null,
+      "revealedSlots": [],
+      "runCount": 0
+    },
+    "hash": "#/story"
+  },
+  {
+    "step": "tab-wallet",
+    "state": {
+      "origin": "top-left, x rightwards, y downwards",
+      "route": "#/wallet",
+      "activeTab": "wallet",
+      "stage": "intro",
+      "scratchTotal": 20,
+      "displayCash": 20,
+      "scratchableSlot": null,
+      "revealedSlots": [],
+      "runCount": 0
+    },
+    "hash": "#/wallet"
+  },
+  {
+    "step": "tab-profile",
+    "state": {
+      "origin": "top-left, x rightwards, y downwards",
+      "route": "#/profile",
+      "activeTab": "profile",
+      "stage": "intro",
+      "scratchTotal": 20,
+      "displayCash": 20,
+      "scratchableSlot": null,
+      "revealedSlots": [],
+      "runCount": 0
+    },
+    "hash": "#/profile"
+  },
+  {
+    "step": "tab-play",
+    "state": {
+      "origin": "top-left, x rightwards, y downwards",
+      "route": "#/play/intro",
+      "activeTab": "play",
+      "stage": "intro",
+      "scratchTotal": 20,
+      "displayCash": 20,
+      "scratchableSlot": null,
+      "revealedSlots": [],
+      "runCount": 0
+    },
+    "hash": "#/play/intro"
+  },
+  {
+    "step": "start-run",
+    "state": {
+      "origin": "top-left, x rightwards, y downwards",
+      "route": "#/play/ticket",
+      "activeTab": "play",
+      "stage": "ticket",
+      "scratchTotal": 0,
+      "displayCash": 20,
+      "scratchableSlot": 0,
+      "revealedSlots": [],
+      "runCount": 1
+    },
+    "hash": "#/play/ticket"
+  },
+  {
+    "step": "play-decision",
+    "state": {
+      "origin": "top-left, x rightwards, y downwards",
+      "route": "#/play/decision",
+      "activeTab": "play",
+      "stage": "decision",
+      "scratchTotal": 40,
+      "displayCash": 20,
+      "scratchableSlot": null,
+      "revealedSlots": [
+        0,
+        1
+      ],
+      "runCount": 1
+    },
+    "hash": "#/play/decision"
+  },
+  {
+    "step": "play-ticket-final",
+    "state": {
+      "origin": "top-left, x rightwards, y downwards",
+      "route": "#/play/ticket-final",
+      "activeTab": "play",
+      "stage": "ticket-final",
+      "scratchTotal": 40,
+      "displayCash": 20,
+      "scratchableSlot": 2,
+      "revealedSlots": [
+        0,
+        1
+      ],
+      "runCount": 1
+    },
+    "hash": "#/play/ticket-final"
+  },
+  {
+    "step": "play-ticket-win",
+    "state": {
+      "origin": "top-left, x rightwards, y downwards",
+      "route": "#/play/ticket-win",
+      "activeTab": "play",
+      "stage": "ticket-win",
+      "scratchTotal": 120,
+      "displayCash": 120,
+      "scratchableSlot": null,
+      "revealedSlots": [
+        0,
+        1,
+        2
+      ],
+      "runCount": 1
+    },
+    "hash": "#/play/ticket-win"
+  },
+  {
+    "step": "play-rex",
+    "state": {
+      "origin": "top-left, x rightwards, y downwards",
+      "route": "#/play/rex",
+      "activeTab": "play",
+      "stage": "rex",
+      "scratchTotal": 120,
+      "displayCash": 20,
+      "scratchableSlot": null,
+      "revealedSlots": [
+        0,
+        1,
+        2
+      ],
+      "runCount": 1
+    },
+    "hash": "#/play/rex"
+  },
+  {
+    "step": "play-rex-win",
+    "state": {
+      "origin": "top-left, x rightwards, y downwards",
+      "route": "#/play/rex-win",
+      "activeTab": "play",
+      "stage": "rex-win",
+      "scratchTotal": 120,
+      "displayCash": 240,
+      "scratchableSlot": null,
+      "revealedSlots": [
+        0,
+        1,
+        2
+      ],
+      "runCount": 1
+    },
+    "hash": "#/play/rex-win"
+  }
+]

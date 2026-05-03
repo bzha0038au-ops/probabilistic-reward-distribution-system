@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+
+<html class="" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Quick Eight - Retro-Modern Web3 Play</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&amp;family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600&amp;family=Space+Grotesk:wght@600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">tailwind.config = {darkMode: "class", theme: {extend: {colors: {"on-secondary-fixed": "#0f0069", "on-tertiary": "#ffffff", "on-primary-fixed": "#370e00", "primary-fixed-dim": "#ffb599", "secondary-fixed": "#e2dfff", "outline-variant": "#dfc0b5", error: "#ba1a1a", "surface-container-lowest": "#ffffff", "on-tertiary-fixed": "#221b00", "inverse-on-surface": "#f4f0ef", "tertiary-container": "#c2aa4e", "on-secondary": "#ffffff", "on-primary": "#ffffff", primary: "#7f2a00", outline: "#8c7168", "on-background": "#1c1b1b", "surface-container": "#f1edec", "tertiary-fixed": "#fce17e", "on-tertiary-fixed-variant": "#544600", tertiary: "#705d00", "surface-tint": "#a73a00", "surface-container-high": "#ece7e7", "on-secondary-fixed-variant": "#3322cc", secondary: "#4b41e1", "on-primary-fixed-variant": "#802a00", surface: "#fdf8f8", "surface-container-low": "#f7f2f2", "on-primary-container": "#ffcebc", "surface-dim": "#ddd9d8", "surface-bright": "#fdf8f8", "secondary-fixed-dim": "#c3c0ff", background: "#fdf8f8", "inverse-surface": "#313030", "on-surface": "#1c1b1b", "inverse-primary": "#ffb599", "surface-variant": "#e6e1e1", "on-secondary-container": "#fffbff", "tertiary-fixed-dim": "#dfc566", "on-error-container": "#93000a", "on-surface-variant": "#58423a", "error-container": "#ffdad6", "on-tertiary-container": "#4c3e00", "secondary-container": "#655dfb", "primary-container": "#a73a00", "surface-container-highest": "#e6e1e1", "on-error": "#ffffff", "primary-fixed": "#ffdbce"}, borderRadius: {DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px"}, spacing: {sm: "8px", lg: "24px", base: "8px", md: "16px", xs: "4px", gutter: "16px", "container-max": "1440px", xl: "32px", margin: "20px", unit: "4px"}, fontFamily: {button: ["Space Grotesk"], "body-lg": ["Be Vietnam Pro"], h1: ["Space Grotesk"], h2: ["Space Grotesk"], "label-caps": ["Space Grotesk"], h3: ["Space Grotesk"], "body-md": ["Be Vietnam Pro"], "headline-xl": ["Plus Jakarta Sans"], "label-bold": ["Be Vietnam Pro"], "label-sm": ["Be Vietnam Pro"], "headline-md": ["Plus Jakarta Sans"], "headline-lg": ["Plus Jakarta Sans"]}, fontSize: {button: ["16px", {lineHeight: "1.0", fontWeight: "600"}], "body-lg": ["18px", {lineHeight: "28px", fontWeight: "400"}], h1: ["64px", {lineHeight: "1.1", letterSpacing: "-0.02em", fontWeight: "700"}], h2: ["48px", {lineHeight: "1.2", letterSpacing: "-0.01em", fontWeight: "700"}], "label-caps": ["14px", {lineHeight: "1.2", letterSpacing: "0.05em", fontWeight: "700"}], h3: ["32px", {lineHeight: "1.2", fontWeight: "600"}], "body-md": ["16px", {lineHeight: "24px", fontWeight: "400"}], "headline-xl": ["40px", {lineHeight: "48px", letterSpacing: "-0.02em", fontWeight: "800"}], "label-bold": ["14px", {lineHeight: "20px", fontWeight: "700"}], "label-sm": ["12px", {lineHeight: "16px", fontWeight: "500"}], "headline-md": ["24px", {lineHeight: "30px", fontWeight: "700"}], "headline-lg": ["32px", {lineHeight: "38px", letterSpacing: "-0.01em", fontWeight: "800"}]}}}};</script>
+<style>
+  .halftone-bg {
+    background-image: radial-gradient(circle, #e9c400 1px, transparent 1px);
+    background-size: 8px 8px;
+    opacity: 0.1;
+  }
+  .card-shadow {
+    box-shadow: 4px 4px 0px 0px #000;
+  }
+  .button-shadow {
+    box-shadow: 2px 2px 0px 0px #000;
+  }
+  .table-glow {
+    box-shadow: 0 0 40px rgba(233, 196, 0, 0.15);
+  }
+</style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex flex-col overflow-x-hidden">
+<!-- TopAppBar -->
+<nav class="flex justify-between items-center w-full px-8 h-20 z-50 bg-slate-950 docked full-width top-0 border-b-2 border-slate-800 shadow-[0px_4px_0px_0px_rgba(0,0,0,1)]">
+<div class="flex items-center gap-md">
+<div class="text-2xl font-black text-yellow-400 italic border-2 border-yellow-400 px-3 py-1 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] font-h3 text-h3">
+        Retro-Modern Web3 Play
+      </div>
+<div class="hidden md:flex gap-base font-['Space_Grotesk'] uppercase tracking-tighter font-bold">
+<a class="text-slate-400 font-medium px-sm py-xs hover:text-yellow-300 hover:bg-slate-900 transition-all duration-100 rounded" href="#">Lobby</a>
+<a class="text-yellow-400 border-b-4 border-yellow-400 pb-1 px-sm py-xs hover:text-yellow-300 hover:bg-slate-900 transition-all duration-100 rounded" href="#">Tables</a>
+<a class="text-slate-400 font-medium px-sm py-xs hover:text-yellow-300 hover:bg-slate-900 transition-all duration-100 rounded" href="#">Predictions</a>
+<a class="text-slate-400 font-medium px-sm py-xs hover:text-yellow-300 hover:bg-slate-900 transition-all duration-100 rounded" href="#">Wallet</a>
+<a class="text-slate-400 font-medium px-sm py-xs hover:text-yellow-300 hover:bg-slate-900 transition-all duration-100 rounded" href="#">Fairness</a>
+</div>
+</div>
+<div class="flex items-center gap-md">
+<div class="hidden md:flex items-center gap-sm">
+<button aria-label="notifications" class="text-yellow-400 hover:text-yellow-300 hover:bg-slate-900 p-2 rounded transition-all duration-100 active:translate-y-1 active:shadow-none">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button aria-label="settings" class="text-yellow-400 hover:text-yellow-300 hover:bg-slate-900 p-2 rounded transition-all duration-100 active:translate-y-1 active:shadow-none">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+</div>
+<button class="bg-primary-container text-on-primary-container font-button text-button px-md py-sm border-2 border-black button-shadow hover:translate-y-px hover:translate-x-px hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition-all uppercase tracking-wider rounded-DEFAULT">
+        Connect Wallet
+      </button>
+</div>
+</nav>
+<div class="flex flex-1 relative">
+<!-- SideNavBar (Game Chat & Info) -->
+<aside class="fixed left-0 top-20 h-[calc(100vh-5rem)] flex flex-col p-4 z-40 bg-slate-900 h-full w-64 border-r-2 rounded-none border-slate-800 shadow-[4px_0px_0px_0px_rgba(0,0,0,1)]">
+<div class="mb-md">
+<h2 class="font-h3 text-h3 text-yellow-400 uppercase tracking-tight">Quick Eight</h2>
+<p class="font-label-caps text-label-caps text-slate-400">High Stakes Room</p>
+</div>
+<div class="flex-1 flex flex-col gap-sm overflow-hidden border-2 border-slate-800 rounded-lg p-sm bg-surface-container-low card-shadow mb-md">
+<div class="border-b-2 border-slate-800 pb-sm mb-sm flex justify-between items-center">
+<span class="font-label-caps text-label-caps text-yellow-400">Chat</span>
+<span class="material-symbols-outlined text-slate-400 text-sm" data-icon="forum">forum</span>
+</div>
+<div class="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+<div class="text-sm"><span class="font-bold text-secondary-container mr-1">CryptoKing:</span> All in.</div>
+<div class="text-sm"><span class="font-bold text-tertiary-container mr-1">Satoshi99:</span> Bold move.</div>
+<div class="text-sm"><span class="font-bold text-error mr-1">Dealer:</span> CryptoKing wins 5000 TOKENS.</div>
+<div class="text-sm"><span class="font-bold text-primary mr-1">Player1:</span> Nice hand.</div>
+</div>
+<div class="mt-auto relative">
+<input class="w-full bg-surface-container text-on-surface border-2 border-slate-800 rounded px-sm py-xs text-sm focus:border-yellow-400 focus:outline-none placeholder-slate-500" placeholder="Send a message..." type="text"/>
+<button class="absolute right-2 top-1/2 -translate-y-1/2 text-yellow-400 hover:text-yellow-300">
+<span class="material-symbols-outlined text-sm" data-icon="send">send</span>
+</button>
+</div>
+</div>
+<div class="h-1/3 flex flex-col border-2 border-slate-800 rounded-lg p-sm bg-surface-container-low card-shadow">
+<div class="border-b-2 border-slate-800 pb-sm mb-sm flex justify-between items-center">
+<span class="font-label-caps text-label-caps text-slate-400">Recent Hands</span>
+<span class="material-symbols-outlined text-slate-400 text-sm" data-icon="history">history</span>
+</div>
+<div class="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+<div class="flex justify-between items-center text-sm bg-surface p-xs rounded border border-slate-800">
+<span class="text-yellow-400">Hand #442</span>
+<span class="text-slate-400">CryptoKing</span>
+</div>
+<div class="flex justify-between items-center text-sm bg-surface p-xs rounded border border-slate-800">
+<span class="text-yellow-400">Hand #441</span>
+<span class="text-slate-400">Satoshi99</span>
+</div>
+<div class="flex justify-between items-center text-sm bg-surface p-xs rounded border border-slate-800">
+<span class="text-yellow-400">Hand #440</span>
+<span class="text-slate-400">Player1</span>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Game Area -->
+<main class="flex-1 ml-64 p-lg relative flex justify-center items-center overflow-hidden bg-surface-dim">
+<div class="absolute inset-0 halftone-bg z-0 pointer-events-none"></div>
+<!-- Top Info Bar -->
+<div class="absolute top-md left-md right-md flex justify-between items-start z-20 pointer-events-none">
+<div class="bg-surface-container-high border-2 border-slate-800 p-sm rounded-lg card-shadow flex flex-col gap-xs pointer-events-auto">
+<div class="flex items-center gap-xs">
+<span class="material-symbols-outlined text-slate-400 text-sm" data-icon="verified">verified</span>
+<span class="font-label-caps text-label-caps text-slate-400">Provably Fair</span>
+</div>
+<div class="font-mono text-xs text-slate-500 max-w-[200px] truncate">Hash: a8f4b...9c2d</div>
+</div>
+<div class="bg-surface-container-high border-2 border-yellow-400 p-sm rounded-lg card-shadow flex items-center gap-sm pointer-events-auto">
+<span class="material-symbols-outlined text-yellow-400" data-icon="timer">timer</span>
+<span class="font-h2 text-h2 text-yellow-400 tracking-tighter">14s</span>
+</div>
+</div>
+<!-- The Table -->
+<div class="relative w-[800px] h-[600px] bg-slate-900 border-4 border-slate-700 rounded-[120px] table-glow z-10 flex items-center justify-center card-shadow">
+<!-- Center Pot & Deck -->
+<div class="absolute inset-0 m-auto w-[300px] h-[200px] flex flex-col items-center justify-center z-20 gap-md">
+<div class="bg-surface-container border-2 border-yellow-400 rounded-full px-lg py-sm flex flex-col items-center card-shadow">
+<span class="font-label-caps text-label-caps text-slate-400 mb-xs">Main Pot</span>
+<span class="font-h2 text-h2 text-yellow-400">12,500</span>
+</div>
+<div class="flex gap-sm">
+<!-- Community Cards -->
+<div class="w-12 h-16 bg-white border-2 border-slate-400 rounded flex flex-col items-center justify-center card-shadow relative overflow-hidden">
+<span class="text-error font-bold text-lg leading-none absolute top-1 left-1">A</span>
+<span class="material-symbols-outlined text-error text-2xl" data-icon="favorite" data-weight="fill">favorite</span>
+</div>
+<div class="w-12 h-16 bg-white border-2 border-slate-400 rounded flex flex-col items-center justify-center card-shadow relative overflow-hidden">
+<span class="text-slate-900 font-bold text-lg leading-none absolute top-1 left-1">K</span>
+<span class="material-symbols-outlined text-slate-900 text-2xl" data-icon="spades" data-weight="fill">playing_cards</span>
+</div>
+<div class="w-12 h-16 bg-slate-800 border-2 border-slate-600 rounded flex flex-col items-center justify-center card-shadow relative overflow-hidden">
+<div class="w-full h-full border-2 border-slate-700 rounded-sm m-1 opacity-50"></div>
+<span class="absolute inset-0 flex items-center justify-center text-slate-500 font-bold text-xs opacity-50">RM</span>
+</div>
+<div class="w-12 h-16 bg-slate-800 border-2 border-slate-600 rounded flex flex-col items-center justify-center card-shadow relative overflow-hidden">
+<div class="w-full h-full border-2 border-slate-700 rounded-sm m-1 opacity-50"></div>
+</div>
+<div class="w-12 h-16 bg-slate-800 border-2 border-slate-600 rounded flex flex-col items-center justify-center card-shadow relative overflow-hidden">
+<div class="w-full h-full border-2 border-slate-700 rounded-sm m-1 opacity-50"></div>
+</div>
+</div>
+</div>
+<!-- Player Slots (Absolute Positioning around the table) -->
+<!-- Player 1 (Bottom - Active User) -->
+<div class="absolute -bottom-12 left-1/2 -translate-x-1/2 flex flex-col items-center gap-sm">
+<div class="flex gap-2 mb-2 relative z-20">
+<div class="w-16 h-24 bg-white border-2 border-slate-400 rounded flex flex-col items-center justify-center card-shadow rotate-[-10deg] translate-x-2">
+<span class="text-error font-bold text-xl leading-none absolute top-1 left-1">Q</span>
+<span class="material-symbols-outlined text-error text-3xl" data-icon="favorite" data-weight="fill">favorite</span>
+</div>
+<div class="w-16 h-24 bg-white border-2 border-slate-400 rounded flex flex-col items-center justify-center card-shadow rotate-[10deg] -translate-x-2">
+<span class="text-slate-900 font-bold text-xl leading-none absolute top-1 left-1">J</span>
+<span class="material-symbols-outlined text-slate-900 text-3xl" data-icon="spades" data-weight="fill">playing_cards</span>
+</div>
+</div>
+<div class="bg-surface border-2 border-yellow-400 rounded-full px-md py-sm flex items-center gap-sm card-shadow z-30">
+<div class="w-8 h-8 bg-yellow-400 rounded-full border-2 border-black flex items-center justify-center">
+<span class="material-symbols-outlined text-black text-sm" data-icon="person">person</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-caps text-label-caps text-yellow-400">YOU (CryptoKing)</span>
+<span class="font-mono text-xs text-slate-300">Balance: 50,000</span>
+</div>
+</div>
+</div>
+<!-- Player 2 (Bottom Right) -->
+<div class="absolute bottom-4 right-12 flex flex-col items-center gap-2 opacity-70">
+<div class="bg-surface-container border-2 border-slate-700 rounded-full px-sm py-xs flex items-center gap-xs card-shadow">
+<span class="font-label-caps text-xs text-slate-400">P2_Satoshi</span>
+</div>
+<div class="flex gap-1">
+<div class="w-8 h-12 bg-slate-800 border-2 border-slate-600 rounded"></div>
+<div class="w-8 h-12 bg-slate-800 border-2 border-slate-600 rounded"></div>
+</div>
+</div>
+<!-- Player 3 (Right) -->
+<div class="absolute top-1/2 right-0 -translate-y-1/2 translate-x-1/2 flex flex-col items-center gap-2">
+<div class="bg-surface-container border-2 border-slate-700 rounded-full px-sm py-xs flex items-center gap-xs card-shadow relative">
+<div class="absolute -top-6 -left-4 bg-error text-on-error px-2 py-0.5 rounded text-xs font-bold rotate-[-15deg] card-shadow">FOLDED</div>
+<span class="font-label-caps text-xs text-slate-500 line-through">Player3</span>
+</div>
+</div>
+<!-- Player 4 (Top Right) -->
+<div class="absolute top-4 right-12 flex flex-col items-center gap-2 opacity-70">
+<div class="flex gap-1 mb-1">
+<div class="w-8 h-12 bg-slate-800 border-2 border-slate-600 rounded"></div>
+<div class="w-8 h-12 bg-slate-800 border-2 border-slate-600 rounded"></div>
+</div>
+<div class="bg-surface-container border-2 border-slate-700 rounded-full px-sm py-xs flex items-center gap-xs card-shadow">
+<span class="font-label-caps text-xs text-slate-400">Whale99</span>
+</div>
+</div>
+<!-- Player 5 (Top) -->
+<div class="absolute -top-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 opacity-70">
+<div class="flex gap-1 mb-1">
+<div class="w-8 h-12 bg-slate-800 border-2 border-slate-600 rounded"></div>
+<div class="w-8 h-12 bg-slate-800 border-2 border-slate-600 rounded"></div>
+</div>
+<div class="bg-surface-container border-2 border-slate-700 rounded-full px-sm py-xs flex items-center gap-xs card-shadow">
+<span class="font-label-caps text-xs text-slate-400">LuckyDraw</span>
+</div>
+</div>
+<!-- Player 6 (Top Left) -->
+<div class="absolute top-4 left-12 flex flex-col items-center gap-2 opacity-70">
+<div class="flex gap-1 mb-1">
+<div class="w-8 h-12 bg-slate-800 border-2 border-slate-600 rounded"></div>
+<div class="w-8 h-12 bg-slate-800 border-2 border-slate-600 rounded"></div>
+</div>
+<div class="bg-surface-container border-2 border-slate-700 rounded-full px-sm py-xs flex items-center gap-xs card-shadow">
+<span class="font-label-caps text-xs text-slate-400">Newbie</span>
+</div>
+</div>
+<!-- Player 7 (Left) -->
+<div class="absolute top-1/2 left-0 -translate-y-1/2 -translate-x-1/2 flex flex-col items-center gap-2 opacity-70">
+<div class="bg-surface-container border-2 border-slate-700 rounded-full px-sm py-xs flex items-center gap-xs card-shadow">
+<span class="font-label-caps text-xs text-slate-400">ProGamer</span>
+</div>
+<div class="flex gap-1 mt-1">
+<div class="w-8 h-12 bg-slate-800 border-2 border-slate-600 rounded"></div>
+<div class="w-8 h-12 bg-slate-800 border-2 border-slate-600 rounded"></div>
+</div>
+</div>
+<!-- Player 8 (Bottom Left) -->
+<div class="absolute bottom-4 left-12 flex flex-col items-center gap-2 opacity-70">
+<div class="bg-surface-container border-2 border-slate-700 rounded-full px-sm py-xs flex items-center gap-xs card-shadow relative">
+<div class="absolute -top-6 right-0 bg-primary-container text-on-primary-container px-2 py-0.5 rounded text-xs font-bold rotate-[10deg] card-shadow">CALLED</div>
+<span class="font-label-caps text-xs text-slate-400">AnonX</span>
+</div>
+<div class="flex gap-1 mt-1">
+<div class="w-8 h-12 bg-slate-800 border-2 border-slate-600 rounded"></div>
+<div class="w-8 h-12 bg-slate-800 border-2 border-slate-600 rounded"></div>
+</div>
+</div>
+</div>
+<!-- Action Controls -->
+<div class="absolute bottom-lg left-1/2 -translate-x-1/2 flex gap-md z-30">
+<button class="bg-error text-on-error font-button text-button px-xl py-md border-2 border-black button-shadow hover:translate-y-px hover:translate-x-px hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition-all uppercase tracking-widest rounded-lg flex items-center gap-2">
+<span class="material-symbols-outlined" data-icon="close">close</span>
+                Fold
+            </button>
+<button class="bg-secondary-container text-on-secondary-container font-button text-button px-xl py-md border-2 border-black button-shadow hover:translate-y-px hover:translate-x-px hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition-all uppercase tracking-widest rounded-lg flex items-center gap-2">
+<span class="material-symbols-outlined" data-icon="check">check</span>
+                Call 500
+            </button>
+<button class="bg-primary-container text-on-primary-container font-button text-button px-xl py-md border-2 border-black button-shadow hover:translate-y-px hover:translate-x-px hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition-all uppercase tracking-widest rounded-lg flex items-center gap-2 text-xl">
+<span class="material-symbols-outlined" data-icon="arrow_upward">arrow_upward</span>
+                Raise
+            </button>
+</div>
+</main>
+</div>
+</body></html>

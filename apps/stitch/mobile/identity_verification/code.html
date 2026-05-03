@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>KYC Verification</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;700;800&amp;family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "primary-fixed-dim": "#ffb59a",
+                      "on-tertiary-fixed-variant": "#544600",
+                      "error-container": "#ffdad6",
+                      "secondary": "#4b41e1",
+                      "error": "#ba1a1a",
+                      "on-primary-fixed-variant": "#802a00",
+                      "on-error-container": "#93000a",
+                      "primary-container": "#ff5c00",
+                      "surface-bright": "#fcf9f8",
+                      "surface-container": "#f0eded",
+                      "primary": "#a73a00",
+                      "outline-variant": "#e4beb1",
+                      "on-surface": "#1c1b1b",
+                      "on-secondary-fixed": "#0f0069",
+                      "surface-variant": "#e5e2e1",
+                      "surface-container-low": "#f6f3f2",
+                      "inverse-primary": "#ffb59a",
+                      "background": "#fcf9f8",
+                      "surface-container-high": "#eae7e7",
+                      "on-secondary-fixed-variant": "#3323cc",
+                      "secondary-container": "#645efb",
+                      "on-background": "#1c1b1b",
+                      "outline": "#8f7065",
+                      "secondary-fixed": "#e2dfff",
+                      "secondary-fixed-dim": "#c3c0ff",
+                      "on-tertiary-container": "#4c3e00",
+                      "tertiary": "#705d00",
+                      "inverse-surface": "#313030",
+                      "tertiary-container": "#caa900",
+                      "surface": "#fcf9f8",
+                      "on-surface-variant": "#5b4137",
+                      "on-primary-container": "#521800",
+                      "primary-fixed": "#ffdbce",
+                      "on-error": "#ffffff",
+                      "on-primary-fixed": "#370e00",
+                      "tertiary-fixed-dim": "#e9c400",
+                      "inverse-on-surface": "#f3f0ef",
+                      "surface-tint": "#a73a00",
+                      "on-tertiary": "#ffffff",
+                      "on-tertiary-fixed": "#221b00",
+                      "surface-container-highest": "#e5e2e1",
+                      "on-secondary": "#ffffff",
+                      "on-primary": "#ffffff",
+                      "surface-dim": "#dcd9d9",
+                      "tertiary-fixed": "#ffe170",
+                      "surface-container-lowest": "#ffffff",
+                      "on-secondary-container": "#fffbff"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "margin": "20px",
+                      "lg": "24px",
+                      "gutter": "16px",
+                      "xs": "4px",
+                      "xl": "32px",
+                      "unit": "4px",
+                      "sm": "8px",
+                      "md": "16px"
+              },
+              "fontFamily": {
+                      "headline-xl": [
+                              "Plus Jakarta Sans"
+                      ],
+                      "headline-lg": [
+                              "Plus Jakarta Sans"
+                      ],
+                      "body-lg": [
+                              "Be Vietnam Pro"
+                      ],
+                      "label-bold": [
+                              "Be Vietnam Pro"
+                      ],
+                      "headline-md": [
+                              "Plus Jakarta Sans"
+                      ],
+                      "body-md": [
+                              "Be Vietnam Pro"
+                      ],
+                      "label-sm": [
+                              "Be Vietnam Pro"
+                      ]
+              },
+              "fontSize": {
+                      "headline-xl": [
+                              "40px",
+                              {
+                                      "lineHeight": "48px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "800"
+                              }
+                      ],
+                      "headline-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "38px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "800"
+                              }
+                      ],
+                      "body-lg": [
+                              "18px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "label-bold": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "30px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "body-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "label-sm": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "fontWeight": "500"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 1, 'wght' 700, 'GRAD' 0, 'opsz' 24;
+        }
+        .retro-halftone {
+            background-image: radial-gradient(circle, #1c1b1b 1px, transparent 1px);
+            background-size: 8px 8px;
+            opacity: 0.05;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface-container-high text-on-surface font-body-lg min-h-screen flex items-center justify-center p-md md:p-xl relative">
+<!-- Decorative Halftone Background Overlay -->
+<div class="absolute inset-0 retro-halftone pointer-events-none"></div>
+<!-- Main Content Canvas (Transactional Flow -> No Navigation Shells) -->
+<main class="w-full max-w-[480px] bg-surface-container-lowest border-2 border-on-surface rounded-xl shadow-[8px_8px_0px_0px_#1c1b1b] relative z-10 flex flex-col overflow-hidden">
+<!-- Header Image Area -->
+<div class="h-32 bg-primary-fixed-dim border-b-2 border-on-surface relative flex items-center justify-center overflow-hidden" data-alt="A flat, vector-style digital illustration serving as a header background. The scene is an abstract, geometric composition featuring vibrant orange, lavender, and yellow shapes layered over a light surface. Thick 2pt black outlines define the shapes, mimicking a retro-pop comic or vintage arcade cabinet art style. High-contrast, flat lighting with subtle halftone dot textures reinforces the energetic, gamified aesthetic of the app interface." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCAdt6f7v1VV-Mm5IbZaJ-SubuBr2toBDGGk0tIrkEpBNF4Zz6I4h3_AK9UrlbTfrApapUw8NZDMziVdJtL9A1_o6BfSd6HrlkkhBLkvouXwC_7-qBJpacjv2776__n33WMHlor-y0WagOQ2CjyBbGTchZm6OJ80wr--wcVjduPkrLPoUehxIV0t4mMxYGSG6GolyMCbx8jRdRHkHiAn4f4zFPx18i5Tn06-zWTVmB68dThaW43qwbqQ5ZrSfElCPsyvXp_3a3Mz4oK'); background-size: cover; background-position: center;">
+<div class="absolute inset-0 bg-primary-fixed-dim/80 mix-blend-multiply"></div>
+<!-- Decorative Security Badge -->
+<div class="w-20 h-20 bg-tertiary-fixed border-2 border-on-surface rounded-full shadow-[4px_4px_0px_0px_#1c1b1b] flex items-center justify-center absolute -bottom-10 z-20">
+<span class="material-symbols-outlined text-[40px] text-on-surface">shield_lock</span>
+</div>
+</div>
+<!-- Content Area -->
+<div class="p-lg md:p-xl flex flex-col items-center mt-6">
+<h1 class="font-headline-lg text-headline-lg text-center mt-sm">Level Up Your Security</h1>
+<p class="font-body-md text-body-md text-center text-on-surface-variant mt-sm px-2">Verify your ID to unlock unlimited withdrawals and exclusive rewards.</p>
+<!-- Steps Bento List -->
+<div class="w-full mt-xl border-2 border-on-surface bg-surface rounded-xl shadow-[4px_4px_0px_0px_#1c1b1b] flex flex-col overflow-hidden">
+<!-- Step 1 -->
+<div class="flex items-center p-md border-b-2 border-on-surface bg-surface-container-low hover:bg-surface-variant transition-colors group">
+<div class="w-10 h-10 rounded-full bg-secondary-fixed border-2 border-on-surface flex items-center justify-center font-headline-md text-headline-md shadow-[2px_2px_0px_0px_#1c1b1b] shrink-0 group-hover:shadow-none group-hover:translate-y-[2px] group-hover:translate-x-[2px] transition-all">
+                        1
+                    </div>
+<div class="ml-md flex-1">
+<h3 class="font-label-bold text-label-bold">ID Document</h3>
+<p class="font-label-sm text-label-sm text-on-surface-variant">Passport or Driver's License</p>
+</div>
+<span class="material-symbols-outlined text-[28px] text-on-surface-variant group-hover:text-secondary transition-colors">badge</span>
+</div>
+<!-- Step 2 -->
+<div class="flex items-center p-md border-b-2 border-on-surface bg-surface-container-low hover:bg-surface-variant transition-colors group">
+<div class="w-10 h-10 rounded-full bg-primary-fixed border-2 border-on-surface flex items-center justify-center font-headline-md text-headline-md shadow-[2px_2px_0px_0px_#1c1b1b] shrink-0 group-hover:shadow-none group-hover:translate-y-[2px] group-hover:translate-x-[2px] transition-all">
+                        2
+                    </div>
+<div class="ml-md flex-1">
+<h3 class="font-label-bold text-label-bold">Selfie Check</h3>
+<p class="font-label-sm text-label-sm text-on-surface-variant">Quick face scan</p>
+</div>
+<span class="material-symbols-outlined text-[28px] text-on-surface-variant group-hover:text-primary transition-colors">face</span>
+</div>
+<!-- Step 3 -->
+<div class="flex items-center p-md bg-surface-container-low hover:bg-surface-variant transition-colors group">
+<div class="w-10 h-10 rounded-full bg-tertiary-fixed border-2 border-on-surface flex items-center justify-center font-headline-md text-headline-md shadow-[2px_2px_0px_0px_#1c1b1b] shrink-0 group-hover:shadow-none group-hover:translate-y-[2px] group-hover:translate-x-[2px] transition-all">
+                        3
+                    </div>
+<div class="ml-md flex-1">
+<h3 class="font-label-bold text-label-bold">Review</h3>
+<p class="font-label-sm text-label-sm text-on-surface-variant">Fast approval process</p>
+</div>
+<span class="material-symbols-outlined text-[28px] text-on-surface-variant group-hover:text-tertiary transition-colors">task_alt</span>
+</div>
+</div>
+<!-- Primary Action -->
+<button class="w-full mt-xl py-4 px-lg bg-[#ff5c00] text-white font-headline-md text-headline-md uppercase tracking-wider border-2 border-on-surface rounded-lg shadow-[4px_4px_0px_0px_#1c1b1b] active:translate-y-[4px] active:translate-x-[4px] active:shadow-none transition-all flex items-center justify-center gap-sm cursor-pointer">
+                Start Verification
+                <span class="material-symbols-outlined text-[28px]">arrow_forward</span>
+</button>
+<!-- Trust Badge -->
+<div class="mt-lg flex items-center justify-center bg-surface-variant py-sm px-md rounded-full border-2 border-on-surface gap-sm max-w-fit mx-auto shadow-[2px_2px_0px_0px_#1c1b1b]">
+<span class="material-symbols-outlined text-[16px] text-secondary">lock</span>
+<span class="font-label-sm text-label-sm uppercase tracking-wide">Trust &amp; Privacy: Data is Encrypted</span>
+</div>
+<!-- Optional: Cancel/Back link for linear flows -->
+<button class="mt-md font-label-bold text-label-bold text-on-surface-variant hover:text-on-surface underline decoration-2 underline-offset-4 transition-colors">
+                I'll do this later
+            </button>
+</div>
+</main>
+</body></html>

@@ -72,6 +72,8 @@ const toDateTimeInputValue = (value: Date) => {
 export const ENGINE_BASE_URL =
   process.env.NEXT_PUBLIC_ENGINE_BASE_URL ?? "http://localhost:4000";
 
+const padDatePart = (value: number) => String(value).padStart(2, "0");
+
 export const formatDate = (value: string | Date | null | undefined) => {
   if (!value) {
     return "—";
@@ -82,7 +84,17 @@ export const formatDate = (value: string | Date | null | undefined) => {
     return "—";
   }
 
-  return parsed.toLocaleString();
+  return [
+    parsed.getUTCFullYear(),
+    padDatePart(parsed.getUTCMonth() + 1),
+    padDatePart(parsed.getUTCDate()),
+  ]
+    .join("-")
+    .concat(
+      ` ${padDatePart(parsed.getUTCHours())}:${padDatePart(
+        parsed.getUTCMinutes(),
+      )}:${padDatePart(parsed.getUTCSeconds())} UTC`,
+    );
 };
 
 export const getDefaultReportFromAt = () =>
@@ -292,7 +304,7 @@ export function SnippetLanguagePicker({
   value,
 }: SnippetLanguagePickerProps) {
   return (
-    <div className="inline-flex rounded-full border border-slate-700 bg-slate-900/80 p-1">
+    <div className="inline-flex rounded-full border border-white/10 bg-white/[0.04] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
       {(
         [
           ["typescript", "TypeScript"],
@@ -305,10 +317,10 @@ export function SnippetLanguagePicker({
           aria-pressed={value === language}
           data-state={value === language ? "active" : "inactive"}
           className={cn(
-            "rounded-full px-3 py-1.5 text-xs font-semibold transition",
+            "rounded-full px-3 py-1.5 text-xs font-semibold transition duration-200",
             value === language
-              ? "bg-white text-slate-950"
-              : "text-slate-300 hover:text-white",
+              ? "bg-white text-slate-950 shadow-sm"
+              : "text-slate-300 hover:bg-white/[0.06] hover:text-white",
           )}
           onClick={() => {
             onChange(language);

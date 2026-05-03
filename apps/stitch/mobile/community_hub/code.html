@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Community Feed - Retro Pop Gaming</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&amp;family=Be+Vietnam+Pro:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+                "primary": "#a73a00",
+                "on-secondary-container": "#6e5c00",
+                "surface": "#f9f9f9",
+                "background": "#f9f9f9",
+                "primary-container": "#ff5c00",
+                "on-primary": "#ffffff",
+                "on-primary-fixed-variant": "#802a00",
+                "error": "#ba1a1a",
+                "on-secondary": "#ffffff",
+                "on-surface-variant": "#5b4137",
+                "surface-dim": "#dadada",
+                "tertiary-fixed": "#d8e2ff",
+                "tertiary-container": "#4f90ff",
+                "surface-tint": "#a73a00",
+                "surface-variant": "#e2e2e2",
+                "inverse-surface": "#303030",
+                "surface-container-lowest": "#ffffff",
+                "on-tertiary-fixed-variant": "#004493",
+                "tertiary": "#005bc1",
+                "surface-bright": "#f9f9f9",
+                "on-tertiary-fixed": "#001a41",
+                "on-tertiary-container": "#00295f",
+                "secondary": "#705d00",
+                "secondary-container": "#fcd400",
+                "on-primary-container": "#521800",
+                "surface-container": "#eeeeee",
+                "on-error": "#ffffff",
+                "primary-fixed": "#ffdbce",
+                "secondary-fixed-dim": "#e9c400",
+                "on-secondary-fixed": "#221b00",
+                "on-primary-fixed": "#370e00",
+                "primary-fixed-dim": "#ffb59a",
+                "on-background": "#1b1b1b",
+                "outline": "#8f7065",
+                "error-container": "#ffdad6",
+                "surface-container-high": "#e8e8e8",
+                "tertiary-fixed-dim": "#adc6ff",
+                "inverse-primary": "#ffb59a",
+                "on-secondary-fixed-variant": "#544600",
+                "on-tertiary": "#ffffff",
+                "on-error-container": "#93000a",
+                "on-surface": "#1b1b1b",
+                "secondary-fixed": "#ffe16d",
+                "surface-container-highest": "#e2e2e2",
+                "outline-variant": "#e4beb1",
+                "inverse-on-surface": "#f1f1f1",
+                "surface-container-low": "#f3f3f3"
+        },
+        "borderRadius": {
+                "DEFAULT": "0.25rem",
+                "lg": "0.5rem",
+                "xl": "0.75rem",
+                "full": "9999px"
+        },
+        "spacing": {
+                "margin-mobile": "20px",
+                "xl": "32px",
+                "unit": "4px",
+                "lg": "24px",
+                "xs": "4px",
+                "md": "16px",
+                "gutter": "16px",
+                "sm": "8px"
+        },
+        "fontFamily": {
+                "headline-md": [
+                        "Plus Jakarta Sans"
+                ],
+                "label-sm": [
+                        "Plus Jakarta Sans"
+                ],
+                "label-bold": [
+                        "Plus Jakarta Sans"
+                ],
+                "display-xl": [
+                        "Plus Jakarta Sans"
+                ],
+                "body-lg": [
+                        "Plus Jakarta Sans"
+                ],
+                "headline-lg": [
+                        "Plus Jakarta Sans"
+                ],
+                "body-md": [
+                        "Plus Jakarta Sans"
+                ]
+        },
+        "fontSize": {
+                "headline-md": [
+                        "24px",
+                        {
+                                "lineHeight": "1.3",
+                                "fontWeight": "700"
+                        }
+                ],
+                "label-sm": [
+                        "12px",
+                        {
+                                "lineHeight": "1.2",
+                                "fontWeight": "600"
+                        }
+                ],
+                "label-bold": [
+                        "14px",
+                        {
+                                "lineHeight": "1.2",
+                                "fontWeight": "700"
+                        }
+                ],
+                "display-xl": [
+                        "48px",
+                        {
+                                "lineHeight": "1.1",
+                                "letterSpacing": "-0.02em",
+                                "fontWeight": "800"
+                        }
+                ],
+                "body-lg": [
+                        "18px",
+                        {
+                                "lineHeight": "1.5",
+                                "fontWeight": "600"
+                        }
+                ],
+                "headline-lg": [
+                        "32px",
+                        {
+                                "lineHeight": "1.2",
+                                "letterSpacing": "-0.01em",
+                                "fontWeight": "800"
+                        }
+                ],
+                "body-md": [
+                        "16px",
+                        {
+                                "lineHeight": "1.5",
+                                "fontWeight": "500"
+                        }
+                ]
+        }
+},
+    },
+  }
+</script>
+<style>
+        .halftone-bg {
+            background-image: radial-gradient(circle, #e5e2e1 2px, transparent 2px);
+            background-size: 10px 10px;
+        }
+        .retro-shadow {
+            box-shadow: 4px 4px 0px 0px rgba(28, 27, 27, 1);
+        }
+        .retro-shadow-sm {
+            box-shadow: 2px 2px 0px 0px rgba(28, 27, 27, 1);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex flex-col pb-24 md:pb-0 md:flex-row">
+<!-- TopAppBar (Web & Mobile) -->
+<header class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-4 h-16 bg-surface border-b-2 border-on-background retro-shadow shadow-[0px_4px_0px_0px_rgba(28,27,27,1)] md:hidden">
+<div class="flex items-center gap-2">
+<div class="w-8 h-8 rounded-full border-2 border-on-background overflow-hidden bg-primary-container">
+<img alt="Avatar" class="w-full h-full object-cover" data-alt="A small, stylized avatar image of a female gamer character in a flat, high-contrast retro pop art style. She wears vibrant electric orange headphones against a deep purple background. The lighting is flat and graphic, emphasizing bold 2px solid black outlines." src="https://lh3.googleusercontent.com/aida-public/AB6AXuADFfF72EktMbAQ65vcG7vYKi21ecONqyI3XPPY8disgH9FJxi2LF4cT1GCby3E6Y0YiptHApp0PQCqCQtKM6l4wDQ_0SDGaI6J985R09nAMyBBbanyaO1KLqevbeeDL1ge1uHRrGUnChc1GYsV-VJkCFnPUoAZQqMlK-mQYXYavU7X59G77yF6KzAB2Qb4elpvI3VdJo68TDQvIit5EkOAUDJYLV17yesVLkRgwaKPo_Rd3WuI8de4jio99LRxBfBA5XrxsETLRTkr"/>
+</div>
+</div>
+<h1 class="font-headline-lg text-headline-md uppercase tracking-tight text-primary-container">REWARDS HUB</h1>
+<div class="font-label-bold text-label-bold text-secondary">
+            $1,240.50
+        </div>
+</header>
+<!-- NavigationDrawer (Web only) -->
+<aside class="hidden md:flex flex-col h-screen w-80 border-r-2 border-on-background bg-surface sticky top-0 shadow-[4px_0px_0px_0px_rgba(28,27,27,1)] p-6 z-40">
+<div class="mb-8 pb-4 border-b-2 border-on-background flex items-center gap-4">
+<div class="w-12 h-12 rounded-full border-2 border-on-background overflow-hidden bg-primary-container retro-shadow-sm">
+<img alt="Avatar" class="w-full h-full object-cover" data-alt="A small, stylized avatar image of a female gamer character in a flat, high-contrast retro pop art style. She wears vibrant electric orange headphones against a deep purple background. The lighting is flat and graphic, emphasizing bold 2px solid black outlines." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDEhnXpC6G-41NrJZkQZvKeCi2HgDrduK_kbzRAVbDyALDEgaLfnhcEZfEcOzQbxQgZlSTugJ_WINzAUahf5WW6vZzkJyPcYOMlKjeik_v9OMtauV7RbgUQPCODt8qBYoRZlSMe3o43VXDWBmoxTggZQ4zkyoZquz2EGP-D02Okh497Y8GyHkmvNkk08fz28vbEctSJUmk6aYZRzYUe0vs1PiBQ5L-WpCZmQbr73du41wj9ZN89-lKXt6Sky_voxs7bE_02KIdYLwwV"/>
+</div>
+<div>
+<h2 class="font-headline-md text-headline-md text-on-background">Lucky Player</h2>
+<p class="font-label-sm text-label-sm text-surface-tint">Level 42 Pro • KYC Verified</p>
+</div>
+</div>
+<nav class="flex flex-col gap-2 flex-grow">
+<!-- Items from TopAppBar/BottomNavBar context mapped to Web -->
+<a class="flex items-center gap-3 p-3 rounded-lg border-2 border-transparent text-on-background hover:border-on-background hover:bg-surface-container transition-all font-label-bold text-label-bold" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">sports_esports</span>
+                Lobby
+            </a>
+<a class="flex items-center gap-3 p-3 rounded-lg border-2 border-transparent text-on-background hover:border-on-background hover:bg-surface-container transition-all font-label-bold text-label-bold" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">casino</span>
+                Gacha
+            </a>
+<a class="flex items-center gap-3 p-3 rounded-lg border-2 border-transparent text-on-background hover:border-on-background hover:bg-surface-container transition-all font-label-bold text-label-bold" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">account_balance_wallet</span>
+                Wallet
+            </a>
+<a class="flex items-center gap-3 p-3 rounded-lg bg-primary-container text-on-primary border-2 border-on-background retro-shadow-sm transition-all font-label-bold text-label-bold" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">groups</span>
+                Social
+            </a>
+</nav>
+<div class="mt-auto pt-4 border-t-2 border-on-background flex flex-col gap-2">
+<a class="flex items-center gap-3 p-3 rounded-lg border-2 border-transparent text-on-background hover:border-on-background hover:bg-surface-container transition-all font-label-bold text-label-bold" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">settings</span>
+                Settings
+            </a>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="flex-grow pt-20 px-4 md:pt-8 md:px-8 max-w-5xl mx-auto w-full flex flex-col gap-6">
+<!-- Header & Search -->
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2">
+<div>
+<h2 class="font-headline-xl text-headline-xl text-on-background uppercase tracking-tight">Community</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Discuss, strategize, and flex your wins.</p>
+</div>
+<div class="relative w-full md:w-72">
+<input class="w-full h-12 pl-10 pr-4 rounded-lg border-2 border-on-background bg-surface font-body-md text-body-md focus:outline-none focus:ring-0 focus:border-on-background transition-shadow focus:retro-shadow placeholder:text-on-surface-variant" placeholder="Search games or topics..." type="text"/>
+<span class="material-symbols-outlined absolute left-3 top-1/2 transform -translate-y-1/2 text-on-surface-variant">search</span>
+</div>
+</div>
+<!-- Bento Grid Layout for Content -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+<!-- Main Feed Column -->
+<div class="md:col-span-8 flex flex-col gap-6">
+<!-- Create Post Card -->
+<div class="bg-surface rounded-xl border-2 border-on-background retro-shadow p-4 flex gap-4 items-start">
+<div class="w-10 h-10 rounded-full border-2 border-on-background overflow-hidden bg-tertiary-container flex-shrink-0">
+<img alt="Avatar" class="w-full h-full object-cover" data-alt="Small stylized avatar of a gamer." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBZJ3ZztKQUvBoh7h9eBdh1QuJ72PNka7Zg7HJBvPOq1rdNI-hiaD5P3Sz3RqaXqteHX5b_590ChOGNH7uehWS6k-1UQitKU7tw543qB_6Q5gJBubyQunKwxyScJ4zC1ENGEcv1BTIJghw-ceplOEsiZC-fouffXUf44T63I5-pHkdbCXiM5qb0HQ-fu6RuY-xATJCaYgJFNqss2N2Biaif5IJ2deDp_yA96MhEjrw8YZYiNTRhhac5i49MQVc7AxfMdAgFAwEZlTs5"/>
+</div>
+<div class="flex-grow">
+<textarea class="w-full bg-surface-container-lowest border-2 border-on-background rounded-lg p-3 font-body-md text-body-md resize-none h-24 focus:outline-none focus:retro-shadow-sm transition-shadow" placeholder="Share your latest strategy or win..."></textarea>
+<div class="flex justify-between items-center mt-3">
+<div class="flex gap-2 text-on-surface-variant">
+<button class="p-2 hover:bg-surface-container rounded-md border-2 border-transparent hover:border-on-background transition-all"><span class="material-symbols-outlined">image</span></button>
+<button class="p-2 hover:bg-surface-container rounded-md border-2 border-transparent hover:border-on-background transition-all"><span class="material-symbols-outlined">tag</span></button>
+</div>
+<button class="bg-primary-container text-on-primary font-label-bold text-label-bold px-6 py-2 rounded-lg border-2 border-on-background retro-shadow-sm active:translate-y-1 active:translate-x-1 active:shadow-none transition-all">Post</button>
+</div>
+</div>
+</div>
+<!-- Feed Post 1: Strategy -->
+<article class="bg-surface rounded-xl border-2 border-on-background retro-shadow flex flex-col overflow-hidden">
+<!-- Post Header -->
+<div class="p-4 border-b-2 border-on-background flex justify-between items-center bg-surface-container-low">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full border-2 border-on-background bg-tertiary-container flex items-center justify-center text-on-tertiary-container font-headline-md text-headline-md">
+                                X
+                            </div>
+<div>
+<h3 class="font-label-bold text-label-bold text-on-background">XenonBlade99</h3>
+<p class="font-label-sm text-label-sm text-on-surface-variant">2 hours ago • in <span class="text-tertiary font-bold">Cyber Strike</span></p>
+</div>
+</div>
+<button class="text-on-surface-variant hover:text-on-background"><span class="material-symbols-outlined">more_vert</span></button>
+</div>
+<!-- Post Content -->
+<div class="p-4 flex flex-col gap-3">
+<h4 class="font-headline-md text-headline-md text-on-background">Optimal loadout for Sector 7 boss?</h4>
+<p class="font-body-md text-body-md text-on-background">I've been stuck on the Neon Sentinel for 3 days. I'm currently running the plasma rifle and dash boots, but the AOE attacks are brutal. Any tips on positioning or alternative gear setups? I heard the EMP grenade works well but haven't unlocked it yet.</p>
+<!-- Tags -->
+<div class="flex gap-2 mt-2">
+<span class="px-3 py-1 bg-tertiary-container text-on-tertiary-container border-2 border-on-background rounded-full font-label-sm text-label-sm">#Strategy</span>
+<span class="px-3 py-1 bg-tertiary-container text-on-tertiary-container border-2 border-on-background rounded-full font-label-sm text-label-sm">#Help</span>
+</div>
+</div>
+<!-- Interaction Bar -->
+<div class="p-3 border-t-2 border-on-background flex justify-between items-center bg-surface-container-lowest">
+<div class="flex gap-4">
+<button class="flex items-center gap-1 font-label-bold text-label-bold text-on-background hover:text-primary transition-colors group">
+<span class="material-symbols-outlined group-hover:scale-110 transition-transform">thumb_up</span> 142
+                            </button>
+<button class="flex items-center gap-1 font-label-bold text-label-bold text-on-background hover:text-secondary transition-colors group">
+<span class="material-symbols-outlined group-hover:scale-110 transition-transform">chat_bubble</span> 28
+                            </button>
+</div>
+<button class="flex items-center gap-1 font-label-bold text-label-bold text-on-background hover:text-tertiary transition-colors group">
+<span class="material-symbols-outlined group-hover:scale-110 transition-transform">share</span> Share
+                        </button>
+</div>
+</article>
+</div>
+<!-- Sidebar Column -->
+<div class="md:col-span-4 flex flex-col gap-6">
+<!-- Trending Topics -->
+<div class="bg-surface rounded-xl border-2 border-on-background retro-shadow overflow-hidden">
+<div class="bg-secondary p-3 border-b-2 border-on-background halftone-bg">
+<h3 class="font-headline-md text-headline-md text-on-secondary uppercase tracking-tight">Trending</h3>
+</div>
+<ul class="flex flex-col">
+<li class="p-3 border-b-2 border-on-background hover:bg-surface-container cursor-pointer transition-colors flex justify-between items-center">
+<div>
+<span class="font-label-sm text-label-sm text-on-surface-variant block">1. Cyber Strike</span>
+<span class="font-label-bold text-label-bold text-on-background">Neon Sentinel Tactics</span>
+</div>
+<span class="material-symbols-outlined text-tertiary">trending_up</span>
+</li>
+<li class="p-3 border-b-2 border-on-background hover:bg-surface-container cursor-pointer transition-colors flex justify-between items-center">
+<div>
+<span class="font-label-sm text-label-sm text-on-surface-variant block">2. Gacha Pulls</span>
+<span class="font-label-bold text-label-bold text-on-background">SSR Rate Up Event</span>
+</div>
+<span class="material-symbols-outlined text-secondary">trending_up</span>
+</li>
+<li class="p-3 hover:bg-surface-container cursor-pointer transition-colors flex justify-between items-center">
+<div>
+<span class="font-label-sm text-label-sm text-on-surface-variant block">3. Site Update</span>
+<span class="font-label-bold text-label-bold text-on-background">New Wallet Features</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant">trending_flat</span>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-2 py-3 bg-surface border-t-2 border-on-background md:hidden">
+<a class="flex flex-col items-center justify-center text-on-background p-1 hover:bg-surface-container rounded-lg transition-colors" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">sports_esports</span>
+<span class="font-headline-lg text-[10px] font-bold uppercase mt-1">Lobby</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-background p-1 hover:bg-surface-container rounded-lg transition-colors" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">casino</span>
+<span class="font-headline-lg text-[10px] font-bold uppercase mt-1">Gacha</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-background p-1 hover:bg-surface-container rounded-lg transition-colors" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">account_balance_wallet</span>
+<span class="font-headline-lg text-[10px] font-bold uppercase mt-1">Wallet</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-primary-container text-on-primary border-2 border-on-background rounded-lg p-1 retro-shadow-sm" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">groups</span>
+<span class="font-headline-lg text-[10px] font-bold uppercase mt-1">Social</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-background p-1 hover:bg-surface-container rounded-lg transition-colors" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">menu</span>
+<span class="font-headline-lg text-[10px] font-bold uppercase mt-1">Menu</span>
+</a>
+</nav>
+</body></html>

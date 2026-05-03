@@ -20,10 +20,27 @@ import { defaultSaasOverviewUiCopy } from "@reward/shared-types/saas";
 
 import { buildLegalPath, buildLoginPath } from "@/lib/navigation";
 import {
-  buildPortalHref,
+  buildPortalRouteHref,
+  isPortalBillingSubview,
+  isPortalDocsSubview,
+  isPortalKeysSubview,
+  isPortalOverviewSubview,
+  isPortalPrizesSubview,
+  isPortalReportsSubview,
+  isPortalTenantsSubview,
+  isPortalUsageSubview,
+  portalBillingSubviewMeta,
+  portalDocsSubviewMeta,
+  portalKeysSubviewMeta,
+  portalOverviewSubviewMeta,
+  portalPrizesSubviewMeta,
+  portalReportsSubviewMeta,
   portalRouteMeta,
+  portalTenantsSubviewMeta,
+  portalUsageSubviewMeta,
   readPositiveInt,
   resolvePortalSelection,
+  type PortalSubview,
   type PortalView,
 } from "@/modules/portal/lib/portal";
 
@@ -47,6 +64,7 @@ type PortalDashboardProps = {
   reportsError: string | null;
   requestedProjectId: number | null;
   requestedTenantId: number | null;
+  subview: PortalSubview | null;
   view: PortalView;
 };
 
@@ -117,6 +135,7 @@ export function PortalDashboard({
   reportsError,
   requestedProjectId,
   requestedTenantId,
+  subview,
   view,
 }: PortalDashboardProps) {
   const pathname = usePathname();
@@ -164,7 +183,8 @@ export function PortalDashboard({
     liveRequestedTenantId ?? requestedTenantId,
     liveRequestedProjectId ?? requestedProjectId,
   );
-  const overviewUiCopy = overview?.uiCopy.overview ?? defaultSaasOverviewUiCopy.overview;
+  const overviewUiCopy =
+    overview?.uiCopy.overview ?? defaultSaasOverviewUiCopy.overview;
 
   const visibleReportExports = reportExports ?? [];
   const hasPendingReportExports = visibleReportExports.some(
@@ -193,7 +213,6 @@ export function PortalDashboard({
     snippetLanguage === "typescript"
       ? "pnpm add @reward/prize-engine-sdk"
       : "from prize_engine_sdk import PrizeEngineClient, create_idempotency_key";
-
 
   const currentHrefState = {
     billingSetupStatus,
@@ -224,7 +243,24 @@ export function PortalDashboard({
     };
   }, [hasPendingReportExports, router, view]);
 
-  const currentViewMeta = portalRouteMeta[view];
+  const currentViewMeta =
+    view === "overview" && subview && isPortalOverviewSubview(subview)
+      ? portalOverviewSubviewMeta[subview]
+      : view === "tenants" && subview && isPortalTenantsSubview(subview)
+      ? portalTenantsSubviewMeta[subview]
+      : view === "keys" && subview && isPortalKeysSubview(subview)
+      ? portalKeysSubviewMeta[subview]
+      : view === "usage" && subview && isPortalUsageSubview(subview)
+      ? portalUsageSubviewMeta[subview]
+      : view === "prizes" && subview && isPortalPrizesSubview(subview)
+        ? portalPrizesSubviewMeta[subview]
+      : view === "billing" && subview && isPortalBillingSubview(subview)
+        ? portalBillingSubviewMeta[subview]
+      : view === "docs" && subview && isPortalDocsSubview(subview)
+        ? portalDocsSubviewMeta[subview]
+      : view === "reports" && subview && isPortalReportsSubview(subview)
+        ? portalReportsSubviewMeta[subview]
+      : portalRouteMeta[view];
   const currentBudgetPolicy = currentTenant?.billing?.budgetPolicy ?? null;
   const billingCurrency =
     billingInsights?.currency ?? currentTenant?.billing?.currency ?? "USD";
@@ -233,8 +269,15 @@ export function PortalDashboard({
     router.refresh();
   };
 
-  const navigateToView = (nextView: PortalView, nextState: typeof currentHrefState) => {
-    const href = buildPortalHref(nextView, nextState);
+  const navigateToView = (
+    nextView: PortalView,
+    nextState: typeof currentHrefState,
+  ) => {
+    const href = buildPortalRouteHref(
+      nextView,
+      nextView === view ? subview : null,
+      nextState,
+    );
     if (href === currentRoute) {
       return false;
     }
@@ -318,7 +361,8 @@ export function PortalDashboard({
       });
       const payload = await readEnvelope<T>(response);
       if (!response.ok || !payload || payload.ok !== true) {
-        const code = payload && payload.ok === false ? payload.error?.code : undefined;
+        const code =
+          payload && payload.ok === false ? payload.error?.code : undefined;
         if (redirectForAccessError(code, response.status)) {
           return null;
         }
@@ -354,7 +398,8 @@ export function PortalDashboard({
       });
       const payload = await readEnvelope<T>(response);
       if (!response.ok || !payload || payload.ok !== true) {
-        const code = payload && payload.ok === false ? payload.error?.code : undefined;
+        const code =
+          payload && payload.ok === false ? payload.error?.code : undefined;
         if (redirectForAccessError(code, response.status)) {
           return null;
         }
@@ -379,7 +424,8 @@ export function PortalDashboard({
       });
       const payload = await readEnvelope<T>(response);
       if (!response.ok || !payload || payload.ok !== true) {
-        const code = payload && payload.ok === false ? payload.error?.code : undefined;
+        const code =
+          payload && payload.ok === false ? payload.error?.code : undefined;
         if (redirectForAccessError(code, response.status)) {
           return null;
         }
@@ -994,6 +1040,7 @@ export function PortalDashboard({
         snippetLanguage={snippetLanguage}
         tenantEntries={tenantEntries}
         tenantProjects={tenantProjects}
+        subview={subview}
         view={view}
         visibleReportExports={visibleReportExports}
       />

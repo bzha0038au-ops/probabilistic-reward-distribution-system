@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Reconciliation Engine - engineerOnCall</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&amp;family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">tailwind.config = {darkMode: "class", theme: {extend: {colors: {"primary-container": "#ff7941", primary: "#a23800", tertiary: "#6d5a00", "on-error-container": "#570008", error: "#b31b25", "primary-fixed-dim": "#ee6d36", "on-primary-fixed": "#000000", "surface-container-low": "#f4f0ef", "secondary-fixed": "#cfcdff", "inverse-primary": "#ff7941", "error-container": "#fb5151", "on-primary-fixed-variant": "#531900", "surface-dim": "#d8d3d3", "secondary-container": "#cfcdff", "outline-variant": "#b0acac", outline: "#797676", "surface-tint": "#a23800", "on-surface": "#302e2e", "on-tertiary-fixed-variant": "#6d5a00", "on-tertiary-fixed": "#4c3e00", "on-error": "#ffefee", "on-secondary-container": "#3423cd", "inverse-surface": "#0f0e0e", "surface-container-high": "#e6e1e1", "on-surface-variant": "#5d5b5b", "on-secondary": "#f4f1ff", surface: "#faf5f5", "on-tertiary": "#fff2cd", "on-secondary-fixed-variant": "#3e32d5", "surface-bright": "#faf5f5", "tertiary-fixed-dim": "#edd372", "tertiary-container": "#fce17e", "primary-fixed": "#ff7941", "on-tertiary-container": "#615000", "on-secondary-fixed": "#2000b0", secondary: "#4a40e0", "surface-container": "#ece7e7", "on-background": "#302e2e", "tertiary-fixed": "#fce17e", "on-primary": "#ffefeb", background: "#faf5f5", "surface-container-lowest": "#ffffff", "surface-variant": "#e0dcdb", "inverse-on-surface": "#9f9c9c", "on-primary-container": "#431200", "surface-container-highest": "#e0dcdb", "secondary-fixed-dim": "#c0bdff", "tertiary-dim": "#5f4e00", "error-dim": "#9f0519", "secondary-dim": "#3d30d4", "primary-dim": "#8e3000"}, borderRadius: {DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px"}, spacing: {sm: "8px", xs: "4px", base: "4px", lg: "24px", gutter: "16px", md: "16px", xl: "32px", "container-margin": "32px", unit: "4px", margin: "20px"}, fontFamily: {"h1-editorial": ["Newsreader"], "body-standard": ["Inter"], "data-mono": ["Space Grotesk"], "body-strong": ["Inter"], "display-editorial": ["Newsreader"], "label-caps": ["Space Grotesk"], "headline-md": ["Plus Jakarta Sans"], "headline-xl": ["Plus Jakarta Sans"], "body-md": ["Be Vietnam Pro"], "body-lg": ["Be Vietnam Pro"], "headline-lg": ["Plus Jakarta Sans"], "label-bold": ["Be Vietnam Pro"], "label-sm": ["Be Vietnam Pro"]}, fontSize: {"h1-editorial": ["28px", {lineHeight: "1.2", fontWeight: "500"}], "body-standard": ["14px", {lineHeight: "1.5", fontWeight: "400"}], "data-mono": ["13px", {lineHeight: "1.2", letterSpacing: "0.02em", fontWeight: "500"}], "body-strong": ["14px", {lineHeight: "1.5", fontWeight: "600"}], "display-editorial": ["42px", {lineHeight: "1.1", letterSpacing: "-0.02em", fontWeight: "400"}], "label-caps": ["11px", {lineHeight: "1", letterSpacing: "0.08em", fontWeight: "700"}], "headline-md": ["24px", {lineHeight: "30px", fontWeight: "700"}], "headline-xl": ["40px", {lineHeight: "48px", letterSpacing: "-0.02em", fontWeight: "800"}], "body-md": ["16px", {lineHeight: "24px", fontWeight: "400"}], "body-lg": ["18px", {lineHeight: "28px", fontWeight: "400"}], "headline-lg": ["32px", {lineHeight: "38px", letterSpacing: "-0.01em", fontWeight: "800"}], "label-bold": ["14px", {lineHeight: "20px", fontWeight: "700"}], "label-sm": ["12px", {lineHeight: "16px", fontWeight: "500"}]}}}};</script>
+<style>
+        .noise-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            pointer-events: none;
+            z-index: 9999;
+            opacity: 0.02;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen antialiased selection:bg-primary-container selection:text-on-primary-container">
+<div class="noise-overlay"></div>
+<!-- TopNavBar -->
+<nav class="bg-stone-950 dark:bg-black docked full-width top-0 h-12 flex justify-between items-center w-full px-8 z-50 fixed border-b border-stone-800 flat no-shadows">
+<div class="flex items-center gap-lg">
+<span class="font-newsreader font-black uppercase tracking-widest text-white text-sm">Reward Admin</span>
+<div class="flex gap-md">
+<!-- Assuming no specific active tab for TopNav in this specific view context, defaulting to first or intent -->
+<a class="text-[#5F634F] font-newsreader tracking-tight text-sm text-stone-500 font-medium hover:text-stone-200 transition-colors active:scale-95 duration-200" href="#">FinanceOps</a>
+<a class="text-[#5F634F] font-newsreader tracking-tight text-sm text-white font-bold border-b border-white hover:text-stone-200 transition-colors active:scale-95 duration-200" href="#">SaaS-Ops</a>
+</div>
+</div>
+<div class="flex items-center gap-md">
+<span class="font-label-caps text-label-caps text-white bg-tertiary px-xs py-[2px] rounded-DEFAULT">PROD</span>
+<div class="flex gap-sm">
+<button class="text-[#5F634F] hover:text-stone-200 transition-colors" data-icon="notifications">
+<span class="material-symbols-outlined text-[18px]">notifications</span>
+</button>
+<button class="text-[#5F634F] hover:text-stone-200 transition-colors" data-icon="settings">
+<span class="material-symbols-outlined text-[18px]">settings</span>
+</button>
+</div>
+<div class="w-6 h-6 rounded-full bg-surface-container overflow-hidden ml-sm border border-stone-800">
+<img alt="Operator Identity" class="w-full h-full object-cover" data-alt="A small, stylized profile avatar of an operator identity. Minimalist, high contrast, fitting a secure operational terminal environment." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBbjcztJ0-Q5y1L7hMGEYuNTzGuFLC2dcVMSgSlrqM8zHu8eAQUGfZlYP0VlRlQMlwn7ABk_l_O0R8qFGb0RrRCl5_DqyKcKozu_aWjEH90e99WsnJ6kzrEV83T-hpTuUvaIIs2vRNWBHtm2BRntptAiA-locsgVVt4RX1IBLz119cDt-F7ozVpp7YKzBVz4sBaGztQQJVKcZbNJr6WeiDOXdFHF283JFYO_n4h2pN7b4riPhkt9qTGu5fD_cK1ebdCGkTO4I-PFT2T"/>
+</div>
+</div>
+</nav>
+<!-- SideNavBar -->
+<aside class="bg-[#F2EFE9] dark:bg-stone-900/95 backdrop-blur-md fixed left-0 top-0 h-full w-64 rounded-none border-r border-stone-300 dark:border-stone-700 inset-shadow-sm flex flex-col pt-16 pb-8 overflow-y-auto z-40 transition-all duration-300 ease-in-out">
+<div class="px-lg mb-xl mt-md">
+<h2 class="font-newsreader text-sm uppercase tracking-wider text-stone-950 font-bold mb-xs">System Engine</h2>
+<p class="font-body-standard text-body-standard text-stone-500 text-xs">Terminal Tier 01</p>
+<div class="mt-md flex items-center gap-xs text-[#5F634F]">
+<span class="material-symbols-outlined text-[14px]">lock</span>
+<span class="font-label-caps text-label-caps">MFA Verified</span>
+</div>
+</div>
+<nav class="flex-1 flex flex-col gap-[2px]">
+<!-- Inactive -->
+<a class="font-newsreader text-sm uppercase tracking-wider text-stone-500 dark:text-stone-400 pl-4 py-xs flex items-center gap-md hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="settings_input_component">settings_input_component</span>
+                Config
+            </a>
+<a class="font-newsreader text-sm uppercase tracking-wider text-stone-500 dark:text-stone-400 pl-4 py-xs flex items-center gap-md hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="gavel">gavel</span>
+                Legal
+            </a>
+<a class="font-newsreader text-sm uppercase tracking-wider text-stone-500 dark:text-stone-400 pl-4 py-xs flex items-center gap-md hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="hub">hub</span>
+                Providers
+            </a>
+<a class="font-newsreader text-sm uppercase tracking-wider text-stone-500 dark:text-stone-400 pl-4 py-xs flex items-center gap-md hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="military_tech">military_tech</span>
+                Prizes
+            </a>
+<!-- Active -->
+<a class="font-newsreader text-sm uppercase tracking-wider text-stone-950 dark:text-white font-bold border-l-2 border-[#5F634F] bg-stone-200/50 dark:bg-stone-800/50 pl-[14px] py-xs flex items-center gap-md" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="account_balance">account_balance</span>
+                Reconciliation
+            </a>
+<!-- Inactive -->
+<a class="font-newsreader text-sm uppercase tracking-wider text-stone-500 dark:text-stone-400 pl-4 py-xs flex items-center gap-md hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="payments">payments</span>
+                Finance
+            </a>
+<a class="font-newsreader text-sm uppercase tracking-wider text-stone-500 dark:text-stone-400 pl-4 py-xs flex items-center gap-md hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="trending_up">trending_up</span>
+                Economy
+            </a>
+<a class="font-newsreader text-sm uppercase tracking-wider text-stone-500 dark:text-stone-400 pl-4 py-xs flex items-center gap-md hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="fingerprint">fingerprint</span>
+                KYC
+            </a>
+<a class="font-newsreader text-sm uppercase tracking-wider text-stone-500 dark:text-stone-400 pl-4 py-xs flex items-center gap-md hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="group">group</span>
+                Users
+            </a>
+<a class="font-newsreader text-sm uppercase tracking-wider text-stone-500 dark:text-stone-400 pl-4 py-xs flex items-center gap-md hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="business">business</span>
+                SaaS
+            </a>
+<a class="font-newsreader text-sm uppercase tracking-wider text-stone-500 dark:text-stone-400 pl-4 py-xs flex items-center gap-md hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="list_alt">list_alt</span>
+                Audit
+            </a>
+<a class="font-newsreader text-sm uppercase tracking-wider text-stone-500 dark:text-stone-400 pl-4 py-xs flex items-center gap-md hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="verified_user">verified_user</span>
+                AML
+            </a>
+<a class="font-newsreader text-sm uppercase tracking-wider text-stone-500 dark:text-stone-400 pl-4 py-xs flex items-center gap-md hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="security">security</span>
+                Collusion
+            </a>
+</nav>
+<div class="mt-auto pt-lg border-t border-stone-300 dark:border-stone-700 px-lg flex flex-col gap-xs">
+<a class="font-newsreader text-sm uppercase tracking-wider text-stone-500 dark:text-stone-400 flex items-center gap-md hover:text-stone-900" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="help">help</span>
+                Help
+            </a>
+<a class="font-newsreader text-sm uppercase tracking-wider text-stone-500 dark:text-stone-400 flex items-center gap-md hover:text-stone-900" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="description">description</span>
+                Docs
+            </a>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="ml-64 mt-12 p-container-margin min-h-[calc(100vh-3rem)]">
+<!-- Header area -->
+<header class="mb-xl flex justify-between items-end border-b border-outline-variant pb-md">
+<div>
+<span class="font-label-caps text-label-caps text-outline mb-xs block">Workspace: engineerOnCall</span>
+<h1 class="font-h1-editorial text-h1-editorial text-on-surface">Reconciliation Engine</h1>
+</div>
+<div class="flex items-center gap-md">
+<div class="flex items-center gap-xs bg-error-container text-on-error-container px-sm py-xs border border-error/20 rounded-DEFAULT">
+<span class="material-symbols-outlined text-[16px] data-weight='fill'" style="font-variation-settings: 'FILL' 1;">warning</span>
+<span class="font-data-mono text-data-mono font-bold">14 ACTIVE MISMATCHES</span>
+</div>
+</div>
+</header>
+<!-- Grid Layout -->
+<div class="grid grid-cols-12 gap-lg">
+<!-- Left Panel: Alert Queue -->
+<section class="col-span-4 flex flex-col gap-sm">
+<h2 class="font-body-strong text-body-strong text-on-surface mb-xs flex items-center gap-xs">
+<span class="material-symbols-outlined text-[16px]">list</span>
+                    Mismatch Alert Queue
+                </h2>
+<!-- Queue Items -->
+<div class="flex flex-col gap-[2px]">
+<!-- Item 1 (Selected/Red) -->
+<button class="w-full text-left bg-surface-container border border-outline border-l-4 border-l-error p-sm flex flex-col gap-xs relative overflow-hidden group">
+<div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
+<div class="flex justify-between items-start w-full">
+<span class="font-data-mono text-data-mono text-on-surface font-bold">TX-8922-A</span>
+<span class="font-label-caps text-label-caps bg-error text-on-error px-[4px] py-[2px] rounded-sm">CRITICAL</span>
+</div>
+<div class="font-body-standard text-body-standard text-on-surface-variant text-xs">
+                            Ledger balance deviation detected. System vs Provider delta exceeds threshold.
+                        </div>
+<div class="font-data-mono text-data-mono text-outline text-[11px] mt-xs">
+                            T-MINUS 14m • Source: Stripe_Gateway
+                        </div>
+</button>
+<!-- Item 2 (Amber) -->
+<button class="w-full text-left bg-surface border border-outline-variant p-sm flex flex-col gap-xs hover:bg-surface-container transition-colors">
+<div class="flex justify-between items-start w-full">
+<span class="font-data-mono text-data-mono text-on-surface">USR-STATE-99</span>
+<span class="font-label-caps text-label-caps bg-tertiary-container text-on-tertiary-container px-[4px] py-[2px] rounded-sm">WARN</span>
+</div>
+<div class="font-body-standard text-body-standard text-on-surface-variant text-xs">
+                            KYC status mismatch. Provider reports 'Verified', System reports 'Pending'.
+                        </div>
+<div class="font-data-mono text-data-mono text-outline text-[11px] mt-xs">
+                            T-MINUS 1h 22m • Source: Onfido_API
+                        </div>
+</button>
+<!-- Item 3 (Amber) -->
+<button class="w-full text-left bg-surface border border-outline-variant p-sm flex flex-col gap-xs hover:bg-surface-container transition-colors">
+<div class="flex justify-between items-start w-full">
+<span class="font-data-mono text-data-mono text-on-surface">REWARD-POOL-C</span>
+<span class="font-label-caps text-label-caps bg-tertiary-container text-on-tertiary-container px-[4px] py-[2px] rounded-sm">WARN</span>
+</div>
+<div class="font-body-standard text-body-standard text-on-surface-variant text-xs">
+                            Inventory desync. Prize ID 402 count mismatch across nodes.
+                        </div>
+<div class="font-data-mono text-data-mono text-outline text-[11px] mt-xs">
+                            T-MINUS 4h 05m • Source: Internal_Inventory
+                        </div>
+</button>
+<!-- Item 4 (Amber) -->
+<button class="w-full text-left bg-surface border border-outline-variant p-sm flex flex-col gap-xs hover:bg-surface-container transition-colors opacity-70">
+<div class="flex justify-between items-start w-full">
+<span class="font-data-mono text-data-mono text-on-surface">TX-8910-B</span>
+<span class="font-label-caps text-label-caps bg-tertiary-container text-on-tertiary-container px-[4px] py-[2px] rounded-sm">WARN</span>
+</div>
+<div class="font-body-standard text-body-standard text-on-surface-variant text-xs">
+                            Settlement delayed beyond SLA. Pending confirmation from gateway.
+                        </div>
+<div class="font-data-mono text-data-mono text-outline text-[11px] mt-xs">
+                            T-MINUS 12h • Source: Bank_ACH
+                        </div>
+</button>
+</div>
+</section>
+<!-- Right Panel: Comparison & Actions -->
+<section class="col-span-8 flex flex-col gap-md">
+<div class="flex justify-between items-center bg-surface-container-high px-md py-sm border border-outline-variant rounded-t-DEFAULT">
+<h2 class="font-data-mono text-data-mono text-on-surface font-bold">Investigation: TX-8922-A</h2>
+<span class="font-label-caps text-label-caps text-outline">Entity: Transaction_Record</span>
+</div>
+<!-- Comparison View -->
+<div class="border border-outline-variant rounded-b-DEFAULT bg-surface overflow-hidden -mt-md">
+<!-- Table Header -->
+<div class="grid grid-cols-12 bg-surface-container border-b border-outline-variant px-md py-xs font-label-caps text-label-caps text-on-surface-variant">
+<div class="col-span-3">Property Key</div>
+<div class="col-span-4 border-l border-outline-variant pl-sm">System State (Internal)</div>
+<div class="col-span-4 border-l border-outline-variant pl-sm">Provider State (Remote)</div>
+<div class="col-span-1 text-right">Delta</div>
+</div>
+<!-- Row 1: Match -->
+<div class="grid grid-cols-12 px-md py-sm border-b border-outline-variant font-data-mono text-data-mono text-on-surface items-center">
+<div class="col-span-3 text-outline">user_id</div>
+<div class="col-span-4 border-l border-outline-variant pl-sm">usr_99827361a</div>
+<div class="col-span-4 border-l border-outline-variant pl-sm">usr_99827361a</div>
+<div class="col-span-1 text-right text-primary">
+<span class="material-symbols-outlined text-[16px]">check</span>
+</div>
+</div>
+<!-- Row 2: Match -->
+<div class="grid grid-cols-12 px-md py-sm border-b border-outline-variant font-data-mono text-data-mono text-on-surface items-center">
+<div class="col-span-3 text-outline">currency</div>
+<div class="col-span-4 border-l border-outline-variant pl-sm">USD</div>
+<div class="col-span-4 border-l border-outline-variant pl-sm">USD</div>
+<div class="col-span-1 text-right text-primary">
+<span class="material-symbols-outlined text-[16px]">check</span>
+</div>
+</div>
+<!-- Row 3: MISMATCH (Highlighted) -->
+<div class="grid grid-cols-12 px-md py-sm border-b border-error bg-error-container/20 font-data-mono text-data-mono items-center">
+<div class="col-span-3 text-on-surface font-bold flex items-center gap-xs">
+<span class="material-symbols-outlined text-[14px] text-error">priority_high</span>
+                            amount_cents
+                        </div>
+<div class="col-span-4 border-l border-outline-variant pl-sm text-on-surface bg-surface-container-low p-xs rounded-sm border border-outline-variant">
+                            4500 <span class="text-outline text-xs ml-xs">($45.00)</span>
+</div>
+<div class="col-span-4 border-l border-outline-variant pl-sm text-error font-bold bg-error-container/50 p-xs rounded-sm border border-error/30">
+                            45000 <span class="text-error/70 text-xs ml-xs">($450.00)</span>
+</div>
+<div class="col-span-1 text-right text-error font-bold">
+                            !=
+                        </div>
+</div>
+<!-- Row 4: MISMATCH -->
+<div class="grid grid-cols-12 px-md py-sm border-b border-error bg-error-container/20 font-data-mono text-data-mono items-center">
+<div class="col-span-3 text-on-surface font-bold flex items-center gap-xs">
+<span class="material-symbols-outlined text-[14px] text-error">priority_high</span>
+                            status
+                        </div>
+<div class="col-span-4 border-l border-outline-variant pl-sm text-on-surface bg-surface-container-low p-xs rounded-sm border border-outline-variant">
+                            "SETTLED"
+                        </div>
+<div class="col-span-4 border-l border-outline-variant pl-sm text-error font-bold bg-error-container/50 p-xs rounded-sm border border-error/30">
+                            "PENDING_FUNDS"
+                        </div>
+<div class="col-span-1 text-right text-error font-bold">
+                            !=
+                        </div>
+</div>
+<!-- Row 5: Match -->
+<div class="grid grid-cols-12 px-md py-sm font-data-mono text-data-mono text-on-surface items-center">
+<div class="col-span-3 text-outline">timestamp</div>
+<div class="col-span-4 border-l border-outline-variant pl-sm text-on-surface-variant">2023-10-27T14:32:01Z</div>
+<div class="col-span-4 border-l border-outline-variant pl-sm text-on-surface-variant">2023-10-27T14:32:02Z</div>
+<div class="col-span-1 text-right text-outline text-xs">
+                            ~1s
+                        </div>
+</div>
+</div>
+<!-- Action Area -->
+<div class="mt-xl p-md border border-outline-variant bg-surface-container-low flex flex-col gap-md">
+<h3 class="font-label-caps text-label-caps text-on-surface">Resolution Protocol</h3>
+<div class="flex gap-md">
+<!-- High Consequence Action -->
+<button class="flex-1 bg-surface border-2 border-primary text-primary hover:bg-primary hover:text-on-primary font-body-strong text-body-strong py-sm px-md transition-colors flex justify-center items-center gap-xs relative overflow-hidden group">
+<span class="material-symbols-outlined text-[18px]">sync_alt</span>
+                            Sync States (Trust Provider)
+                            <!-- Mock progress bar for "hold to confirm" feel -->
+<div class="absolute bottom-0 left-0 h-1 bg-primary w-0 group-hover:w-full transition-all duration-1000 ease-linear"></div>
+</button>
+<!-- High Consequence Action (Destructive/Force) -->
+<button class="flex-1 bg-surface border-2 border-error text-error hover:bg-error hover:text-on-error font-body-strong text-body-strong py-sm px-md transition-colors flex justify-center items-center gap-xs relative overflow-hidden group">
+<span class="material-symbols-outlined text-[18px]">gavel</span>
+                            Force Resolve (Trust System)
+                            <div class="absolute bottom-0 left-0 h-1 bg-error w-0 group-hover:w-full transition-all duration-1000 ease-linear"></div>
+</button>
+</div>
+<!-- Secondary Action -->
+<div class="border-t border-outline-variant pt-md mt-xs flex justify-between items-center">
+<span class="font-body-standard text-body-standard text-on-surface-variant text-sm">Requires secondary review if Delta &gt; $100.</span>
+<button class="bg-transparent border border-outline text-on-surface hover:bg-surface-container font-body-strong text-body-strong py-xs px-md transition-colors flex items-center gap-xs text-sm">
+<span class="material-symbols-outlined text-[16px]">engineering</span>
+                            Escalate to Engineering
+                        </button>
+</div>
+</div>
+</section>
+</div>
+</main>
+</body></html>

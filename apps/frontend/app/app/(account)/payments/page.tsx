@@ -1,5 +1,5 @@
-import { redirect } from 'next/navigation';
+import { PaymentsOperationsPage } from "@/modules/app/components/payments-operations-page";
 
 export default function PaymentsPage() {
-  redirect('/app/wallet');
+  return <PaymentsOperationsPage />;
 }

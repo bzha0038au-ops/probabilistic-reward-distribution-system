@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>User Detail &amp; Investigation</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&amp;family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&amp;family=Newsreader:wght@400;500;700;900&amp;family=Space+Grotesk:wght@500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">tailwind.config = {darkMode: "class", theme: {extend: {colors: {"primary-container": "#ff7941", primary: "#a23800", tertiary: "#6d5a00", "on-error-container": "#570008", error: "#b31b25", "primary-fixed-dim": "#ee6d36", "on-primary-fixed": "#000000", "surface-container-low": "#f4f0ef", "secondary-fixed": "#cfcdff", "inverse-primary": "#ff7941", "error-container": "#fb5151", "on-primary-fixed-variant": "#531900", "surface-dim": "#d8d3d3", "secondary-container": "#cfcdff", "outline-variant": "#b0acac", outline: "#797676", "surface-tint": "#a23800", "on-surface": "#302e2e", "on-tertiary-fixed-variant": "#6d5a00", "on-tertiary-fixed": "#4c3e00", "on-error": "#ffefee", "on-secondary-container": "#3423cd", "inverse-surface": "#0f0e0e", "surface-container-high": "#e6e1e1", "on-surface-variant": "#5d5b5b", "on-secondary": "#f4f1ff", surface: "#faf5f5", "on-tertiary": "#fff2cd", "on-secondary-fixed-variant": "#3e32d5", "surface-bright": "#faf5f5", "tertiary-fixed-dim": "#edd372", "tertiary-container": "#fce17e", "primary-fixed": "#ff7941", "on-tertiary-container": "#615000", "on-secondary-fixed": "#2000b0", secondary: "#4a40e0", "surface-container": "#ece7e7", "on-background": "#302e2e", "tertiary-fixed": "#fce17e", "on-primary": "#ffefeb", background: "#faf5f5", "surface-container-lowest": "#ffffff", "surface-variant": "#e0dcdb", "inverse-on-surface": "#9f9c9c", "on-primary-container": "#431200", "surface-container-highest": "#e0dcdb", "secondary-fixed-dim": "#c0bdff", "tertiary-dim": "#5f4e00", "error-dim": "#9f0519", "secondary-dim": "#3d30d4", "primary-dim": "#8e3000"}, borderRadius: {DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px"}, spacing: {sm: "8px", xs: "4px", base: "4px", lg: "24px", gutter: "16px", md: "16px", xl: "32px", "container-margin": "32px", unit: "4px", margin: "20px"}, fontFamily: {"h1-editorial": ["Newsreader"], "body-standard": ["Inter"], "data-mono": ["Space Grotesk"], "body-strong": ["Inter"], "display-editorial": ["Newsreader"], "label-caps": ["Space Grotesk"], "headline-md": ["Plus Jakarta Sans"], "headline-xl": ["Plus Jakarta Sans"], "body-md": ["Be Vietnam Pro"], "body-lg": ["Be Vietnam Pro"], "headline-lg": ["Plus Jakarta Sans"], "label-bold": ["Be Vietnam Pro"], "label-sm": ["Be Vietnam Pro"]}, fontSize: {"h1-editorial": ["28px", {lineHeight: "1.2", fontWeight: "500"}], "body-standard": ["14px", {lineHeight: "1.5", fontWeight: "400"}], "data-mono": ["13px", {lineHeight: "1.2", letterSpacing: "0.02em", fontWeight: "500"}], "body-strong": ["14px", {lineHeight: "1.5", fontWeight: "600"}], "display-editorial": ["42px", {lineHeight: "1.1", letterSpacing: "-0.02em", fontWeight: "400"}], "label-caps": ["11px", {lineHeight: "1", letterSpacing: "0.08em", fontWeight: "700"}], "headline-md": ["24px", {lineHeight: "30px", fontWeight: "700"}], "headline-xl": ["40px", {lineHeight: "48px", letterSpacing: "-0.02em", fontWeight: "800"}], "body-md": ["16px", {lineHeight: "24px", fontWeight: "400"}], "body-lg": ["18px", {lineHeight: "28px", fontWeight: "400"}], "headline-lg": ["32px", {lineHeight: "38px", letterSpacing: "-0.01em", fontWeight: "800"}], "label-bold": ["14px", {lineHeight: "20px", fontWeight: "700"}], "label-sm": ["12px", {lineHeight: "16px", fontWeight: "500"}]}}}};</script>
+<style>
+        .bg-noise {
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.02'/%3E%3C/svg%3E");
+        }
+        .gated-action-hover:active {
+            box-shadow: inset 0 0 0 2px rgba(186, 26, 26, 0.5);
+            background-color: rgba(255, 218, 214, 0.2);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-standard text-body-standard bg-noise min-h-screen">
+<!-- TopNavBar (JSON Executed) -->
+<header class="bg-stone-950 dark:bg-black font-newsreader tracking-tight text-sm docked full-width top-0 h-12 border-b border-stone-800 flat no-shadows flex justify-between items-center w-full px-8 fixed z-50 text-[#5F634F]">
+<div class="flex items-center gap-6">
+<span class="font-newsreader font-black uppercase tracking-widest text-white text-sm">Reward Admin</span>
+<div class="flex items-center gap-4 border-l border-stone-800 pl-6 h-6">
+<a class="text-stone-500 font-medium hover:text-stone-200 transition-colors active:scale-95 duration-200" href="#">FinanceOps</a>
+<a class="text-stone-500 font-medium hover:text-stone-200 transition-colors active:scale-95 duration-200" href="#">SaaS-Ops</a>
+</div>
+</div>
+<div class="flex flex-1 max-w-md mx-8">
+<div class="flex items-center w-full bg-stone-900 rounded border border-stone-800 px-3 py-1.5 focus-within:border-stone-600 transition-colors">
+<span class="material-symbols-outlined text-stone-500 text-sm mr-2">search</span>
+<input class="bg-transparent border-none outline-none text-stone-300 w-full text-xs font-data-mono placeholder-stone-600 focus:ring-0" placeholder="Search..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<span class="text-xs font-mono bg-stone-800 text-stone-300 px-2 py-0.5 rounded uppercase tracking-wider">PROD</span>
+<button class="text-stone-500 hover:text-stone-200 transition-colors active:scale-95 duration-200 flex items-center justify-center">
+<span class="material-symbols-outlined text-[18px]">notifications</span>
+</button>
+<button class="text-stone-500 hover:text-stone-200 transition-colors active:scale-95 duration-200 flex items-center justify-center">
+<span class="material-symbols-outlined text-[18px]">settings</span>
+</button>
+<div class="w-6 h-6 rounded bg-stone-700 ml-2 overflow-hidden border border-stone-600">
+<img alt="Operator Identity" class="w-full h-full object-cover grayscale opacity-80" data-alt="A tightly cropped, high-contrast black and white portrait of a focused individual serving as a generic placeholder avatar for a sophisticated operator dashboard. The lighting is cinematic and moody, highlighting subtle textures." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDz7Y_thQlFGO9df6dO1xWc5261V8DHhF45WekBL4WLi642Q3UMdtvNBvZITF11d2O-kz9MFSwG4Fhg4NQQLQPMo5pdpvZ20fP-BnowZKvGfWSkXQcZ6d_biTCbmtMGRO_pgYWs-c8Y8dt-8ja2twWLajiNzGdEE61PxfdCGnV648flAXB2Mc5Nu-bQ_WbNDK-Yii5D5ZrCzzmC4CSfn55QhQ8Og0QpVFmnbjAdCfiM094j_CINJQgIkSDBp5h4C8UZk4f094JcTijQ"/>
+</div>
+</div>
+</header>
+<!-- SideNavBar (JSON Executed) -->
+<nav class="bg-[#F2EFE9] dark:bg-stone-900/95 backdrop-blur-md text-[#5F634F] font-newsreader text-sm uppercase tracking-wider fixed left-0 top-0 h-full w-64 rounded-none border-r border-stone-300 dark:border-stone-700 inset-shadow-sm flex flex-col pt-16 pb-8 overflow-y-auto z-40 transition-all duration-300 ease-in-out">
+<div class="px-6 mb-8 flex flex-col">
+<h2 class="text-stone-900 dark:text-stone-100 font-bold tracking-tight">System Engine</h2>
+<span class="text-xs text-stone-500 font-medium">Terminal Tier 01</span>
+</div>
+<div class="flex-1 flex flex-col gap-1 px-2">
+<!-- Inactive -->
+<a class="text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 flex items-center gap-3 py-2 rounded-sm transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]">settings_input_component</span>
+                Config
+            </a>
+<a class="text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 flex items-center gap-3 py-2 rounded-sm transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]">gavel</span>
+                Legal
+            </a>
+<a class="text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 flex items-center gap-3 py-2 rounded-sm transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]">hub</span>
+                Providers
+            </a>
+<a class="text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 flex items-center gap-3 py-2 rounded-sm transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]">military_tech</span>
+                Prizes
+            </a>
+<a class="text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 flex items-center gap-3 py-2 rounded-sm transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]">account_balance</span>
+                Reconciliation
+            </a>
+<a class="text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 flex items-center gap-3 py-2 rounded-sm transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]">payments</span>
+                Finance
+            </a>
+<a class="text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 flex items-center gap-3 py-2 rounded-sm transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]">trending_up</span>
+                Economy
+            </a>
+<a class="text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 flex items-center gap-3 py-2 rounded-sm transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]">fingerprint</span>
+                KYC
+            </a>
+<!-- Active -->
+<a class="text-stone-950 dark:text-white font-bold border-l-2 border-[#5F634F] bg-stone-200/50 dark:bg-stone-800/50 flex items-center gap-3 py-2 pl-[14px] rounded-sm transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]">group</span>
+                Users
+            </a>
+<!-- Inactive -->
+<a class="text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 flex items-center gap-3 py-2 rounded-sm transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]">business</span>
+                SaaS
+            </a>
+<a class="text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 flex items-center gap-3 py-2 rounded-sm transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]">list_alt</span>
+                Audit
+            </a>
+<a class="text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 flex items-center gap-3 py-2 rounded-sm transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]">verified_user</span>
+                AML
+            </a>
+<a class="text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 flex items-center gap-3 py-2 rounded-sm transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]">security</span>
+                Collusion
+            </a>
+</div>
+<div class="mt-auto px-6 pt-4 border-t border-stone-300/50 flex flex-col gap-2">
+<span class="text-[10px] text-stone-400 tracking-widest font-mono">STATUS</span>
+<div class="flex items-center gap-2">
+<div class="w-1.5 h-1.5 rounded-full bg-emerald-600"></div>
+<span class="text-xs font-semibold text-stone-700">MFA Verified</span>
+</div>
+<div class="flex gap-4 mt-4">
+<a class="text-stone-400 hover:text-stone-600 transition-colors" href="#"><span class="material-symbols-outlined text-[16px]">help</span></a>
+<a class="text-stone-400 hover:text-stone-600 transition-colors" href="#"><span class="material-symbols-outlined text-[16px]">description</span></a>
+</div>
+</div>
+</nav>
+<!-- Main Content Canvas -->
+<main class="ml-64 pt-12 p-container-margin">
+<div class="max-w-7xl mx-auto">
+<!-- Breadcrumb / Context -->
+<div class="flex items-center gap-2 text-on-surface-variant font-label-caps text-label-caps mb-lg opacity-70 hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-[14px]">arrow_back</span>
+<a class="uppercase tracking-widest" href="#">Return to Directory</a>
+</div>
+<!-- Page Header -->
+<div class="flex justify-between items-end mb-xl border-b border-outline-variant/30 pb-lg">
+<div>
+<h1 class="font-h1-editorial text-h1-editorial text-on-surface mb-xs">USR_7739_KOWALSKI</h1>
+<div class="flex items-center gap-md">
+<span class="font-data-mono text-data-mono text-secondary">UUID: 8f7e-4b21-99ac-11ed</span>
+<div class="w-px h-4 bg-outline-variant/50"></div>
+<span class="font-data-mono text-data-mono text-secondary">Created: 2023-11-04 14:22 UTC</span>
+</div>
+</div>
+<div class="flex gap-sm">
+<div class="bg-error-container text-on-error-container border border-error/20 px-sm py-xs font-label-caps text-label-caps rounded flex items-center gap-1 shadow-sm">
+<span class="material-symbols-outlined text-[14px] fill-current" style="font-variation-settings: 'FILL' 1;">warning</span>
+                        HIGH RISK
+                    </div>
+<div class="bg-surface-variant text-on-surface-variant border border-outline-variant/50 px-sm py-xs font-label-caps text-label-caps rounded flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">gavel</span>
+                        UNDER REVIEW
+                    </div>
+</div>
+</div>
+<!-- Dashboard Grid -->
+<div class="grid grid-cols-12 gap-gutter">
+<!-- Left Column (Data Theater) -->
+<div class="col-span-8 flex flex-col gap-gutter">
+<!-- Core Identity Bento -->
+<div class="bg-surface-container-low border border-outline-variant/30 rounded-lg p-lg shadow-sm relative overflow-hidden">
+<div class="absolute top-0 left-0 w-1 h-full bg-outline-variant/40"></div>
+<h3 class="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-widest mb-md border-b border-outline-variant/20 pb-xs">Identity Dossier</h3>
+<div class="grid grid-cols-2 gap-y-md gap-x-lg">
+<div>
+<span class="block font-label-caps text-label-caps text-secondary mb-1">Legal Name</span>
+<span class="font-body-strong text-body-strong text-on-surface">Elias Kowalski</span>
+</div>
+<div>
+<span class="block font-label-caps text-label-caps text-secondary mb-1">Primary Email</span>
+<span class="font-data-mono text-data-mono text-on-surface">e.kowalski.77@proton.me</span>
+</div>
+<div>
+<span class="block font-label-caps text-label-caps text-secondary mb-1">Registered Address</span>
+<span class="font-body-standard text-body-standard text-on-surface block truncate">1442 Vector St, Apt 4B, Warsaw, PL</span>
+</div>
+<div>
+<span class="block font-label-caps text-label-caps text-secondary mb-1">KYC Status</span>
+<span class="font-body-strong text-body-strong text-on-surface flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                                    Verified (Tier 2)
+                                </span>
+</div>
+</div>
+</div>
+<!-- Audit Log Table (High Density) -->
+<div class="bg-surface border border-outline-variant/30 rounded-lg shadow-sm overflow-hidden flex flex-col">
+<div class="bg-surface-container-low p-md border-b border-outline-variant/30 flex justify-between items-center">
+<h3 class="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-widest">System Audit Trail</h3>
+<button class="font-label-caps text-label-caps text-primary hover:text-on-surface transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">filter_list</span> Filter
+                            </button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr>
+<th class="font-label-caps text-label-caps text-secondary border-b border-outline-variant/40 py-2 px-4 uppercase tracking-widest bg-surface-container-lowest">Timestamp (UTC)</th>
+<th class="font-label-caps text-label-caps text-secondary border-b border-outline-variant/40 py-2 px-4 uppercase tracking-widest bg-surface-container-lowest">Event ID</th>
+<th class="font-label-caps text-label-caps text-secondary border-b border-outline-variant/40 py-2 px-4 uppercase tracking-widest bg-surface-container-lowest">Action Type</th>
+<th class="font-label-caps text-label-caps text-secondary border-b border-outline-variant/40 py-2 px-4 uppercase tracking-widest bg-surface-container-lowest">IP / Geo</th>
+</tr>
+</thead>
+<tbody class="font-data-mono text-data-mono text-on-surface">
+<tr class="border-b border-outline-variant/20 hover:bg-surface-container-highest transition-colors bg-error-container/10">
+<td class="py-2 px-4 text-secondary">2023-11-20 08:14:02</td>
+<td class="py-2 px-4">TRX_9921_FLG</td>
+<td class="py-2 px-4 font-body-standard text-body-standard text-error font-medium">Anomalous Transfer Initiated</td>
+<td class="py-2 px-4 text-secondary text-xs">192.168.1.1 (PL)</td>
+</tr>
+<tr class="border-b border-outline-variant/20 hover:bg-surface-container-highest transition-colors">
+<td class="py-2 px-4 text-secondary">2023-11-20 07:55:10</td>
+<td class="py-2 px-4">AUTH_LOGIN_S</td>
+<td class="py-2 px-4 font-body-standard text-body-standard">Session Authenticated</td>
+<td class="py-2 px-4 text-secondary text-xs">192.168.1.1 (PL)</td>
+</tr>
+<tr class="border-b border-outline-variant/20 hover:bg-surface-container-highest transition-colors">
+<td class="py-2 px-4 text-secondary">2023-11-19 22:10:44</td>
+<td class="py-2 px-4">ACC_MOD_PASS</td>
+<td class="py-2 px-4 font-body-standard text-body-standard">Credential Rotation</td>
+<td class="py-2 px-4 text-secondary text-xs">89.101.44.2 (DE)</td>
+</tr>
+<tr class="border-b border-outline-variant/20 hover:bg-surface-container-highest transition-colors bg-surface-container-low">
+<td class="py-2 px-4 text-secondary">2023-11-15 14:00:00</td>
+<td class="py-2 px-4">SYS_NOTE_ADD</td>
+<td class="py-2 px-4 font-body-standard text-body-standard italic text-secondary">Operator Note Appended</td>
+<td class="py-2 px-4 text-secondary text-xs">System (Internal)</td>
+</tr>
+<tr class="hover:bg-surface-container-highest transition-colors">
+<td class="py-2 px-4 text-secondary">2023-11-12 09:30:12</td>
+<td class="py-2 px-4">TRX_8842_OK</td>
+<td class="py-2 px-4 font-body-standard text-body-standard">Standard Deposit Cleared</td>
+<td class="py-2 px-4 text-secondary text-xs">192.168.1.1 (PL)</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<!-- Right Column (Control Panel) -->
+<div class="col-span-4 flex flex-col gap-gutter">
+<!-- Operational Actions -->
+<div class="bg-surface-container border border-outline-variant/50 rounded-lg p-lg shadow-sm">
+<h3 class="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-widest mb-md border-b border-outline-variant/30 pb-xs">Gated Write Actions</h3>
+<div class="flex flex-col gap-sm">
+<button class="w-full flex items-center justify-between px-4 py-3 border border-error/40 text-error rounded font-body-strong text-body-strong hover:bg-error-container/20 transition-all gated-action-hover cursor-pointer bg-surface group relative overflow-hidden">
+<span class="relative z-10 flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">lock</span>
+                                    Freeze Account
+                                </span>
+<span class="material-symbols-outlined text-[16px] opacity-50 group-hover:opacity-100 transition-opacity">chevron_right</span>
+</button>
+<button class="w-full flex items-center justify-between px-4 py-3 border border-outline-variant text-on-surface rounded font-body-strong text-body-strong hover:bg-surface-container-high hover:border-outline transition-all cursor-pointer bg-surface group">
+<span class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">policy</span>
+                                    Initiate AML Review
+                                </span>
+</button>
+<button class="w-full flex items-center justify-between px-4 py-3 border border-outline-variant/50 text-secondary rounded font-body-standard text-body-standard hover:bg-surface-container-high transition-all cursor-not-allowed bg-surface/50 opacity-70">
+<span class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">lock_open</span>
+                                    Release Funds
+                                </span>
+<span class="font-data-mono text-[10px]">LOCKED</span>
+</button>
+</div>
+</div>
+<!-- Operator Notes -->
+<div class="bg-surface-container-lowest border border-outline-variant/30 rounded-lg flex flex-col flex-grow shadow-sm">
+<div class="p-md border-b border-outline-variant/20 flex justify-between items-center bg-surface-container-low rounded-t-lg">
+<h3 class="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-widest flex items-center gap-2">
+<span class="material-symbols-outlined text-[14px]">edit_note</span>
+                                Operator Notes
+                            </h3>
+<button class="text-primary hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined text-[16px]">add</span>
+</button>
+</div>
+<div class="p-md flex-grow overflow-y-auto font-body-standard text-body-standard text-on-surface-variant flex flex-col gap-4">
+<div class="bg-surface border border-outline-variant/20 p-3 rounded shadow-sm relative">
+<div class="absolute top-0 left-0 w-1 h-full bg-error-container"></div>
+<div class="flex justify-between items-baseline mb-2">
+<span class="font-label-caps text-label-caps text-on-surface font-bold">OPR_992 (System Engine)</span>
+<span class="font-data-mono text-[10px] text-secondary">Nov 20, 08:30 UTC</span>
+</div>
+<p class="text-sm leading-relaxed">Flagged for immediate review. User attempted three rapid transfers to high-risk jurisdiction (Jurisdiction ID: 44) following credential rotation. Freezing pending manual verification.</p>
+</div>
+<div class="bg-surface border border-outline-variant/20 p-3 rounded shadow-sm relative">
+<div class="absolute top-0 left-0 w-1 h-full bg-surface-variant"></div>
+<div class="flex justify-between items-baseline mb-2">
+<span class="font-label-caps text-label-caps text-on-surface font-bold">OPR_114 (Tier 01)</span>
+<span class="font-data-mono text-[10px] text-secondary">Nov 15, 14:00 UTC</span>
+</div>
+<p class="text-sm leading-relaxed">Routine check completed. KYC documents appear legitimate, but source of funds declaration requires update within 30 days.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

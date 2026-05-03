@@ -23,19 +23,30 @@
   let cryptoIsActive = $state(true)
 </script>
 
-<section class="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.95fr)]">
+<section
+  class="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.95fr)]"
+>
   <div class="card bg-base-100 shadow">
     <div class="card-body">
       <div>
+        <p
+          class="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-[var(--admin-primary)]"
+        >
+          Crypto Channels
+        </p>
         <h2 class="card-title">{t("finance.cryptoChannels.title")}</h2>
         <p class="text-sm text-slate-500">
           {t("finance.cryptoChannels.description")}
         </p>
       </div>
 
-      <div class="overflow-x-auto mt-4">
-        <table class="table">
-          <thead>
+      <div
+        class="admin-table-scroll admin-table-scroll--wide mt-4 overflow-x-auto rounded-[0.95rem] border border-[var(--admin-border)]"
+      >
+        <table class="table admin-table-compact">
+          <thead
+            class="font-mono text-[0.68rem] uppercase tracking-[0.18em] text-slate-500"
+          >
             <tr>
               <th>{t("finance.cryptoChannels.headers.id")}</th>
               <th>{t("finance.cryptoChannels.headers.providerId")}</th>
@@ -50,8 +61,8 @@
           <tbody>
             {#each cryptoDepositChannels as channel}
               <tr>
-                <td>{channel.id}</td>
-                <td>{channel.providerId ?? "-"}</td>
+                <td class="font-mono text-xs">{channel.id}</td>
+                <td class="font-mono text-xs">{channel.providerId ?? "-"}</td>
                 <td>
                   <div class="space-y-1 text-xs">
                     <div class="font-medium">{channel.token}</div>
@@ -79,18 +90,21 @@
                   <div class="space-y-1 text-xs">
                     <div>
                       {channel.memoRequired
-                        ? channel.memoValue ?? t("finance.cryptoChannels.memoRequiredOnly")
-                        : channel.memoValue ?? "-"}
+                        ? (channel.memoValue ??
+                          t("finance.cryptoChannels.memoRequiredOnly"))
+                        : (channel.memoValue ?? "-")}
                     </div>
                   </div>
                 </td>
-                <td>{channel.minConfirmations}</td>
+                <td class="font-mono text-xs">{channel.minConfirmations}</td>
                 <td>
                   {channel.isActive
                     ? t("finance.cryptoChannels.statusActive")
                     : t("finance.cryptoChannels.statusInactive")}
                 </td>
-                <td>{formatDate(channel.updatedAt ?? channel.createdAt)}</td>
+                <td class="font-mono text-xs">
+                  {formatDate(channel.updatedAt ?? channel.createdAt)}
+                </td>
               </tr>
             {/each}
             {#if cryptoDepositChannels.length === 0}
@@ -109,16 +123,27 @@
   <div class="card bg-base-100 shadow">
     <div class="card-body gap-4">
       <div>
+        <p
+          class="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-[var(--admin-primary)]"
+        >
+          Channel Provisioning
+        </p>
         <h2 class="card-title">{t("finance.cryptoChannels.createTitle")}</h2>
         <p class="text-sm text-slate-500">
           {t("finance.cryptoChannels.createDescription")}
         </p>
       </div>
 
-      <form method="post" action="?/createCryptoDepositChannel" class="space-y-4">
+      <form
+        method="post"
+        action="?/createCryptoDepositChannel"
+        class="space-y-4"
+      >
         <div class="grid gap-4">
           <label class="form-control">
-            <span class="label-text mb-2">{t("finance.cryptoChannels.providerId")}</span>
+            <span class="label-text mb-2"
+              >{t("finance.cryptoChannels.providerId")}</span
+            >
             <input
               name="providerId"
               type="number"
@@ -130,7 +155,9 @@
           </label>
 
           <label class="form-control">
-            <span class="label-text mb-2">{t("finance.cryptoChannels.chain")}</span>
+            <span class="label-text mb-2"
+              >{t("finance.cryptoChannels.chain")}</span
+            >
             <input
               name="chain"
               type="text"
@@ -141,7 +168,9 @@
           </label>
 
           <label class="form-control">
-            <span class="label-text mb-2">{t("finance.cryptoChannels.network")}</span>
+            <span class="label-text mb-2"
+              >{t("finance.cryptoChannels.network")}</span
+            >
             <input
               name="network"
               type="text"
@@ -152,7 +181,9 @@
           </label>
 
           <label class="form-control">
-            <span class="label-text mb-2">{t("finance.cryptoChannels.token")}</span>
+            <span class="label-text mb-2"
+              >{t("finance.cryptoChannels.token")}</span
+            >
             <input
               name="token"
               type="text"
@@ -163,17 +194,23 @@
           </label>
 
           <label class="form-control">
-            <span class="label-text mb-2">{t("finance.cryptoChannels.receiveAddress")}</span>
+            <span class="label-text mb-2"
+              >{t("finance.cryptoChannels.receiveAddress")}</span
+            >
             <textarea
               name="receiveAddress"
               class="textarea textarea-bordered min-h-24"
               bind:value={cryptoReceiveAddress}
-              placeholder={t("finance.cryptoChannels.receiveAddressPlaceholder")}
+              placeholder={t(
+                "finance.cryptoChannels.receiveAddressPlaceholder",
+              )}
             ></textarea>
           </label>
 
           <label class="form-control">
-            <span class="label-text mb-2">{t("finance.cryptoChannels.qrCodeUrl")}</span>
+            <span class="label-text mb-2"
+              >{t("finance.cryptoChannels.qrCodeUrl")}</span
+            >
             <input
               name="qrCodeUrl"
               type="url"
@@ -184,7 +221,9 @@
           </label>
 
           <label class="form-control">
-            <span class="label-text mb-2">{t("finance.cryptoChannels.memoValue")}</span>
+            <span class="label-text mb-2"
+              >{t("finance.cryptoChannels.memoValue")}</span
+            >
             <input
               name="memoValue"
               type="text"
@@ -207,24 +246,32 @@
             />
           </label>
 
-          <label class="label cursor-pointer justify-start gap-3 rounded-lg border border-base-300 px-4 py-3">
+          <label
+            class="label cursor-pointer justify-start gap-3 rounded-lg border border-base-300 px-4 py-3"
+          >
             <input
               name="memoRequired"
               type="checkbox"
               class="checkbox"
               bind:checked={cryptoMemoRequired}
             />
-            <span class="label-text">{t("finance.cryptoChannels.memoRequired")}</span>
+            <span class="label-text"
+              >{t("finance.cryptoChannels.memoRequired")}</span
+            >
           </label>
 
-          <label class="label cursor-pointer justify-start gap-3 rounded-lg border border-base-300 px-4 py-3">
+          <label
+            class="label cursor-pointer justify-start gap-3 rounded-lg border border-base-300 px-4 py-3"
+          >
             <input
               name="isActive"
               type="checkbox"
               class="checkbox"
               bind:checked={cryptoIsActive}
             />
-            <span class="label-text">{t("finance.cryptoChannels.isActive")}</span>
+            <span class="label-text"
+              >{t("finance.cryptoChannels.isActive")}</span
+            >
           </label>
         </div>
 

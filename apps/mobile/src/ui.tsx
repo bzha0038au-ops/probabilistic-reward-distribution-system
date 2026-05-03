@@ -6,7 +6,16 @@ import type {
   PlayModeType,
 } from '@reward/shared-types/play-mode';
 
-import { mobileFeedbackTheme, mobilePalette, mobileSurfaceTheme } from './theme';
+import {
+  mobileChromeTheme,
+  mobileFeedbackTheme,
+  mobileLayoutTheme,
+  mobilePalette,
+  mobileRadii,
+  mobileSpacing,
+  mobileSurfaceTheme,
+  mobileTypeScale,
+} from './theme';
 
 const playModeOrder: PlayModeType[] = [
   'standard',
@@ -54,8 +63,9 @@ export type ActionButtonProps = {
   label: string;
   onPress: () => void;
   disabled?: boolean;
-  variant?: 'primary' | 'secondary' | 'danger';
+  variant?: 'primary' | 'secondary' | 'danger' | 'gold';
   compact?: boolean;
+  fullWidth?: boolean;
   accessibilityLabel?: string;
   accessibilityHint?: string;
   testID?: string;
@@ -73,21 +83,31 @@ export function ActionButton(props: ActionButtonProps) {
       accessibilityHint={props.accessibilityHint}
       accessibilityState={{ disabled: props.disabled ?? false }}
       testID={props.testID}
-      style={[
+      style={({ pressed }) => [
         styles.button,
+        props.fullWidth ? styles.buttonFullWidth : null,
         props.compact ? styles.buttonCompact : null,
         variant === 'secondary'
           ? styles.buttonSecondary
+          : variant === 'gold'
+            ? styles.buttonGold
           : variant === 'danger'
             ? styles.buttonDanger
             : styles.buttonPrimary,
         props.disabled ? styles.buttonDisabled : null,
+        pressed && !props.disabled ? styles.buttonPressed : null,
       ]}
     >
       <Text
         style={[
           styles.buttonLabel,
-          variant === 'secondary' ? styles.buttonLabelSecondary : null,
+          variant === 'secondary'
+            ? styles.buttonLabelSecondary
+            : variant === 'danger'
+              ? styles.buttonLabelDanger
+              : variant === 'primary' || variant === 'gold'
+                ? styles.buttonLabelAccent
+            : null,
         ]}
       >
         {props.label}
@@ -136,8 +156,15 @@ export type SectionCardProps = {
 export function SectionCard(props: SectionCardProps) {
   return (
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>{props.title}</Text>
-      {props.subtitle ? <Text style={styles.cardSubtitle}>{props.subtitle}</Text> : null}
+      <View style={styles.cardHeader}>
+        <View style={styles.cardTitleRow}>
+          <View style={styles.cardAccent} />
+          <Text style={styles.cardTitle}>{props.title}</Text>
+        </View>
+        {props.subtitle ? (
+          <Text style={styles.cardSubtitle}>{props.subtitle}</Text>
+        ) : null}
+      </View>
       {props.children}
     </View>
   );
@@ -291,40 +318,59 @@ export function ToastBanner(props: ToastBannerProps) {
 
 const styles = StyleSheet.create({
   card: {
-    gap: 16,
-    borderRadius: 20,
-    borderWidth: 1,
+    gap: mobileLayoutTheme.sectionGap,
+    borderRadius: mobileRadii.xl,
+    borderWidth: mobileChromeTheme.borderWidth,
     borderColor: mobilePalette.border,
     backgroundColor: mobilePalette.panel,
-    padding: 18,
+    padding: mobileLayoutTheme.cardPadding,
+    ...mobileChromeTheme.cardShadow,
+  },
+  cardHeader: {
+    gap: mobileSpacing.sm,
+  },
+  cardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: mobileSpacing.sm,
+  },
+  cardAccent: {
+    width: 14,
+    height: 14,
+    borderRadius: mobileRadii.full,
+    borderWidth: mobileChromeTheme.borderWidth,
+    borderColor: mobilePalette.border,
+    backgroundColor: mobilePalette.accent,
   },
   cardTitle: {
     color: mobilePalette.text,
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: mobileTypeScale.fontSize.hero - 8,
+    fontWeight: '800',
+    letterSpacing: -0.4,
   },
   cardSubtitle: {
     color: mobilePalette.textMuted,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: mobileTypeScale.fontSize.body,
+    lineHeight: mobileTypeScale.lineHeight.body,
   },
   playModeCard: {
-    gap: 12,
-    borderRadius: 18,
-    borderWidth: 1,
+    gap: mobileSpacing.md,
+    borderRadius: mobileRadii.xl,
+    borderWidth: mobileChromeTheme.borderWidth,
     borderColor: mobilePalette.border,
     backgroundColor: mobilePalette.panelMuted,
-    padding: 16,
+    padding: mobileLayoutTheme.cardPadding,
+    ...mobileChromeTheme.cardShadowSm,
   },
   playModeTitle: {
     color: mobilePalette.text,
-    fontSize: 16,
+    fontSize: mobileTypeScale.fontSize.bodyLg,
     fontWeight: '700',
   },
   playModeSubtitle: {
     color: mobilePalette.textMuted,
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: mobileTypeScale.fontSize.labelSm,
+    lineHeight: mobileTypeScale.lineHeight.label,
   },
   playModeMetaRow: {
     flexDirection: 'row',
@@ -342,9 +388,9 @@ const styles = StyleSheet.create({
   },
   playModeChip: {
     borderRadius: 18,
-    borderWidth: 1,
+    borderWidth: mobileChromeTheme.borderWidth,
     borderColor: mobilePalette.border,
-    backgroundColor: mobilePalette.panel,
+    backgroundColor: mobilePalette.panelMuted,
     minWidth: '47%',
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -374,41 +420,54 @@ const styles = StyleSheet.create({
     color: mobileSurfaceTheme.primaryTextOnAccent,
   },
   field: {
-    gap: 8,
+    gap: mobileSpacing.sm,
   },
   fieldLabel: {
     color: mobilePalette.text,
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: mobileTypeScale.fontSize.labelSm,
+    fontWeight: '700',
+    letterSpacing: mobileTypeScale.letterSpacing.subtle,
+    textTransform: 'uppercase',
   },
   input: {
-    borderRadius: 14,
-    borderWidth: 1,
+    minHeight: mobileLayoutTheme.fieldHeight,
+    borderRadius: mobileRadii.lg,
+    borderWidth: mobileChromeTheme.borderWidth,
     borderColor: mobilePalette.border,
     backgroundColor: mobilePalette.input,
     color: mobilePalette.text,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    fontSize: 15,
+    paddingHorizontal: mobileSpacing.xl,
+    paddingVertical: mobileSpacing.lg,
+    fontSize: mobileTypeScale.fontSize.bodyLg,
+    ...mobileChromeTheme.cardShadowSm,
   },
   button: {
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 14,
-    borderWidth: 1,
-    minHeight: 50,
-    paddingHorizontal: 16,
+    borderRadius: mobileRadii.lg,
+    borderWidth: mobileChromeTheme.borderWidth,
+    minHeight: mobileLayoutTheme.buttonHeight,
+    paddingHorizontal: mobileSpacing.xl,
+    ...mobileChromeTheme.cardShadowSm,
   },
   buttonCompact: {
-    minHeight: 42,
-    paddingHorizontal: 14,
+    minHeight: mobileLayoutTheme.buttonCompactHeight,
+    paddingHorizontal: mobileSpacing.lg,
+  },
+  buttonFullWidth: {
+    alignSelf: 'stretch',
+    width: '100%',
   },
   buttonPrimary: {
     backgroundColor: mobilePalette.accent,
-    borderColor: mobilePalette.accent,
+    borderColor: mobilePalette.border,
   },
   buttonSecondary: {
     backgroundColor: mobilePalette.panelMuted,
+    borderColor: mobilePalette.border,
+  },
+  buttonGold: {
+    backgroundColor: mobileFeedbackTheme.warning.backgroundColor,
     borderColor: mobilePalette.border,
   },
   buttonDanger: {
@@ -418,18 +477,31 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     opacity: 0.55,
   },
+  buttonPressed: {
+    transform: [{ translateX: 2 }, { translateY: 2 }, { scale: 0.985 }],
+    ...mobileChromeTheme.pressedShadow,
+  },
   buttonLabel: {
+    color: mobilePalette.text,
+    fontSize: mobileTypeScale.fontSize.labelSm,
+    fontWeight: '800',
+    letterSpacing: mobileTypeScale.letterSpacing.subtle,
+    textTransform: 'uppercase',
+  },
+  buttonLabelAccent: {
     color: mobileSurfaceTheme.primaryTextOnAccent,
-    fontSize: 15,
-    fontWeight: '700',
   },
   buttonLabelSecondary: {
     color: mobilePalette.text,
   },
+  buttonLabelDanger: {
+    color: '#fff8ef',
+  },
   textLink: {
     color: mobilePalette.accent,
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: mobileTypeScale.fontSize.labelSm,
+    fontWeight: '700',
+    letterSpacing: mobileTypeScale.letterSpacing.subtle,
   },
   textLinkDisabled: {
     opacity: 0.45,
@@ -439,22 +511,18 @@ const styles = StyleSheet.create({
   },
   toastViewport: {
     position: 'absolute',
-    top: 18,
-    left: 18,
-    right: 18,
+    top: mobileSpacing['3xl'],
+    left: mobileSpacing['3xl'],
+    right: mobileSpacing['3xl'],
     zIndex: 120,
   },
   toastCard: {
-    gap: 6,
-    borderRadius: 18,
-    borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    shadowColor: '#020617',
-    shadowOpacity: 0.28,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 16,
+    gap: mobileSpacing.xs,
+    borderRadius: mobileRadii.xl,
+    borderWidth: mobileChromeTheme.borderWidth,
+    paddingHorizontal: mobileSpacing.xl,
+    paddingVertical: mobileSpacing.lg,
+    ...mobileChromeTheme.cardShadow,
   },
   toastSuccess: {
     borderColor: mobileFeedbackTheme.success.borderColor,
@@ -470,15 +538,15 @@ const styles = StyleSheet.create({
   },
   toastKicker: {
     color: mobilePalette.accentMuted,
-    fontSize: 11,
+    fontSize: mobileTypeScale.fontSize.labelXs,
     fontWeight: '800',
-    letterSpacing: 1,
+    letterSpacing: mobileTypeScale.letterSpacing.caps,
     textTransform: 'uppercase',
   },
   toastMessage: {
     color: mobilePalette.text,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: mobileTypeScale.fontSize.body,
+    lineHeight: mobileTypeScale.lineHeight.body,
     fontWeight: '600',
   },
 });

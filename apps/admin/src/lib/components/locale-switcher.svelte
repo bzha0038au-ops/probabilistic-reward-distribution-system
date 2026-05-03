@@ -19,10 +19,16 @@
   }
 </script>
 
-<div class="flex items-center gap-2">
+<div
+  class="inline-flex items-center rounded-md border border-white/10 bg-white/4 p-1"
+>
   {#each SUPPORTED_LOCALES as option}
     <button
-      class={option === locale() ? "btn btn-primary btn-sm" : "btn btn-outline btn-sm"}
+      class={`rounded px-2.5 py-1 text-xs font-semibold transition ${
+        option === locale()
+          ? "bg-white/12 text-white"
+          : "text-white/60 hover:text-white"
+      }`}
       onclick={() => setLocale(option)}
       type="button"
     >

@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Blackjack - Retro Pop</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;700&amp;family=Plus+Jakarta+Sans:wght@700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-variant": "#e5e2e1",
+                    "error": "#ba1a1a",
+                    "on-primary": "#ffffff",
+                    "on-error-container": "#93000a",
+                    "on-error": "#ffffff",
+                    "secondary-fixed": "#e2dfff",
+                    "inverse-on-surface": "#f3f0ef",
+                    "on-tertiary-container": "#4c3e00",
+                    "tertiary": "#705d00",
+                    "surface-container": "#f0eded",
+                    "on-surface": "#1c1b1b",
+                    "on-secondary-fixed": "#0f0069",
+                    "surface-dim": "#dcd9d9",
+                    "primary-fixed-dim": "#ffb59a",
+                    "on-tertiary-fixed": "#221b00",
+                    "surface-container-high": "#eae7e7",
+                    "on-tertiary": "#ffffff",
+                    "on-secondary-fixed-variant": "#3323cc",
+                    "primary-fixed": "#ffdbce",
+                    "inverse-primary": "#ffb59a",
+                    "on-tertiary-fixed-variant": "#544600",
+                    "on-surface-variant": "#5b4137",
+                    "secondary-container": "#645efb",
+                    "tertiary-fixed": "#ffe170",
+                    "surface-bright": "#fcf9f8",
+                    "on-primary-container": "#521800",
+                    "error-container": "#ffdad6",
+                    "secondary-fixed-dim": "#c3c0ff",
+                    "tertiary-fixed-dim": "#e9c400",
+                    "on-primary-fixed-variant": "#802a00",
+                    "on-primary-fixed": "#370e00",
+                    "background": "#fcf9f8",
+                    "tertiary-container": "#caa900",
+                    "secondary": "#4b41e1",
+                    "surface": "#fcf9f8",
+                    "outline": "#8f7065",
+                    "surface-container-low": "#f6f3f2",
+                    "surface-tint": "#a73a00",
+                    "inverse-surface": "#313030",
+                    "outline-variant": "#e4beb1",
+                    "primary": "#a73a00",
+                    "surface-container-lowest": "#ffffff",
+                    "primary-container": "#ff5c00",
+                    "on-secondary-container": "#fffbff",
+                    "on-background": "#1c1b1b",
+                    "surface-container-highest": "#e5e2e1",
+                    "on-secondary": "#ffffff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "xs": "4px",
+                    "unit": "4px",
+                    "margin": "20px",
+                    "gutter": "16px",
+                    "sm": "8px",
+                    "xl": "32px",
+                    "lg": "24px",
+                    "md": "16px"
+            },
+            "fontFamily": {
+                    "label-bold": ["Be Vietnam Pro"],
+                    "headline-xl": ["Plus Jakarta Sans"],
+                    "label-sm": ["Be Vietnam Pro"],
+                    "headline-md": ["Plus Jakarta Sans"],
+                    "headline-lg": ["Plus Jakarta Sans"],
+                    "body-md": ["Be Vietnam Pro"],
+                    "body-lg": ["Be Vietnam Pro"]
+            },
+            "fontSize": {
+                    "label-bold": ["14px", {"lineHeight": "20px", "fontWeight": "700"}],
+                    "headline-xl": ["40px", {"lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "500"}],
+                    "headline-md": ["24px", {"lineHeight": "30px", "fontWeight": "700"}],
+                    "headline-lg": ["32px", {"lineHeight": "38px", "letterSpacing": "-0.01em", "fontWeight": "800"}],
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        .halftone-bg {
+            background-image: radial-gradient(circle, #dcd9d9 1.5px, transparent 1.5px);
+            background-size: 12px 12px;
+        }
+        .halftone-accent {
+            background-image: radial-gradient(circle, rgba(255,255,255,0.2) 2px, transparent 2px);
+            background-size: 8px 8px;
+        }
+        /* Hard shadows for Retro Pop */
+        .shadow-retro {
+            box-shadow: 4px 4px 0px 0px #1c1b1b;
+        }
+        .shadow-retro-sm {
+            box-shadow: 2px 2px 0px 0px #1c1b1b;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface font-body-md h-[884px] w-full flex flex-col overflow-hidden relative selection:bg-primary-container selection:text-white antialiased">
+<!-- Global Background Pattern -->
+<div class="absolute inset-0 z-0 opacity-50 halftone-bg pointer-events-none"></div>
+<!-- Game Contextual Header (Suppresses Global Nav due to task focus) -->
+<header class="relative z-20 flex justify-between items-center p-md">
+<button class="w-12 h-12 flex items-center justify-center bg-white border-2 border-on-surface rounded shadow-retro-sm active:translate-y-[2px] active:translate-x-[2px] active:shadow-none transition-all">
+<span class="material-symbols-outlined text-on-surface">arrow_back</span>
+</button>
+<div class="flex items-center gap-2 px-4 py-2 bg-tertiary-fixed border-2 border-on-surface rounded-full shadow-retro-sm">
+<span class="material-symbols-outlined text-[18px] text-on-surface">verified</span>
+<span class="font-label-bold text-label-bold uppercase text-on-surface tracking-wide">Provably Fair</span>
+</div>
+<div class="px-4 py-2 bg-white border-2 border-on-surface rounded shadow-retro-sm flex items-center gap-2">
+<span class="material-symbols-outlined text-primary-container">account_balance_wallet</span>
+<span class="font-label-bold text-label-bold text-on-surface">$1,240.50</span>
+</div>
+</header>
+<!-- Main Game Canvas -->
+<main class="relative z-10 flex-1 flex flex-col w-full max-w-md mx-auto">
+<!-- Dealer Area -->
+<section class="flex-1 flex flex-col items-center justify-start pt-lg gap-sm relative">
+<div class="bg-surface-variant border-2 border-on-surface px-6 py-1.5 rounded-full shadow-retro-sm z-10">
+<span class="font-label-bold text-label-bold uppercase text-on-surface">Dealer: 17</span>
+</div>
+<div class="flex gap-[-8px] relative mt-2">
+<!-- Dealer Card 1 -->
+<div class="w-20 h-32 bg-white border-2 border-on-surface rounded shadow-retro flex flex-col justify-between p-2 rotate-[-4deg] relative z-10">
+<div class="text-error font-headline-md leading-none">10<span class="text-lg align-top">♥</span></div>
+<div class="text-error text-center text-3xl font-bold">♥</div>
+<div class="text-error font-headline-md leading-none rotate-180 self-end">10<span class="text-lg align-top">♥</span></div>
+</div>
+<!-- Dealer Card 2 -->
+<div class="w-20 h-32 bg-white border-2 border-on-surface rounded shadow-retro flex flex-col justify-between p-2 rotate-[4deg] relative ml-[-20px] z-20">
+<div class="text-on-surface font-headline-md leading-none">7<span class="text-lg align-top">♠</span></div>
+<div class="text-on-surface text-center text-3xl font-bold">♠</div>
+<div class="text-on-surface font-headline-md leading-none rotate-180 self-end">7<span class="text-lg align-top">♠</span></div>
+</div>
+</div>
+</section>
+<!-- Table Center / Betting Area -->
+<section class="flex shrink-0 flex-col items-center justify-center py-sm relative z-0">
+<!-- Table Arc Decoration -->
+<div class="absolute w-[150%] h-[200px] border-t-4 border-on-surface rounded-[100%] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-20 pointer-events-none"></div>
+<div class="relative w-20 h-20 flex items-center justify-center">
+<div class="absolute inset-0 bg-secondary border-2 border-on-surface rounded-full shadow-retro-sm flex items-center justify-center">
+<div class="w-14 h-14 bg-secondary border border-on-primary rounded-full flex items-center justify-center border-dashed opacity-50"></div>
+</div>
+<div class="relative z-10 w-16 h-16 bg-white border-2 border-on-surface rounded-full shadow-retro flex flex-col items-center justify-center -translate-y-2">
+<div class="w-12 h-12 bg-primary-container rounded-full border-2 border-on-surface flex items-center justify-center halftone-accent">
+<span class="font-label-bold text-white text-[14px]">$50</span>
+</div>
+</div>
+</div>
+<div class="mt-4 bg-on-surface text-white px-3 py-1 rounded text-label-sm font-label-sm uppercase tracking-widest shadow-retro-sm">Current Bet</div>
+</section>
+<!-- Player Area -->
+<section class="flex-1 flex flex-col items-center justify-end pb-xl gap-sm relative z-10">
+<div class="flex gap-[-12px] relative mb-2">
+<!-- Player Card 1 -->
+<div class="w-24 h-36 bg-white border-2 border-on-surface rounded shadow-retro flex flex-col justify-between p-2.5 rotate-[-6deg] relative z-10 translate-y-2">
+<div class="text-on-surface font-headline-md leading-none text-[28px]">K<span class="text-xl align-top">♣</span></div>
+<div class="text-on-surface text-center text-4xl font-bold">♣</div>
+<div class="text-on-surface font-headline-md leading-none text-[28px] rotate-180 self-end">K<span class="text-xl align-top">♣</span></div>
+</div>
+<!-- Player Card 2 -->
+<div class="w-24 h-36 bg-white border-2 border-on-surface rounded shadow-retro flex flex-col justify-between p-2.5 rotate-[6deg] relative ml-[-24px] z-20">
+<div class="text-error font-headline-md leading-none text-[28px]">A<span class="text-xl align-top">♦</span></div>
+<div class="text-error text-center text-4xl font-bold">♦</div>
+<div class="text-error font-headline-md leading-none text-[28px] rotate-180 self-end">A<span class="text-xl align-top">♦</span></div>
+</div>
+</div>
+<div class="bg-tertiary-fixed border-2 border-on-surface px-8 py-3 rounded-full shadow-retro mt-2">
+<span class="font-headline-lg text-headline-lg text-on-surface uppercase tracking-tighter">You: 21</span>
+</div>
+</section>
+</main>
+<!-- Action Controls -->
+<footer class="relative z-30 p-md bg-surface border-t-2 border-on-surface flex gap-4 shadow-[0px_-4px_0px_0px_#1c1b1b]">
+<button class="flex-1 bg-white border-2 border-on-surface py-4 rounded shadow-retro active:translate-y-[4px] active:translate-x-[4px] active:shadow-none transition-all flex flex-col items-center justify-center gap-1 group">
+<span class="material-symbols-outlined text-[28px] text-on-surface group-active:scale-95 transition-transform">front_hand</span>
+<span class="font-label-bold text-label-bold uppercase text-on-surface">Stand</span>
+</button>
+<button class="flex-1 bg-primary-container border-2 border-on-surface py-4 rounded shadow-retro active:translate-y-[4px] active:translate-x-[4px] active:shadow-none transition-all flex flex-col items-center justify-center gap-1 group relative overflow-hidden">
+<div class="absolute inset-0 halftone-accent opacity-50"></div>
+<span class="material-symbols-outlined text-[28px] text-white relative z-10 group-active:scale-95 transition-transform" style="font-variation-settings: 'FILL' 1;">add_circle</span>
+<span class="font-label-bold text-label-bold uppercase text-white relative z-10">Hit</span>
+</button>
+</footer>
+</body></html>

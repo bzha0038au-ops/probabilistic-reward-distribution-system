@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Fairness Verification</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;700&amp;family=Plus+Jakarta+Sans:wght@700;800&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-highest": "#e5e2e1",
+                        "tertiary": "#705d00",
+                        "surface-container-high": "#eae7e7",
+                        "on-secondary-container": "#fffbff",
+                        "secondary-fixed-dim": "#c3c0ff",
+                        "on-secondary-fixed-variant": "#3323cc",
+                        "surface-container": "#f0eded",
+                        "secondary-fixed": "#e2dfff",
+                        "inverse-on-surface": "#f3f0ef",
+                        "surface-tint": "#a73a00",
+                        "on-tertiary-fixed": "#221b00",
+                        "on-surface": "#1c1b1b",
+                        "on-tertiary-fixed-variant": "#544600",
+                        "on-error": "#ffffff",
+                        "on-secondary": "#ffffff",
+                        "primary-fixed": "#ffdbce",
+                        "on-error-container": "#93000a",
+                        "on-primary-container": "#521800",
+                        "primary-container": "#ff5c00",
+                        "on-primary": "#ffffff",
+                        "on-surface-variant": "#5b4137",
+                        "tertiary-fixed-dim": "#e9c400",
+                        "on-background": "#1c1b1b",
+                        "on-tertiary-container": "#4c3e00",
+                        "primary-fixed-dim": "#ffb59a",
+                        "on-primary-fixed-variant": "#802a00",
+                        "outline": "#8f7065",
+                        "secondary": "#4b41e1",
+                        "tertiary-container": "#caa900",
+                        "outline-variant": "#e4beb1",
+                        "surface-dim": "#dcd9d9",
+                        "surface": "#fcf9f8",
+                        "on-tertiary": "#ffffff",
+                        "inverse-surface": "#313030",
+                        "on-primary-fixed": "#370e00",
+                        "secondary-container": "#645efb",
+                        "background": "#fcf9f8",
+                        "surface-container-lowest": "#ffffff",
+                        "error": "#ba1a1a",
+                        "primary": "#a73a00",
+                        "surface-variant": "#e5e2e1",
+                        "inverse-primary": "#ffb59a",
+                        "surface-container-low": "#f6f3f2",
+                        "on-secondary-fixed": "#0f0069",
+                        "tertiary-fixed": "#ffe170",
+                        "error-container": "#ffdad6",
+                        "surface-bright": "#fcf9f8"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xs": "4px",
+                        "lg": "24px",
+                        "md": "16px",
+                        "sm": "8px",
+                        "margin": "20px",
+                        "xl": "32px",
+                        "gutter": "16px",
+                        "unit": "4px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Plus Jakarta Sans"],
+                        "label-bold": ["Be Vietnam Pro"],
+                        "body-lg": ["Be Vietnam Pro"],
+                        "body-md": ["Be Vietnam Pro"],
+                        "headline-xl": ["Plus Jakarta Sans"],
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "label-sm": ["Be Vietnam Pro"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["32px", { "lineHeight": "38px", "letterSpacing": "-0.01em", "fontWeight": "800" }],
+                        "label-bold": ["14px", { "lineHeight": "20px", "fontWeight": "700" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-xl": ["40px", { "lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "800" }],
+                        "headline-md": ["24px", { "lineHeight": "30px", "fontWeight": "700" }],
+                        "label-sm": ["12px", { "lineHeight": "16px", "fontWeight": "500" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .retro-border {
+            border: 2px solid #1c1b1b;
+        }
+        .retro-shadow {
+            box-shadow: 4px 4px 0px 0px #1c1b1b;
+        }
+        .retro-shadow-sm {
+            box-shadow: 2px 2px 0px 0px #1c1b1b;
+        }
+        .retro-button-active:active {
+            transform: translate(2px, 2px);
+            box-shadow: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background min-h-screen pb-20 md:pb-0 md:flex md:flex-row font-body-md text-body-md">
+<!-- Mobile Drawer / Web SideNav (Hidden on Mobile) -->
+<aside class="hidden md:flex h-full w-80 border-r-2 border-slate-950 flex-col bg-white dark:bg-slate-900 shadow-[4px_0px_0px_0px_rgba(2,6,23,1)] p-6 fixed left-0 top-0 z-40 pt-24">
+<div class="border-b-2 border-slate-950 mb-4 pb-4">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-full retro-border bg-surface-variant overflow-hidden">
+<img alt="User Avatar" class="w-full h-full object-cover" data-alt="A stylized, flat vector illustration of a playful avatar character, resembling a classic video game protagonist. The color palette features electric orange and vibrant indigo over a clean white background. The image has subtle halftone textures and bold, black 2px outlines, fitting perfectly within a modern retro-pop UI aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuASWZcxwQseMjkDIPCng2HYwfx17YKYkoDdYs4gOJ9jsB64VeUmZ2h04QYY_NWyYoPELU6ojlcwmg7M17VPE7Cx2-1kU-K6aKsvEX9vpw3I_KVUVgU2DGvuDIyoERkbUPS8hsuHZsCyZ6fgSS65KMj4-djEWUbTUj6Ja3qfVeEga6v7deidjNsNyi4fRoMG1onJN-HYHlPrDwqdO_S1Q5VZYFmEFpWZSaVKvjHzDJSdB_O3ok9Yk6Q-EEFULYPMn6ThbyUSMfKwymqF"/>
+</div>
+<div>
+<h3 class="font-plus-jakarta-sans font-bold text-slate-950 text-lg">Lucky Player</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">Level 42 Pro</p>
+<span class="inline-block mt-1 font-label-sm text-label-sm bg-tertiary-fixed text-on-tertiary-fixed px-2 py-0.5 rounded-full retro-border">KYC Verified</span>
+</div>
+</div>
+</div>
+<nav class="flex-1 flex flex-col gap-2">
+<a class="flex items-center gap-3 p-3 rounded-lg text-slate-950 dark:text-slate-300 border-2 border-transparent hover:border-slate-950 hover:bg-slate-50 transition-all active:translate-x-[2px]" href="#">
+<span class="material-symbols-outlined">shield</span>
+<span class="font-plus-jakarta-sans font-bold">Account Security</span>
+</a>
+<a class="flex items-center gap-3 p-3 rounded-lg bg-[#FF5C00] text-white border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(2,6,23,1)] transition-all active:translate-x-[2px]" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">verified_user</span>
+<span class="font-plus-jakarta-sans font-bold">Fairness Verification</span>
+</a>
+<a class="flex items-center gap-3 p-3 rounded-lg text-slate-950 dark:text-slate-300 border-2 border-transparent hover:border-slate-950 hover:bg-slate-50 transition-all active:translate-x-[2px]" href="#">
+<span class="material-symbols-outlined">notifications</span>
+<span class="font-plus-jakarta-sans font-bold">Notifications</span>
+</a>
+<a class="flex items-center gap-3 p-3 rounded-lg text-slate-950 dark:text-slate-300 border-2 border-transparent hover:border-slate-950 hover:bg-slate-50 transition-all active:translate-x-[2px]" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-plus-jakarta-sans font-bold">Settings</span>
+</a>
+</nav>
+</aside>
+<div class="flex-1 md:ml-80">
+<!-- TopAppBar -->
+<header class="fixed top-0 left-0 md:left-80 right-0 w-full md:w-[calc(100%-20rem)] z-50 flex justify-between items-center px-4 h-16 bg-white dark:bg-slate-900 border-b-2 border-slate-950 shadow-[0px_4px_0px_0px_rgba(2,6,23,1)]">
+<div class="flex items-center gap-3">
+<button class="md:hidden p-2 rounded-lg retro-border hover:bg-slate-100 transition-colors">
+<span class="material-symbols-outlined text-slate-950">menu</span>
+</button>
+<h1 class="text-xl font-black text-slate-950 dark:text-white font-plus-jakarta-sans uppercase tracking-tight">REWARDS HUB</h1>
+</div>
+<div class="flex items-center gap-4">
+<div class="hidden md:flex items-center gap-2">
+<div class="w-8 h-8 rounded-full retro-border overflow-hidden bg-surface-variant">
+<img alt="User Profile Avatar" class="w-full h-full object-cover" data-alt="A stylized, flat vector illustration of a playful avatar character, resembling a classic video game protagonist. The color palette features electric orange and vibrant indigo over a clean white background. The image has subtle halftone textures and bold, black 2px outlines, fitting perfectly within a modern retro-pop UI aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAAZaPWwKfPGVH-tcCgDUIKzVGBxju7PPU5UH1HOXto4KfGHqdI-fa-2ufEUASF-e8oSTmjIK2tE6w1YcUcU0hc24mJoHlcvEJGMqr0wkYW8F2L5XbbnCSCO0OaMe_FEbJ76k6dQPEi6101C4bqCxi8DLBH9dekfNIyts2sUOtm5X5pxFd4eBiCuOVtRLc9sicRvkDU3aJpWuhoQR3JxPVdXarnnbmOj8SR-nTz8761L6J00IfpKfk8-rl35UjBdRv8MGaO2fesFw87"/>
+</div>
+</div>
+<button class="font-plus-jakarta-sans font-black uppercase tracking-tight text-[#FF5C00] retro-border px-4 py-1.5 rounded bg-white hover:bg-slate-100 active:translate-y-[2px] transition-all retro-shadow-sm flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">account_balance_wallet</span>
+                    $1,240.50
+                </button>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="pt-24 px-4 pb-8 max-w-5xl mx-auto md:px-8 space-y-8">
+<!-- Page Header -->
+<div class="flex items-center gap-4 border-b-2 border-slate-950 pb-4 mb-6">
+<div class="w-12 h-12 bg-primary-container retro-border retro-shadow flex items-center justify-center rounded-lg">
+<span class="material-symbols-outlined text-on-primary-container text-3xl" style="font-variation-settings: 'FILL' 1;">verified</span>
+</div>
+<div>
+<h2 class="font-headline-xl text-headline-xl text-on-background">Fairness Verification</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant mt-1">Provably fair. Verifiably random. 100% transparent.</p>
+</div>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+<!-- How it Works Graphic Card -->
+<section class="md:col-span-12 bg-surface retro-border retro-shadow rounded-xl overflow-hidden flex flex-col md:flex-row">
+<div class="md:w-1/3 bg-secondary-fixed p-6 border-b-2 md:border-b-0 md:border-r-2 border-slate-950 flex flex-col justify-center items-start relative overflow-hidden">
+<!-- Decorative Halftone/Pattern overlay could go here via CSS if requested, using simple diagonal lines for retro feel -->
+<div class="absolute inset-0 opacity-10" style="background-image: repeating-linear-gradient(45deg, #1c1b1b 0, #1c1b1b 1px, transparent 0, transparent 50%); background-size: 8px 8px;"></div>
+<h3 class="font-headline-md text-headline-md text-on-surface relative z-10 mb-2">The Seed Protocol</h3>
+<p class="font-body-md text-body-md text-on-surface-variant relative z-10 mb-4">Every result is generated using a combination of a Server Seed and a Client Seed, guaranteeing the outcome cannot be manipulated by either party.</p>
+<button class="bg-surface text-on-surface font-label-bold text-label-bold py-2 px-4 rounded-lg retro-border retro-shadow-sm retro-button-active relative z-10 flex items-center gap-2">
+                            Read Tech Paper <span class="material-symbols-outlined text-sm">open_in_new</span>
+</button>
+</div>
+<div class="md:w-2/3 p-6 bg-white flex items-center justify-center">
+<div class="w-full flex flex-col gap-4">
+<!-- Visual representation of flow -->
+<div class="flex items-center justify-between gap-2">
+<div class="flex-1 p-4 bg-surface-container retro-border rounded-lg text-center relative">
+<span class="material-symbols-outlined text-tertiary mb-1">dns</span>
+<div class="font-label-bold text-label-bold text-on-surface">Server Seed</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant truncate text-xs mt-1">Hashed &amp; Hidden</div>
+</div>
+<span class="material-symbols-outlined text-outline">add</span>
+<div class="flex-1 p-4 bg-surface-container retro-border rounded-lg text-center relative">
+<span class="material-symbols-outlined text-primary mb-1">smartphone</span>
+<div class="font-label-bold text-label-bold text-on-surface">Client Seed</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant truncate text-xs mt-1">Set by You</div>
+</div>
+<span class="material-symbols-outlined text-outline">arrow_forward</span>
+<div class="flex-1 p-4 bg-tertiary-fixed retro-border rounded-lg text-center relative retro-shadow-sm">
+<span class="material-symbols-outlined text-on-tertiary-fixed mb-1" style="font-variation-settings: 'FILL' 1;">casino</span>
+<div class="font-label-bold text-label-bold text-on-tertiary-fixed">Fair Result</div>
+<div class="font-label-sm text-label-sm text-on-tertiary-fixed-variant truncate text-xs mt-1">Verifiable</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Current Seeds Setup -->
+<section class="md:col-span-5 bg-white retro-border retro-shadow rounded-xl p-6 flex flex-col gap-4">
+<div class="flex items-center justify-between border-b-2 border-slate-950 pb-2 mb-2">
+<h3 class="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">key</span> Active Seeds
+                        </h3>
+</div>
+<div class="space-y-4">
+<div>
+<label class="font-label-bold text-label-bold text-on-surface-variant block mb-1">Active Client Seed</label>
+<div class="flex gap-2">
+<input class="flex-1 bg-surface-container-low retro-border rounded-lg px-3 py-2 font-body-md text-body-md text-on-surface focus:outline-none focus:ring-0 focus:shadow-[4px_4px_0px_0px_#1c1b1b] transition-shadow" type="text" value="retro_player_01"/>
+<button class="bg-primary-container text-on-primary-container p-2 rounded-lg retro-border retro-shadow-sm retro-button-active">
+<span class="material-symbols-outlined">refresh</span>
+</button>
+</div>
+<p class="font-label-sm text-label-sm text-on-surface-variant mt-1">You can change this before any round.</p>
+</div>
+<div>
+<label class="font-label-bold text-label-bold text-on-surface-variant block mb-1">Next Server Seed (Hashed)</label>
+<div class="bg-surface-container retro-border rounded-lg px-3 py-2 font-body-md text-body-md text-on-surface truncate cursor-not-allowed opacity-70">
+                                a8f5f167f44f4964e6c998dee827110c
+                            </div>
+</div>
+</div>
+</section>
+<!-- Transparency Metrics -->
+<section class="md:col-span-7 bg-white retro-border retro-shadow rounded-xl p-6 flex flex-col gap-4">
+<div class="flex items-center justify-between border-b-2 border-slate-950 pb-2 mb-2">
+<h3 class="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary">monitoring</span> Global Metrics
+                        </h3>
+<span class="font-label-sm text-label-sm bg-surface-container px-2 py-1 rounded retro-border">Last 24h</span>
+</div>
+<div class="grid grid-cols-2 gap-4 mt-2">
+<div class="p-4 bg-surface-container-lowest retro-border rounded-lg flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider mb-1">Total Verified Rounds</span>
+<span class="font-headline-lg text-headline-lg text-on-surface">1.2M</span>
+</div>
+<div class="p-4 bg-surface-container-lowest retro-border rounded-lg flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider mb-1">Total Payouts</span>
+<span class="font-headline-lg text-headline-lg text-primary">$4.5M</span>
+</div>
+<div class="col-span-2 p-4 bg-primary-fixed retro-border rounded-lg flex items-center justify-between">
+<div>
+<span class="font-label-bold text-label-bold text-on-primary-fixed block">RTP (Return to Player)</span>
+<span class="font-label-sm text-label-sm text-on-primary-fixed-variant">System-wide average</span>
+</div>
+<span class="font-headline-md text-headline-md text-on-primary-fixed bg-white retro-border px-3 py-1 rounded-lg">96.5%</span>
+</div>
+</div>
+</section>
+<!-- Round History with Verification -->
+<section class="md:col-span-12 bg-white retro-border retro-shadow rounded-xl p-6">
+<div class="flex items-center justify-between border-b-2 border-slate-950 pb-4 mb-4">
+<h3 class="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-tertiary-container" style="font-variation-settings: 'FILL' 1;">history</span> Recent Rounds
+                        </h3>
+<button class="font-label-bold text-label-bold text-on-surface hover:underline flex items-center gap-1">
+                            View All <span class="material-symbols-outlined text-sm">chevron_right</span>
+</button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b-2 border-slate-950">
+<th class="font-label-bold text-label-bold text-on-surface-variant p-3">Round ID</th>
+<th class="font-label-bold text-label-bold text-on-surface-variant p-3">Game</th>
+<th class="font-label-bold text-label-bold text-on-surface-variant p-3">Result</th>
+<th class="font-label-bold text-label-bold text-on-surface-variant p-3 text-right">Action</th>
+</tr>
+</thead>
+<tbody>
+<!-- Row 1 -->
+<tr class="border-b-2 border-surface-variant hover:bg-surface-container-lowest transition-colors">
+<td class="p-3 font-body-md text-body-md text-on-surface font-mono text-sm">#8942A1</td>
+<td class="p-3">
+<div class="flex items-center gap-2">
+<div class="w-8 h-8 bg-secondary-fixed rounded retro-border flex items-center justify-center">
+<span class="material-symbols-outlined text-on-secondary-fixed text-sm">sports_esports</span>
+</div>
+<span class="font-label-bold text-label-bold text-on-surface">Neon Crash</span>
+</div>
+</td>
+<td class="p-3 font-label-bold text-label-bold text-primary">2.45x</td>
+<td class="p-3 text-right">
+<button class="bg-surface text-on-surface font-label-bold text-label-bold py-1.5 px-3 rounded-lg retro-border retro-shadow-sm retro-button-active text-sm">
+                                            Verify
+                                        </button>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="border-b-2 border-surface-variant hover:bg-surface-container-lowest transition-colors">
+<td class="p-3 font-body-md text-body-md text-on-surface font-mono text-sm">#8942A0</td>
+<td class="p-3">
+<div class="flex items-center gap-2">
+<div class="w-8 h-8 bg-tertiary-fixed rounded retro-border flex items-center justify-center">
+<span class="material-symbols-outlined text-on-tertiary-fixed text-sm">casino</span>
+</div>
+<span class="font-label-bold text-label-bold text-on-surface">Retro Dice</span>
+</div>
+</td>
+<td class="p-3 font-label-bold text-label-bold text-on-surface">Loss</td>
+<td class="p-3 text-right">
+<button class="bg-surface text-on-surface font-label-bold text-label-bold py-1.5 px-3 rounded-lg retro-border retro-shadow-sm retro-button-active text-sm">
+                                            Verify
+                                        </button>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container-lowest transition-colors">
+<td class="p-3 font-body-md text-body-md text-on-surface font-mono text-sm">#89429F</td>
+<td class="p-3">
+<div class="flex items-center gap-2">
+<div class="w-8 h-8 bg-primary-fixed rounded retro-border flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary-fixed text-sm">star</span>
+</div>
+<span class="font-label-bold text-label-bold text-on-surface">Lucky Spin</span>
+</div>
+</td>
+<td class="p-3 font-label-bold text-label-bold text-primary">10.00x</td>
+<td class="p-3 text-right">
+<button class="bg-surface text-on-surface font-label-bold text-label-bold py-1.5 px-3 rounded-lg retro-border retro-shadow-sm retro-button-active text-sm">
+                                            Verify
+                                        </button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</div>
+</main>
+</div>
+</body></html>

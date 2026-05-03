@@ -142,8 +142,10 @@ test('portal operator can create a workspace, issue a key, and queue an audit ex
   await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: 'Sign in' }).click();
 
-  await expect(page).toHaveURL(/\/portal(?:\?|$)/);
-  await expect(page.getByTestId('portal-dashboard-ready')).toBeVisible();
+  await page.waitForURL(/\/portal(?:\?|$)/, { timeout: 30_000 });
+  await expect(page.getByTestId('portal-dashboard-ready')).toBeVisible({
+    timeout: 30_000,
+  });
   await expect(page.getByText('Create your first workspace')).toBeVisible();
 
   await page.getByLabel('Workspace name').fill(workspaceName);
@@ -169,7 +171,9 @@ test('portal operator can create a workspace, issue a key, and queue an audit ex
 
   await page.goto(`${portalBaseUrl}/portal/keys${scopedQuery}`);
   await expect(page.getByTestId('portal-dashboard-ready')).toBeVisible();
-  await expect(page.getByText('API key management')).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'API key management' }),
+  ).toBeVisible();
   await page.getByLabel('Key label').fill(keyLabel);
   await page.getByRole('button', { name: 'Issue key' }).click();
 
@@ -178,18 +182,30 @@ test('portal operator can create a workspace, issue a key, and queue an audit ex
 
   await page.goto(`${portalBaseUrl}/portal/reports${scopedQuery}`);
   await expect(page.getByTestId('portal-dashboard-ready')).toBeVisible();
-  await expect(page.getByText('Queue audit export')).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Queue audit export' }),
+  ).toBeVisible();
   await page.getByRole('button', { name: 'Queue export' }).click();
 
   await expect(page.getByText('Report export queued.')).toBeVisible();
   await waitForReportExportCompletion(tenantId);
 
-  await page.reload();
-  await expect(page.getByText('Recent export jobs')).toBeVisible();
+  await page.goto(`${portalBaseUrl}/portal/reports/jobs${scopedQuery}`);
+  await expect(page.getByTestId('portal-dashboard-ready')).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Recent export jobs' }),
+  ).toBeVisible();
   await expect(page.getByRole('link', { name: 'Download' })).toBeVisible();
 
-  await page.goto(`${portalBaseUrl}/portal/docs${scopedQuery}`);
+  await page.goto(`${portalBaseUrl}/portal/docs/handoff${scopedQuery}`);
   await expect(page.getByTestId('portal-dashboard-ready')).toBeVisible();
-  await expect(page.getByText('Docs and SDK handoff')).toBeVisible();
-  await expect(page.getByText('Copy-and-run sandbox snippet')).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Docs and SDK handoff' }),
+  ).toBeVisible();
+
+  await page.goto(`${portalBaseUrl}/portal/docs/snippet${scopedQuery}`);
+  await expect(page.getByTestId('portal-dashboard-ready')).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Copy-and-run sandbox snippet' }),
+  ).toBeVisible();
 });

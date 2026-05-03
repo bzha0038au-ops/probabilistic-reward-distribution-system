@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>Docs - Reward SaaS Portal</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&amp;family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+  <link href="../shared-ui.css" rel="stylesheet"/>
+  <style>
+    .code-block {
+      background:
+        linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(15, 23, 42, 0.94)),
+        radial-gradient(circle at top right, rgba(14, 165, 233, 0.12), transparent 28%);
+      color: #e2e8f0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+  </style>
+  <script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            surface: "#fdf8f8",
+            "on-surface-variant": "#58423a",
+            "surface-container-lowest": "#ffffff",
+            "surface-variant": "#e6e1e1",
+            "surface-tint": "#a73a00",
+            "primary-container": "#a73a00",
+            "on-surface": "#1c1b1b",
+            "on-error": "#ffffff",
+            "on-tertiary": "#ffffff",
+            "secondary-container": "#655dfb",
+            "primary-fixed": "#ffdbce",
+            "tertiary-container": "#c2aa4e",
+            "surface-container": "#f1edec",
+            "on-background": "#1c1b1b",
+            "surface-container-high": "#ece7e7",
+            "on-error-container": "#93000a",
+            "on-secondary-fixed-variant": "#3322cc",
+            secondary: "#4b41e1",
+            "outline-variant": "#dfc0b5",
+            "error-container": "#ffdad6",
+            "inverse-surface": "#313030",
+            "tertiary-fixed-dim": "#dfc566",
+            "on-primary-fixed": "#370e00",
+            "surface-bright": "#fdf8f8",
+            "on-secondary-container": "#fffbff",
+            "on-secondary-fixed": "#0f0069",
+            background: "#fdf8f8",
+            "secondary-fixed": "#e2dfff",
+            "on-secondary": "#ffffff",
+            "tertiary-fixed": "#fce17e",
+            "inverse-on-surface": "#f4f0ef",
+            error: "#ba1a1a",
+            "on-primary-fixed-variant": "#802a00",
+            "on-primary-container": "#ffcebc",
+            "on-primary": "#ffffff",
+            "surface-container-low": "#f7f2f2",
+            "surface-container-highest": "#e6e1e1",
+            "on-tertiary-fixed": "#221b00",
+            "inverse-primary": "#ffb599",
+            "surface-dim": "#ddd9d8",
+            tertiary: "#705d00",
+            "primary-fixed-dim": "#ffb599",
+            outline: "#8c7168",
+            "on-tertiary-container": "#4c3e00",
+            "on-tertiary-fixed-variant": "#544600",
+            primary: "#7f2a00",
+            "secondary-fixed-dim": "#c3c0ff"
+          },
+          borderRadius: {
+            DEFAULT: "0.25rem",
+            lg: "0.5rem",
+            xl: "0.75rem",
+            full: "9999px"
+          },
+          spacing: {
+            xs: "4px",
+            gutter: "16px",
+            sm: "8px",
+            lg: "24px",
+            "container-max": "1280px",
+            md: "16px",
+            xl: "32px",
+            unit: "4px",
+            margin: "20px"
+          },
+          fontFamily: {
+            "body-sm": ["Inter"],
+            "body-base": ["Inter"],
+            "numeric-data": ["Inter"],
+            "headline-md": ["Plus Jakarta Sans"],
+            "display-lg": ["Manrope"],
+            "label-caps": ["Inter"],
+            "body-md": ["Be Vietnam Pro"],
+            "headline-lg": ["Plus Jakarta Sans"],
+            "body-lg": ["Be Vietnam Pro"],
+            "label-bold": ["Be Vietnam Pro"],
+            "headline-xl": ["Plus Jakarta Sans"],
+            "label-sm": ["Be Vietnam Pro"]
+          },
+          fontSize: {
+            "body-sm": ["14px", { lineHeight: "1.5", letterSpacing: "0em", fontWeight: "400" }],
+            "body-base": ["16px", { lineHeight: "1.6", letterSpacing: "0em", fontWeight: "400" }],
+            "numeric-data": ["14px", { lineHeight: "1.0", fontWeight: "500" }],
+            "headline-md": ["24px", { lineHeight: "30px", fontWeight: "700" }],
+            "display-lg": ["48px", { lineHeight: "1.1", letterSpacing: "-0.02em", fontWeight: "700" }],
+            "label-caps": ["12px", { lineHeight: "1.0", letterSpacing: "0.05em", fontWeight: "600" }],
+            "body-md": ["16px", { lineHeight: "24px", fontWeight: "400" }],
+            "headline-lg": ["32px", { lineHeight: "38px", letterSpacing: "-0.01em", fontWeight: "800" }],
+            "body-lg": ["18px", { lineHeight: "28px", fontWeight: "400" }],
+            "label-bold": ["14px", { lineHeight: "20px", fontWeight: "700" }],
+            "headline-xl": ["40px", { lineHeight: "48px", letterSpacing: "-0.02em", fontWeight: "800" }],
+            "label-sm": ["12px", { lineHeight: "16px", fontWeight: "500" }]
+          }
+        }
+      }
+    };
+  </script>
+</head>
+<body class="bg-surface font-body-base text-on-surface portal-page-shell">
+  <div class="portal-vignette-fixed"></div>
+  <header class="fixed top-0 z-50 w-full border-b border-slate-200/60 bg-white/80 shadow-sm shadow-slate-200/50 backdrop-blur-md">
+    <div class="mx-auto flex h-16 max-w-[1280px] items-center justify-between px-8">
+      <div class="flex items-center gap-8">
+        <span class="portal-topbar-brand text-lg font-bold tracking-tighter text-slate-900">Reward SaaS Portal</span>
+        <nav class="hidden h-16 items-center space-x-6 font-manrope text-sm font-medium tracking-tight md:flex">
+          <a class="portal-topnav-link" href="#">Overview</a>
+          <a class="portal-topnav-link" href="#">Tenants</a>
+          <a class="portal-topnav-link" href="#">API Keys</a>
+          <a class="portal-topnav-link" href="#">Usage</a>
+          <a class="portal-topnav-link" href="#">Reports</a>
+          <a class="portal-topnav-link" href="#">Prizes</a>
+          <a class="portal-topnav-link" href="#">Billing</a>
+          <a class="portal-topnav-link portal-topnav-link-active" href="#">Docs</a>
+        </nav>
+      </div>
+      <div class="flex items-center gap-4">
+        <div class="portal-topbar-badge hidden lg:flex">
+          <span class="material-symbols-outlined text-[18px]">terminal</span>
+          <span>Production Mode</span>
+        </div>
+        <button class="portal-topbar-icon-button">
+          <span class="material-symbols-outlined">notifications</span>
+        </button>
+        <button class="portal-topbar-icon-button">
+          <span class="material-symbols-outlined">settings</span>
+        </button>
+        <div class="portal-topbar-avatar flex items-center justify-center bg-slate-900 text-xs font-bold text-white">JD</div>
+      </div>
+    </div>
+  </header>
+
+  <div class="relative z-10 mx-auto flex max-w-[1280px] flex-col gap-6 px-5 pb-20 pt-24 sm:px-8 lg:flex-row">
+    <aside class="portal-context-rail flex w-72 flex-col space-y-2 p-4">
+      <div class="mb-4 px-4 py-2">
+        <p class="portal-context-title">Developer Workspace</p>
+        <p class="portal-context-copy mt-3">Keep the base URL, starter key path, sandbox flow, and support routes visible while your team moves from first request to live readiness.</p>
+      </div>
+      <nav class="flex-1 space-y-1">
+        <a class="portal-context-link portal-context-link-active text-sm font-semibold" href="#">
+          <span class="material-symbols-outlined">terminal</span>
+          <span>SDK Quickstart</span>
+        </a>
+        <a class="portal-context-link text-sm" href="#">
+          <span class="material-symbols-outlined">key</span>
+          <span>Starter Key</span>
+        </a>
+        <a class="portal-context-link text-sm" href="#">
+          <span class="material-symbols-outlined">code</span>
+          <span>Base URL</span>
+        </a>
+        <a class="portal-context-link text-sm" href="#">
+          <span class="material-symbols-outlined">task_alt</span>
+          <span>Sandbox Checklist</span>
+        </a>
+        <a class="portal-context-link text-sm" href="#">
+          <span class="material-symbols-outlined">support_agent</span>
+          <span>Support Routes</span>
+        </a>
+      </nav>
+      <button class="portal-button portal-button-primary mt-auto w-full">
+        <span class="material-symbols-outlined text-sm">vpn_key</span>
+        Issue Sandbox Key
+      </button>
+      <div class="space-y-1 border-t border-slate-100 pt-8">
+        <a class="portal-context-link text-sm" href="#">
+          <span class="material-symbols-outlined">description</span>
+          <span>API Reference</span>
+        </a>
+        <a class="portal-context-link text-sm" href="#">
+          <span class="material-symbols-outlined">check_circle</span>
+          <span>Platform Status</span>
+        </a>
+      </div>
+    </aside>
+
+    <main class="portal-context-main min-w-0 flex-1">
+      <div class="portal-page-intro portal-animate-in">
+        <div class="portal-scope-strip">
+          <span class="portal-scope-chip">Acme Corp</span>
+          <span class="portal-scope-chip">Sandbox Project</span>
+          <span class="portal-scope-chip">Starter Key Ready</span>
+        </div>
+        <h1 class="portal-page-title">Docs &amp; SDK</h1>
+        <p class="portal-page-copy">Move from sandbox onboarding to the first successful engine request without leaving the portal. Keep the quickstart, response contract, and operational handoff on the same surface.</p>
+      </div>
+
+      <div class="portal-inline-banner portal-inline-banner-info portal-inline-banner-live portal-animate-in portal-animate-delay-1 mb-8">
+        <span class="material-symbols-outlined text-[20px]">electric_bolt</span>
+        <div>
+          <p class="text-sm font-semibold">Recommended next step</p>
+          <p class="mt-1 text-sm leading-6">Issue a sandbox key, run the quickstart request, verify the response payload, then hand the working snippet to your application team before requesting a live key.</p>
+        </div>
+      </div>
+
+      <div class="mb-10 grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <section class="portal-panel overflow-hidden lg:col-span-8 portal-hover-lift portal-animate-in portal-animate-delay-2">
+          <div class="portal-panel-header">
+            <div>
+              <h2 class="text-headline-md font-headline-md text-slate-900">SDK Quickstart</h2>
+              <p class="portal-panel-header-copy">Use the sandbox key to validate connectivity, reward request shape, and response handling.</p>
+            </div>
+            <div class="portal-panel-header-actions rounded-xl bg-slate-100 p-1 text-xs font-semibold">
+              <button class="portal-button portal-button-secondary portal-button-sm bg-white text-slate-900 shadow-sm">TypeScript</button>
+              <button class="portal-button portal-button-ghost portal-button-sm text-slate-500">Python</button>
+            </div>
+          </div>
+          <div class="space-y-8 p-6">
+            <section>
+              <div class="mb-3 flex items-center justify-between">
+                <h3 class="portal-eyebrow">1. Install SDK</h3>
+                <button class="portal-button portal-button-ghost portal-button-sm portal-button-accent">Copy</button>
+              </div>
+              <div class="code-block rounded-2xl p-4 text-sm">
+                <pre><code>npm install @reward/prize-engine-sdk</code></pre>
+              </div>
+            </section>
+
+            <section>
+              <div class="mb-3 flex items-center justify-between">
+                <h3 class="portal-eyebrow">2. Configure Client</h3>
+                <button class="portal-button portal-button-ghost portal-button-sm portal-button-accent">Copy</button>
+              </div>
+              <div class="code-block overflow-x-auto rounded-2xl p-5 text-[13px] leading-7">
+                <pre><code><span class="text-sky-300">import</span> { <span class="text-white">PrizeEngineClient</span> } <span class="text-sky-300">from</span> <span class="text-emerald-300">'@reward/prize-engine-sdk'</span>;
+
+<span class="text-slate-400">const</span> client = <span class="text-sky-300">new</span> <span class="text-white">PrizeEngineClient</span>({
+  apiKey: process.env.<span class="text-amber-200">REWARD_ENGINE_API_KEY</span>,
+  baseUrl: <span class="text-emerald-300">'https://api.rewardportal.io/v1/engine'</span>,
+  environment: <span class="text-emerald-300">'sandbox'</span>
+});
+
+<span class="text-slate-400">const</span> reward = <span class="text-sky-300">await</span> client.<span class="text-white">rewards.create</span>({
+  projectId: <span class="text-emerald-300">'proj_sandbox_01'</span>,
+  subject: { id: <span class="text-emerald-300">'user_99'</span> },
+  amount: <span class="text-amber-200">2500</span>,
+  currency: <span class="text-emerald-300">'USD'</span>,
+  metadata: { source: <span class="text-emerald-300">'portal-quickstart'</span> }
+});
+
+console.log(reward.id, reward.status);</code></pre>
+              </div>
+            </section>
+
+            <section class="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div class="portal-info-surface">
+                <p class="portal-eyebrow">Base URL</p>
+                <p class="portal-url-wrap mt-3 font-mono text-sm text-slate-900">https://api.rewardportal.io/v1/engine</p>
+                <p class="mt-3 text-sm leading-6 text-slate-500">All requests must be made over HTTPS with a sandbox or production key scoped to the current tenant project.</p>
+              </div>
+              <div class="portal-info-surface">
+                <p class="portal-eyebrow">Starter Key Guidance</p>
+                <p class="mt-3 text-sm font-semibold text-slate-900">One-time secret visibility</p>
+                <p class="mt-2 text-sm leading-6 text-slate-500">Copy the full starter key into your secret manager immediately. Treat regenerated sandbox keys as a rotation event for every dependent script or environment.</p>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <aside class="flex flex-col gap-6 lg:col-span-4">
+          <section class="portal-panel-soft p-6">
+            <div class="portal-section-intro portal-section-intro-compact">
+              <span class="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-900 text-sky-400">
+                <span class="material-symbols-outlined">task_alt</span>
+              </span>
+              <div>
+                <h3 class="text-headline-md font-headline-md text-slate-900">Sandbox Checklist</h3>
+                <p class="portal-section-copy">Minimum path before live issuance.</p>
+              </div>
+            </div>
+            <div class="portal-stack-list text-sm">
+              <div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
+                <p class="font-semibold text-slate-900">1. Starter key issued</p>
+                <p class="mt-2 leading-6 text-slate-600">Key copied into your secret manager and restricted to sandbox usage.</p>
+              </div>
+              <div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3">
+                <p class="font-semibold text-slate-900">2. First request successful</p>
+                <p class="mt-2 leading-6 text-slate-600">Reward response returns ID, status, and metadata echo without schema errors.</p>
+              </div>
+              <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                <p class="font-semibold text-slate-900">3. Retry semantics reviewed</p>
+                <p class="mt-2 leading-6 text-slate-600">Your application team understands request identifiers, error handling, and replay behavior.</p>
+              </div>
+              <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                <p class="font-semibold text-slate-900">4. Live readiness handoff</p>
+                <p class="mt-2 leading-6 text-slate-600">Move into billing setup, quota review, and production key issuance after sandbox validation.</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="portal-panel-soft p-6">
+            <div class="portal-section-intro">
+              <h3 class="text-headline-md font-headline-md text-slate-900">Support Routes</h3>
+              <p class="portal-section-copy">Escalation points during onboarding.</p>
+            </div>
+            <div class="portal-stack-list text-sm">
+              <a class="portal-button portal-button-secondary w-full justify-between rounded-2xl px-4 py-3" href="#">
+                <span class="font-semibold text-slate-900">Open API Reference</span>
+                <span class="material-symbols-outlined text-slate-400">arrow_forward</span>
+              </a>
+              <a class="portal-button portal-button-secondary w-full justify-between rounded-2xl px-4 py-3" href="#">
+                <span class="font-semibold text-slate-900">Contact Integration Support</span>
+                <span class="material-symbols-outlined text-slate-400">mail</span>
+              </a>
+              <a class="portal-button portal-button-secondary w-full justify-between rounded-2xl px-4 py-3" href="#">
+                <span class="font-semibold text-slate-900">Review Platform Status</span>
+                <span class="material-symbols-outlined text-slate-400">open_in_new</span>
+              </a>
+            </div>
+            <div class="portal-empty-state mt-4">
+              <div class="flex items-start gap-3">
+                <span class="material-symbols-outlined text-slate-400">forum</span>
+                <div>
+                  <p class="portal-empty-state-title">No active onboarding support case is open</p>
+                  <p class="portal-empty-state-copy">Your team can continue through the sandbox checklist without waiting on a platform-side unblock. Open support only if the first request or webhook verification fails.</p>
+                </div>
+              </div>
+            </div>
+          </section>
+        </aside>
+      </div>
+
+      <div class="grid grid-cols-1 gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+        <section class="portal-panel p-6 md:p-8">
+          <div class="flex items-start justify-between gap-5">
+            <div>
+              <p class="portal-context-title mb-3">Sandbox Flow</p>
+              <h2 class="text-3xl font-bold tracking-tight text-slate-900">Use the sandbox like a preflight environment</h2>
+              <p class="mt-4 max-w-2xl text-sm leading-7 text-slate-600">The sandbox mirrors the production contract surface but keeps reward outcomes, ledger writes, and downstream notifications in a safe test lane. Validate request shape, response handling, and idempotency before routing live traffic.</p>
+            </div>
+            <div class="hidden rounded-3xl border border-sky-100 bg-sky-50/80 px-4 py-3 text-right lg:block">
+              <p class="portal-micro-label portal-micro-label-info">Mode</p>
+              <p class="mt-2 text-2xl font-bold text-slate-900">Sandbox</p>
+            </div>
+          </div>
+          <div class="mt-8 grid gap-4 md:grid-cols-3">
+            <div class="rounded-2xl border border-slate-200 bg-white p-5">
+              <div class="flex items-center gap-2 text-slate-900">
+                <span class="material-symbols-outlined text-sky-600">science</span>
+                <p class="text-sm font-semibold">Isolated testing</p>
+              </div>
+              <p class="mt-3 text-sm leading-6 text-slate-600">Send events, retry requests, and inspect metadata without touching live tenant budgets or outbound notifications.</p>
+            </div>
+            <div class="rounded-2xl border border-slate-200 bg-white p-5">
+              <div class="flex items-center gap-2 text-slate-900">
+                <span class="material-symbols-outlined text-sky-600">vpn_key</span>
+                <p class="text-sm font-semibold">Separate credentials</p>
+              </div>
+              <p class="mt-3 text-sm leading-6 text-slate-600">Sandbox keys are scoped away from production access while preserving the same permission and rotation model.</p>
+            </div>
+            <div class="rounded-2xl border border-slate-200 bg-white p-5">
+              <div class="flex items-center gap-2 text-slate-900">
+                <span class="material-symbols-outlined text-sky-600">sync_alt</span>
+                <p class="text-sm font-semibold">Production-like contract</p>
+              </div>
+              <p class="mt-3 text-sm leading-6 text-slate-600">Confirm status codes, response fields, and retry semantics before live project onboarding reaches billing and quota review.</p>
+            </div>
+          </div>
+        </section>
+
+        <aside class="portal-panel-soft p-6">
+          <div class="mb-4">
+            <h3 class="text-headline-md font-headline-md text-slate-900">Response Shape</h3>
+            <p class="mt-1 text-sm text-slate-500">What your team should verify on the first successful request.</p>
+          </div>
+          <div class="code-block overflow-x-auto rounded-2xl p-4 text-[12px] leading-6">
+            <pre><code>{
+  <span class="text-emerald-300">"id"</span>: <span class="text-amber-200">"reward_01J2Y9..."</span>,
+  <span class="text-emerald-300">"status"</span>: <span class="text-amber-200">"issued"</span>,
+  <span class="text-emerald-300">"currency"</span>: <span class="text-amber-200">"USD"</span>,
+  <span class="text-emerald-300">"amount"</span>: <span class="text-amber-200">2500</span>,
+  <span class="text-emerald-300">"metadata"</span>: {
+    <span class="text-emerald-300">"source"</span>: <span class="text-amber-200">"portal-quickstart"</span>
+  }
+}</code></pre>
+          </div>
+          <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm leading-6 text-slate-600">
+            Check that your application stores the returned `id`, preserves request metadata, and can safely retry the same operation without ambiguous duplicate handling.
+          </div>
+        </aside>
+      </div>
+    </main>
+  </div>
+
+  <footer class="portal-footer">
+    <div class="portal-footer-shell">
+      <span class="portal-footer-copy">© 2024 Reward SaaS Portal. Sandbox onboarding, SDK quickstart, and support routes.</span>
+      <div class="portal-footer-links">
+        <a class="portal-footer-link" href="#">Privacy Policy</a>
+        <a class="portal-footer-link" href="#">Terms of Service</a>
+        <a class="portal-footer-link" href="#">Security</a>
+        <a class="portal-footer-link" href="#">Status</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

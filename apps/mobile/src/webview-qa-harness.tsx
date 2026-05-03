@@ -54,7 +54,7 @@ export function WebviewQaHarness(props: WebviewQaHarnessProps) {
 
   return (
     <SafeAreaView style={props.styles.safeArea}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       <View style={styles.webviewShell}>
         <View style={styles.webviewHeader}>
           <Text style={props.styles.kicker}>WebView QA</Text>

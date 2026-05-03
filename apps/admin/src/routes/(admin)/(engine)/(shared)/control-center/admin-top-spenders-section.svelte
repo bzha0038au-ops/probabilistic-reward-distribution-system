@@ -11,12 +11,21 @@
 </script>
 
 {#if spenders.length > 0}
-  <section class="mt-8 card bg-base-100 shadow">
+  <section class="card bg-base-100 shadow">
     <div class="card-body">
-      <h2 class="card-title">{t("admin.topSpenders.title")}</h2>
-      <div class="overflow-x-auto mt-4">
+      <div class="space-y-2">
+        <p
+          class="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-[var(--admin-primary)]"
+        >
+          Spend Watch
+        </p>
+        <h2 class="card-title">{t("admin.topSpenders.title")}</h2>
+      </div>
+      <div class="mt-4 overflow-x-auto">
         <table class="table">
-          <thead>
+          <thead
+            class="font-mono text-[0.68rem] uppercase tracking-[0.18em] text-slate-500"
+          >
             <tr>
               <th>{t("admin.topSpenders.userId")}</th>
               <th>{t("admin.topSpenders.spend")}</th>
@@ -25,8 +34,12 @@
           <tbody>
             {#each spenders as spender}
               <tr>
-                <td>{spender.userId}</td>
-                <td>{spender.spent}</td>
+                <td class="font-mono text-[var(--admin-ink)]">
+                  #{spender.userId}
+                </td>
+                <td class="font-mono text-[var(--admin-ink)]">
+                  {spender.spent}
+                </td>
               </tr>
             {/each}
           </tbody>

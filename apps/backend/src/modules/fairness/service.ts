@@ -3,6 +3,7 @@ import { fairnessAudits, fairnessSeeds } from '@reward/database';
 import { and, desc, eq, lt } from '@reward/database/orm';
 
 import type { DbClient, DbTransaction } from '../../db';
+import { getConfig } from '../../shared/config';
 import { persistenceError } from '../../shared/errors';
 
 type DbExecutor = DbClient | DbTransaction;
@@ -45,6 +46,8 @@ const EMPTY_AUDIT_SUMMARY: FairnessAuditSummary = {
 
 const hashSeed = (seed: string) =>
   createHash('sha256').update(seed).digest('hex');
+
+const shouldSkipInitialHistoricalAudit = () => getConfig().nodeEnv === 'development';
 
 const resolveEpochSeconds = (epochSeconds?: number | null) => {
   const parsed = Number(epochSeconds ?? 0);
@@ -455,7 +458,11 @@ export async function auditPendingFairnessEpochs(
     .orderBy(desc(fairnessAudits.epoch))
     .limit(1);
 
-  const startEpoch = latestAudit ? latestAudit.epoch + 1 : Math.max(current - 1, 0);
+  const startEpoch = latestAudit
+    ? latestAudit.epoch + 1
+    : shouldSkipInitialHistoricalAudit()
+      ? current
+      : Math.max(current - 1, 0);
 
   let auditedEpochs = 0;
   let verifiedEpochs = 0;

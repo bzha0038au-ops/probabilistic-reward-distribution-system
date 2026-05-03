@@ -1,0 +1,11 @@
+{
+  "origin": "top-left, x rightwards, y downwards",
+  "route": "#/play/ticket",
+  "activeTab": "play",
+  "stage": "ticket",
+  "scratchTotal": 0,
+  "displayCash": 20,
+  "scratchableSlot": 0,
+  "revealedSlots": [],
+  "runCount": 1
+}

@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Usage &amp; Observability | Reward SaaS Portal</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&amp;family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="../shared-ui.css" rel="stylesheet"/>
+<script id="tailwind-config">tailwind.config = {darkMode: "class", theme: {extend: {colors: {surface: "#fdf8f8", "on-surface-variant": "#58423a", "surface-container-lowest": "#ffffff", "surface-variant": "#e6e1e1", "surface-tint": "#a73a00", "primary-container": "#a73a00", "on-surface": "#1c1b1b", "on-error": "#ffffff", "on-tertiary": "#ffffff", "secondary-container": "#655dfb", "primary-fixed": "#ffdbce", "tertiary-container": "#c2aa4e", "surface-container": "#f1edec", "on-background": "#1c1b1b", "surface-container-high": "#ece7e7", "on-error-container": "#93000a", "on-secondary-fixed-variant": "#3322cc", secondary: "#4b41e1", "outline-variant": "#dfc0b5", "error-container": "#ffdad6", "inverse-surface": "#313030", "tertiary-fixed-dim": "#dfc566", "on-primary-fixed": "#370e00", "surface-bright": "#fdf8f8", "on-secondary-container": "#fffbff", "on-secondary-fixed": "#0f0069", background: "#fdf8f8", "secondary-fixed": "#e2dfff", "on-secondary": "#ffffff", "tertiary-fixed": "#fce17e", "inverse-on-surface": "#f4f0ef", error: "#ba1a1a", "on-primary-fixed-variant": "#802a00", "on-primary-container": "#ffcebc", "on-primary": "#ffffff", "surface-container-low": "#f7f2f2", "surface-container-highest": "#e6e1e1", "on-tertiary-fixed": "#221b00", "inverse-primary": "#ffb599", "surface-dim": "#ddd9d8", tertiary: "#705d00", "primary-fixed-dim": "#ffb599", outline: "#8c7168", "on-tertiary-container": "#4c3e00", "on-tertiary-fixed-variant": "#544600", primary: "#7f2a00", "secondary-fixed-dim": "#c3c0ff"}, borderRadius: {DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px"}, spacing: {xs: "4px", gutter: "16px", sm: "8px", lg: "24px", "container-max": "1280px", md: "16px", xl: "32px", unit: "4px", margin: "20px"}, fontFamily: {"body-sm": ["Inter"], "body-base": ["Inter"], "numeric-data": ["Inter"], "headline-md": ["Plus Jakarta Sans"], "display-lg": ["Manrope"], "label-caps": ["Inter"], "body-md": ["Be Vietnam Pro"], "headline-lg": ["Plus Jakarta Sans"], "body-lg": ["Be Vietnam Pro"], "label-bold": ["Be Vietnam Pro"], "headline-xl": ["Plus Jakarta Sans"], "label-sm": ["Be Vietnam Pro"]}, fontSize: {"body-sm": ["14px", {lineHeight: "1.5", letterSpacing: "0em", fontWeight: "400"}], "body-base": ["16px", {lineHeight: "1.6", letterSpacing: "0em", fontWeight: "400"}], "numeric-data": ["14px", {lineHeight: "1.0", fontWeight: "500"}], "headline-md": ["24px", {lineHeight: "30px", fontWeight: "700"}], "display-lg": ["48px", {lineHeight: "1.1", letterSpacing: "-0.02em", fontWeight: "700"}], "label-caps": ["12px", {lineHeight: "1.0", letterSpacing: "0.05em", fontWeight: "600"}], "body-md": ["16px", {lineHeight: "24px", fontWeight: "400"}], "headline-lg": ["32px", {lineHeight: "38px", letterSpacing: "-0.01em", fontWeight: "800"}], "body-lg": ["18px", {lineHeight: "28px", fontWeight: "400"}], "label-bold": ["14px", {lineHeight: "20px", fontWeight: "700"}], "headline-xl": ["40px", {lineHeight: "48px", letterSpacing: "-0.02em", fontWeight: "800"}], "label-sm": ["12px", {lineHeight: "16px", fontWeight: "500"}]}}}};</script>
+</head>
+<body class="bg-surface font-body-base text-on-surface antialiased min-h-screen portal-page-shell">
+<div class="portal-vignette-fixed"></div>
+<nav class="fixed top-0 w-full z-50 border-b border-slate-200/60 bg-white/80 backdrop-blur-md">
+<div class="flex items-center justify-between px-8 h-16 max-w-[1280px] mx-auto">
+<div class="flex items-center gap-12">
+<span class="text-lg font-bold text-slate-900 tracking-tighter portal-topbar-brand">Reward SaaS Portal</span>
+<div class="hidden md:flex items-center gap-8 font-manrope text-sm font-medium tracking-tight">
+<a class="portal-topnav-link" href="#">Overview</a>
+<a class="portal-topnav-link" href="#">Tenants</a>
+<a class="portal-topnav-link" href="#">API Keys</a>
+<a class="portal-topnav-link portal-topnav-link-active" href="#">Usage</a>
+<a class="portal-topnav-link" href="#">Reports</a>
+<a class="portal-topnav-link" href="#">Prizes</a>
+<a class="portal-topnav-link" href="#">Billing</a>
+<a class="portal-topnav-link" href="#">Docs</a>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<span class="portal-topbar-badge hidden lg:flex">Production Mode</span>
+<button class="portal-topbar-icon-button">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="portal-topbar-icon-button">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<div class="portal-topbar-avatar">
+<img alt="User profile" class="w-full h-full object-cover" data-alt="A professional headshot of a software engineer in a modern office setting. The lighting is soft with a bright blue and white color palette. The engineer is wearing a dark navy sweater and has a confident, approachable expression, fitting the premium B2B SaaS aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCPwAZjFqtfzojkqgKfAYphK5ftmIUOgPoz4eyYHqyWYzMqXL2H8lItIUCvKPcvPUUDTMbLJS8IPFtbMXXpqwuHaFbyXIPsJMzAkFQNwEUsnt6Apt6J6pMPiCbTjZcvhM_WQeVRMshPGsvpxZKeK1Nn0BnDcNuTxAYpnYaCwXWhF3BYGlCobKoQenzX8QXMQdFIe6WutrDYP2jlXmwHkrISYgC6KIf2mxbuwaisyqnHjWFYube7qbVVEI6M_f7Z0_40k2pnpkD6V8A"/>
+</div>
+</div>
+</div>
+</nav>
+<div class="max-w-[1280px] mx-auto px-5 pt-24 pb-12 flex flex-col gap-6 relative z-10 sm:px-8 lg:flex-row">
+<aside class="portal-context-rail w-72 flex flex-col p-4 space-y-2">
+<div class="px-4 py-2 mb-4">
+<p class="portal-context-title">Usage Signals</p>
+<p class="portal-context-copy mt-3">Keep quota windows, trend direction, and lightweight health signals visible without turning the page into a full monitoring product.</p>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="portal-context-link portal-context-link-active text-sm font-semibold" href="#">
+<span class="material-symbols-outlined portal-icon-filled">bar_chart</span>
+<span>Quota Windows</span>
+</a>
+<a class="portal-context-link text-sm" href="#">
+<span class="material-symbols-outlined">timeline</span>
+<span>30-Day Trend</span>
+</a>
+<a class="portal-context-link text-sm" href="#">
+<span class="material-symbols-outlined">warning</span>
+<span>Usage Alerts</span>
+</a>
+<a class="portal-context-link text-sm" href="#">
+<span class="material-symbols-outlined">monitoring</span>
+<span>Health Signals</span>
+</a>
+<a class="portal-context-link text-sm" href="#">
+<span class="material-symbols-outlined">download</span>
+<span>Exports</span>
+</a>
+</nav>
+<button class="portal-button portal-button-primary mt-auto w-full">
+<span class="material-symbols-outlined text-sm">download</span>
+            Export Usage Data
+        </button>
+</aside>
+<main class="portal-context-main flex-1 min-w-0">
+<div class="portal-page-intro">
+<div class="portal-scope-strip">
+<span class="portal-scope-chip">Acme Corp</span>
+<span class="portal-scope-chip">All Projects</span>
+<span class="portal-scope-chip">Last 30 Days</span>
+</div>
+<h1 class="portal-page-title">Usage &amp; Observability</h1>
+<p class="portal-page-copy">Track consumption, quota headroom, and light project health signals for the current tenant. This view should help operators catch usage risk early, not replace a dedicated monitoring stack.</p>
+</div>
+<div class="flex flex-wrap gap-sm mb-8">
+<div class="portal-field-shell">
+<span class="material-symbols-outlined text-outline">filter_list</span>
+<select class="text-body-sm font-medium cursor-pointer">
+<option>All Projects</option>
+<option>Acme Reward Engine</option>
+<option>Beta Internal Tool</option>
+</select>
+</div>
+<div class="portal-field-shell">
+<span class="material-symbols-outlined text-outline">calendar_today</span>
+<select class="text-body-sm font-medium cursor-pointer">
+<option>Last 30 Days</option>
+<option>Last 7 Days</option>
+<option>Last 24 Hours</option>
+</select>
+</div>
+</div>
+<div class="portal-inline-banner portal-inline-banner-warn mb-8">
+<span class="material-symbols-outlined text-[20px]">warning</span>
+<div>
+<p class="text-sm font-semibold">Compute quota is nearing the window limit</p>
+<p class="mt-1 text-sm leading-6">One production project is at 96% of its compute allocation. Review rate shaping or request a higher ceiling before the current window closes.</p>
+</div>
+</div>
+<section class="portal-metric-grid md:grid-cols-3">
+<div class="portal-panel-soft portal-metric-card flex flex-col justify-between">
+<div>
+<div class="portal-metric-card-head">
+<span class="portal-label-caps">API Requests</span>
+<span class="text-primary font-numeric-data text-numeric-data">85% Used</span>
+</div>
+<div class="portal-metric-value mb-4">42.5M <span class="text-body-sm font-normal text-on-surface-variant">/ 50M</span></div>
+<div class="w-full bg-surface-container h-2 rounded-full overflow-hidden mb-2">
+<div class="bg-primary h-full w-[85%] rounded-full"></div>
+</div>
+<p class="portal-metric-copy">Estimated window reset: <span class="font-medium">12 Days</span></p>
+</div>
+<div class="mt-6 pt-4 border-t border-outline-variant flex items-center justify-between">
+<span class="text-body-sm text-primary font-medium">Auto-scaling active</span>
+<span class="material-symbols-outlined portal-icon-filled text-primary text-sm">check_circle</span>
+</div>
+</div>
+<div class="portal-panel-soft portal-metric-card flex flex-col justify-between">
+<div>
+<div class="portal-metric-card-head">
+<span class="portal-label-caps">Tenant Seats</span>
+<span class="text-tertiary font-numeric-data text-numeric-data">12% Used</span>
+</div>
+<div class="portal-metric-value mb-4">1,240 <span class="text-body-sm font-normal text-on-surface-variant">/ 10,000</span></div>
+<div class="w-full bg-surface-container h-2 rounded-full overflow-hidden mb-2">
+<div class="bg-tertiary h-full w-[12%] rounded-full"></div>
+</div>
+<p class="portal-metric-copy">Enterprise plan: <span class="font-medium">Unlimited available</span></p>
+</div>
+<div class="mt-6 pt-4 border-t border-outline-variant flex items-center justify-between">
+<span class="text-body-sm text-on-surface-variant">Manage permissions</span>
+<span class="material-symbols-outlined text-outline text-sm">arrow_forward</span>
+</div>
+</div>
+<div class="portal-panel-soft portal-metric-card border border-error/20 bg-error-container/20 flex flex-col justify-between">
+<div>
+<div class="portal-metric-card-head">
+<span class="portal-label-caps portal-label-caps-danger">Compute Units</span>
+<span class="text-error font-numeric-data text-numeric-data font-bold">96% Used</span>
+</div>
+<div class="portal-metric-value mb-4">9,642 <span class="text-body-sm font-normal text-on-surface-variant">/ 10k</span></div>
+<div class="w-full bg-surface-container h-2 rounded-full overflow-hidden mb-2">
+<div class="bg-error h-full w-[96%] rounded-full"></div>
+</div>
+<p class="mt-1 text-sm font-medium text-error">Approaching hard limit. Action required.</p>
+</div>
+<div class="mt-6 pt-4 border-t border-error/10">
+<button class="portal-button portal-button-danger w-full">
+                        Upgrade Quota
+                    </button>
+</div>
+</div>
+</section>
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-10">
+<section class="portal-panel lg:col-span-8 p-6">
+<div class="mb-6 flex items-center justify-between">
+<div>
+<h2 class="font-headline-md text-headline-md text-on-surface">30-Day Usage Trend</h2>
+<p class="text-on-surface-variant text-body-sm">Aggregated request activity across the selected tenant projects.</p>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-full bg-primary"></span>
+<span class="text-body-sm font-medium text-on-surface-variant">Production</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-full bg-secondary-container border border-primary"></span>
+<span class="text-body-sm font-medium text-on-surface-variant">Sandbox</span>
+</div>
+</div>
+</div>
+<div class="h-[320px] w-full relative flex items-end gap-1 px-2">
+<div class="flex-1 bg-primary-container/20 hover:bg-primary-container/40 transition-colors rounded-t-sm h-[40%]"></div>
+<div class="flex-1 bg-primary-container/20 hover:bg-primary-container/40 transition-colors rounded-t-sm h-[45%]"></div>
+<div class="flex-1 bg-primary-container/20 hover:bg-primary-container/40 transition-colors rounded-t-sm h-[60%]"></div>
+<div class="flex-1 bg-primary-container/20 hover:bg-primary-container/40 transition-colors rounded-t-sm h-[55%]"></div>
+<div class="flex-1 bg-primary-container/20 hover:bg-primary-container/40 transition-colors rounded-t-sm h-[70%]"></div>
+<div class="flex-1 bg-primary-container/20 hover:bg-primary-container/40 transition-colors rounded-t-sm h-[65%]"></div>
+<div class="flex-1 bg-primary-container/20 hover:bg-primary-container/40 transition-colors rounded-t-sm h-[80%]"></div>
+<div class="flex-1 bg-primary-container/20 hover:bg-primary-container/40 transition-colors rounded-t-sm h-[75%]"></div>
+<div class="flex-1 bg-primary-container/20 hover:bg-primary-container/40 transition-colors rounded-t-sm h-[90%]"></div>
+<div class="flex-1 bg-primary h-full rounded-t-sm shadow-sm"></div>
+<div class="flex-1 bg-primary-container/20 hover:bg-primary-container/40 transition-colors rounded-t-sm h-[85%]"></div>
+<div class="flex-1 bg-primary-container/20 hover:bg-primary-container/40 transition-colors rounded-t-sm h-[70%]"></div>
+<div class="flex-1 bg-primary-container/20 hover:bg-primary-container/40 transition-colors rounded-t-sm h-[65%]"></div>
+<div class="flex-1 bg-primary-container/20 hover:bg-primary-container/40 transition-colors rounded-t-sm h-[80%]"></div>
+<div class="flex-1 bg-primary-container/20 hover:bg-primary-container/40 transition-colors rounded-t-sm h-[75%]"></div>
+<div class="flex-1 bg-primary-container/20 hover:bg-primary-container/40 transition-colors rounded-t-sm h-[82%]"></div>
+<div class="flex-1 bg-primary-container/20 hover:bg-primary-container/40 transition-colors rounded-t-sm h-[70%]"></div>
+<div class="flex-1 bg-primary-container/20 hover:bg-primary-container/40 transition-colors rounded-t-sm h-[60%]"></div>
+<div class="flex-1 bg-primary-container/20 hover:bg-primary-container/40 transition-colors rounded-t-sm h-[65%]"></div>
+<div class="flex-1 bg-primary-container/20 hover:bg-primary-container/40 transition-colors rounded-t-sm h-[50%]"></div>
+<div class="flex-1 bg-primary-container/20 hover:bg-primary-container/40 transition-colors rounded-t-sm h-[55%]"></div>
+<div class="flex-1 bg-primary-container/20 hover:bg-primary-container/40 transition-colors rounded-t-sm h-[40%]"></div>
+<div class="flex-1 bg-primary-container/20 hover:bg-primary-container/40 transition-colors rounded-t-sm h-[45%]"></div>
+<div class="flex-1 bg-primary-container/20 hover:bg-primary-container/40 transition-colors rounded-t-sm h-[30%]"></div>
+<div class="flex-1 bg-primary-container/20 hover:bg-primary-container/40 transition-colors rounded-t-sm h-[35%]"></div>
+<div class="flex-1 bg-primary-container/20 hover:bg-primary-container/40 transition-colors rounded-t-sm h-[50%]"></div>
+<div class="flex-1 bg-primary-container/20 hover:bg-primary-container/40 transition-colors rounded-t-sm h-[45%]"></div>
+<div class="flex-1 bg-primary-container/20 hover:bg-primary-container/40 transition-colors rounded-t-sm h-[40%]"></div>
+<div class="flex-1 bg-primary-container/20 hover:bg-primary-container/40 transition-colors rounded-t-sm h-[35%]"></div>
+<div class="flex-1 bg-primary-container/20 hover:bg-primary-container/40 transition-colors rounded-t-sm h-[20%]"></div>
+</div>
+<div class="portal-label-caps mt-4 flex justify-between text-outline">
+<span>01 Oct</span>
+<span>15 Oct</span>
+<span>Today</span>
+</div>
+</section>
+<aside class="lg:col-span-4 flex flex-col gap-6">
+<section class="portal-panel-soft p-lg">
+<div class="mb-4">
+<h3 class="font-headline-md text-body-base font-bold text-on-surface">Quota Alerts</h3>
+<p class="mt-1 text-sm text-on-surface-variant">Projects nearing a hard limit in the current window.</p>
+</div>
+<div class="space-y-4">
+<div class="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+<div class="flex items-center justify-between mb-2">
+<span class="text-sm font-semibold text-amber-900">Acme Reward Engine</span>
+<span class="portal-micro-label portal-micro-label-warn">96%</span>
+</div>
+<p class="text-xs leading-5 text-amber-800/80">Compute usage is close to the current cap. Window resets in 12 days.</p>
+</div>
+<div class="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+<div class="flex items-center justify-between mb-2">
+<span class="text-sm font-semibold text-slate-900">Beta Internal Tool</span>
+<span class="portal-micro-label portal-micro-label-muted">61%</span>
+</div>
+<p class="text-xs leading-5 text-slate-600">Healthy margin remains for both request and compute allocations.</p>
+</div>
+</div>
+</section>
+<section class="portal-panel-soft p-lg">
+<div class="mb-4">
+<h3 class="font-headline-md text-body-base font-bold text-on-surface">Regional Share</h3>
+<p class="mt-1 text-sm text-on-surface-variant">High-level traffic mix, not infrastructure diagnostics.</p>
+</div>
+<div class="space-y-4 text-sm">
+<div class="flex items-center justify-between">
+<span class="text-slate-600">US-EAST</span>
+<span class="font-numeric-data font-bold text-slate-900">45%</span>
+</div>
+<div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden"><div class="bg-sky-500 h-full w-[45%]"></div></div>
+<div class="flex items-center justify-between">
+<span class="text-slate-600">EU-WEST</span>
+<span class="font-numeric-data font-bold text-slate-900">32%</span>
+</div>
+<div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden"><div class="bg-indigo-400 h-full w-[32%]"></div></div>
+<div class="flex items-center justify-between">
+<span class="text-slate-600">ASIA-PAC</span>
+<span class="font-numeric-data font-bold text-slate-900">23%</span>
+</div>
+<div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden"><div class="bg-slate-400 h-full w-[23%]"></div></div>
+</div>
+</section>
+</aside>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-lg">
+<section class="portal-panel-soft rounded-xl overflow-hidden">
+<div class="p-lg border-b border-outline-variant bg-surface-container-low/50">
+<h3 class="font-headline-md text-body-base font-bold text-on-surface">Health Signals</h3>
+</div>
+<div class="p-lg space-y-6">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-lg bg-primary-container/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">rocket_launch</span>
+</div>
+<div>
+<div class="text-body-sm font-semibold text-on-surface">Successful Requests</div>
+<div class="text-xs text-on-surface-variant">HTTP 2xx, 3xx</div>
+</div>
+</div>
+<div class="text-right">
+<div class="font-numeric-data text-body-base font-bold text-on-surface">99.98%</div>
+<div class="text-[10px] font-bold text-primary">OPTIMAL</div>
+</div>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-lg bg-error-container/10 flex items-center justify-center text-error">
+<span class="material-symbols-outlined">error</span>
+</div>
+<div>
+<div class="text-body-sm font-semibold text-on-surface">System Errors</div>
+<div class="text-xs text-on-surface-variant">HTTP 4xx, 5xx</div>
+</div>
+</div>
+<div class="text-right">
+<div class="font-numeric-data text-body-base font-bold text-on-surface">0.02%</div>
+<div class="text-[10px] font-bold text-error">MONITORING</div>
+</div>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-lg bg-tertiary-container/10 flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined">timer</span>
+</div>
+<div>
+<div class="text-body-sm font-semibold text-on-surface">Avg. Latency</div>
+<div class="text-xs text-on-surface-variant">Global p95</div>
+</div>
+</div>
+<div class="text-right">
+<div class="font-numeric-data text-body-base font-bold text-on-surface">124ms</div>
+<div class="text-[10px] font-bold text-tertiary">+12ms VS PREV</div>
+</div>
+</div>
+</div>
+</section>
+<section class="portal-panel-soft rounded-xl overflow-hidden">
+<div class="p-lg border-b border-outline-variant bg-surface-container-low/50">
+<h3 class="font-headline-md text-body-base font-bold text-on-surface">Recent Anomalies</h3>
+</div>
+<div class="p-lg space-y-4">
+<div class="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+<div class="flex items-center justify-between mb-2">
+<span class="text-sm font-semibold text-amber-900">Webhook retry burst</span>
+<span class="portal-micro-label portal-micro-label-warn">1h ago</span>
+</div>
+<p class="text-xs leading-5 text-amber-800/80">Retries increased on the primary production endpoint after downstream timeouts.</p>
+</div>
+<div class="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+<div class="flex items-center justify-between mb-2">
+<span class="text-sm font-semibold text-slate-900">Latency spike resolved</span>
+<span class="portal-micro-label portal-micro-label-muted">6h ago</span>
+</div>
+<p class="text-xs leading-5 text-slate-600">P95 latency briefly rose in EU-WEST and returned to baseline after autoscaling.</p>
+</div>
+<div class="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+<div class="flex items-center justify-between mb-2">
+<span class="text-sm font-semibold text-slate-900">Sandbox request surge</span>
+<span class="portal-micro-label portal-micro-label-muted">Yesterday</span>
+</div>
+<p class="text-xs leading-5 text-slate-600">A single SDK smoke test generated 3.2x the normal sandbox request rate and then tapered off.</p>
+</div>
+</div>
+</section>
+<div class="portal-empty-state mt-6">
+<div class="flex items-start gap-3">
+<span class="material-symbols-outlined text-slate-400">notifications_off</span>
+<div>
+<p class="portal-empty-state-title">No escalated usage incidents beyond the listed anomalies</p>
+<p class="portal-empty-state-copy">The alert surface is currently limited to quota pressure and short-lived latency changes. No tenant-wide outage or billing-impacting traffic event is open.</p>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+<footer class="portal-footer">
+<div class="portal-footer-shell">
+<span class="portal-footer-copy">© 2024 Reward SaaS Portal. Quota windows, trend direction, and health signals.</span>
+<div class="portal-footer-links">
+<a class="portal-footer-link" href="#">Privacy Policy</a>
+<a class="portal-footer-link" href="#">Terms of Service</a>
+<a class="portal-footer-link" href="#">Security</a>
+<a class="portal-footer-link" href="#">Status</a>
+</div>
+</div>
+</footer>
+</body></html>

@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Overview - Reward SaaS Portal</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&amp;family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="../shared-ui.css" rel="stylesheet"/>
+<script id="tailwind-config">tailwind.config = {darkMode: "class", theme: {extend: {colors: {surface: "#fdf8f8", "on-surface-variant": "#58423a", "surface-container-lowest": "#ffffff", "surface-variant": "#e6e1e1", "surface-tint": "#a73a00", "primary-container": "#a73a00", "on-surface": "#1c1b1b", "on-error": "#ffffff", "on-tertiary": "#ffffff", "secondary-container": "#655dfb", "primary-fixed": "#ffdbce", "tertiary-container": "#c2aa4e", "surface-container": "#f1edec", "on-background": "#1c1b1b", "surface-container-high": "#ece7e7", "on-error-container": "#93000a", "on-secondary-fixed-variant": "#3322cc", secondary: "#4b41e1", "outline-variant": "#dfc0b5", "error-container": "#ffdad6", "inverse-surface": "#313030", "tertiary-fixed-dim": "#dfc566", "on-primary-fixed": "#370e00", "surface-bright": "#fdf8f8", "on-secondary-container": "#fffbff", "on-secondary-fixed": "#0f0069", background: "#fdf8f8", "secondary-fixed": "#e2dfff", "on-secondary": "#ffffff", "tertiary-fixed": "#fce17e", "inverse-on-surface": "#f4f0ef", error: "#ba1a1a", "on-primary-fixed-variant": "#802a00", "on-primary-container": "#ffcebc", "on-primary": "#ffffff", "surface-container-low": "#f7f2f2", "surface-container-highest": "#e6e1e1", "on-tertiary-fixed": "#221b00", "inverse-primary": "#ffb599", "surface-dim": "#ddd9d8", tertiary: "#705d00", "primary-fixed-dim": "#ffb599", outline: "#8c7168", "on-tertiary-container": "#4c3e00", "on-tertiary-fixed-variant": "#544600", primary: "#7f2a00", "secondary-fixed-dim": "#c3c0ff"}, borderRadius: {DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px"}, spacing: {xs: "4px", gutter: "16px", sm: "8px", lg: "24px", "container-max": "1280px", md: "16px", xl: "32px", unit: "4px", margin: "20px"}, fontFamily: {"body-sm": ["Inter"], "body-base": ["Inter"], "numeric-data": ["Inter"], "headline-md": ["Plus Jakarta Sans"], "display-lg": ["Manrope"], "label-caps": ["Inter"], "body-md": ["Be Vietnam Pro"], "headline-lg": ["Plus Jakarta Sans"], "body-lg": ["Be Vietnam Pro"], "label-bold": ["Be Vietnam Pro"], "headline-xl": ["Plus Jakarta Sans"], "label-sm": ["Be Vietnam Pro"]}, fontSize: {"body-sm": ["14px", {lineHeight: "1.5", letterSpacing: "0em", fontWeight: "400"}], "body-base": ["16px", {lineHeight: "1.6", letterSpacing: "0em", fontWeight: "400"}], "numeric-data": ["14px", {lineHeight: "1.0", fontWeight: "500"}], "headline-md": ["24px", {lineHeight: "30px", fontWeight: "700"}], "display-lg": ["48px", {lineHeight: "1.1", letterSpacing: "-0.02em", fontWeight: "700"}], "label-caps": ["12px", {lineHeight: "1.0", letterSpacing: "0.05em", fontWeight: "600"}], "body-md": ["16px", {lineHeight: "24px", fontWeight: "400"}], "headline-lg": ["32px", {lineHeight: "38px", letterSpacing: "-0.01em", fontWeight: "800"}], "body-lg": ["18px", {lineHeight: "28px", fontWeight: "400"}], "label-bold": ["14px", {lineHeight: "20px", fontWeight: "700"}], "headline-xl": ["40px", {lineHeight: "48px", letterSpacing: "-0.02em", fontWeight: "800"}], "label-sm": ["12px", {lineHeight: "16px", fontWeight: "500"}]}}}};</script>
+</head>
+<body class="bg-surface font-body-base text-on-surface antialiased portal-page-shell">
+<div class="portal-vignette-fixed"></div>
+<header class="fixed top-0 w-full z-50 border-b border-slate-200/60 bg-white/80 backdrop-blur-md shadow-sm shadow-slate-200/50">
+<nav class="max-w-[1280px] mx-auto flex h-16 items-center justify-between px-8">
+<div class="flex items-center gap-8">
+<span class="text-lg font-bold tracking-tighter text-slate-900 portal-topbar-brand">Reward SaaS Portal</span>
+<div class="hidden md:flex items-center gap-6">
+<a class="portal-topnav-link portal-topnav-link-active" href="#">Overview</a>
+<a class="portal-topnav-link" href="#">Tenants</a>
+<a class="portal-topnav-link" href="#">API Keys</a>
+<a class="portal-topnav-link" href="#">Usage</a>
+<a class="portal-topnav-link" href="#">Reports</a>
+<a class="portal-topnav-link" href="#">Prizes</a>
+<a class="portal-topnav-link" href="#">Billing</a>
+<a class="portal-topnav-link" href="#">Docs</a>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="portal-topbar-badge hidden lg:flex">
+<span class="material-symbols-outlined text-[18px]">domain</span>
+<span>Production Mode</span>
+</div>
+<button class="portal-topbar-icon-button">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="portal-topbar-icon-button portal-topbar-icon-button-active">
+<span class="material-symbols-outlined">dashboard</span>
+</button>
+<div class="portal-topbar-avatar">
+<img alt="User profile" class="h-full w-full object-cover" data-alt="A professional headshot of a software engineer in a minimalist office setting with soft, high-key natural lighting. The subject has a friendly expression and is wearing a dark, modern polo shirt. The background is slightly blurred with soft grey and blue tones, maintaining a clean B2B SaaS aesthetic and corporate professional mood." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCKmT5G0dItJUEIJpv5sJVXiZG0ybzFrCcl0jtNSyIJJpGdpJ4X_FG_LCHHBe-7AvB6haRjJOG977ZcMbv5GF6TXgEEdn_m-tlLPBuBOivB-ZSS21bsoiBTkJxrDueqrJUl7893NyG5j12Zl9OUPgZ41d2Ir3SO_VBOQt5dy2WsEpoELcxnvRh9V4wC5Tz6l1vjevZRFetEMGnEtqOBp9q-9fNbP66qMcz-X4CMC91qT1dp477XUPgwMtSpl_7Dkh6TRY-dP4_Kutw"/>
+</div>
+</div>
+</nav>
+</header>
+<div class="max-w-[1280px] mx-auto px-5 pt-24 pb-16 flex flex-col gap-6 relative z-10 sm:px-8 lg:flex-row">
+<aside class="portal-context-rail w-72 flex flex-col p-4 space-y-2">
+<div class="mb-6 px-4 py-2">
+<p class="portal-context-title">Overview Home</p>
+<p class="portal-context-copy mt-3">Use the landing screen to move the tenant from sandbox setup into first live reward traffic with as little context switching as possible.</p>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="portal-context-link portal-context-link-active text-sm font-semibold" href="#">
+<span class="material-symbols-outlined portal-icon-filled">rocket_launch</span>
+<span>Sandbox Checklist</span>
+</a>
+<a class="portal-context-link text-sm" href="#">
+<span class="material-symbols-outlined">domain</span>
+<span>Current Scope</span>
+</a>
+<a class="portal-context-link text-sm" href="#">
+<span class="material-symbols-outlined">bolt</span>
+<span>Quick Actions</span>
+</a>
+<a class="portal-context-link text-sm" href="#">
+<span class="material-symbols-outlined">verified</span>
+<span>Go-Live Readiness</span>
+</a>
+<a class="portal-context-link text-sm" href="#">
+<span class="material-symbols-outlined">history</span>
+<span>Recent Events</span>
+</a>
+</nav>
+<button class="portal-button portal-button-primary mt-auto w-full">
+            Open SDK Quickstart
+        </button>
+</aside>
+<main class="portal-context-main flex-1 min-w-0">
+<div class="flex flex-col gap-6">
+<div class="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+<div class="portal-page-intro portal-animate-in">
+<div class="portal-scope-strip">
+<span class="portal-scope-chip">Acme Corp</span>
+<span class="portal-scope-chip">Sandbox Project</span>
+<span class="portal-scope-chip">Starter Key Ready</span>
+</div>
+<h1 class="portal-page-title">Overview</h1>
+<p class="portal-page-copy">This is the operator home for the current tenant. Keep onboarding, current scope, starter credentials, and the first reward event path obvious before surfacing denser operational detail.</p>
+</div>
+<div class="portal-page-actions">
+<button class="portal-button portal-button-secondary">
+<span class="material-symbols-outlined text-[18px]">description</span>
+<span>View Docs</span>
+</button>
+<button class="portal-button portal-button-primary">
+<span class="material-symbols-outlined text-[18px]">add</span>
+<span>Create API Key</span>
+</button>
+</div>
+</div>
+<div class="portal-inline-banner portal-inline-banner-info portal-inline-banner-live portal-animate-in portal-animate-delay-1">
+<span class="material-symbols-outlined text-[20px]">tips_and_updates</span>
+<div>
+<p class="text-sm font-semibold">Recommended next step</p>
+<p class="mt-1 text-sm leading-6 text-sky-800/80">Your sandbox key is already issued. Trigger one test reward event and confirm webhook delivery before requesting production review.</p>
+</div>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+<section class="portal-panel lg:col-span-8 p-8 portal-hover-lift portal-animate-in portal-animate-delay-2">
+<div class="mb-6 flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+<div>
+<h2 class="text-headline-md font-headline-md text-slate-900">Sandbox Onboarding</h2>
+<p class="mt-1 text-sm text-slate-500">Complete the core setup sequence for your first live-ready reward integration.</p>
+</div>
+<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-right">
+<div class="text-2xl font-bold text-sky-600">60%</div>
+<div class="portal-progress-track mt-2 h-1.5 w-32">
+<div class="portal-progress-fill h-full w-3/5"></div>
+</div>
+<div class="portal-label-caps portal-label-caps-info mt-2">2 of 4 complete</div>
+</div>
+</div>
+<div class="space-y-4">
+<div class="portal-panel-soft flex items-center gap-4 p-4">
+<div class="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+<span class="material-symbols-outlined text-sm">check_circle</span>
+</div>
+<div class="flex-1">
+<p class="text-sm font-semibold text-slate-900">Configure tenant settings</p>
+<p class="text-xs text-slate-500">Verified domain, reward currency, and workspace billing contact.</p>
+</div>
+<span class="text-xs italic text-slate-400">Completed</span>
+</div>
+<div class="portal-panel-soft flex items-center gap-4 p-4">
+<div class="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+<span class="material-symbols-outlined text-sm">check_circle</span>
+</div>
+<div class="flex-1">
+<p class="text-sm font-semibold text-slate-900">Issue sandbox API key</p>
+<p class="text-xs text-slate-500">Starter credential created for the current project environment.</p>
+</div>
+<span class="text-xs italic text-slate-400">Completed</span>
+</div>
+<div class="rounded-2xl border border-sky-100 bg-sky-50/70 p-4">
+<div class="flex items-start gap-4">
+<div class="flex h-7 w-7 items-center justify-center rounded-full border-2 border-sky-400 text-sky-700">
+<span class="text-[10px] font-bold">3</span>
+</div>
+<div class="flex-1">
+<p class="text-sm font-semibold text-sky-900">Send first reward event</p>
+<p class="mt-1 text-xs leading-5 text-sky-700/80">Use the starter key and SDK quickstart to submit a test event, then verify the response payload and webhook trace.</p>
+</div>
+<button class="portal-button portal-button-primary portal-button-sm">Start Integration</button>
+</div>
+</div>
+<div class="portal-panel-soft flex items-center gap-4 p-4 opacity-70">
+<div class="flex h-7 w-7 items-center justify-center rounded-full border-2 border-slate-200 text-slate-400">
+<span class="text-[10px] font-bold">4</span>
+</div>
+<div class="flex-1">
+<p class="text-sm font-semibold text-slate-900">Apply for production access</p>
+<p class="text-xs text-slate-500">Submit the integration for review once webhook delivery and budget policy are confirmed.</p>
+</div>
+</div>
+</div>
+<div class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+<div class="portal-panel-soft p-4">
+<div class="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-900">
+<span class="material-symbols-outlined text-sky-600 text-[18px]">vpn_key</span>
+<span>Starter key status</span>
+</div>
+<p class="text-sm text-slate-500">Issued 3 hours ago for <span class="portal-inline-code">sandbox_default</span>. Rotate only if the credential has been shared outside the SDK test path.</p>
+</div>
+<div class="portal-panel-soft p-4">
+<div class="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-900">
+<span class="material-symbols-outlined text-sky-600 text-[18px]">webhook</span>
+<span>Webhook verification</span>
+</div>
+<p class="text-sm text-slate-500">One retrying endpoint is still pending a successful callback. Resolve this before asking for production review.</p>
+</div>
+</div>
+</section>
+<aside class="lg:col-span-4 flex flex-col gap-6">
+<section class="portal-panel-soft p-6">
+<div class="portal-section-intro">
+<h3 class="text-headline-md font-headline-md text-slate-900">Current Scope</h3>
+<p class="portal-section-copy">The dashboard should keep tenant and project context visible at a glance.</p>
+</div>
+<div class="portal-detail-list">
+<div class="flex items-center justify-between">
+<span class="text-slate-500">Tenant</span>
+<span class="font-semibold text-slate-900">Acme Corp</span>
+</div>
+<div class="flex items-center justify-between">
+<span class="text-slate-500">Project</span>
+<span class="font-semibold text-slate-900">Sandbox Project</span>
+</div>
+<div class="flex items-center justify-between">
+<span class="text-slate-500">Environment</span>
+<span class="portal-status-pill portal-status-info">Sandbox</span>
+</div>
+<div class="flex items-center justify-between">
+<span class="text-slate-500">Owner</span>
+<span class="font-semibold text-slate-900">Julian Draxler</span>
+</div>
+<div class="flex items-center justify-between">
+<span class="text-slate-500">Last key rotation</span>
+<span class="font-semibold text-slate-900">3h ago</span>
+</div>
+</div>
+</section>
+<section class="portal-panel-soft p-6">
+<div class="portal-section-intro">
+<h3 class="text-headline-md font-headline-md text-slate-900">Quick Actions</h3>
+<p class="portal-section-copy">Primary setup routes should be obvious and low-friction.</p>
+</div>
+<div class="grid grid-cols-1 gap-2">
+<button class="group flex items-center justify-between rounded-xl border border-slate-100 p-3 transition-all hover:border-sky-200 hover:bg-sky-50">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-sky-600">person_add</span>
+<span class="text-sm font-medium text-slate-700">Invite Team</span>
+</div>
+<span class="material-symbols-outlined text-sm text-slate-300 group-hover:text-sky-400">chevron_right</span>
+</button>
+<button class="group flex items-center justify-between rounded-xl border border-slate-100 p-3 transition-all hover:border-sky-200 hover:bg-sky-50">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-sky-600">account_balance_wallet</span>
+<span class="text-sm font-medium text-slate-700">Billing Setup</span>
+</div>
+<span class="material-symbols-outlined text-sm text-slate-300 group-hover:text-sky-400">chevron_right</span>
+</button>
+<button class="group flex items-center justify-between rounded-xl border border-slate-100 p-3 transition-all hover:border-sky-200 hover:bg-sky-50">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-sky-600">webhook</span>
+<span class="text-sm font-medium text-slate-700">Manage Webhooks</span>
+</div>
+<span class="material-symbols-outlined text-sm text-slate-300 group-hover:text-sky-400">chevron_right</span>
+</button>
+</div>
+</section>
+<section class="portal-panel-soft p-6">
+<div class="portal-section-intro portal-section-intro-compact">
+<span class="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+<span class="material-symbols-outlined">verified</span>
+</span>
+<div>
+<h3 class="text-headline-md font-headline-md text-slate-900">Go-Live Readiness</h3>
+<p class="portal-section-copy">Review blockers before production review.</p>
+</div>
+</div>
+<div class="portal-inline-banner portal-inline-banner-warn !p-0 !border-0 !bg-transparent !text-inherit">
+<span class="material-symbols-outlined text-[20px] text-amber-600">warning</span>
+<div>
+<p class="text-sm font-semibold text-amber-900">Budget policy still unconfirmed</p>
+<p class="mt-1 text-sm leading-6 text-amber-800/80">A monthly spend ceiling has not been approved for the production project yet. This is the last policy gate before go-live.</p>
+</div>
+</div>
+</section>
+</aside>
+<section class="portal-metric-grid lg:col-span-12 md:grid-cols-2 xl:grid-cols-4 portal-animate-in-soft portal-animate-delay-3">
+<div class="portal-panel-soft portal-metric-card">
+<div class="portal-metric-card-head">
+<span class="portal-label-caps">Reward Events 24h</span>
+<span class="material-symbols-outlined text-slate-300">redeem</span>
+</div>
+<div class="portal-metric-value">18,420</div>
+<div class="mt-2 flex items-center gap-1 text-emerald-600">
+<span class="material-symbols-outlined text-sm">trending_up</span>
+<span class="text-xs font-medium">+12.5% vs yesterday</span>
+</div>
+</div>
+<div class="portal-panel-soft portal-metric-card">
+<div class="portal-metric-card-head">
+<span class="portal-label-caps">API Latency (p99)</span>
+<span class="material-symbols-outlined text-slate-300">speed</span>
+</div>
+<div class="portal-metric-value">42ms</div>
+<div class="mt-2 flex items-center gap-1 text-emerald-600">
+<span class="material-symbols-outlined text-sm">check_circle</span>
+<span class="text-xs font-medium">Within SLI target</span>
+</div>
+</div>
+<div class="portal-panel-soft portal-metric-card">
+<div class="portal-metric-card-head">
+<span class="portal-label-caps">Active Projects</span>
+<span class="material-symbols-outlined text-slate-300">layers</span>
+</div>
+<div class="portal-metric-value">14</div>
+<div class="portal-metric-copy mt-2"><span class="text-xs font-medium text-slate-500">3 pending production review</span></div>
+</div>
+<div class="portal-panel-soft portal-metric-card">
+<div class="portal-metric-card-head">
+<span class="portal-label-caps">Budget Usage</span>
+<span class="material-symbols-outlined text-slate-300">payments</span>
+</div>
+<div class="portal-metric-value">72%</div>
+<div class="portal-metric-copy mt-2"><span class="text-xs font-medium text-amber-700">$7.2k of $10k monthly policy</span></div>
+</div>
+</section>
+<section class="portal-panel lg:col-span-12 overflow-hidden">
+<div class="portal-panel-header">
+<div>
+<h3 class="text-lg font-headline-md text-slate-900">Recent Operational Highlights</h3>
+<p class="portal-panel-header-copy">Recent events across rewards, keys, webhooks, and project review workflows.</p>
+</div>
+<div class="portal-panel-header-actions">
+<button class="portal-button portal-button-ghost portal-button-sm portal-button-accent">View All Events</button>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left">
+<thead class="border-b border-slate-100 bg-slate-50">
+<tr class="portal-table-head-row">
+<th class="portal-table-head-cell">Event Type</th>
+<th class="portal-table-head-cell">Description</th>
+<th class="portal-table-head-cell">Project</th>
+<th class="portal-table-head-cell">Timestamp</th>
+<th class="portal-table-head-cell">Status</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-50">
+<tr class="portal-table-row">
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<span class="portal-status-dot portal-status-dot-info"></span>
+<span class="text-sm font-medium">Reward Issued</span>
+</div>
+</td>
+<td class="portal-table-copy px-6 py-4 text-sm text-slate-600">Amazon Gift Card ($25.00) delivered to <span class="portal-inline-code">user_8422</span> from the first sandbox test batch.</td>
+<td class="px-6 py-4 text-sm text-slate-500">Sandbox Project</td>
+<td class="px-6 py-4 text-numeric-data text-slate-500">2 mins ago</td>
+<td class="px-6 py-4"><span class="portal-status-pill portal-status-success">Success</span></td>
+</tr>
+<tr class="portal-table-row">
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<span class="portal-status-dot portal-status-dot-violet"></span>
+<span class="text-sm font-medium">API Key Rotated</span>
+</div>
+</td>
+<td class="portal-table-copy px-6 py-4 text-sm text-slate-600">A development key was rotated after being copied into a temporary staging script.</td>
+<td class="px-6 py-4 text-sm text-slate-500">Sandbox Project</td>
+<td class="px-6 py-4 text-numeric-data text-slate-500">45 mins ago</td>
+<td class="px-6 py-4"><span class="portal-status-pill portal-status-muted">Info</span></td>
+</tr>
+<tr class="portal-table-row portal-table-row-warn">
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<span class="portal-status-dot portal-status-dot-warn"></span>
+<span class="text-sm font-medium">Webhook Delivery</span>
+</div>
+</td>
+<td class="portal-table-copy px-6 py-4 text-sm text-slate-600">Retrying connection to <span class="portal-inline-code">https://api.acme.co/v1/hook</span> after a timeout from the receiving service.</td>
+<td class="px-6 py-4 text-sm text-slate-500">Acme Production</td>
+<td class="px-6 py-4 text-numeric-data text-slate-500">1 hour ago</td>
+<td class="px-6 py-4"><span class="portal-status-pill portal-status-warn">Retrying</span></td>
+</tr>
+<tr class="portal-table-row portal-table-row-danger">
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<span class="portal-status-dot portal-status-dot-danger"></span>
+<span class="text-sm font-medium">Budget Policy</span>
+</div>
+</td>
+<td class="portal-table-copy px-6 py-4 text-sm text-slate-600">Production spend ceiling still requires owner approval before the review queue can be opened.</td>
+<td class="px-6 py-4 text-sm text-slate-500">Acme Production</td>
+<td class="px-6 py-4 text-numeric-data text-slate-500">3 hours ago</td>
+<td class="px-6 py-4"><span class="portal-status-pill portal-status-danger">Action Needed</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="border-t border-slate-100 bg-white px-6 py-4">
+<div class="portal-empty-state">
+<div class="flex items-start gap-3">
+<span class="material-symbols-outlined text-slate-400">health_and_safety</span>
+<div>
+<p class="portal-empty-state-title">No unresolved incident escalations in the current scope</p>
+<p class="portal-empty-state-copy">Operational highlights above include retries and approval blockers, but no production-severity incident is currently holding the tenant in an emergency state.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+</div>
+<footer class="portal-footer">
+<div class="portal-footer-shell">
+<div class="portal-footer-copy">
+                © 2024 Reward SaaS Portal. Sandbox onboarding, tenant scope, and operational health.
+            </div>
+<div class="portal-footer-links">
+<a class="portal-footer-link" href="#">Privacy Policy</a>
+<a class="portal-footer-link" href="#">Terms of Service</a>
+<a class="portal-footer-link" href="#">Security</a>
+<a class="portal-footer-link" href="#">Status</a>
+</div>
+</div>
+</footer>
+</body></html>

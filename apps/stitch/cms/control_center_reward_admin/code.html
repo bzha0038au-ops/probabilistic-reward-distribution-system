@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Control Center - System Integrity</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&amp;family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&amp;family=Newsreader:wght@400;500;900&amp;family=Space+Grotesk:wght@500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">tailwind.config = {darkMode: "class", theme: {extend: {colors: {"primary-container": "#ff7941", primary: "#a23800", tertiary: "#6d5a00", "on-error-container": "#570008", error: "#b31b25", "primary-fixed-dim": "#ee6d36", "on-primary-fixed": "#000000", "surface-container-low": "#f4f0ef", "secondary-fixed": "#cfcdff", "inverse-primary": "#ff7941", "error-container": "#fb5151", "on-primary-fixed-variant": "#531900", "surface-dim": "#d8d3d3", "secondary-container": "#cfcdff", "outline-variant": "#b0acac", outline: "#797676", "surface-tint": "#a23800", "on-surface": "#302e2e", "on-tertiary-fixed-variant": "#6d5a00", "on-tertiary-fixed": "#4c3e00", "on-error": "#ffefee", "on-secondary-container": "#3423cd", "inverse-surface": "#0f0e0e", "surface-container-high": "#e6e1e1", "on-surface-variant": "#5d5b5b", "on-secondary": "#f4f1ff", surface: "#faf5f5", "on-tertiary": "#fff2cd", "on-secondary-fixed-variant": "#3e32d5", "surface-bright": "#faf5f5", "tertiary-fixed-dim": "#edd372", "tertiary-container": "#fce17e", "primary-fixed": "#ff7941", "on-tertiary-container": "#615000", "on-secondary-fixed": "#2000b0", secondary: "#4a40e0", "surface-container": "#ece7e7", "on-background": "#302e2e", "tertiary-fixed": "#fce17e", "on-primary": "#ffefeb", background: "#faf5f5", "surface-container-lowest": "#ffffff", "surface-variant": "#e0dcdb", "inverse-on-surface": "#9f9c9c", "on-primary-container": "#431200", "surface-container-highest": "#e0dcdb", "secondary-fixed-dim": "#c0bdff", "tertiary-dim": "#5f4e00", "error-dim": "#9f0519", "secondary-dim": "#3d30d4", "primary-dim": "#8e3000"}, borderRadius: {DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px"}, spacing: {sm: "8px", xs: "4px", base: "4px", lg: "24px", gutter: "16px", md: "16px", xl: "32px", "container-margin": "32px", unit: "4px", margin: "20px"}, fontFamily: {"h1-editorial": ["Newsreader"], "body-standard": ["Inter"], "data-mono": ["Space Grotesk"], "body-strong": ["Inter"], "display-editorial": ["Newsreader"], "label-caps": ["Space Grotesk"], "headline-md": ["Plus Jakarta Sans"], "headline-xl": ["Plus Jakarta Sans"], "body-md": ["Be Vietnam Pro"], "body-lg": ["Be Vietnam Pro"], "headline-lg": ["Plus Jakarta Sans"], "label-bold": ["Be Vietnam Pro"], "label-sm": ["Be Vietnam Pro"]}, fontSize: {"h1-editorial": ["28px", {lineHeight: "1.2", fontWeight: "500"}], "body-standard": ["14px", {lineHeight: "1.5", fontWeight: "400"}], "data-mono": ["13px", {lineHeight: "1.2", letterSpacing: "0.02em", fontWeight: "500"}], "body-strong": ["14px", {lineHeight: "1.5", fontWeight: "600"}], "display-editorial": ["42px", {lineHeight: "1.1", letterSpacing: "-0.02em", fontWeight: "400"}], "label-caps": ["11px", {lineHeight: "1", letterSpacing: "0.08em", fontWeight: "700"}], "headline-md": ["24px", {lineHeight: "30px", fontWeight: "700"}], "headline-xl": ["40px", {lineHeight: "48px", letterSpacing: "-0.02em", fontWeight: "800"}], "body-md": ["16px", {lineHeight: "24px", fontWeight: "400"}], "body-lg": ["18px", {lineHeight: "28px", fontWeight: "400"}], "headline-lg": ["32px", {lineHeight: "38px", letterSpacing: "-0.01em", fontWeight: "800"}], "label-bold": ["14px", {lineHeight: "20px", fontWeight: "700"}], "label-sm": ["12px", {lineHeight: "16px", fontWeight: "500"}]}}}};</script>
+<style>
+        .noise-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 9999;
+            opacity: 0.02;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        }
+        /* Custom scrollbar for dense tables */
+        .thin-scrollbar::-webkit-scrollbar {
+            height: 4px;
+            width: 4px;
+        }
+        .thin-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .thin-scrollbar::-webkit-scrollbar-thumb {
+            background-color: #c7c7bc; /* outline-variant */
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-standard text-body-standard min-h-screen flex flex-col antialiased selection:bg-primary-container selection:text-on-primary-container">
+<div class="noise-overlay"></div>
+<!-- TopNavBar -->
+<nav class="bg-stone-950 dark:bg-black text-[#5F634F] font-newsreader tracking-tight text-sm docked full-width top-0 h-12 border-b border-stone-800 flat no-shadows flex justify-between items-center w-full px-8 fixed z-50">
+<div class="flex items-center gap-6">
+<span class="font-newsreader font-black uppercase tracking-widest text-white text-sm">Reward Admin</span>
+<div class="hidden md:flex items-center gap-4 border-l border-stone-800 pl-4 h-6">
+<a class="text-stone-500 font-medium hover:text-stone-200 transition-colors active:scale-95 duration-200" href="#">FinanceOps</a>
+<a class="text-stone-500 font-medium hover:text-stone-200 transition-colors active:scale-95 duration-200" href="#">SaaS-Ops</a>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<span class="font-data-mono text-label-caps text-stone-500 border border-stone-800 px-2 py-1 rounded-none">PROD</span>
+<button class="text-stone-500 hover:text-stone-200 transition-colors flex items-center justify-center h-8 w-8">
+<span class="material-symbols-outlined" style="font-size: 20px;">notifications</span>
+</button>
+<button class="text-stone-500 hover:text-stone-200 transition-colors flex items-center justify-center h-8 w-8">
+<span class="material-symbols-outlined" style="font-size: 20px;">settings</span>
+</button>
+<div class="w-6 h-6 rounded-none bg-stone-800 overflow-hidden ml-2 border border-stone-700">
+<img alt="Operator Identity" class="w-full h-full object-cover grayscale opacity-80" data-alt="A small, grayscale, highly professional portrait of a system operator. The lighting is dramatic and moody, fitting a high-security internal dashboard. The subject wears dark, minimalist clothing against a dark background, looking intently forward. Cinematic minimal aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBUSRch0NSzJJteePbt0Nd01qOmf4dlYXkNldqMl99A95QyCMMFmW__iWyUtntiCxr7msrNaQBYkQP0V8qvJJ-KpsyKi_qZytJSbJxE3WbmcetsYd6zxizzGswgRL0FxkyGHB-zzbZqNdFhqq2zC52e7A8j2LNQSx0CEn694B2_x-jPXoSqb2f-Gjt2obbcJIQGxTng8t6U2Dvye_dmrPy-7Go-WBaFKtyLIm6APNgIIeIounTZAs8RPc-ulyoFEAOgywRos-uFn07-"/>
+</div>
+</div>
+</nav>
+<div class="flex flex-1 pt-12">
+<!-- SideNavBar -->
+<aside class="bg-[#F2EFE9] dark:bg-stone-900/95 backdrop-blur-md text-[#5F634F] font-newsreader text-sm uppercase tracking-wider fixed left-0 top-12 h-[calc(100vh-48px)] w-64 rounded-none border-r border-stone-300 dark:border-stone-700 inset-shadow-sm flex flex-col pt-16 pb-8 overflow-y-auto z-40 hidden md:flex">
+<div class="px-8 mb-8 flex flex-col gap-2">
+<div class="flex items-center gap-3 mb-2">
+<div class="w-10 h-10 bg-stone-300 dark:bg-stone-800 rounded-none overflow-hidden border border-stone-400">
+<img alt="Operator" class="w-full h-full object-cover grayscale opacity-90" data-alt="A square, grayscale profile image of a technical operator in a stark, utilitarian environment. The lighting is flat and neutral, emphasizing a clinical, high-trust operational atmosphere. The image is devoid of bright colors, fitting seamlessly into an editorial, paper-like UI." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCmdOqRviljOp0_Z11vzV9rQV9vRiuQqeXjCPrw1tME94FjISdQrCP7esETyMeDrh8eAS0S0wO1JARWO9SULsoEdSGzn3uzYOp7oMnt5DnZ_XVLtU6KLkE7JfbE-8nBp1oDcVAWcIUzDVAu2f-AlDHqPWk7Doc-0hMXJCsLb8AcphJtI-9TBtPcVvTDgof00CTKn93E4WALh8WSu3DFmdrmOjr3KKbYvuK0n2yPSUEFg_N9gtO9hg7dX9A-ENS6ief3tGW0tz6BhRME"/>
+</div>
+<div>
+<div class="font-bold text-stone-900 dark:text-stone-100 tracking-normal capitalize text-base">System Engine</div>
+<div class="text-xs text-stone-500 normal-case tracking-tight">Terminal Tier 01</div>
+</div>
+</div>
+<div class="bg-primary-fixed/20 border border-primary-fixed text-on-primary-fixed text-label-caps font-label-caps px-2 py-1 inline-flex items-center gap-1 w-max">
+<span class="material-symbols-outlined" style="font-size: 14px;">verified</span>
+                    MFA Verified
+                </div>
+</div>
+<nav class="flex-1 flex flex-col gap-1 w-full">
+<!-- Active Tab -->
+<a class="text-stone-950 dark:text-white font-bold border-l-2 border-[#5F634F] bg-stone-200/50 dark:bg-stone-800/50 flex items-center gap-3 py-2 px-8 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined" style="font-size: 18px;">settings_input_component</span>
+                    Config
+                </a>
+<!-- Inactive Tabs -->
+<a class="text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 flex items-center gap-3 py-2 px-8 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined" style="font-size: 18px;">gavel</span> Legal
+                </a>
+<a class="text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 flex items-center gap-3 py-2 px-8 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined" style="font-size: 18px;">hub</span> Providers
+                </a>
+<a class="text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 flex items-center gap-3 py-2 px-8 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined" style="font-size: 18px;">military_tech</span> Prizes
+                </a>
+<a class="text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 flex items-center gap-3 py-2 px-8 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined" style="font-size: 18px;">account_balance</span> Reconciliation
+                </a>
+<a class="text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 flex items-center gap-3 py-2 px-8 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined" style="font-size: 18px;">payments</span> Finance
+                </a>
+<a class="text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 flex items-center gap-3 py-2 px-8 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined" style="font-size: 18px;">trending_up</span> Economy
+                </a>
+<a class="text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 flex items-center gap-3 py-2 px-8 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined" style="font-size: 18px;">fingerprint</span> KYC
+                </a>
+<a class="text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 flex items-center gap-3 py-2 px-8 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined" style="font-size: 18px;">group</span> Users
+                </a>
+<a class="text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 flex items-center gap-3 py-2 px-8 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined" style="font-size: 18px;">business</span> SaaS
+                </a>
+<a class="text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 flex items-center gap-3 py-2 px-8 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined" style="font-size: 18px;">list_alt</span> Audit
+                </a>
+<a class="text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 flex items-center gap-3 py-2 px-8 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined" style="font-size: 18px;">verified_user</span> AML
+                </a>
+<a class="text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 flex items-center gap-3 py-2 px-8 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined" style="font-size: 18px;">security</span> Collusion
+                </a>
+</nav>
+<div class="mt-auto border-t border-stone-300 dark:border-stone-700 pt-4 w-full">
+<a class="text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 flex items-center gap-3 py-2 px-8 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined" style="font-size: 18px;">help</span> Help
+                </a>
+<a class="text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 flex items-center gap-3 py-2 px-8 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined" style="font-size: 18px;">description</span> Docs
+                </a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 md:ml-64 p-container-margin w-full max-w-[1600px] mx-auto flex flex-col gap-lg">
+<!-- Header section -->
+<header class="flex flex-col gap-sm pb-lg border-b border-outline-variant/30">
+<div class="flex items-center gap-2 text-on-surface-variant font-data-mono text-data-mono uppercase">
+<span>Workspace</span>
+<span class="material-symbols-outlined" style="font-size: 14px;">chevron_right</span>
+<span class="text-primary font-bold">controlCenter</span>
+</div>
+<h1 class="font-display-editorial text-display-editorial text-on-background">System Control Node</h1>
+<p class="font-body-standard text-body-standard text-on-surface-variant max-w-2xl">
+                    High-trust governance hub for core platform parameters. All actions taken in this workspace are permanently logged and require secondary verification.
+                </p>
+</header>
+<!-- Dashboard Grid -->
+<div class="grid grid-cols-1 xl:grid-cols-12 gap-lg items-start">
+<!-- Left/Center Column (Wider) -->
+<div class="xl:col-span-8 flex flex-col gap-lg">
+<!-- System Integrity Panel -->
+<section class="bg-surface border border-outline-variant p-lg flex flex-col gap-md relative overflow-hidden">
+<!-- Decorative top line -->
+<div class="absolute top-0 left-0 w-full h-[1px] bg-primary/20"></div>
+<div class="flex justify-between items-end mb-2 border-b border-outline-variant/50 pb-sm">
+<h2 class="font-h1-editorial text-h1-editorial text-on-background">System Integrity</h2>
+<span class="font-data-mono text-label-caps text-on-surface-variant uppercase tracking-widest">Live Telemetry</span>
+</div>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-md">
+<!-- Metric 1 -->
+<div class="bg-surface-container-lowest border border-outline-variant/40 p-md flex flex-col gap-sm">
+<div class="flex items-center justify-between text-on-surface-variant">
+<span class="font-label-caps text-label-caps">Global Latency</span>
+<span class="material-symbols-outlined text-outline" style="font-size: 16px;">speed</span>
+</div>
+<div class="font-data-mono text-data-mono text-lg text-on-background flex items-baseline gap-1">
+                                    24<span class="text-xs text-outline">ms</span>
+</div>
+</div>
+<!-- Metric 2 -->
+<div class="bg-surface-container-lowest border border-outline-variant/40 p-md flex flex-col gap-sm">
+<div class="flex items-center justify-between text-on-surface-variant">
+<span class="font-label-caps text-label-caps">Node Sync</span>
+<span class="material-symbols-outlined text-outline" style="font-size: 16px;">sync</span>
+</div>
+<div class="font-data-mono text-data-mono text-lg text-primary flex items-center gap-2">
+                                    99.9%
+                                    <div class="w-1.5 h-1.5 rounded-full bg-primary mt-1"></div>
+</div>
+</div>
+<!-- Metric 3 -->
+<div class="bg-surface-container-lowest border border-outline-variant/40 p-md flex flex-col gap-sm">
+<div class="flex items-center justify-between text-on-surface-variant">
+<span class="font-label-caps text-label-caps">Active Queues</span>
+<span class="material-symbols-outlined text-outline" style="font-size: 16px;">toc</span>
+</div>
+<div class="font-data-mono text-data-mono text-lg text-on-background">
+                                    1,402
+                                </div>
+</div>
+<!-- Metric 4 -->
+<div class="bg-surface-container-lowest border border-outline-variant/40 p-md flex flex-col gap-sm">
+<div class="flex items-center justify-between text-on-surface-variant">
+<span class="font-label-caps text-label-caps">DB Load</span>
+<span class="material-symbols-outlined text-outline" style="font-size: 16px;">database</span>
+</div>
+<div class="font-data-mono text-data-mono text-lg text-on-background flex items-baseline gap-1">
+                                    12<span class="text-xs text-outline">%</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Configuration Governance Panel -->
+<section class="bg-surface border border-outline-variant flex flex-col relative overflow-hidden">
+<div class="p-lg border-b border-outline-variant bg-surface-container-lowest flex justify-between items-center">
+<div>
+<h2 class="font-h1-editorial text-h1-editorial text-on-background">Configuration Governance</h2>
+<p class="font-body-standard text-body-standard text-on-surface-variant mt-1">Review and gate sensitive system parameters.</p>
+</div>
+<button class="flex items-center gap-2 px-4 py-2 border border-outline-variant text-on-surface font-body-strong text-body-strong hover:bg-surface-variant transition-colors">
+<span class="material-symbols-outlined" style="font-size: 18px;">filter_list</span>
+                                Filter
+                            </button>
+</div>
+<div class="overflow-x-auto thin-scrollbar">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b border-outline-variant bg-surface-container text-on-surface-variant font-label-caps text-label-caps uppercase">
+<th class="p-md font-normal w-1/3">Parameter ID</th>
+<th class="p-md font-normal w-1/4">Type</th>
+<th class="p-md font-normal">Current Value</th>
+<th class="p-md font-normal text-right">Status</th>
+</tr>
+</thead>
+<tbody class="font-body-standard text-body-standard text-on-background">
+<!-- Row 1 -->
+<tr class="border-b border-outline-variant/50 hover:bg-surface-container-lowest transition-colors group cursor-pointer">
+<td class="p-md font-data-mono text-data-mono text-on-surface">SYS_MAX_WITHDRAWAL_LIM</td>
+<td class="p-md text-on-surface-variant">Integer (USD)</td>
+<td class="p-md font-data-mono text-data-mono">50,000</td>
+<td class="p-md text-right">
+<span class="inline-flex items-center gap-1 text-outline group-hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-weight="fill" style="font-size: 16px;">lock</span>
+<span class="font-label-caps text-label-caps">Locked</span>
+</span>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="border-b border-outline-variant/50 hover:bg-surface-container-lowest transition-colors group cursor-pointer bg-primary-fixed/5">
+<td class="p-md font-data-mono text-data-mono text-on-surface">CFG_FEE_MULTIPLIER_BASE</td>
+<td class="p-md text-on-surface-variant">Float (Ratio)</td>
+<td class="p-md font-data-mono text-data-mono">1.025</td>
+<td class="p-md text-right">
+<span class="inline-flex items-center gap-1 text-primary">
+<span class="material-symbols-outlined" style="font-size: 16px;">edit</span>
+<span class="font-label-caps text-label-caps">Draft</span>
+</span>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="border-b border-outline-variant/50 hover:bg-surface-container-lowest transition-colors group cursor-pointer">
+<td class="p-md font-data-mono text-data-mono text-on-surface">AUTH_SESSION_TIMEOUT_MIN</td>
+<td class="p-md text-on-surface-variant">Integer (Minutes)</td>
+<td class="p-md font-data-mono text-data-mono">15</td>
+<td class="p-md text-right">
+<span class="inline-flex items-center gap-1 text-outline group-hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-weight="fill" style="font-size: 16px;">lock</span>
+<span class="font-label-caps text-label-caps">Locked</span>
+</span>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="hover:bg-surface-container-lowest transition-colors group cursor-pointer">
+<td class="p-md font-data-mono text-data-mono text-on-surface">NET_IP_WHITELIST_STRICT</td>
+<td class="p-md text-on-surface-variant">Boolean</td>
+<td class="p-md font-data-mono text-data-mono">TRUE</td>
+<td class="p-md text-right">
+<span class="inline-flex items-center gap-1 text-outline group-hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-weight="fill" style="font-size: 16px;">lock</span>
+<span class="font-label-caps text-label-caps">Locked</span>
+</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Gated Action Area -->
+<div class="p-lg bg-surface-container border-t border-outline-variant flex justify-between items-center">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-outline" style="font-size: 24px;">info</span>
+<span class="font-body-standard text-body-standard text-on-surface-variant">1 pending change requires commit.</span>
+</div>
+<button class="px-6 py-3 border-2 border-primary text-primary font-body-strong text-body-strong flex items-center gap-2 hover:bg-primary hover:text-on-primary transition-all active:scale-95 group">
+<span class="material-symbols-outlined group-hover:animate-pulse" style="font-size: 20px;">publish</span>
+                                Update Global Config
+                            </button>
+</div>
+</section>
+</div>
+<!-- Right Column (Narrower) -->
+<div class="xl:col-span-4 flex flex-col gap-lg">
+<!-- Operator Verification Panel -->
+<aside class="bg-surface border border-outline-variant p-lg flex flex-col gap-md">
+<div class="flex justify-between items-center border-b border-outline-variant/50 pb-sm mb-2">
+<h2 class="font-h1-editorial text-h1-editorial text-on-background">Operator Verification</h2>
+<span class="material-symbols-outlined text-primary" style="font-size: 20px;">shield_person</span>
+</div>
+<!-- Identity Block -->
+<div class="flex items-start gap-4 mb-4">
+<div class="w-12 h-12 border border-outline p-1 bg-surface-container-lowest">
+<div class="w-full h-full bg-surface-variant overflow-hidden">
+<img alt="Operator" class="w-full h-full object-cover grayscale" data-alt="A close-up, monochromatic portrait of a system administrator. The image is styled like an official ID photo, with flat, harsh lighting and a completely neutral gray background. The subject appears serious and focused, conveying a sense of high-security clearance and operational authority within a digital environment." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBr06sYpiStu7sgZur8CLysMEW30zwfaMDvSE_IuSpo3fzXaPOBHABJD79-oPllOwBybB4Xg1Lcw9Lc2ANBzlIdfW0lD9LTa109trtUK-zqTJWDqVGNbxuYt4rIwVmAaJ5WoFSEiRKRiUKSelbpb69srSvE0Q0uOLFP1hJw_AsV8OrFlH7BQy4mcxsGIB-b6niR4ZayMHrNqDC60rjP7M5mflgtULZ38D3CaSmQc2OBYp9WOFt4YtHzSIFKWdNS185CcU0sKgA5fkPy"/>
+</div>
+</div>
+<div class="flex flex-col">
+<span class="font-body-strong text-body-strong text-on-surface">ID: OP-772-X</span>
+<span class="font-data-mono text-data-mono text-on-surface-variant text-xs mt-1">Clearance: Level 4</span>
+</div>
+</div>
+<!-- Security Status List -->
+<div class="flex flex-col gap-3 border-t border-outline-variant/30 pt-4">
+<div class="flex justify-between items-center">
+<span class="font-body-standard text-body-standard text-on-surface-variant">MFA Status</span>
+<span class="bg-primary-fixed text-on-primary-fixed font-label-caps text-label-caps px-2 py-1 flex items-center gap-1 border border-primary-fixed-dim">
+<span class="material-symbols-outlined" style="font-size: 12px;">done</span> ACTIVE
+                                </span>
+</div>
+<div class="flex justify-between items-center">
+<span class="font-body-standard text-body-standard text-on-surface-variant">Active Session</span>
+<span class="font-data-mono text-data-mono text-on-surface">02h 14m 09s</span>
+</div>
+<div class="flex justify-between items-center">
+<span class="font-body-standard text-body-standard text-on-surface-variant">Origin IP</span>
+<span class="font-data-mono text-data-mono text-on-surface">192.168.1.104</span>
+</div>
+</div>
+<!-- Step-up Security Box -->
+<div class="mt-4 p-4 bg-surface-container-highest border border-outline-variant/50 flex flex-col gap-3">
+<div class="flex items-center gap-2 text-on-surface font-body-strong text-body-strong">
+<span class="material-symbols-outlined text-tertiary" style="font-size: 18px;">key</span>
+                                Step-up Required
+                            </div>
+<p class="font-body-standard text-body-standard text-on-surface-variant text-sm">
+                                Modifying Core Parameters requires a secondary hardware key insertion.
+                            </p>
+<div class="w-full h-1 bg-surface-variant mt-2 overflow-hidden">
+<div class="h-full bg-tertiary w-1/3 opacity-50 animate-pulse"></div>
+</div>
+<span class="font-data-mono text-label-caps text-center text-on-surface-variant uppercase mt-1">Awaiting Token...</span>
+</div>
+</aside>
+</div>
+</div>
+</main>
+</div>
+</body></html>

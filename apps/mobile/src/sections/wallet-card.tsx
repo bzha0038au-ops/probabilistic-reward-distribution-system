@@ -7,6 +7,13 @@ import {
   type GiftEnergyAccountRecord,
   type GiftTransferRecord,
 } from "@reward/shared-types/economy";
+import type {
+  BankCardRecord,
+  CryptoDepositChannelRecord,
+  CryptoWithdrawAddressViewRecord,
+  DepositRecord,
+  WithdrawalRecord,
+} from "@reward/shared-types/finance";
 import type { WalletBalanceResponse } from "@reward/shared-types/user";
 
 import type {
@@ -15,9 +22,16 @@ import type {
 } from "../hooks/use-iap";
 import type { MobileWalletCopy } from "../mobile-copy";
 import type { MobileStyles } from "../screens/types";
-import { mobilePalette } from "../theme";
+import {
+  mobileChromeTheme,
+  mobilePalette,
+  mobileRadii,
+  mobileSpacing,
+  mobileTypeScale,
+} from "../theme";
 import { WalletAssetCard, WalletHistoryEntryCard } from "./domain-ui";
 import { ActionButton, Field, SectionCard } from "../ui";
+import { PaymentsOperationsSection } from "./payments-operations-section";
 
 type WalletCardProps = {
   styles: MobileStyles;
@@ -37,18 +51,61 @@ type WalletCardProps = {
   giftPackProducts: MobileGiftPackCatalogItem[];
   supportedIap: boolean;
   connectedStore: boolean;
+  bankCards: BankCardRecord[];
+  cryptoChannels: CryptoDepositChannelRecord[];
+  cryptoAddresses: CryptoWithdrawAddressViewRecord[];
+  topUps: DepositRecord[];
+  withdrawals: WithdrawalRecord[];
+  loadingPayments: boolean;
+  activePaymentAction: string | null;
   formatAmount: (value: string) => string;
   formatDateTime: (value: string | Date | null | undefined) => string;
   onRefreshBalance: () => void;
   onRefreshEconomy: () => void;
   onRefreshIapProducts: () => void;
   onSyncPendingPurchases: () => void;
+  onRefreshPayments: () => void;
   onSendGift: (receiverUserId: number, amount: string) => Promise<boolean>;
   onPurchaseVoucher: (sku: string) => void | Promise<boolean>;
   onPurchaseGiftPack: (
     sku: string,
     recipientUserId: number,
   ) => void | Promise<boolean>;
+  onCreateTopUp: (payload: {
+    amount: string;
+    referenceId?: string | null;
+  }) => Promise<boolean>;
+  onCreateCryptoDeposit: (payload: {
+    channelId: number;
+    amountClaimed: string;
+    txHash: string;
+    fromAddress?: string | null;
+  }) => Promise<boolean>;
+  onCreateBankCard: (payload: {
+    cardholderName: string;
+    bankName?: string | null;
+    brand?: string | null;
+    last4?: string | null;
+    isDefault?: boolean;
+  }) => Promise<boolean>;
+  onSetDefaultBankCard: (bankCardId: number) => Promise<boolean>;
+  onCreateWithdrawal: (payload: {
+    amount: string;
+    bankCardId?: number | null;
+  }) => Promise<boolean>;
+  onCreateCryptoWithdrawAddress: (payload: {
+    chain?: string | null;
+    network?: string | null;
+    token?: string | null;
+    address: string;
+    label?: string | null;
+    isDefault?: boolean;
+  }) => Promise<boolean>;
+  onSetDefaultCryptoAddress: (payoutMethodId: number) => Promise<boolean>;
+  onCreateCryptoWithdrawal: (payload: {
+    amount: string;
+    payoutMethodId?: number | null;
+  }) => Promise<boolean>;
 };
 
 export function WalletCard(props: WalletCardProps) {
@@ -70,6 +127,17 @@ export function WalletCard(props: WalletCardProps) {
 
   const renderAssetLabel = (assetCode: AssetCode) =>
     props.copy.assetLabels[assetCode];
+  const bonusAsset =
+    assets.find((asset) => asset.assetCode === "B_LUCK") ?? assets[0] ?? null;
+  const voucherAsset =
+    assets.find((asset) => asset.assetCode === "IAP_VOUCHER") ?? null;
+  const giftEnergyRatio =
+    props.giftEnergy && props.giftEnergy.maxEnergy > 0
+      ? Math.max(
+          0,
+          Math.min(1, props.giftEnergy.currentEnergy / props.giftEnergy.maxEnergy),
+        )
+      : 0;
 
   const parsedGiftReceiverUserId = Number(giftReceiverUserId);
   const parsedGiftPackRecipientUserId = Number(giftPackRecipientUserId);
@@ -90,7 +158,6 @@ export function WalletCard(props: WalletCardProps) {
     () => props.ledgerEntries.slice(0, 8),
     [props.ledgerEntries],
   );
-
   const renderLedgerLabel = (entry: EconomyLedgerEntryRecord) => {
     if (
       entry.entryType.includes("refund") ||
@@ -144,170 +211,155 @@ export function WalletCard(props: WalletCardProps) {
   };
 
   return (
-    <SectionCard title={props.copy.title} subtitle={props.copy.subtitle}>
-      <View style={props.styles.inlineActions}>
-        <View style={styles.balanceBlock}>
-          <Text style={props.styles.balanceLabel}>
-            {props.copy.currentBalance}
-          </Text>
-          <Text style={props.styles.balanceValue}>{props.formattedBalance}</Text>
-        </View>
-        <ActionButton
-          label={
-            props.refreshingBalance
-              ? props.copy.refreshing
-              : props.copy.refresh
-          }
-          onPress={props.onRefreshBalance}
-          disabled={props.refreshingBalance}
-          variant="secondary"
-          compact
-        />
-      </View>
-
-      <View style={styles.assetSection}>
-        <Text style={styles.sectionTitle}>{props.copy.assetsTitle}</Text>
-          <View style={styles.assetGrid}>
-            {assets.map((asset) => (
-              <WalletAssetCard
-                key={asset.assetCode}
-                label={renderAssetLabel(asset.assetCode)}
-                value={props.formatAmount(asset.availableBalance)}
-                detailRows={[
-                  {
-                    label: props.copy.available,
-                    value: props.formatAmount(asset.availableBalance),
-                  },
-                  {
-                    label: props.copy.locked,
-                    value: props.formatAmount(asset.lockedBalance),
-                  },
-                ]}
-              />
-            ))}
-          </View>
-      </View>
-
-      <View style={styles.giftSection}>
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionHeading}>
-            <Text style={styles.sectionTitle}>{props.copy.giftTitle}</Text>
-            <Text style={styles.sectionSubtitle}>{props.copy.giftSubtitle}</Text>
-          </View>
-          <ActionButton
-            label={
-              props.loadingEconomy
-                ? props.copy.refreshingEconomy
-                : props.copy.refreshEconomy
-            }
-            onPress={props.onRefreshEconomy}
-            disabled={props.loadingEconomy}
-            variant="secondary"
-            compact
-          />
-        </View>
-
-        <View style={styles.energyCard}>
-          <Text style={styles.energyLabel}>{props.copy.giftEnergy}</Text>
-          <Text style={styles.energyValue}>
-            {props.giftEnergy
-              ? `${props.giftEnergy.currentEnergy}/${props.giftEnergy.maxEnergy}`
-              : props.copy.economyLoading}
-          </Text>
-        </View>
-
-        <View style={styles.formGrid}>
-          <Field
-            label={props.copy.receiverUserId}
-            value={giftReceiverUserId}
-            onChangeText={setGiftReceiverUserId}
-            keyboardType="numeric"
-            placeholder={props.copy.receiverUserIdPlaceholder}
-          />
-          <Field
-            label={props.copy.giftAmount}
-            value={giftAmount}
-            onChangeText={setGiftAmount}
-            keyboardType="numeric"
-            placeholder={props.copy.giftAmountPlaceholder}
-          />
-        </View>
-
-        <ActionButton
-          label={props.sendingGift ? props.copy.sendingGift : props.copy.sendGift}
-          onPress={() => {
-            void handleSendGift();
-          }}
-          disabled={!canSendGift}
-          compact
-        />
-
-        <View style={styles.historySection}>
-          <Text style={styles.subsectionTitle}>{props.copy.giftHistory}</Text>
-          {giftHistory.length === 0 ? (
-            <Text style={styles.emptyText}>{props.copy.historyEmpty}</Text>
-          ) : (
-            <View style={styles.timelineList}>
-              {giftHistory.map((gift) => (
-                <WalletHistoryEntryCard
-                  key={gift.id}
-                  title={props.copy.giftTransferLabel(
-                    gift.senderUserId,
-                    gift.receiverUserId,
-                  )}
-                  accentValue={props.formatAmount(gift.amount)}
-                  detailLines={[
-                    props.copy.giftEnergyCost(gift.energyCost),
-                    props.formatDateTime(gift.createdAt),
-                  ]}
-                />
-              ))}
+    <View style={styles.walletStack}>
+      <View style={styles.heroGrid}>
+        <View style={styles.balanceHeroCard}>
+          <View style={styles.heroHeader}>
+            <Text style={styles.heroEyebrow}>{props.copy.currentBalance}</Text>
+            <View
+              style={[
+                props.styles.badge,
+                props.connectedStore
+                  ? props.styles.badgeSuccess
+                  : props.styles.badgeWarning,
+              ]}
+            >
+              <Text style={props.styles.badgeText}>
+                {props.connectedStore
+                  ? props.copy.storeReady
+                  : props.copy.storeUnavailable}
+              </Text>
             </View>
-          )}
+          </View>
+
+          <Text style={styles.balanceHeroValue}>{props.formattedBalance}</Text>
+          <Text style={styles.balanceHeroMeta}>
+            {renderAssetLabel("B_LUCK")}:{" "}
+            {props.formatAmount(props.wallet?.balance.bonusBalance ?? "0.00")} ·{" "}
+            {props.copy.locked}:{" "}
+            {props.formatAmount(props.wallet?.balance.lockedBalance ?? "0.00")}
+          </Text>
+
+          <View style={styles.heroActionRow}>
+            <ActionButton
+              label={
+                props.refreshingBalance
+                  ? props.copy.refreshing
+                  : props.copy.refresh
+              }
+              onPress={props.onRefreshBalance}
+              disabled={props.refreshingBalance}
+              compact
+            />
+            <ActionButton
+              label={
+                props.syncingPendingPurchases
+                  ? props.copy.syncingPending
+                  : props.copy.syncPending
+              }
+              onPress={props.onSyncPendingPurchases}
+              disabled={!props.connectedStore || props.syncingPendingPurchases}
+              variant="secondary"
+              compact
+            />
+          </View>
         </View>
 
-        <View style={styles.historySection}>
-          <Text style={styles.subsectionTitle}>{props.copy.ledgerTitle}</Text>
-          {ledgerEntries.length === 0 ? (
-            <Text style={styles.emptyText}>{props.copy.ledgerEmpty}</Text>
-          ) : (
-            <View style={styles.timelineList}>
-              {ledgerEntries.map((entry) => (
-                <WalletHistoryEntryCard
-                  key={entry.id}
-                  title={renderLedgerLabel(entry)}
-                  accentValue={props.formatAmount(entry.amount)}
-                  detailLines={[
-                    renderAssetLabel(entry.assetCode),
-                    props.formatDateTime(entry.createdAt),
-                  ]}
-                />
-              ))}
+        <View style={styles.creditsHeroCard}>
+          <Text style={styles.heroEyebrow}>{props.copy.assetsTitle}</Text>
+          <Text style={styles.creditsHeroValue}>
+            {props.formatAmount(bonusAsset?.availableBalance ?? "0.00")}
+          </Text>
+          <Text style={styles.creditsHeroMeta}>
+            {renderAssetLabel(bonusAsset?.assetCode ?? "B_LUCK")}
+            {voucherAsset
+              ? ` · ${renderAssetLabel(voucherAsset.assetCode)} ${props.formatAmount(
+                  voucherAsset.availableBalance,
+                )}`
+              : ""}
+          </Text>
+
+          <View style={styles.progressTrack}>
+            <View
+              style={[
+                styles.progressFill,
+                { width: `${Math.max(8, giftEnergyRatio * 100)}%` },
+              ]}
+            />
+          </View>
+
+          <View style={styles.creditsFooter}>
+            <View>
+              <Text style={styles.creditsFooterLabel}>{props.copy.giftEnergy}</Text>
+              <Text style={styles.creditsFooterValue}>
+                {props.giftEnergy
+                  ? `${props.giftEnergy.currentEnergy}/${props.giftEnergy.maxEnergy}`
+                  : props.copy.economyLoading}
+              </Text>
             </View>
-          )}
+            <ActionButton
+              label={
+                props.loadingEconomy
+                  ? props.copy.refreshingEconomy
+                  : props.copy.refreshEconomy
+              }
+              onPress={props.onRefreshEconomy}
+              disabled={props.loadingEconomy}
+              variant="secondary"
+              compact
+            />
+          </View>
         </View>
       </View>
 
-      <View style={styles.storeSection}>
-        <View style={styles.storeHeader}>
-          <View style={styles.storeHeading}>
-            <Text style={styles.sectionTitle}>{props.copy.purchaseTitle}</Text>
-            <Text style={styles.storeSubtitle}>{props.copy.purchaseSubtitle}</Text>
-          </View>
-          <View
-            style={[
-              props.styles.badge,
-              props.connectedStore
-                ? props.styles.badgeSuccess
-                : props.styles.badgeMuted,
-            ]}
-          >
-            <Text style={props.styles.badgeText}>
-              {props.connectedStore
-                ? props.copy.storeReady
-                : props.copy.storeUnavailable}
-            </Text>
-          </View>
+      <PaymentsOperationsSection
+        copy={props.copy.payments}
+        bankCards={props.bankCards}
+        cryptoChannels={props.cryptoChannels}
+        cryptoAddresses={props.cryptoAddresses}
+        topUps={props.topUps}
+        withdrawals={props.withdrawals}
+        loadingPayments={props.loadingPayments}
+        activePaymentAction={props.activePaymentAction}
+        formatAmount={props.formatAmount}
+        formatDateTime={props.formatDateTime}
+        onRefreshPayments={props.onRefreshPayments}
+        onCreateTopUp={props.onCreateTopUp}
+        onCreateCryptoDeposit={props.onCreateCryptoDeposit}
+        onCreateBankCard={props.onCreateBankCard}
+        onSetDefaultBankCard={props.onSetDefaultBankCard}
+        onCreateWithdrawal={props.onCreateWithdrawal}
+        onCreateCryptoWithdrawAddress={props.onCreateCryptoWithdrawAddress}
+        onSetDefaultCryptoAddress={props.onSetDefaultCryptoAddress}
+        onCreateCryptoWithdrawal={props.onCreateCryptoWithdrawal}
+      />
+
+      <SectionCard title={props.copy.purchaseTitle}>
+        <View style={styles.assetGrid}>
+          {assets.map((asset) => (
+            <WalletAssetCard
+              key={asset.assetCode}
+              label={renderAssetLabel(asset.assetCode)}
+              value={props.formatAmount(asset.availableBalance)}
+              tone={
+                asset.assetCode === "B_LUCK"
+                  ? "gold"
+                  : asset.assetCode === "IAP_VOUCHER"
+                    ? "blue"
+                    : "panel"
+              }
+              detailRows={[
+                {
+                  label: props.copy.available,
+                  value: props.formatAmount(asset.availableBalance),
+                },
+                {
+                  label: props.copy.locked,
+                  value: props.formatAmount(asset.lockedBalance),
+                },
+              ]}
+            />
+          ))}
         </View>
 
         <View style={props.styles.inlineActions}>
@@ -351,26 +403,21 @@ export function WalletCard(props: WalletCardProps) {
           </Text>
         ) : null}
 
-        <View style={styles.productList}>
+        <View style={styles.storeGrid}>
           {props.iapProducts.map((product) => (
-            <View key={product.catalogProduct.sku} style={styles.productCard}>
-              <View style={styles.productContent}>
-                <Text style={styles.productTitle}>
-                  {product.title || props.copy.productTitleFallback}
-                </Text>
-                <Text style={styles.productDescription}>{product.description}</Text>
-                <View style={styles.productMetaRow}>
-                  <Text style={styles.productMetaLabel}>
-                    {props.copy.amountLabel}
-                  </Text>
-                  <Text style={styles.productMetaValue}>
-                    {props.formatAmount(product.catalogProduct.assetAmount ?? "0")}
-                  </Text>
-                </View>
-                <Text style={styles.productPrice}>
-                  {product.displayPrice ?? props.copy.priceFallback}
-                </Text>
+            <View key={product.catalogProduct.sku} style={styles.storeTile}>
+              <View style={[styles.storeIconBubble, styles.storeIconVoucher]}>
+                <Text style={styles.storeIconText}>V</Text>
               </View>
+              <Text style={styles.storeTileTitle}>
+                {product.title || props.copy.productTitleFallback}
+              </Text>
+              <Text style={styles.storeTileValue}>
+                {props.formatAmount(product.catalogProduct.assetAmount ?? "0")}
+              </Text>
+              <Text style={styles.storeTileMeta}>
+                {product.displayPrice ?? props.copy.priceFallback}
+              </Text>
               <ActionButton
                 label={
                   props.purchasingSku === product.catalogProduct.sku
@@ -391,14 +438,9 @@ export function WalletCard(props: WalletCardProps) {
             </View>
           ))}
         </View>
-      </View>
+      </SectionCard>
 
-      <View style={styles.storeSection}>
-        <View style={styles.sectionHeading}>
-          <Text style={styles.sectionTitle}>{props.copy.giftPackTitle}</Text>
-          <Text style={styles.sectionSubtitle}>{props.copy.giftPackSubtitle}</Text>
-        </View>
-
+      <SectionCard title={props.copy.giftPackTitle}>
         <Field
           label={props.copy.giftPackRecipientUserId}
           value={giftPackRecipientUserId}
@@ -413,26 +455,21 @@ export function WalletCard(props: WalletCardProps) {
           <Text style={props.styles.gachaHint}>{props.copy.giftPackEmpty}</Text>
         ) : null}
 
-        <View style={styles.productList}>
+        <View style={styles.storeGrid}>
           {props.giftPackProducts.map((product) => (
-            <View key={product.catalogItem.product.sku} style={styles.productCard}>
-              <View style={styles.productContent}>
-                <Text style={styles.productTitle}>
-                  {product.title || props.copy.giftPackTitleFallback}
-                </Text>
-                <Text style={styles.productDescription}>{product.description}</Text>
-                <View style={styles.productMetaRow}>
-                  <Text style={styles.productMetaLabel}>
-                    {props.copy.giftPackRewardLabel}
-                  </Text>
-                  <Text style={styles.productMetaValue}>
-                    {props.formatAmount(product.catalogItem.giftPack.rewardAmount)}
-                  </Text>
-                </View>
-                <Text style={styles.productPrice}>
-                  {product.displayPrice ?? props.copy.priceFallback}
-                </Text>
+            <View key={product.catalogItem.product.sku} style={styles.storeTile}>
+              <View style={[styles.storeIconBubble, styles.storeIconGift]}>
+                <Text style={styles.storeIconText}>P</Text>
               </View>
+              <Text style={styles.storeTileTitle}>
+                {product.title || props.copy.giftPackTitleFallback}
+              </Text>
+              <Text style={styles.storeTileValue}>
+                {props.formatAmount(product.catalogItem.giftPack.rewardAmount)}
+              </Text>
+              <Text style={styles.storeTileMeta}>
+                {product.displayPrice ?? props.copy.priceFallback}
+              </Text>
               <ActionButton
                 label={
                   props.purchasingSku === product.catalogItem.product.sku
@@ -454,150 +491,256 @@ export function WalletCard(props: WalletCardProps) {
             </View>
           ))}
         </View>
-      </View>
-    </SectionCard>
+      </SectionCard>
+
+      <SectionCard title={props.copy.ledgerTitle}>
+        {ledgerEntries.length === 0 ? (
+          <Text style={styles.emptyText}>{props.copy.ledgerEmpty}</Text>
+        ) : (
+          <View style={styles.timelineList}>
+            {ledgerEntries.map((entry) => (
+              <WalletHistoryEntryCard
+                key={entry.id}
+                title={renderLedgerLabel(entry)}
+                accentValue={props.formatAmount(entry.amount)}
+                tone={
+                  entry.entryType.includes("refund") ||
+                  entry.entryType.includes("revoke") ||
+                  entry.entryType.includes("reversal")
+                    ? "panel"
+                    : entry.entryType.includes("gift_send") ||
+                  entry.entryType.includes("spend") ||
+                  entry.entryType.includes("debit")
+                    ? "danger"
+                    : entry.entryType.includes("gift_receive") ||
+                        entry.entryType.includes("gift_pack")
+                      ? "blue"
+                      : "success"
+                }
+                detailLines={[
+                  renderAssetLabel(entry.assetCode),
+                  props.formatDateTime(entry.createdAt),
+                ]}
+              />
+            ))}
+          </View>
+        )}
+      </SectionCard>
+
+      <SectionCard title={props.copy.giftTitle}>
+        <View style={styles.formGrid}>
+          <Field
+            label={props.copy.receiverUserId}
+            value={giftReceiverUserId}
+            onChangeText={setGiftReceiverUserId}
+            keyboardType="numeric"
+            placeholder={props.copy.receiverUserIdPlaceholder}
+          />
+          <Field
+            label={props.copy.giftAmount}
+            value={giftAmount}
+            onChangeText={setGiftAmount}
+            keyboardType="numeric"
+            placeholder={props.copy.giftAmountPlaceholder}
+          />
+        </View>
+
+        <ActionButton
+          label={props.sendingGift ? props.copy.sendingGift : props.copy.sendGift}
+          onPress={() => {
+            void handleSendGift();
+          }}
+          disabled={!canSendGift}
+          fullWidth
+        />
+
+        {giftHistory.length === 0 ? (
+          <Text style={styles.emptyText}>{props.copy.historyEmpty}</Text>
+        ) : (
+          <View style={styles.timelineList}>
+            {giftHistory.map((gift) => (
+              <WalletHistoryEntryCard
+                key={gift.id}
+                title={props.copy.giftTransferLabel(
+                  gift.senderUserId,
+                  gift.receiverUserId,
+                )}
+                accentValue={props.formatAmount(gift.amount)}
+                tone="blue"
+                detailLines={[
+                  props.copy.giftEnergyCost(gift.energyCost),
+                  props.formatDateTime(gift.createdAt),
+                ]}
+              />
+            ))}
+          </View>
+        )}
+      </SectionCard>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  balanceBlock: {
-    flex: 1,
-    gap: 6,
+  walletStack: {
+    gap: mobileSpacing["3xl"],
   },
-  sectionHeader: {
+  heroGrid: {
+    gap: mobileSpacing.lg,
+  },
+  balanceHeroCard: {
+    gap: mobileSpacing.md,
+    borderRadius: mobileRadii.xl,
+    borderWidth: mobileChromeTheme.borderWidth,
+    borderColor: mobilePalette.border,
+    backgroundColor: "#261b0e",
+    padding: mobileSpacing.xl,
+    ...mobileChromeTheme.cardShadow,
+  },
+  creditsHeroCard: {
+    gap: mobileSpacing.md,
+    borderRadius: mobileRadii.xl,
+    borderWidth: mobileChromeTheme.borderWidth,
+    borderColor: mobilePalette.border,
+    backgroundColor: "#171f31",
+    padding: mobileSpacing.xl,
+    ...mobileChromeTheme.cardShadow,
+  },
+  heroHeader: {
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
     gap: 12,
   },
-  sectionHeading: {
-    flex: 1,
-    gap: 6,
-  },
-  sectionTitle: {
-    color: mobilePalette.text,
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  sectionSubtitle: {
+  heroEyebrow: {
     color: mobilePalette.textMuted,
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: mobileTypeScale.fontSize.labelXs,
+    fontWeight: "700",
+    letterSpacing: mobileTypeScale.letterSpacing.subtle,
+    textTransform: "uppercase",
   },
-  assetSection: {
-    gap: 12,
+  balanceHeroValue: {
+    color: mobilePalette.accent,
+    fontSize: mobileTypeScale.fontSize.metric + 6,
+    lineHeight: mobileTypeScale.fontSize.metric + 10,
+    fontWeight: "800",
   },
-  giftSection: {
-    gap: 12,
+  balanceHeroMeta: {
+    color: mobilePalette.textMuted,
+    fontSize: mobileTypeScale.fontSize.labelSm,
+    lineHeight: mobileTypeScale.lineHeight.label,
   },
-  energyCard: {
+  heroActionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: mobileSpacing.md,
+  },
+  creditsHeroValue: {
+    color: mobilePalette.text,
+    fontSize: mobileTypeScale.fontSize.hero,
+    lineHeight: mobileTypeScale.lineHeight.hero,
+    fontWeight: "800",
+  },
+  creditsHeroMeta: {
+    color: mobilePalette.textMuted,
+    fontSize: mobileTypeScale.fontSize.labelSm,
+    lineHeight: mobileTypeScale.lineHeight.label,
+  },
+  progressTrack: {
+    height: 14,
+    overflow: "hidden",
+    borderRadius: 999,
+    borderWidth: mobileChromeTheme.borderWidth,
+    borderColor: mobilePalette.border,
+    backgroundColor: "#0b1119",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 999,
+    backgroundColor: mobilePalette.accent,
+  },
+  creditsFooter: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: mobilePalette.border,
-    backgroundColor: mobilePalette.panelMuted,
-    padding: 14,
   },
-  energyLabel: {
+  creditsFooterLabel: {
     color: mobilePalette.textMuted,
-    fontSize: 13,
+    fontSize: mobileTypeScale.fontSize.labelXs,
+    fontWeight: "700",
+    letterSpacing: mobileTypeScale.letterSpacing.subtle,
     textTransform: "uppercase",
-    letterSpacing: 0.4,
   },
-  energyValue: {
+  creditsFooterValue: {
     color: mobilePalette.text,
-    fontSize: 18,
+    fontSize: mobileTypeScale.fontSize.bodyLg,
     fontWeight: "700",
-  },
-  formGrid: {
-    gap: 12,
-  },
-  historySection: {
-    gap: 10,
-  },
-  subsectionTitle: {
-    color: mobilePalette.text,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  emptyText: {
-    color: mobilePalette.textMuted,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  timelineList: {
-    gap: 10,
   },
   assetGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 12,
   },
-  storeSection: {
-    gap: 12,
-  },
-  storeHeader: {
+  storeGrid: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
+    flexWrap: "wrap",
     gap: 12,
   },
-  storeHeading: {
-    flex: 1,
-    gap: 6,
-  },
-  storeSubtitle: {
-    color: mobilePalette.textMuted,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  productList: {
-    gap: 12,
-  },
-  productCard: {
-    gap: 12,
-    borderRadius: 16,
-    borderWidth: 1,
+  storeTile: {
+    flexGrow: 1,
+    minWidth: 160,
+    gap: mobileSpacing.sm,
+    borderRadius: mobileRadii.xl,
+    borderWidth: mobileChromeTheme.borderWidth,
     borderColor: mobilePalette.border,
     backgroundColor: mobilePalette.panelMuted,
-    padding: 14,
+    padding: mobileSpacing.lg,
+    ...mobileChromeTheme.cardShadowSm,
   },
-  productContent: {
-    gap: 6,
-  },
-  productTitle: {
-    color: mobilePalette.text,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  productDescription: {
-    color: mobilePalette.textMuted,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  productMetaRow: {
-    flexDirection: "row",
+  storeIconBubble: {
+    width: 44,
+    height: 44,
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
+    justifyContent: "center",
+    borderRadius: 22,
+    borderWidth: mobileChromeTheme.borderWidth,
+    borderColor: mobilePalette.border,
   },
-  productMetaLabel: {
-    color: mobilePalette.textMuted,
-    fontSize: 12,
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
+  storeIconVoucher: {
+    backgroundColor: "#2d220f",
   },
-  productMetaValue: {
-    color: mobilePalette.text,
-    fontSize: 14,
-    fontWeight: "700",
+  storeIconGift: {
+    backgroundColor: "#2d1719",
   },
-  productPrice: {
+  storeIconText: {
     color: mobilePalette.accent,
-    fontSize: 14,
+    fontSize: mobileTypeScale.fontSize.titleBase,
+    fontWeight: "800",
+  },
+  storeTileTitle: {
+    color: mobilePalette.text,
+    fontSize: mobileTypeScale.fontSize.bodyLg,
+    fontWeight: "800",
+  },
+  storeTileValue: {
+    color: mobilePalette.accent,
+    fontSize: mobileTypeScale.fontSize.body,
+    fontWeight: "800",
+  },
+  storeTileMeta: {
+    color: mobilePalette.textMuted,
+    fontSize: mobileTypeScale.fontSize.labelXs,
     fontWeight: "700",
+  },
+  formGrid: {
+    gap: mobileSpacing.md,
+  },
+  emptyText: {
+    color: mobilePalette.textMuted,
+    fontSize: mobileTypeScale.fontSize.labelSm,
+    lineHeight: mobileTypeScale.lineHeight.label,
+  },
+  timelineList: {
+    gap: mobileSpacing.md,
   },
 });

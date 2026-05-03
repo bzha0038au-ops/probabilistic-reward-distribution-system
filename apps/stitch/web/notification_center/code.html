@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+
+<html class="" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Notification Center - Retro-Modern Web3 Play</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&amp;family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">tailwind.config = {darkMode: "class", theme: {extend: {colors: {"on-secondary-fixed": "#0f0069", "on-tertiary": "#ffffff", "on-primary-fixed": "#370e00", "primary-fixed-dim": "#ffb599", "secondary-fixed": "#e2dfff", "outline-variant": "#dfc0b5", error: "#ba1a1a", "surface-container-lowest": "#ffffff", "on-tertiary-fixed": "#221b00", "inverse-on-surface": "#f4f0ef", "tertiary-container": "#c2aa4e", "on-secondary": "#ffffff", "on-primary": "#ffffff", primary: "#7f2a00", outline: "#8c7168", "on-background": "#1c1b1b", "surface-container": "#f1edec", "tertiary-fixed": "#fce17e", "on-tertiary-fixed-variant": "#544600", tertiary: "#705d00", "surface-tint": "#a73a00", "surface-container-high": "#ece7e7", "on-secondary-fixed-variant": "#3322cc", secondary: "#4b41e1", "on-primary-fixed-variant": "#802a00", surface: "#fdf8f8", "surface-container-low": "#f7f2f2", "on-primary-container": "#ffcebc", "surface-dim": "#ddd9d8", "surface-bright": "#fdf8f8", "secondary-fixed-dim": "#c3c0ff", background: "#fdf8f8", "inverse-surface": "#313030", "on-surface": "#1c1b1b", "inverse-primary": "#ffb599", "surface-variant": "#e6e1e1", "on-secondary-container": "#fffbff", "tertiary-fixed-dim": "#dfc566", "on-error-container": "#93000a", "on-surface-variant": "#58423a", "error-container": "#ffdad6", "on-tertiary-container": "#4c3e00", "secondary-container": "#655dfb", "primary-container": "#a73a00", "surface-container-highest": "#e6e1e1", "on-error": "#ffffff", "primary-fixed": "#ffdbce"}, borderRadius: {DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px"}, spacing: {sm: "8px", lg: "24px", base: "8px", md: "16px", xs: "4px", gutter: "16px", "container-max": "1440px", xl: "32px", margin: "20px", unit: "4px"}, fontFamily: {button: ["Space Grotesk"], "body-lg": ["Be Vietnam Pro"], h1: ["Space Grotesk"], h2: ["Space Grotesk"], "label-caps": ["Space Grotesk"], h3: ["Space Grotesk"], "body-md": ["Be Vietnam Pro"], "headline-xl": ["Plus Jakarta Sans"], "label-bold": ["Be Vietnam Pro"], "label-sm": ["Be Vietnam Pro"], "headline-md": ["Plus Jakarta Sans"], "headline-lg": ["Plus Jakarta Sans"]}, fontSize: {button: ["16px", {lineHeight: "1.0", fontWeight: "600"}], "body-lg": ["18px", {lineHeight: "28px", fontWeight: "400"}], h1: ["64px", {lineHeight: "1.1", letterSpacing: "-0.02em", fontWeight: "700"}], h2: ["48px", {lineHeight: "1.2", letterSpacing: "-0.01em", fontWeight: "700"}], "label-caps": ["14px", {lineHeight: "1.2", letterSpacing: "0.05em", fontWeight: "700"}], h3: ["32px", {lineHeight: "1.2", fontWeight: "600"}], "body-md": ["16px", {lineHeight: "24px", fontWeight: "400"}], "headline-xl": ["40px", {lineHeight: "48px", letterSpacing: "-0.02em", fontWeight: "800"}], "label-bold": ["14px", {lineHeight: "20px", fontWeight: "700"}], "label-sm": ["12px", {lineHeight: "16px", fontWeight: "500"}], "headline-md": ["24px", {lineHeight: "30px", fontWeight: "700"}], "headline-lg": ["32px", {lineHeight: "38px", letterSpacing: "-0.01em", fontWeight: "800"}]}}}};</script>
+<style>
+        .halftone-bg {
+            background-image: radial-gradient(circle, #333348 2px, transparent 2px);
+            background-size: 16px 16px;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex flex-col">
+<!-- TopAppBar -->
+<header class="bg-slate-950 font-['Space_Grotesk'] uppercase tracking-tighter font-bold flex justify-between items-center w-full px-8 h-20 z-50 sticky top-0 border-b-2 border-slate-800 shadow-[0px_4px_0px_0px_rgba(0,0,0,1)]">
+<div class="flex items-center gap-8">
+<div class="text-2xl font-black text-yellow-400 italic border-2 border-yellow-400 px-3 py-1 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                Retro-Modern Web3 Play
+            </div>
+<nav class="hidden md:flex gap-6 h-full items-center">
+<a class="text-slate-400 font-medium hover:text-yellow-300 hover:bg-slate-900 px-3 py-2 rounded transition-all duration-100 h-full flex items-center" href="#">Lobby</a>
+<a class="text-slate-400 font-medium hover:text-yellow-300 hover:bg-slate-900 px-3 py-2 rounded transition-all duration-100 h-full flex items-center" href="#">Tables</a>
+<a class="text-slate-400 font-medium hover:text-yellow-300 hover:bg-slate-900 px-3 py-2 rounded transition-all duration-100 h-full flex items-center" href="#">Predictions</a>
+<a class="text-slate-400 font-medium hover:text-yellow-300 hover:bg-slate-900 px-3 py-2 rounded transition-all duration-100 h-full flex items-center" href="#">Wallet</a>
+<a class="text-slate-400 font-medium hover:text-yellow-300 hover:bg-slate-900 px-3 py-2 rounded transition-all duration-100 h-full flex items-center" href="#">Fairness</a>
+</nav>
+</div>
+<div class="flex items-center gap-6">
+<button class="bg-primary-container text-on-primary-container font-button text-button px-6 py-3 border-2 border-on-primary-fixed shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all uppercase">
+                Connect Wallet
+            </button>
+<div class="flex gap-4">
+<button aria-label="notifications" class="text-yellow-400 border-b-4 border-yellow-400 pb-1">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">notifications</span>
+</button>
+<button aria-label="settings" class="text-slate-400 hover:text-yellow-300 transition-colors">
+<span class="material-symbols-outlined">settings</span>
+</button>
+</div>
+</div>
+</header>
+<div class="flex flex-1 relative">
+<!-- SideNavBar -->
+<aside class="bg-slate-900 h-full w-64 border-r-2 border-slate-800 shadow-[4px_0px_0px_0px_rgba(0,0,0,1)] fixed left-0 top-20 flex flex-col p-4 z-40 hidden md:flex" style="height: calc(100vh - 5rem);">
+<div class="mb-8">
+<h2 class="text-yellow-400 font-['Space_Grotesk'] text-xl font-black uppercase tracking-widest">Player Hub</h2>
+<p class="text-slate-400 font-body-md text-sm mt-1">Legendary Rank</p>
+</div>
+<nav class="flex-1 flex flex-col gap-2 font-['Space_Grotesk'] text-sm font-bold uppercase">
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined">group</span> Social
+                </a>
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined">military_tech</span> Missions
+                </a>
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined">leaderboard</span> Leaderboard
+                </a>
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined">psychology</span> Strategy
+                </a>
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined">help_center</span> Support
+                </a>
+</nav>
+<div class="mt-auto mb-6">
+<button class="w-full bg-primary-container text-on-primary-container font-button text-button py-3 border-2 border-on-primary-fixed shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all uppercase">
+                    Daily Spin
+                </button>
+</div>
+<div class="border-t-2 border-slate-800 pt-4 flex flex-col gap-2 font-['Space_Grotesk'] text-sm font-bold uppercase">
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined">verified_user</span> Audit Log
+                </a>
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined">enhanced_encryption</span> Security
+                </a>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="flex-1 md:ml-64 p-8 halftone-bg relative min-h-[calc(100vh-5rem)]">
+<div class="max-w-[1440px] mx-auto">
+<!-- Notification Header -->
+<div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 bg-surface-container border-2 border-outline-variant p-6 shadow-[8px_8px_0px_0px_#4d4732]">
+<div>
+<h1 class="font-h1 text-h1 text-primary-fixed uppercase drop-shadow-[2px_2px_0px_rgba(0,0,0,1)]">Command Center</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant mt-2 max-w-xl">Stay updated on your legendary conquests, critical security alerts, and strategic game results.</p>
+</div>
+<button class="mt-4 md:mt-0 font-button text-button bg-surface border-2 border-outline-variant text-on-surface px-6 py-3 shadow-[4px_4px_0px_0px_#4d4732] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_#4d4732] transition-all flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">done_all</span>
+                        Mark All as Read
+                    </button>
+</div>
+<!-- Filters -->
+<div class="flex gap-4 mb-8 overflow-x-auto pb-4 hide-scrollbar">
+<button class="shrink-0 font-label-caps text-label-caps uppercase px-6 py-3 bg-primary-container text-on-primary-container border-2 border-on-primary-fixed shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all">All Alerts</button>
+<button class="shrink-0 font-label-caps text-label-caps uppercase px-6 py-3 bg-surface border-2 border-outline-variant text-primary-fixed hover:bg-surface-variant transition-all flex items-center gap-2">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">military_tech</span> Rewards
+                    </button>
+<button class="shrink-0 font-label-caps text-label-caps uppercase px-6 py-3 bg-surface border-2 border-outline-variant text-secondary hover:bg-surface-variant transition-all flex items-center gap-2">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">sports_esports</span> Game Results
+                    </button>
+<button class="shrink-0 font-label-caps text-label-caps uppercase px-6 py-3 bg-surface border-2 border-outline-variant text-error hover:bg-surface-variant transition-all flex items-center gap-2">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">security</span> Security
+                    </button>
+<button class="shrink-0 font-label-caps text-label-caps uppercase px-6 py-3 bg-surface border-2 border-outline-variant text-tertiary-fixed-dim hover:bg-surface-variant transition-all flex items-center gap-2">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">forum</span> Community
+                    </button>
+</div>
+<!-- Notification Grid (Bento Style) -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+<!-- Major Alert (Span 12 or 8) -->
+<div class="md:col-span-8 bg-surface-container border-2 border-primary-fixed p-6 shadow-[8px_8px_0px_0px_#e9c400] relative overflow-hidden group">
+<div class="absolute top-0 right-0 w-32 h-32 bg-primary-container opacity-10 rounded-bl-full -mr-8 -mt-8"></div>
+<div class="flex items-start gap-4 relative z-10">
+<div class="w-16 h-16 shrink-0 bg-primary-container border-2 border-on-primary-fixed flex items-center justify-center shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+<span class="material-symbols-outlined text-on-primary-fixed text-4xl" style="font-variation-settings: 'FILL' 1;">military_tech</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start mb-2">
+<span class="font-label-caps text-label-caps text-primary-fixed px-3 py-1 border border-primary-fixed uppercase tracking-widest text-xs">Reward Unlocked</span>
+<span class="font-body-md text-sm text-on-surface-variant">2 mins ago</span>
+</div>
+<h3 class="font-h3 text-h3 text-on-surface mb-2">Legendary Genesis Box Granted</h3>
+<p class="font-body-md text-on-surface-variant mb-4">Your ranking in Season 4 has earned you an exclusive Genesis Box. Open it to reveal limited edition tactical gear.</p>
+<button class="font-button text-button bg-primary-container text-on-primary-container px-6 py-2 border-2 border-on-primary-fixed shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all uppercase">
+                                    Claim Now
+                                </button>
+</div>
+</div>
+</div>
+<!-- Side Alert (Span 4) -->
+<div class="md:col-span-4 bg-surface-container border-2 border-error p-6 shadow-[6px_6px_0px_0px_#ffb4ab]">
+<div class="flex items-start gap-4">
+<div class="w-12 h-12 shrink-0 bg-error-container border-2 border-error flex items-center justify-center shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+<span class="material-symbols-outlined text-on-error-container text-2xl" style="font-variation-settings: 'FILL' 1;">security</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start mb-1">
+<span class="font-label-caps text-label-caps text-error px-2 py-0.5 border border-error uppercase tracking-widest text-[10px]">Action Required</span>
+<span class="font-body-md text-xs text-on-surface-variant">1 hr ago</span>
+</div>
+<h4 class="font-h3 text-xl text-on-surface mb-2">New Device Detected</h4>
+<p class="font-body-md text-sm text-on-surface-variant mb-4">Login attempt from IP 192.168.1.1.</p>
+<button class="w-full font-button text-button text-sm bg-transparent border-2 border-error text-error px-4 py-2 hover:bg-error-container hover:text-on-error-container transition-all uppercase text-center">
+                                    Review
+                                </button>
+</div>
+</div>
+</div>
+<!-- Regular Card -->
+<div class="md:col-span-4 bg-surface-container border-2 border-outline-variant p-5 shadow-[4px_4px_0px_0px_#4d4732] hover:border-secondary hover:shadow-[4px_4px_0px_0px_#deb7ff] transition-all">
+<div class="flex items-start gap-4">
+<div class="w-10 h-10 shrink-0 bg-secondary-container border-2 border-secondary flex items-center justify-center">
+<span class="material-symbols-outlined text-on-secondary-container" style="font-variation-settings: 'FILL' 1;">sports_esports</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start mb-1">
+<span class="font-label-caps text-label-caps text-secondary uppercase text-[10px]">Match Result</span>
+<span class="font-body-md text-xs text-on-surface-variant">3 hrs ago</span>
+</div>
+<h4 class="font-h3 text-lg text-on-surface mb-1">Victory in Cyber-Arena</h4>
+<p class="font-body-md text-sm text-on-surface-variant mb-3">You defeated 'NeonNinja' +150 XP.</p>
+<a class="font-label-caps text-label-caps text-secondary hover:underline underline-offset-4 flex items-center gap-1" href="#">
+                                    View Stats <span class="material-symbols-outlined text-sm">arrow_forward</span>
+</a>
+</div>
+</div>
+</div>
+<!-- Regular Card -->
+<div class="md:col-span-4 bg-surface-container border-2 border-outline-variant p-5 shadow-[4px_4px_0px_0px_#4d4732] hover:border-secondary hover:shadow-[4px_4px_0px_0px_#deb7ff] transition-all">
+<div class="flex items-start gap-4">
+<div class="w-10 h-10 shrink-0 bg-secondary-container border-2 border-secondary flex items-center justify-center">
+<span class="material-symbols-outlined text-on-secondary-container" style="font-variation-settings: 'FILL' 1;">sports_esports</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start mb-1">
+<span class="font-label-caps text-label-caps text-secondary uppercase text-[10px]">Tournament</span>
+<span class="font-body-md text-xs text-on-surface-variant">5 hrs ago</span>
+</div>
+<h4 class="font-h3 text-lg text-on-surface mb-1">Final Bracket Posted</h4>
+<p class="font-body-md text-sm text-on-surface-variant mb-3">The weekend qualifiers have concluded.</p>
+<a class="font-label-caps text-label-caps text-secondary hover:underline underline-offset-4 flex items-center gap-1" href="#">
+                                    See Bracket <span class="material-symbols-outlined text-sm">arrow_forward</span>
+</a>
+</div>
+</div>
+</div>
+<!-- Regular Card -->
+<div class="md:col-span-4 bg-surface-container border-2 border-outline-variant p-5 shadow-[4px_4px_0px_0px_#4d4732] hover:border-tertiary-fixed-dim hover:shadow-[4px_4px_0px_0px_#adc6ff] transition-all">
+<div class="flex items-start gap-4">
+<div class="w-10 h-10 shrink-0 bg-tertiary-container border-2 border-tertiary-fixed-dim flex items-center justify-center">
+<span class="material-symbols-outlined text-on-tertiary-container" style="font-variation-settings: 'FILL' 1;">forum</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start mb-1">
+<span class="font-label-caps text-label-caps text-tertiary-fixed-dim uppercase text-[10px]">Guild Update</span>
+<span class="font-body-md text-xs text-on-surface-variant">1 day ago</span>
+</div>
+<h4 class="font-h3 text-lg text-on-surface mb-1">Raid Strategy Decided</h4>
+<p class="font-body-md text-sm text-on-surface-variant mb-3">Guild Master pinned a new message.</p>
+<a class="font-label-caps text-label-caps text-tertiary-fixed-dim hover:underline underline-offset-4 flex items-center gap-1" href="#">
+                                    Read Post <span class="material-symbols-outlined text-sm">arrow_forward</span>
+</a>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- Footer -->
+<footer class="bg-slate-950 font-['Space_Grotesk'] text-xs font-black uppercase tracking-widest w-full py-12 px-8 flex flex-col md:flex-row justify-between items-center gap-8 border-t-2 border-slate-800 z-50 relative">
+<div class="text-lg text-yellow-400">
+            © 2024 RETRO-MODERN WEB3 PLAY. PROVABLY FAIR.
+        </div>
+<nav class="flex flex-wrap justify-center gap-6">
+<a class="text-slate-500 hover:text-yellow-400 transition-colors underline-offset-4 hover:underline" href="#">Whitepaper</a>
+<a class="text-slate-500 hover:text-yellow-400 transition-colors underline-offset-4 hover:underline" href="#">Tokenomics</a>
+<a class="text-slate-500 hover:text-yellow-400 transition-colors underline-offset-4 hover:underline" href="#">Audit Report</a>
+<a class="text-slate-500 hover:text-yellow-400 transition-colors underline-offset-4 hover:underline" href="#">Privacy</a>
+<a class="text-slate-500 hover:text-yellow-400 transition-colors underline-offset-4 hover:underline" href="#">Terms</a>
+</nav>
+</footer>
+</body></html>

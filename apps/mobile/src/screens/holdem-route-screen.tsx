@@ -201,10 +201,7 @@ export function HoldemRouteScreen(props: HoldemRouteScreenProps) {
       <>
         {routeSummary}
 
-        <SectionCard
-          title={props.screenCopy.replayDetailTitle}
-          subtitle={props.screenCopy.replayDetailSubtitle}
-        >
+        <SectionCard title={props.screenCopy.replayDetailTitle}>
           {props.loadingHoldemReplay ? (
             <View style={styles.replayStatusCard}>
               <ActivityIndicator color={palette.accent} />
@@ -250,10 +247,7 @@ export function HoldemRouteScreen(props: HoldemRouteScreenProps) {
         onSelect={props.onChangeHoldemPlayMode}
       />
 
-      <SectionCard
-        title={props.screenCopy.sectionTitle}
-        subtitle={props.screenCopy.sectionSubtitle}
-      >
+      <SectionCard title={props.screenCopy.sectionTitle}>
         <HoldemLobbyPanel
           activeTableId={activeTable?.id ?? null}
           actingHoldem={props.actingHoldem}
@@ -286,6 +280,7 @@ export function HoldemRouteScreen(props: HoldemRouteScreenProps) {
         {activeTable ? (
           <HoldemActiveTablePanel
             activeTable={activeTable}
+            balance={props.balance}
             canStart={canStartActiveTable}
             chatDraft={chatDraft}
             clockNowMs={clockNowMs}

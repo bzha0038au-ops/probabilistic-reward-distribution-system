@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Redemption Success</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;700&amp;family=Plus+Jakarta+Sans:wght@700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Configuration -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-variant": "#e5e2e1",
+                        "error": "#ba1a1a",
+                        "on-primary": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "on-error": "#ffffff",
+                        "secondary-fixed": "#e2dfff",
+                        "inverse-on-surface": "#f3f0ef",
+                        "on-tertiary-container": "#4c3e00",
+                        "tertiary": "#705d00",
+                        "surface-container": "#f0eded",
+                        "on-surface": "#1c1b1b",
+                        "on-secondary-fixed": "#0f0069",
+                        "surface-dim": "#dcd9d9",
+                        "primary-fixed-dim": "#ffb59a",
+                        "on-tertiary-fixed": "#221b00",
+                        "surface-container-high": "#eae7e7",
+                        "on-tertiary": "#ffffff",
+                        "on-secondary-fixed-variant": "#3323cc",
+                        "primary-fixed": "#ffdbce",
+                        "inverse-primary": "#ffb59a",
+                        "on-tertiary-fixed-variant": "#544600",
+                        "on-surface-variant": "#5b4137",
+                        "secondary-container": "#645efb",
+                        "tertiary-fixed": "#ffe170",
+                        "surface-bright": "#fcf9f8",
+                        "on-primary-container": "#521800",
+                        "error-container": "#ffdad6",
+                        "secondary-fixed-dim": "#c3c0ff",
+                        "tertiary-fixed-dim": "#e9c400",
+                        "on-primary-fixed-variant": "#802a00",
+                        "on-primary-fixed": "#370e00",
+                        "background": "#fcf9f8",
+                        "tertiary-container": "#caa900",
+                        "secondary": "#4b41e1",
+                        "surface": "#fcf9f8",
+                        "outline": "#8f7065",
+                        "surface-container-low": "#f6f3f2",
+                        "surface-tint": "#a73a00",
+                        "inverse-surface": "#313030",
+                        "outline-variant": "#e4beb1",
+                        "primary": "#a73a00",
+                        "surface-container-lowest": "#ffffff",
+                        "primary-container": "#ff5c00",
+                        "on-secondary-container": "#fffbff",
+                        "on-background": "#1c1b1b",
+                        "surface-container-highest": "#e5e2e1",
+                        "on-secondary": "#ffffff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xs": "4px",
+                        "unit": "4px",
+                        "margin": "20px",
+                        "gutter": "16px",
+                        "sm": "8px",
+                        "xl": "32px",
+                        "lg": "24px",
+                        "md": "16px"
+                    },
+                    "fontFamily": {
+                        "label-bold": ["Be Vietnam Pro"],
+                        "headline-xl": ["Plus Jakarta Sans"],
+                        "label-sm": ["Be Vietnam Pro"],
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "headline-lg": ["Plus Jakarta Sans"],
+                        "body-md": ["Be Vietnam Pro"],
+                        "body-lg": ["Be Vietnam Pro"]
+                    },
+                    "fontSize": {
+                        "label-bold": ["14px", { "lineHeight": "20px", "fontWeight": "700" }],
+                        "headline-xl": ["40px", { "lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "800" }],
+                        "label-sm": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+                        "headline-md": ["24px", { "lineHeight": "30px", "fontWeight": "700" }],
+                        "headline-lg": ["32px", { "lineHeight": "38px", "letterSpacing": "-0.01em", "fontWeight": "800" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        /* Halftone texture overlay utility */
+        .halftone-overlay {
+            background-image: radial-gradient(#1c1b1b 1px, transparent 1px);
+            background-size: 8px 8px;
+            opacity: 0.1;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface-variant min-h-screen flex items-center justify-center p-margin">
+<!-- Celebration Canvas / Card -->
+<main class="w-full max-w-md bg-surface border-2 border-on-surface rounded-xl shadow-[8px_8px_0px_0px_#1c1b1b] overflow-hidden relative flex flex-col">
+<!-- Decorative Header Area -->
+<div class="h-48 bg-tertiary-fixed relative border-b-2 border-on-surface overflow-hidden flex items-center justify-center">
+<div class="absolute inset-0 halftone-overlay"></div>
+<!-- Hero Celebration Image -->
+<img alt="Celebration Graphics" class="w-full h-full object-cover mix-blend-hard-light opacity-80" data-alt="A vibrant, retro-pop style illustration of an open treasure chest exploding with stylized, flat-vector stars, coins, and confetti. The scene uses a bright light-mode aesthetic with high contrast, featuring bold black outlines around all elements. The color palette is dominated by electric orange, cyber indigo, and stark white, creating an energetic and rewarding arcade-game atmosphere. The lighting is flat and graphic, emphasizing the solid colors and bold shapes." src="https://lh3.googleusercontent.com/aida-public/AB6AXuByKaZTGoyu41wiQlREfJU0aNIw6mPPKR56V9_Ic1o5PbBueNXjz-P1IbB100X6CwX0yecgriCF7ae_wmi5mJXwj5TKw-EmZgCctNcPRqhy6KRSC2Zp8dbAsjVoDALscJ5tARPBNsx0iW3MZ_I9N2-Oxd_zjxod4u4s2Zaa7zsXELwybukzLHcwwTOAQXWYXUJGOCCjPkjSfeXCTrDMgVtxeINNKmWq6BwiyBGUnbACUYOFk3sJn66I8ONNAtDflL8Nl-EICKDfJalC"/>
+<!-- Badge Overlay -->
+<div class="absolute z-10 bg-surface border-2 border-on-surface rounded-full w-24 h-24 flex items-center justify-center shadow-[4px_4px_0px_0px_#1c1b1b]">
+<span class="material-symbols-outlined text-[48px] text-primary-container" style="font-variation-settings: 'FILL' 1;">
+                    stars
+                </span>
+</div>
+</div>
+<!-- Content Area -->
+<div class="p-lg flex flex-col items-center text-center">
+<h1 class="font-headline-lg text-headline-lg text-on-surface mb-sm tracking-tight uppercase">
+                Redemption<br/>Success!
+            </h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant mb-xl">
+                Your voucher has been successfully generated and securely sent to your registered email address.
+            </p>
+<!-- Action Buttons Stack -->
+<div class="w-full flex flex-col gap-md">
+<!-- Primary Action -->
+<button class="w-full bg-primary-container text-on-primary font-label-bold text-label-bold uppercase tracking-wide border-2 border-on-surface py-3 px-6 rounded-lg shadow-[4px_4px_0px_0px_#1c1b1b] hover:bg-surface-tint active:translate-y-[4px] active:translate-x-[4px] active:shadow-none transition-all flex items-center justify-center gap-2 group">
+<span class="material-symbols-outlined group-hover:-rotate-12 transition-transform">
+                        home
+                    </span>
+                    Back to Lobby
+                </button>
+<!-- Secondary Action -->
+<button class="w-full bg-surface text-on-surface font-label-bold text-label-bold uppercase tracking-wide border-2 border-on-surface py-3 px-6 rounded-lg shadow-[4px_4px_0px_0px_#1c1b1b] hover:bg-surface-container active:translate-y-[4px] active:translate-x-[4px] active:shadow-none transition-all flex items-center justify-center gap-2 group">
+<span class="material-symbols-outlined group-hover:translate-x-1 transition-transform">
+                        receipt_long
+                    </span>
+                    View Ledger
+                </button>
+</div>
+</div>
+</main>
+</body></html>

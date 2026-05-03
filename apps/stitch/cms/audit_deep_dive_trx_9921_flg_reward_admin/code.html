@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Audit Log Deep-Dive - System Engine</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&amp;family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&amp;family=Inter:wght@100..900&amp;family=Space+Grotesk:wght@300..700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">tailwind.config = {darkMode: "class", theme: {extend: {colors: {"outline-variant": "#b0acac", outline: "#797676", "inverse-primary": "#ff7941", background: "#faf5f5", tertiary: "#6d5a00", "secondary-fixed": "#cfcdff", "primary-container": "#ff7941", "surface-container-low": "#f4f0ef", "on-secondary-fixed-variant": "#3e32d5", surface: "#faf5f5", "surface-bright": "#faf5f5", "on-secondary-fixed": "#2000b0", "on-primary": "#ffefeb", "on-error": "#ffefee", "on-background": "#302e2e", secondary: "#4a40e0", "surface-tint": "#a23800", "inverse-on-surface": "#9f9c9c", "on-surface-variant": "#5d5b5b", "on-tertiary": "#fff2cd", "tertiary-fixed": "#fce17e", "on-tertiary-fixed-variant": "#6d5a00", "on-secondary": "#f4f1ff", "on-secondary-container": "#3423cd", "on-primary-fixed-variant": "#531900", "on-error-container": "#570008", "tertiary-container": "#fce17e", "surface-variant": "#e0dcdb", "tertiary-fixed-dim": "#edd372", "primary-fixed-dim": "#ee6d36", "surface-container-lowest": "#ffffff", "secondary-fixed-dim": "#c0bdff", "inverse-surface": "#0f0e0e", "surface-container-high": "#e6e1e1", "secondary-container": "#cfcdff", "primary-fixed": "#ff7941", "surface-dim": "#d8d3d3", "on-surface": "#302e2e", "on-tertiary-fixed": "#4c3e00", error: "#b31b25", "on-primary-fixed": "#000000", "surface-container-highest": "#e0dcdb", "on-tertiary-container": "#615000", "error-container": "#fb5151", "surface-container": "#ece7e7", primary: "#a23800", "on-primary-container": "#431200", "tertiary-dim": "#5f4e00", "error-dim": "#9f0519", "secondary-dim": "#3d30d4", "primary-dim": "#8e3000"}, borderRadius: {DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px"}, spacing: {lg: "24px", "container-margin": "32px", sm: "8px", md: "16px", gutter: "16px", xs: "4px", xl: "32px", base: "4px", unit: "4px", margin: "20px"}, fontFamily: {"display-editorial": ["Newsreader"], "body-strong": ["Inter"], "label-caps": ["Space Grotesk"], "h1-editorial": ["Newsreader"], "body-standard": ["Inter"], "data-mono": ["Space Grotesk"], "headline-md": ["Plus Jakarta Sans"], "headline-xl": ["Plus Jakarta Sans"], "body-md": ["Be Vietnam Pro"], "body-lg": ["Be Vietnam Pro"], "headline-lg": ["Plus Jakarta Sans"], "label-bold": ["Be Vietnam Pro"], "label-sm": ["Be Vietnam Pro"]}, fontSize: {"display-editorial": ["42px", {lineHeight: "1.1", letterSpacing: "-0.02em", fontWeight: "400"}], "body-strong": ["14px", {lineHeight: "1.5", fontWeight: "600"}], "label-caps": ["11px", {lineHeight: "1", letterSpacing: "0.08em", fontWeight: "700"}], "h1-editorial": ["28px", {lineHeight: "1.2", fontWeight: "500"}], "body-standard": ["14px", {lineHeight: "1.5", fontWeight: "400"}], "data-mono": ["13px", {lineHeight: "1.2", letterSpacing: "0.02em", fontWeight: "500"}], "headline-md": ["24px", {lineHeight: "30px", fontWeight: "700"}], "headline-xl": ["40px", {lineHeight: "48px", letterSpacing: "-0.02em", fontWeight: "800"}], "body-md": ["16px", {lineHeight: "24px", fontWeight: "400"}], "body-lg": ["18px", {lineHeight: "28px", fontWeight: "400"}], "headline-lg": ["32px", {lineHeight: "38px", letterSpacing: "-0.01em", fontWeight: "800"}], "label-bold": ["14px", {lineHeight: "20px", fontWeight: "700"}], "label-sm": ["12px", {lineHeight: "16px", fontWeight: "500"}]}}}};</script>
+<style>
+        /* Grain Filter for Cinematic Minimalism */
+        .bg-grain {
+            position: relative;
+        }
+        .bg-grain::before {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            opacity: 0.02;
+            pointer-events: none;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        }
+        
+        /* Thin borders for material construction */
+        .thin-border {
+            border: 1px solid rgba(112, 119, 122, 0.2);
+        }
+        .thin-border-b {
+            border-bottom: 1px solid rgba(112, 119, 122, 0.2);
+        }
+        .inset-panel {
+            background-color: #F2EFE9;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-standard min-h-screen bg-grain overflow-hidden flex flex-col md:flex-row">
+<!-- Mobile TopNavBar (Visible only on md:hidden, representing standard top bar for mobile) -->
+<!-- However, JSON dictates a specific TopNavBar for the full application context. Let's implement TopNavBar for WEB as persistent top bar, and SideNav. -->
+<!-- TopNavBar (Persistent Top Bar as per Style Guidance: 48px, darkest background) -->
+<header class="hidden md:flex bg-stone-950 dark:bg-black text-[#5F634F] font-newsreader tracking-tight text-sm docked full-width top-0 h-12 border-b border-stone-800 flat no-shadows justify-between items-center w-full px-8 fixed z-50">
+<div class="flex items-center gap-6">
+<span class="font-newsreader font-black uppercase tracking-widest text-white text-sm">Reward Admin</span>
+<div class="flex items-center gap-4">
+<span class="text-stone-500 font-medium hover:text-stone-200 transition-colors cursor-pointer active:scale-95 duration-200">FinanceOps</span>
+<span class="text-stone-500 font-medium hover:text-stone-200 transition-colors cursor-pointer active:scale-95 duration-200">SaaS-Ops</span>
+<!-- 'Security' Workspace indicator as requested -->
+<span class="text-white font-bold border-b border-white hover:text-stone-200 transition-colors cursor-pointer active:scale-95 duration-200">Security</span>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<span class="text-stone-500 font-medium">PROD</span>
+<span class="material-symbols-outlined text-stone-500 hover:text-stone-200 transition-colors cursor-pointer" data-icon="notifications">notifications</span>
+<span class="material-symbols-outlined text-stone-500 hover:text-stone-200 transition-colors cursor-pointer" data-icon="settings">settings</span>
+<img alt="Operator Identity" class="w-6 h-6 rounded-full border border-stone-600" data-alt="A small circular profile picture of an operator, shown as a close-up portrait of a professional looking directly at the camera with a neutral expression. The lighting is balanced and the background is blurred, fitting a dark-mode administrative dashboard context." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBG99wsW82eYNAekK3yQ2D_LLeYFyIbqBwUhIAwTHz-6gdEMCPOsZ6tn3enlwcbOMt_V91azWYrwS2N8mqZk7MMYyjMcXluQqWHGH7GiJewF438fxl-FdOHwA44qdPk80puq0yxHUJ7lqEjxNPlpS7aF8C05lYvxQoMFDnWf38BZSutd3TISXRcC5Y3L9ICMfNo-BUm49iYmRSzxQwNwUlgStVBBrZ3g2256R_CGsq4XLT9C4HMfitFQ-9hJJfoN9SkPFAPtf2XwyNM"/>
+</div>
+</header>
+<!-- SideNavBar (Fixed width 64, fluid right area) -->
+<nav class="hidden md:flex bg-[#F2EFE9] dark:bg-stone-900/95 backdrop-blur-md text-[#5F634F] font-newsreader text-sm uppercase tracking-wider fixed left-0 top-0 h-full w-64 rounded-none border-r border-stone-300 dark:border-stone-700 inset-shadow-sm flex-col pt-16 pb-8 overflow-y-auto z-40">
+<!-- Header Info -->
+<div class="px-6 mb-8 flex flex-col gap-2">
+<img alt="Operator" class="w-12 h-12 rounded-full border border-stone-300" data-alt="A medium close-up portrait of a professional individual serving as an operator avatar. The subject has a calm, authoritative demeanor suitable for an internal system console. The background is subtle and neutral, emphasizing the person's face." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDlWiDXe75QCBRf8SF_AZBZIpyBKstHq5LqHu7gEnxMRNfHXk4_T3RR2oq2bBhSB4aoqpQVVCsqalgOscT_WtiXqp-gNeOzvMWwnaTstx4wbTI0dPLgfwu4Qxf5nYCSKgrKQjFlGRnUR36vnx0FPLaa4BJnscvEId5t8UZj0YN1xkDJFta8MGy_jCgQpN5b6dKo6-ydt-bhagj7VOZyX_ONguczcROG2UpbwLi5cStWmx08KzQCmNezujKBN49CWBq0cc6UXPPvSyQT"/>
+<div>
+<h2 class="font-body-strong text-on-surface">System Engine</h2>
+<p class="font-data-mono text-xs text-secondary">Terminal Tier 01</p>
+<span class="inline-block mt-2 font-label-caps text-[10px] bg-primary-fixed text-on-primary-fixed px-2 py-0.5 rounded-sm">MFA Verified</span>
+</div>
+</div>
+<div class="flex-1 flex flex-col gap-1">
+<!-- Navigation Items -->
+<!-- Active: Audit -->
+<a class="flex items-center gap-3 py-2 px-6 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="settings_input_component">settings_input_component</span>
+<span>Config</span>
+</a>
+<a class="flex items-center gap-3 py-2 px-6 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="gavel">gavel</span>
+<span>Legal</span>
+</a>
+<a class="flex items-center gap-3 py-2 px-6 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="hub">hub</span>
+<span>Providers</span>
+</a>
+<a class="flex items-center gap-3 py-2 px-6 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="military_tech">military_tech</span>
+<span>Prizes</span>
+</a>
+<a class="flex items-center gap-3 py-2 px-6 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="account_balance">account_balance</span>
+<span>Reconciliation</span>
+</a>
+<a class="flex items-center gap-3 py-2 px-6 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="payments">payments</span>
+<span>Finance</span>
+</a>
+<a class="flex items-center gap-3 py-2 px-6 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="trending_up">trending_up</span>
+<span>Economy</span>
+</a>
+<a class="flex items-center gap-3 py-2 px-6 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="fingerprint">fingerprint</span>
+<span>KYC</span>
+</a>
+<a class="flex items-center gap-3 py-2 px-6 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="group">group</span>
+<span>Users</span>
+</a>
+<a class="flex items-center gap-3 py-2 px-6 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="business">business</span>
+<span>SaaS</span>
+</a>
+<!-- Active State -->
+<a class="flex items-center gap-3 py-2 px-6 text-stone-950 dark:text-white font-bold border-l-2 border-[#5F634F] bg-stone-200/50 dark:bg-stone-800/50 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="list_alt">list_alt</span>
+<span>Audit</span>
+</a>
+<a class="flex items-center gap-3 py-2 px-6 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="verified_user">verified_user</span>
+<span>AML</span>
+</a>
+<a class="flex items-center gap-3 py-2 px-6 text-stone-500 dark:text-stone-400 pl-4 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="security">security</span>
+<span>Collusion</span>
+</a>
+</div>
+<!-- Footer Items -->
+<div class="mt-auto px-6 flex flex-col gap-1 border-t border-stone-300 dark:border-stone-700 pt-4">
+<a class="flex items-center gap-3 py-2 text-stone-500 dark:text-stone-400 hover:text-stone-900 transition-colors" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="help">help</span>
+<span>Help</span>
+</a>
+<a class="flex items-center gap-3 py-2 text-stone-500 dark:text-stone-400 hover:text-stone-900 transition-colors" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="description">description</span>
+<span>Docs</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-1 md:ml-64 mt-12 md:mt-12 h-[calc(100vh-3rem)] overflow-y-auto p-container-margin">
+<div class="max-w-6xl mx-auto flex flex-col gap-lg h-full">
+<!-- Header Section -->
+<header class="flex justify-between items-end pb-sm thin-border-b">
+<div>
+<h1 class="font-h1-editorial text-h1-editorial text-on-background">TRX_9921_FLG</h1>
+<p class="font-data-mono text-data-mono text-secondary mt-1">Audit Log Deep-Dive</p>
+</div>
+<div class="flex items-center gap-4">
+<!-- Inline Badge (Anomalous) - Low saturation, high contrast -->
+<span class="inline-flex items-center gap-2 bg-[#EADDD7] text-[#694435] px-3 py-1 rounded-sm font-label-caps text-label-caps border border-[#D5BDB2]">
+<span class="material-symbols-outlined text-[14px]" data-icon="warning">warning</span>
+                        Anomalous
+                    </span>
+<!-- Gated Write Action -->
+<button class="font-body-strong text-body-strong px-4 py-2 border border-outline text-on-surface hover:bg-surface-variant transition-colors rounded-sm flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]" data-icon="lock">lock</span>
+                        Lock Entity
+                    </button>
+</div>
+</header>
+<!-- Split View: Raw Data & Interpretation -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-lg flex-1 min-h-0">
+<!-- Left: Raw Event Data -->
+<div class="lg:col-span-7 flex flex-col h-full bg-surface-container-lowest thin-border rounded-sm overflow-hidden">
+<div class="bg-surface-container-high px-4 py-2 thin-border-b flex justify-between items-center">
+<h3 class="font-label-caps text-label-caps text-on-surface-variant">Raw Payload JSON</h3>
+<span class="material-symbols-outlined text-secondary text-[16px] cursor-pointer hover:text-on-surface" data-icon="content_copy">content_copy</span>
+</div>
+<div class="flex-1 overflow-auto inset-panel p-4">
+<pre class="font-data-mono text-[12px] leading-relaxed text-tertiary">{
+  "event_id": "evt_9921_flg_a8b2",
+  "timestamp": "2023-10-27T14:32:01.000Z",
+  "actor": {
+    "type": "user",
+    "id": "usr_77a9b21x",
+    "role": "standard"
+  },
+  "action": "funds_withdrawal",
+  "resource": {
+    "type": "wallet",
+    "id": "wal_098xyz"
+  },
+  "context": {
+    "amount": 50000.00,
+    "currency": "USD",
+    "destination_type": "external_bank",
+    "velocity_score": 0.94,
+    "ip_address": "192.168.1.145",
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36..."
+  },
+  "flags": [
+    "VELOCITY_EXCEEDED",
+    "NEW_DESTINATION",
+    "GEO_MISMATCH"
+  ],
+  "system_hash": "a9b8c7d6e5f4g3h2i1j0"
+}
+                        </pre>
+</div>
+</div>
+<!-- Right: Interpretation Context -->
+<div class="lg:col-span-5 flex flex-col gap-lg h-full overflow-y-auto pr-2">
+<!-- Context Card -->
+<div class="bg-surface-container-lowest thin-border rounded-sm p-4">
+<h3 class="font-display-editorial text-[20px] mb-4 text-on-background border-b border-surface-variant pb-2">Contextual Analysis</h3>
+<dl class="grid grid-cols-1 gap-y-4">
+<div class="flex flex-col gap-1">
+<dt class="font-label-caps text-label-caps text-secondary">Related User</dt>
+<dd class="font-data-mono text-data-mono text-primary flex items-center gap-2 cursor-pointer hover:underline">
+                                    usr_77a9b21x
+                                    <span class="material-symbols-outlined text-[14px]" data-icon="open_in_new">open_in_new</span>
+</dd>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="flex flex-col gap-1">
+<dt class="font-label-caps text-label-caps text-secondary">IP Address</dt>
+<dd class="font-data-mono text-data-mono text-on-surface">192.168.1.145</dd>
+</div>
+<div class="flex flex-col gap-1">
+<dt class="font-label-caps text-label-caps text-secondary">Geo Location</dt>
+<dd class="font-body-standard text-body-standard text-on-surface flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-secondary" data-icon="location_on">location_on</span>
+                                        St. Petersburg, RU
+                                    </dd>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<dt class="font-label-caps text-label-caps text-secondary">User Agent</dt>
+<dd class="font-data-mono text-[11px] text-on-surface-variant bg-surface-container p-2 rounded-sm thin-border break-all">
+                                    Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36
+                                </dd>
+</div>
+</dl>
+</div>
+<!-- Note Appended Section -->
+<div class="bg-surface-container-lowest thin-border rounded-sm p-4 flex-1">
+<div class="flex justify-between items-center mb-4">
+<h3 class="font-label-caps text-label-caps text-on-surface-variant">Operator Commentary</h3>
+<button class="text-secondary hover:text-on-surface"><span class="material-symbols-outlined text-[16px]" data-icon="edit">edit</span></button>
+</div>
+<div class="bg-surface-container p-3 text-sm text-on-surface-variant font-body-standard italic border-l-2 border-primary">
+                            "Flagged due to unusual velocity. User typically withdraws &lt;$500 monthly. IP address originates from a known VPN node range. Initiated manual hold pending KYC reverification."
+                            <div class="mt-2 text-xs font-data-mono text-secondary not-italic flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px]" data-icon="person">person</span> op_jdoe · 12 mins ago
+                            </div>
+</div>
+<div class="mt-4">
+<!-- Input Field Ghost Style -->
+<input class="w-full bg-transparent border-0 border-b border-outline-variant focus:border-primary focus:ring-0 font-body-standard text-sm px-0 py-2 placeholder:text-secondary transition-colors" placeholder="Add supplementary note..." type="text"/>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Section: Related Audit Trail (Dense List) -->
+<div class="mt-2">
+<h3 class="font-h1-editorial text-[18px] text-on-background mb-3 border-b border-surface-variant pb-1">Previous Events (usr_77a9b21x)</h3>
+<div class="bg-surface-container-lowest thin-border rounded-sm overflow-hidden">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low thin-border-b">
+<th class="py-2 px-4 font-label-caps text-[10px] text-secondary">Timestamp</th>
+<th class="py-2 px-4 font-label-caps text-[10px] text-secondary">Event ID</th>
+<th class="py-2 px-4 font-label-caps text-[10px] text-secondary">Action</th>
+<th class="py-2 px-4 font-label-caps text-[10px] text-secondary">Status</th>
+</tr>
+</thead>
+<tbody class="font-data-mono text-[12px] text-on-surface">
+<tr class="thin-border-b hover:bg-[#F2EFE9] transition-colors cursor-pointer">
+<td class="py-2 px-4 text-secondary">2023-10-27 14:30:12</td>
+<td class="py-2 px-4">evt_9920_auth</td>
+<td class="py-2 px-4">login_success</td>
+<td class="py-2 px-4"><span class="text-[#3b593f]">OK</span></td>
+</tr>
+<tr class="thin-border-b hover:bg-[#F2EFE9] transition-colors cursor-pointer">
+<td class="py-2 px-4 text-secondary">2023-10-26 09:15:00</td>
+<td class="py-2 px-4">evt_8812_kyc</td>
+<td class="py-2 px-4">document_uploaded</td>
+<td class="py-2 px-4"><span class="text-[#3b593f]">OK</span></td>
+</tr>
+<tr class="thin-border-b hover:bg-[#F2EFE9] transition-colors cursor-pointer">
+<td class="py-2 px-4 text-secondary">2023-10-25 18:42:33</td>
+<td class="py-2 px-4">evt_8754_trx</td>
+<td class="py-2 px-4">deposit_fiat</td>
+<td class="py-2 px-4"><span class="text-[#3b593f]">OK</span></td>
+</tr>
+<tr class="thin-border-b hover:bg-[#F2EFE9] transition-colors cursor-pointer">
+<td class="py-2 px-4 text-secondary">2023-10-20 11:05:19</td>
+<td class="py-2 px-4">evt_7421_auth</td>
+<td class="py-2 px-4">pwd_reset_req</td>
+<td class="py-2 px-4 text-secondary">INFO</td>
+</tr>
+<tr class="hover:bg-[#F2EFE9] transition-colors cursor-pointer">
+<td class="py-2 px-4 text-secondary">2023-10-01 08:00:01</td>
+<td class="py-2 px-4">evt_6100_sys</td>
+<td class="py-2 px-4">account_created</td>
+<td class="py-2 px-4"><span class="text-[#3b593f]">OK</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</main>
+</body></html>

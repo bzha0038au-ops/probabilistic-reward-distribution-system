@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { TbArrowRight } from 'react-icons/tb';
 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,6 +15,7 @@ type LoginFormProps = {
   submitLabel: string;
   loadingLabel: string;
   idleLabel: string;
+  requestFailedMessage: string;
   initialErrorMessage?: string | null;
   noticeMessage?: string | null;
   redirectTo: string;
@@ -30,6 +32,7 @@ export function LoginForm({
   submitLabel,
   loadingLabel,
   idleLabel,
+  requestFailedMessage,
   initialErrorMessage,
   noticeMessage,
   redirectTo,
@@ -62,14 +65,14 @@ export function LoginForm({
         setErrorMessage(
           payload && payload.ok === false
             ? payload.error.message
-            : 'Login request failed.'
+            : requestFailedMessage
         );
         return;
       }
 
       window.location.assign(payload.redirectTo);
     } catch {
-      setErrorMessage('Login request failed.');
+      setErrorMessage(requestFailedMessage);
     } finally {
       setPending(false);
     }
@@ -84,7 +87,9 @@ export function LoginForm({
     >
       <input type="hidden" name="redirectTo" value={redirectTo} />
       <div className="space-y-2">
-        <Label htmlFor="email">{emailLabel}</Label>
+        <Label htmlFor="email" className="text-[var(--retro-ink)]">
+          {emailLabel}
+        </Label>
         <Input
           id="email"
           name="email"
@@ -92,30 +97,35 @@ export function LoginForm({
           placeholder={emailPlaceholder}
           autoComplete="email"
           required
+          className="retro-field h-12 border-none px-4 text-base"
         />
       </div>
       <div className="space-y-2">
-        <Label htmlFor="password">{passwordLabel}</Label>
+        <Label htmlFor="password" className="text-[var(--retro-ink)]">
+          {passwordLabel}
+        </Label>
         <Input
           id="password"
           name="password"
           type="password"
           autoComplete="current-password"
           required
+          className="retro-field h-12 border-none px-4 text-base"
         />
       </div>
       {noticeMessage && (
-        <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+        <p className="rounded-[1rem] border-2 border-[var(--retro-green)] bg-[#e7fff1] px-4 py-3 text-sm text-[var(--retro-ink)]">
           {noticeMessage}
         </p>
       )}
       {errorMessage && (
-        <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+        <p className="rounded-[1rem] border-2 border-[var(--retro-red)] bg-[#ffebe6] px-4 py-3 text-sm text-[var(--retro-ink)]">
           {errorMessage}
         </p>
       )}
-      <Button type="submit" disabled={pending}>
+      <Button type="submit" variant="arcade" className="w-full" disabled={pending}>
         {submitLabel}
+        <TbArrowRight className="h-4 w-4" />
         <span aria-live="polite" className="sr-only" role="status">
           {pending ? loadingLabel : idleLabel}
         </span>

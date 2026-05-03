@@ -11,6 +11,58 @@ export const userDashboardCopy = {
     phonePending: 'Phone verification required',
     drawUnlocked: 'Draw enabled',
     drawLocked: 'Verify your email before running the draw flow.',
+    overviewHeroEyebrow: 'Active event',
+    overviewHeroTitle: 'Neon Nights is live across tables, rewards, and prediction rounds.',
+    overviewHeroDescription:
+      'Use the lobby as the jump point for fast tables, reward draws, and live market positions. Keep fairness, wallet, and missions close while you play.',
+    overviewHeroPrimary: 'Open prediction markets',
+    overviewHeroSecondary: 'Open reward center',
+    overviewRewardsEyebrow: 'Reward spotlight',
+    overviewRewardsTitle: 'Lucky Streak weekend is pushing pack drops, bonus spins, and mission payouts.',
+    overviewRewardsDescription:
+      'Stay close to the reward loop, rotate into draw routes, and clear mission tracks before the event timer rolls over.',
+    overviewRewardsPrimary: 'Open reward center',
+    overviewRewardsSecondary: 'Open slot machine',
+    overviewCommunityEyebrow: 'Club bulletin',
+    overviewCommunityTitle: 'Community picks, fairness proofs, and hot threads are moving together this round.',
+    overviewCommunityDescription:
+      'Track the conversation around live tables, review published fairness proof, and pivot into the routes players are talking about.',
+    overviewCommunityPrimary: 'Open community',
+    overviewCommunitySecondary: 'Open fairness verifier',
+    overviewPulseTitle: 'Player pulse',
+    overviewPulseDescription:
+      'Track which routes feel active before you jump in.',
+    overviewQueueTitle: 'Activity queue',
+    overviewQueueDescription: 'Rotate through live campaign cards and jump into the route behind each spotlight.',
+    overviewSignalsTitle: 'Live signals',
+    overviewSignalsDescription: 'Snapshot the current activity lane before you move into markets, tables, or rewards.',
+    profileWalletEyebrow: 'My wallet',
+    profileWalletDescription:
+      'Keep credits, reward balance, payout tools, and recent ledger activity inside one player wallet hub.',
+    profileTotalBalanceLabel: 'Total balance',
+    profileLockedBalanceLabel: 'Locked balance',
+    profileQuickActionsTitle: 'Quick actions',
+    profileRecentActivityTitle: 'Ledger',
+    profileRecentActivityDescription:
+      'Latest balance movement across rewards, tables, and markets.',
+    profileNoRecentActivity: 'No recent wallet activity yet.',
+    profileAccountEyebrow: 'Account',
+    profileAccountDescription:
+      'Keep verification, security, and payout readiness grouped inside one personal center.',
+    profileVerificationSummaryTitle: 'Verification',
+    profileSecuritySummaryTitle: 'Security',
+    profilePayoutSummaryTitle: 'Rewards & withdrawal',
+    profileCurrentDeviceTitle: 'Current device',
+    profileTierLabel: 'Trust tier',
+    lobbyTitle: 'Featured tables',
+    lobbyDescription:
+      'Dedicated routes for table play, quick rounds, reward draws, and market positions.',
+    routePlayersLabel: 'Active players',
+    routeRewardRangeLabel: 'Reward range',
+    routeRiskLabel: 'Risk level',
+    riskLow: 'Low risk',
+    riskMedium: 'Medium risk',
+    riskHigh: 'High risk',
     routesTitle: 'Game routes',
     routesDescription:
       'Gameplay moved off the dashboard. Launch each mode from its own route and keep the account center focused on wallet, rewards, and security.',
@@ -35,6 +87,11 @@ export const userDashboardCopy = {
     blackjackDescription:
       'Blackjack with an AI dealer seated at the same table now runs on its own route at `/app/blackjack`.',
     blackjackOpen: 'Open blackjack',
+    marketsTitle: 'Prediction Markets',
+    marketsDescription:
+      'Open live positions, track momentum, and rotate into headline events from `/app/markets`.',
+    marketsOpen: 'Open prediction markets',
+    marketsStatus: 'Market live',
     fairnessTitle: 'Fairness verifier',
     fairnessDescription:
       'Open a standalone commit-reveal verifier on `/app/fairness` and prove locally that `SHA-256(seed)` matches the published commit.',
@@ -68,6 +125,47 @@ export const userDashboardCopy = {
     financeUnlocked: 'Higher-trust actions enabled',
     financeLocked:
       'Phone verification is required before higher-trust account actions.',
+    securityHeroEyebrow: 'Security center',
+    securityHeroTitle: 'Lock the account before high-trust play begins.',
+    securityHeroDescription:
+      'Keep email, phone, sessions, and identity review in one guarded route so wallet actions feel protected instead of buried in settings.',
+    securitySummaryLevel: 'Security tier',
+    securitySummaryChecks: 'Checks live',
+    securitySummarySessions: 'Active sessions',
+    securitySummaryAccess: 'Draw access',
+    securityTierPending: 'Entry tier',
+    securityTierActive: 'Verified tier',
+    securityTierAdvanced: 'Shielded tier',
+    securityIdentityTitle: 'Identity and trust',
+    securityIdentityDescription:
+      'Complete lightweight checks here first, then move into KYC only when withdrawals or restricted events require a higher trust level.',
+    securityEmailStepTitle: 'Email checkpoint',
+    securityEmailStepDescription:
+      'Confirm the inbox on file so draws, reward claims, and recovery links stay tied to your player account.',
+    securityPhoneStepTitle: 'Phone checkpoint',
+    securityPhoneStepDescription:
+      'Add a verified phone before higher-trust actions like withdrawals, payout edits, or account recovery.',
+    securityVerificationRouteDescription:
+      'Open the identity review route when you need higher withdrawal or event access.',
+    securityDefenseTitle: 'Account defense',
+    securityDefenseDescription:
+      'See which protection layers are live right now and when the current device expires.',
+    securityDefenseEmail: 'Email lock',
+    securityDefensePhone: 'Phone lock',
+    securityDefenseSessions: 'Session watch',
+    securityDefenseExpires: 'Current device expires',
+    securityGuardTitle: 'Protection stack',
+    securityGuardDescription:
+      'Treat each layer as a gate. Lightweight checks unlock routine play, while stronger identity proof protects wallet actions and recovery.',
+    securityGuardEmail:
+      'Email verification keeps reward claims, draws, and reset links bound to the account.',
+    securityGuardPhone:
+      'Phone verification unlocks higher-trust wallet actions and adds a second recovery checkpoint.',
+    securityGuardSessions:
+      'Session review lets you kill stale devices before they turn into payout or settings risk.',
+    securityRiskTitle: 'Risk disclosure',
+    securityRiskDescription:
+      'If a device, browser, or network looks unfamiliar, revoke it first and refresh the current session. Only move into full KYC when the product explicitly asks for a higher-trust identity tier.',
     sendEmail: 'Send verification email',
     phoneLabel: 'Phone number',
     phonePlaceholder: '+61 4xx xxx xxx',
@@ -80,9 +178,9 @@ export const userDashboardCopy = {
     phoneCodeSent: 'Verification code sent. Enter the SMS code to finish setup.',
     phoneVerifiedNotice:
       'Phone verified. Higher-trust account actions are now available.',
-    walletTitle: 'Economy wallet',
+    walletTitle: 'Treasury',
     walletDescription:
-      'Asset balances, gifting activity, and the read-only gift pack surface for web.',
+      'Manage game credits, protected reserves, gifting tools, and wallet activity from one route.',
     currentBalance: 'Available B luck',
     topUpAmount: 'Top-up amount',
     referenceId: 'Reference ID',
@@ -150,7 +248,7 @@ export const userDashboardCopy = {
     noCryptoWithdrawals: 'No crypto withdrawals yet.',
     transactionsTitle: 'Ledger activity',
     transactionsDescription:
-      'Immutable B luck economy balance movements for web wallet activity.',
+      'Recent B luck balance movements across rewards, markets, and protected wallet actions.',
     noTransactions: 'No ledger entries yet.',
     sessionsTitle: 'Active sessions',
     sessionsDescription: 'Review active devices and revoke access if needed.',
@@ -197,6 +295,57 @@ export const userDashboardCopy = {
     phonePending: '需要完成手机号验证',
     drawUnlocked: '抽奖已解锁',
     drawLocked: '请先完成邮箱验证，再执行抽奖流程。',
+    overviewHeroEyebrow: '活动进行中',
+    overviewHeroTitle: 'Neon Nights 已在牌桌、奖励和预测玩法中开启。',
+    overviewHeroDescription:
+      '把大厅当作统一跳板，在快节奏牌桌、奖励抽取和实时市场头寸之间切换，同时保持公平性、钱包和任务始终可见。',
+    overviewHeroPrimary: '打开预测市场',
+    overviewHeroSecondary: '打开奖励中心',
+    overviewRewardsEyebrow: '奖励活动',
+    overviewRewardsTitle: 'Lucky Streak 周末正在推动奖励包掉落、额外转轴和任务派奖。',
+    overviewRewardsDescription:
+      '把视线留在奖励循环里，在活动计时结束前切进抽奖玩法并清掉当前任务轨道。',
+    overviewRewardsPrimary: '打开奖励中心',
+    overviewRewardsSecondary: '打开老虎机页面',
+    overviewCommunityEyebrow: '俱乐部公告',
+    overviewCommunityTitle: '社区热帖、公平性证明和热门讨论正在同一轮里同步升温。',
+    overviewCommunityDescription:
+      '一边看玩家在聊什么，一边检查已发布的公平性证明，再切进当前被讨论最多的玩法路由。',
+    overviewCommunityPrimary: '打开社区',
+    overviewCommunitySecondary: '打开公平性验证页',
+    overviewPulseTitle: '玩家热度',
+    overviewPulseDescription:
+      '先看清哪条路线最活跃，再决定进入哪一局。',
+    overviewQueueTitle: '活动队列',
+    overviewQueueDescription: '左右切换当前活动栏目，再直接跳进对应的玩法或功能路由。',
+    overviewSignalsTitle: '实时信号',
+    overviewSignalsDescription: '在进入市场、牌桌或奖励前，先看一眼当前活动对应的状态快照。',
+    profileWalletEyebrow: '我的钱包',
+    profileWalletDescription:
+      '把点券余额、奖励储备、出款工具和最近账本变动集中在一个钱包总览里。',
+    profileTotalBalanceLabel: '总余额',
+    profileLockedBalanceLabel: '锁定余额',
+    profileQuickActionsTitle: '快捷入口',
+    profileRecentActivityTitle: '账本',
+    profileRecentActivityDescription: '展示奖励、牌桌和市场带来的最近余额变动。',
+    profileNoRecentActivity: '还没有最近的余额变动。',
+    profileAccountEyebrow: '账户',
+    profileAccountDescription:
+      '把验证、安全和出款准备度收进一个个人中心里。',
+    profileVerificationSummaryTitle: '验证状态',
+    profileSecuritySummaryTitle: '安全',
+    profilePayoutSummaryTitle: '奖励与出款',
+    profileCurrentDeviceTitle: '当前设备',
+    profileTierLabel: '信任等级',
+    lobbyTitle: '精选牌桌',
+    lobbyDescription:
+      '独立玩法页覆盖桌游、快节奏回合、奖励抽取和市场头寸。',
+    routePlayersLabel: '活跃玩家',
+    routeRewardRangeLabel: '奖励区间',
+    routeRiskLabel: '风险等级',
+    riskLow: '低风险',
+    riskMedium: '中风险',
+    riskHigh: '高风险',
     routesTitle: '玩法入口',
     routesDescription:
       '玩法已经从首页拆出去。账户首页只保留钱包、奖励和安全能力，具体玩法走各自独立路由。',
@@ -218,6 +367,11 @@ export const userDashboardCopy = {
     blackjackTitle: '二十一点',
     blackjackDescription: '接入同桌 AI 智能荷官的二十一点已拆到独立页面 `/app/blackjack`。',
     blackjackOpen: '打开二十一点页面',
+    marketsTitle: '预测市场',
+    marketsDescription:
+      '在 `/app/markets` 打开实时头寸、跟踪热度事件并参与市场结算。',
+    marketsOpen: '打开预测市场',
+    marketsStatus: '市场在线',
     fairnessTitle: '公平性验证器',
     fairnessDescription:
       '把 commit-reveal 独立拆到 `/app/fairness`，可单独 reveal 已结束 epoch，并在本地验证 `SHA-256(seed)` 是否匹配已公布 commit。',
@@ -250,6 +404,47 @@ export const userDashboardCopy = {
     verificationRouteStatus: '身份等级',
     financeUnlocked: '高信任操作已解锁',
     financeLocked: '更高信任级别的账户操作需要先完成手机号验证。',
+    securityHeroEyebrow: '安全中心',
+    securityHeroTitle: '在进入高信任玩法前，先把账户锁稳。',
+    securityHeroDescription:
+      '把邮箱、手机号、会话和身份审核收进同一条受保护路由，让钱包相关动作看起来像金库防线，而不是埋在设置里的表单。',
+    securitySummaryLevel: '安全等级',
+    securitySummaryChecks: '已启用校验',
+    securitySummarySessions: '活跃会话',
+    securitySummaryAccess: '抽奖权限',
+    securityTierPending: '基础等级',
+    securityTierActive: '已验证等级',
+    securityTierAdvanced: '防护等级',
+    securityIdentityTitle: '身份与信任',
+    securityIdentityDescription:
+      '先在这里完成轻量校验；只有当提现或受限活动要求更高信任级别时，再进入完整 KYC。',
+    securityEmailStepTitle: '邮箱关卡',
+    securityEmailStepDescription:
+      '确认当前绑定邮箱，让抽奖、奖励领取和找回链接都稳定绑定到你的玩家账户。',
+    securityPhoneStepTitle: '手机号关卡',
+    securityPhoneStepDescription:
+      '在提现、出款信息修改或账户找回前，先补齐已验证手机号。',
+    securityVerificationRouteDescription:
+      '当你需要更高提现额度或活动权限时，再进入身份审核路由。',
+    securityDefenseTitle: '账户防线',
+    securityDefenseDescription:
+      '集中查看当前已生效的防护层，以及这台设备什么时候失效。',
+    securityDefenseEmail: '邮箱锁',
+    securityDefensePhone: '手机锁',
+    securityDefenseSessions: '会话监控',
+    securityDefenseExpires: '当前设备过期时间',
+    securityGuardTitle: '防护栈',
+    securityGuardDescription:
+      '把每一层都当成闸门。轻量校验先解锁日常玩法，更强的身份证明再保护钱包动作和账户找回。',
+    securityGuardEmail:
+      '邮箱验证会把奖励领取、抽奖流程和重置链接牢牢绑定到账户本身。',
+    securityGuardPhone:
+      '手机号验证会解锁更高信任级别的钱包动作，并为账户恢复提供第二重校验。',
+    securityGuardSessions:
+      '会话审查让你能在旧设备演变成出款或设置风险之前先把它踢掉。',
+    securityRiskTitle: '风险提示',
+    securityRiskDescription:
+      '只要设备、浏览器或网络看起来不熟悉，就先撤销它，再刷新当前会话。只有在产品明确要求更高身份等级时，才进入完整 KYC。',
     sendEmail: '发送验证邮件',
     phoneLabel: '手机号',
     phonePlaceholder: '+86 13800138000',
@@ -260,8 +455,8 @@ export const userDashboardCopy = {
     verificationEmailSent: '验证邮件已重新发起。如果账号还未验证，请检查当前绑定邮箱。',
     phoneCodeSent: '验证码已发送，请输入短信中的 6 位验证码完成绑定。',
     phoneVerifiedNotice: '手机号验证完成，更高信任级别的账户操作现已可用。',
-    walletTitle: '经济钱包',
-    walletDescription: 'Web 侧仅保留资产余额、送礼活动和礼物包只读展示。',
+    walletTitle: '金库',
+    walletDescription: '在一个页面里管理游戏点券、保护余额、送礼工具和钱包活动流水。',
     currentBalance: '当前 B luck',
     topUpAmount: '充值金额',
     referenceId: '参考单号',
@@ -325,7 +520,7 @@ export const userDashboardCopy = {
     recentCryptoWithdrawals: '最近加密提现',
     noCryptoWithdrawals: '还没有加密提现申请。',
     transactionsTitle: '账本流水',
-    transactionsDescription: '展示 Web 钱包可见的 B luck 经济账本不可变余额流水。',
+    transactionsDescription: '展示奖励、市场结算和受保护钱包动作带来的最近 B luck 余额变化。',
     noTransactions: '还没有账本流水。',
     sessionsTitle: '活跃会话',
     sessionsDescription: '查看当前活跃设备，并在需要时撤销访问。',

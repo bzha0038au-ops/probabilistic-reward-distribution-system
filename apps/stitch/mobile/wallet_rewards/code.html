@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Rewards Hub - Wallet &amp; Gifts</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;700&amp;family=Plus+Jakarta+Sans:wght@700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-container-highest": "#e5e2e1",
+                    "tertiary": "#705d00",
+                    "surface-container-high": "#eae7e7",
+                    "on-secondary-container": "#fffbff",
+                    "secondary-fixed-dim": "#c3c0ff",
+                    "on-secondary-fixed-variant": "#3323cc",
+                    "surface-container": "#f0eded",
+                    "secondary-fixed": "#e2dfff",
+                    "inverse-on-surface": "#f3f0ef",
+                    "surface-tint": "#a73a00",
+                    "on-tertiary-fixed": "#221b00",
+                    "on-surface": "#1c1b1b",
+                    "on-tertiary-fixed-variant": "#544600",
+                    "on-error": "#ffffff",
+                    "on-secondary": "#ffffff",
+                    "primary-fixed": "#ffdbce",
+                    "on-error-container": "#93000a",
+                    "on-primary-container": "#521800",
+                    "primary-container": "#ff5c00",
+                    "on-primary": "#ffffff",
+                    "on-surface-variant": "#5b4137",
+                    "tertiary-fixed-dim": "#e9c400",
+                    "on-background": "#1c1b1b",
+                    "on-tertiary-container": "#4c3e00",
+                    "primary-fixed-dim": "#ffb59a",
+                    "on-primary-fixed-variant": "#802a00",
+                    "outline": "#8f7065",
+                    "secondary": "#4b41e1",
+                    "tertiary-container": "#caa900",
+                    "outline-variant": "#e4beb1",
+                    "surface-dim": "#dcd9d9",
+                    "surface": "#fcf9f8",
+                    "on-tertiary": "#ffffff",
+                    "inverse-surface": "#313030",
+                    "on-primary-fixed": "#370e00",
+                    "secondary-container": "#645efb",
+                    "background": "#fcf9f8",
+                    "surface-container-lowest": "#ffffff",
+                    "error": "#ba1a1a",
+                    "primary": "#a73a00",
+                    "surface-variant": "#e5e2e1",
+                    "inverse-primary": "#ffb59a",
+                    "surface-container-low": "#f6f3f2",
+                    "on-secondary-fixed": "#0f0069",
+                    "tertiary-fixed": "#ffe170",
+                    "error-container": "#ffdad6",
+                    "surface-bright": "#fcf9f8"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "xs": "4px",
+                    "lg": "24px",
+                    "md": "16px",
+                    "sm": "8px",
+                    "margin": "20px",
+                    "xl": "32px",
+                    "gutter": "16px",
+                    "unit": "4px"
+            },
+            "fontFamily": {
+                    "headline-lg": [
+                            "Plus Jakarta Sans"
+                    ],
+                    "label-bold": [
+                            "Be Vietnam Pro"
+                    ],
+                    "body-lg": [
+                            "Be Vietnam Pro"
+                    ],
+                    "body-md": [
+                            "Be Vietnam Pro"
+                    ],
+                    "headline-xl": [
+                            "Plus Jakarta Sans"
+                    ],
+                    "headline-md": [
+                            "Plus Jakarta Sans"
+                    ],
+                    "label-sm": [
+                            "Be Vietnam Pro"
+                    ]
+            },
+            "fontSize": {
+                    "headline-lg": [
+                            "32px",
+                            {
+                                    "lineHeight": "38px",
+                                    "letterSpacing": "-0.01em",
+                                    "fontWeight": "800"
+                            }
+                    ],
+                    "label-bold": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "body-lg": [
+                            "18px",
+                            {
+                                    "lineHeight": "28px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "body-md": [
+                            "16px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "headline-xl": [
+                            "40px",
+                            {
+                                    "lineHeight": "48px",
+                                    "letterSpacing": "-0.02em",
+                                    "fontWeight": "800"
+                            }
+                    ],
+                    "headline-md": [
+                            "24px",
+                            {
+                                    "lineHeight": "30px",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "label-sm": [
+                            "12px",
+                            {
+                                    "lineHeight": "16px",
+                                    "fontWeight": "500"
+                            }
+                    ]
+            }
+        },
+        },
+      }
+    </script>
+<style>
+        .halftone-bg {
+            background-image: radial-gradient(circle, #e5e2e1 2px, transparent 2.5px);
+            background-size: 10px 10px;
+        }
+        .retro-shadow {
+            box-shadow: 4px 4px 0px 0px rgba(28,27,27,1);
+        }
+        .retro-shadow-sm {
+            box-shadow: 2px 2px 0px 0px rgba(28,27,27,1);
+        }
+        .retro-border {
+            border: 2px solid #1c1b1b;
+        }
+        .btn-press:active {
+            transform: translate(4px, 4px);
+            box-shadow: 0px 0px 0px 0px rgba(28,27,27,1);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen pb-24 md:pb-0 md:pt-16">
+<!-- TopAppBar (Web) -->
+<header class="hidden md:flex fixed top-0 left-0 w-full z-50 justify-between items-center px-4 h-16 bg-white dark:bg-slate-900 border-b-2 border-slate-950 shadow-[0px_4px_0px_0px_rgba(2,6,23,1)]">
+<div class="flex items-center gap-sm">
+<img alt="User Profile Avatar" class="w-10 h-10 rounded-full retro-border retro-shadow-sm object-cover" data-alt="A close up, highly detailed portrait photo of a cheerful young adult with stylish glasses and a neat haircut, smiling warmly. The background is a vibrant, solid electric orange color to match a playful, retro-pop mobile app aesthetic. High key lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC1cA6dTet8fP5t6ISoWxJhQZk1qaG5uL5DJimHxvoXrafa3ciH_spPCe81K9OczC0pDKfWY75zviyMy3ryWs0qn92-fvQe5TfYQ-a4P1UMVQ_hAoQ-sfgizryvXKuLLhU2358M4wgn-8oQC7OYELwldfctJ725CMhmbeT3WqZGUVvdy7bPv7gnQuxiC2_BSF6Sm6sqKLXCG5bJmr-frZLOhLTN3rcWdpRj7EYWvdnnSbkSvg_O5Dcs3yNv2fTzZtli51jFIM8bE1D9"/>
+<h1 class="font-headline-lg text-headline-lg text-slate-950 dark:text-white uppercase tracking-tight font-black">REWARDS HUB</h1>
+</div>
+<nav class="flex gap-lg">
+<a class="font-plus-jakarta-sans text-slate-950 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 active:translate-y-[2px] transition-all px-3 py-2 rounded-lg font-bold flex items-center gap-xs" href="#">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">sports_esports</span> Lobby
+            </a>
+<a class="font-plus-jakarta-sans text-slate-950 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 active:translate-y-[2px] transition-all px-3 py-2 rounded-lg font-bold flex items-center gap-xs" href="#">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">casino</span> Gacha
+            </a>
+<a class="font-plus-jakarta-sans text-[#FF5C00] font-bold hover:bg-slate-100 dark:hover:bg-slate-800 active:translate-y-[2px] transition-all px-3 py-2 rounded-lg flex items-center gap-xs border-b-2 border-[#FF5C00]" href="#">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">account_balance_wallet</span> Wallet
+            </a>
+<a class="font-plus-jakarta-sans text-slate-950 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 active:translate-y-[2px] transition-all px-3 py-2 rounded-lg font-bold flex items-center gap-xs" href="#">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">groups</span> Social
+            </a>
+</nav>
+<div class="font-headline-md text-headline-md text-tertiary font-black tracking-tight">
+            $1,240.50
+        </div>
+</header>
+<!-- Mobile Header -->
+<header class="md:hidden flex justify-between items-center px-4 h-16 bg-white dark:bg-slate-900 border-b-2 border-slate-950 shadow-[0px_4px_0px_0px_rgba(2,6,23,1)] sticky top-0 z-40">
+<div class="flex items-center gap-sm">
+<img alt="User Profile Avatar" class="w-8 h-8 rounded-full retro-border retro-shadow-sm object-cover" data-alt="A close up, highly detailed portrait photo of a cheerful young adult with stylish glasses and a neat haircut, smiling warmly. The background is a vibrant, solid electric orange color to match a playful, retro-pop mobile app aesthetic. High key lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBJ9H26Ak-DLpKIXhoNbuQJEY_MWLbSL-8-j77nDEh4lio1nm_2l_R5SO3ZbZnI5_Svt19zODi3k7ItDfY2KAh_sDAURM0O9QgZ_3niCoG9FHZo-yLNFSfB2jvDfzCiumVNOm_c6GWkE6snpv0jCa3YBDt4F3jRFmxipfMT-8COhn0-BLHcIjH6g66sVRd5SiHIrKXC7g60iLwX0jIEGuNBrdxNmp3o636K60Anni_88TFCMDMLIAjIl0zMWbub591LCQUdMkViyRio"/>
+<h1 class="font-headline-md text-headline-md text-slate-950 dark:text-white uppercase tracking-tight font-black">REWARDS HUB</h1>
+</div>
+<div class="font-headline-md text-headline-md text-tertiary font-black tracking-tight">
+            $1,240.50
+        </div>
+</header>
+<main class="max-w-4xl mx-auto p-4 md:p-8 flex flex-col gap-xl">
+<!-- Hero Balance Area -->
+<section class="grid grid-cols-1 md:grid-cols-2 gap-md">
+<!-- Total Wallet Balance -->
+<div class="bg-surface rounded-xl retro-border retro-shadow p-6 relative overflow-hidden group">
+<div class="absolute inset-0 halftone-bg opacity-30 z-0"></div>
+<div class="relative z-10 flex flex-col h-full justify-between">
+<div class="flex justify-between items-start mb-lg">
+<h2 class="font-label-bold text-label-bold text-on-surface uppercase tracking-widest flex items-center gap-xs">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">account_balance_wallet</span> Main Balance
+                        </h2>
+<span class="bg-primary-container text-on-primary-container font-label-sm text-label-sm px-2 py-1 rounded-full retro-border">Active</span>
+</div>
+<div>
+<div class="font-headline-xl text-[48px] leading-[1.1] font-black tracking-tighter text-tertiary mb-xs">$1,240.50</div>
+<div class="font-body-sm text-on-surface-variant flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px] text-tertiary">trending_up</span> +$45.00 this week
+                        </div>
+</div>
+<div class="mt-lg flex gap-sm">
+<button class="flex-1 bg-primary-container text-white font-label-bold text-label-bold py-3 rounded-lg retro-border retro-shadow btn-press transition-transform uppercase tracking-wider flex justify-center items-center gap-xs">
+<span class="material-symbols-outlined text-[18px]">add_circle</span> Add Funds
+                        </button>
+<button class="w-12 bg-surface text-on-surface font-label-bold text-label-bold rounded-lg retro-border retro-shadow btn-press transition-transform flex justify-center items-center">
+<span class="material-symbols-outlined text-[20px]">swap_horiz</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Game Credits / Locked -->
+<div class="bg-secondary-fixed text-on-secondary-fixed rounded-xl retro-border retro-shadow p-6 flex flex-col justify-between">
+<div>
+<h2 class="font-label-bold text-label-bold uppercase tracking-widest flex items-center gap-xs mb-lg">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">toll</span> Game Credits
+                    </h2>
+<div class="font-headline-xl text-[40px] leading-[1.1] font-black tracking-tighter text-tertiary mb-xs">8,450 XP</div>
+<div class="font-body-sm opacity-80 mb-md">Next tier at 10,000 XP</div>
+<!-- Progress Bar -->
+<div class="h-4 w-full bg-white retro-border rounded-full overflow-hidden relative">
+<div class="absolute top-0 left-0 h-full bg-secondary w-[84%]" style="background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.2) 10px, rgba(255,255,255,0.2) 20px);"></div>
+</div>
+</div>
+<div class="mt-lg pt-4 border-t-2 border-on-secondary-fixed border-dashed flex justify-between items-center">
+<div>
+<div class="font-label-sm text-label-sm uppercase tracking-wider opacity-80">Locked Vault</div>
+<div class="font-headline-md text-headline-md text-tertiary font-bold flex items-center gap-xs">
+<span class="material-symbols-outlined text-[20px]">lock</span> $150.00
+                        </div>
+</div>
+<button class="bg-secondary text-white font-label-bold text-label-bold px-4 py-2 rounded-lg retro-border retro-shadow-sm btn-press transition-transform uppercase tracking-wider">
+                        Unlock Rules
+                    </button>
+</div>
+</div>
+</section>
+<!-- Gift Packs Grid -->
+<section>
+<div class="flex justify-between items-end mb-md">
+<h2 class="font-headline-lg text-headline-lg font-black text-on-surface tracking-tight uppercase">Loot &amp; Vouchers</h2>
+<a class="font-label-bold text-label-bold text-secondary flex items-center gap-xs hover:underline" href="#">View All <span class="material-symbols-outlined text-[16px]">arrow_forward</span></a>
+</div>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-md">
+<!-- Pack 1 -->
+<div class="bg-surface rounded-xl retro-border retro-shadow-sm p-4 flex flex-col items-center text-center hover:bg-surface-container transition-colors cursor-pointer group">
+<div class="w-16 h-16 bg-primary-fixed rounded-full flex items-center justify-center retro-border mb-3 group-hover:-translate-y-1 transition-transform">
+<span class="material-symbols-outlined text-[32px] text-primary" style="font-variation-settings: 'FILL' 1;">local_pizza</span>
+</div>
+<h3 class="font-label-bold text-label-bold text-on-surface mb-1 leading-tight">Snack Pack</h3>
+<p class="font-label-sm text-label-sm text-on-surface-variant mb-2">Free Delivery</p>
+<div class="mt-auto font-headline-md text-[18px] font-black text-tertiary">500 XP</div>
+</div>
+<!-- Pack 2 -->
+<div class="bg-surface rounded-xl retro-border retro-shadow-sm p-4 flex flex-col items-center text-center hover:bg-surface-container transition-colors cursor-pointer group">
+<div class="w-16 h-16 bg-tertiary-fixed rounded-full flex items-center justify-center retro-border mb-3 group-hover:-translate-y-1 transition-transform">
+<span class="material-symbols-outlined text-[32px] text-tertiary" style="font-variation-settings: 'FILL' 1;">videogame_asset</span>
+</div>
+<h3 class="font-label-bold text-label-bold text-on-surface mb-1 leading-tight">Steam Card</h3>
+<p class="font-label-sm text-label-sm text-on-surface-variant mb-2">$10 Value</p>
+<div class="mt-auto font-headline-md text-[18px] font-black text-tertiary">2,500 XP</div>
+</div>
+<!-- Pack 3 -->
+<div class="bg-surface rounded-xl retro-border retro-shadow-sm p-4 flex flex-col items-center text-center hover:bg-surface-container transition-colors cursor-pointer group">
+<div class="w-16 h-16 bg-secondary-fixed rounded-full flex items-center justify-center retro-border mb-3 group-hover:-translate-y-1 transition-transform relative">
+<span class="absolute -top-2 -right-2 bg-error text-on-error text-[10px] font-bold px-1.5 py-0.5 rounded-full retro-border transform rotate-12">HOT</span>
+<span class="material-symbols-outlined text-[32px] text-secondary" style="font-variation-settings: 'FILL' 1;">shopping_cart</span>
+</div>
+<h3 class="font-label-bold text-label-bold text-on-surface mb-1 leading-tight">Amazon Gift</h3>
+<p class="font-label-sm text-label-sm text-on-surface-variant mb-2">$25 Value</p>
+<div class="mt-auto font-headline-md text-[18px] font-black text-tertiary">5,000 XP</div>
+</div>
+<!-- Pack 4 - Locked -->
+<div class="bg-surface-container-highest rounded-xl retro-border retro-shadow-sm p-4 flex flex-col items-center text-center opacity-70 relative">
+<div class="absolute inset-0 bg-white/20 backdrop-blur-[1px] z-10 rounded-xl flex items-center justify-center">
+<span class="material-symbols-outlined text-[48px] text-on-surface drop-shadow-md">lock</span>
+</div>
+<div class="w-16 h-16 bg-surface-variant rounded-full flex items-center justify-center retro-border mb-3">
+<span class="material-symbols-outlined text-[32px] text-on-surface-variant" style="font-variation-settings: 'FILL' 1;">flight</span>
+</div>
+<h3 class="font-label-bold text-label-bold text-on-surface mb-1 leading-tight">Travel Pass</h3>
+<p class="font-label-sm text-label-sm text-on-surface-variant mb-2">Mystery Dest.</p>
+<div class="mt-auto font-headline-md text-[18px] font-black text-on-surface-variant">15,000 XP</div>
+</div>
+</div>
+</section>
+<!-- Ledger / Recent Activity -->
+<section class="bg-surface rounded-xl retro-border retro-shadow p-0 overflow-hidden">
+<div class="bg-tertiary-fixed p-4 border-b-2 border-on-surface flex justify-between items-center">
+<h2 class="font-headline-md text-headline-md font-black text-on-tertiary-fixed tracking-tight uppercase flex items-center gap-xs">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">receipt_long</span> Ledger History
+                 </h2>
+<button class="text-on-tertiary-fixed hover:bg-white/30 p-1 rounded-md transition-colors retro-border bg-white/10">
+<span class="material-symbols-outlined text-[20px]">filter_list</span>
+</button>
+</div>
+<ul class="flex flex-col">
+<!-- Activity Item 1 -->
+<li class="flex items-center justify-between p-4 border-b-2 border-surface-container hover:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-lg bg-primary-fixed retro-border flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">casino</span>
+</div>
+<div>
+<div class="font-label-bold text-label-bold text-on-surface">Daily Spin Win</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Today, 2:45 PM</div>
+</div>
+</div>
+<div class="text-right">
+<div class="font-headline-md text-[16px] font-black text-tertiary">+500 XP</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Wallet</div>
+</div>
+</li>
+<!-- Activity Item 2 -->
+<li class="flex items-center justify-between p-4 border-b-2 border-surface-container hover:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-lg bg-surface-container-highest retro-border flex items-center justify-center text-on-surface-variant">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">shopping_cart</span>
+</div>
+<div>
+<div class="font-label-bold text-label-bold text-on-surface">Redeemed Steam Card</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Yesterday, 10:12 AM</div>
+</div>
+</div>
+<div class="text-right">
+<div class="font-headline-md text-[16px] font-black text-error">-2,500 XP</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Voucher Sent</div>
+</div>
+</li>
+<!-- Activity Item 3 -->
+<li class="flex items-center justify-between p-4 hover:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-lg bg-secondary-fixed retro-border flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">group_add</span>
+</div>
+<div>
+<div class="font-label-bold text-label-bold text-on-surface">Referral Bonus (Alex)</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Oct 24, 2023</div>
+</div>
+</div>
+<div class="text-right">
+<div class="font-headline-md text-[16px] font-black text-tertiary">+$15.00</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant text-secondary font-bold">Locked</div>
+</div>
+</li>
+</ul>
+<div class="p-4 bg-surface-container-lowest border-t-2 border-surface-container text-center">
+<button class="font-label-bold text-label-bold text-on-surface uppercase tracking-wider hover:underline">Load More Logs</button>
+</div>
+</section>
+</main>
+<!-- BottomNavBar (Mobile) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-2 py-3 bg-white dark:bg-slate-900 border-t-2 border-slate-950">
+<a class="flex flex-col items-center justify-center text-slate-950 dark:text-slate-300 p-1 hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-95 transition-transform w-16" href="#">
+<span class="material-symbols-outlined text-[24px]">sports_esports</span>
+<span class="font-plus-jakarta-sans text-[10px] font-bold uppercase mt-1">Lobby</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-950 dark:text-slate-300 p-1 hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-95 transition-transform w-16" href="#">
+<span class="material-symbols-outlined text-[24px]">casino</span>
+<span class="font-plus-jakarta-sans text-[10px] font-bold uppercase mt-1">Gacha</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-[#FF5C00] text-white border-2 border-slate-950 rounded-lg p-1 shadow-[2px_2px_0px_0px_rgba(2,6,23,1)] active:scale-95 transition-transform w-16 -mt-4" href="#">
+<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 1;">account_balance_wallet</span>
+<span class="font-plus-jakarta-sans text-[10px] font-bold uppercase mt-1">Wallet</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-950 dark:text-slate-300 p-1 hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-95 transition-transform w-16" href="#">
+<span class="material-symbols-outlined text-[24px]">groups</span>
+<span class="font-plus-jakarta-sans text-[10px] font-bold uppercase mt-1">Social</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-950 dark:text-slate-300 p-1 hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-95 transition-transform w-16" href="#">
+<span class="material-symbols-outlined text-[24px]">menu</span>
+<span class="font-plus-jakarta-sans text-[10px] font-bold uppercase mt-1">Menu</span>
+</a>
+</nav>
+</body></html>

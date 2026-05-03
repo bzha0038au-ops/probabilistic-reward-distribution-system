@@ -6,11 +6,11 @@ const mobileCopy = {
   en: {
     appHero: {
       kicker: "Reward System Native",
-      title: "Production session lifecycle for mobile.",
+      title: "Play rewards, cards, and provably fair game modes on mobile.",
       subtitle:
-        "Secure storage, cold-start restore, backend-backed logout, session self-service, and native game routes.",
+        "Jump between gacha, hold'em, blackjack, prediction markets, wallet rewards, and community from one lobby.",
       authSubtitle:
-        "Secure storage, cold-start restore, backend-backed logout, session self-service, and native password-recovery/email-verification flows.",
+        "Sign in to restore your balance, rewards, and active routes on this device without losing your progress.",
       endpointLabel: "API",
     },
     restoringSession: {
@@ -27,7 +27,9 @@ const mobileCopy = {
       loginTitle: "Sign in",
       registerTitle: "Create account",
       loginSubtitle:
-        "Uses the backend session lifecycle: create, persist, restore, revoke.",
+        "Restore your wallet, rewards, and active game routes on this device.",
+      registerSubtitle:
+        "Create a player profile, accept the current terms, and unlock the lobby.",
       tabs: {
         login: "Login",
         register: "Register",
@@ -36,6 +38,10 @@ const mobileCopy = {
         busy: "Submitting...",
         login: "Sign in",
         register: "Create account",
+      },
+      seededLogin: {
+        idle: "Use demo user",
+        busy: "Signing in demo user...",
       },
       forgotPasswordLink: "Forgot password?",
       verifyEmailLink: "Open verification link",
@@ -74,6 +80,10 @@ const mobileCopy = {
         title: "Current legal documents",
         subtitle:
           "Review and accept every active document before creating the account.",
+        selectedSummary: (selected: number, total: number) =>
+          `${selected}/${total} selected`,
+        pendingSummary: (count: number) =>
+          `${count} pending document${count === 1 ? "" : "s"}`,
         loading: "Loading current documents...",
         empty: "No active legal documents are configured right now.",
         versionLabel: (version: string) => `Version ${version}`,
@@ -86,6 +96,10 @@ const mobileCopy = {
       title: "Accept updated legal documents",
       subtitle:
         "A new version is effective. Accept the pending documents before returning to the app.",
+      pendingSummary: (count: number) =>
+        `${count} document update${count === 1 ? "" : "s"} pending`,
+      acceptedSummary: (count: number) =>
+        `${count} already accepted`,
       loading: "Loading current documents...",
       empty: "No current documents were returned.",
       versionLabel: (version: string) => `Version ${version}`,
@@ -107,9 +121,20 @@ const mobileCopy = {
       open: "Open verification",
     },
     signedIn: {
-      title: (email: string) => `Signed in as ${email}`,
-      subtitle: (platform: string, role: string) =>
-        `Platform: ${platform} · Role: ${role}`,
+      title: (_email: string) => "Account profile",
+      subtitle: (_platform: string, _role: string) =>
+        "Review account status, balance access, and sign-out controls from one screen.",
+      profileTitle: "Player profile",
+      profileSubtitle:
+        "Identity, session health, and balance refresh stay grouped here for quick account checks.",
+      verifiedBannerTitle: "Account ready",
+      verifiedBannerBody:
+        "Email is verified and the current session is healthy. Gameplay and reward routes stay fully available.",
+      pendingBannerTitle: "Finish account setup",
+      pendingBannerBody:
+        "Verify email before gameplay routes unlock write actions and higher-risk account changes.",
+      platformLabel: (value: string) => `Platform ${value}`,
+      roleLabel: (value: string) => `Role ${value}`,
       unknownUser: "Unknown user",
       unknownRole: "unknown",
       emailVerified: "Email verified",
@@ -117,6 +142,16 @@ const mobileCopy = {
       sessionActive: "Session active",
       sessionLoading: "Session loading",
       balance: (value: string) => `Balance ${value}`,
+      statusLabel: "Status",
+      balanceLabel: "Balance",
+      roleSummaryLabel: "Access",
+      profileMonogramFallback: "P",
+      refreshBalanceSubtitle:
+        "Sync wallet-linked balance and make the latest reward totals visible here.",
+      refreshSessionsSubtitle:
+        "Pull the latest device session state before opening deeper security tools.",
+      signOutSubtitle:
+        "End the current mobile session and require a fresh sign-in on the next launch.",
       refreshBalance: "Refresh balance",
       refreshSessions: "Refresh sessions",
       refreshing: "Refreshing...",
@@ -192,15 +227,163 @@ const mobileCopy = {
         B_LUCK: "B luck",
         IAP_VOUCHER: "Voucher",
       },
+      payments: {
+        title: "Payout operations",
+        subtitle:
+          "Run top-up intake, chain deposit claims, payout methods, and withdrawal requests from the same wallet route.",
+        summaryMethods: "Saved routes",
+        summaryChannels: "Deposit channels",
+        summaryQueue: "Review queue",
+        summaryLockedShare: "Locked share",
+        refresh: "Refresh payments",
+        refreshing: "Refreshing payments...",
+        inflowTitle: "Inflow desk",
+        inflowSubtitle:
+          "Create fiat top-up requests and submit crypto transfer evidence for manual review.",
+        topUpAmount: "Top-up amount",
+        topUpReference: "Reference ID",
+        topUpReferencePlaceholder: "Optional remittance or payment reference",
+        createTopUp: "Create top-up request",
+        creatingTopUp: "Creating top-up...",
+        depositChannelsTitle: "Crypto deposit channels",
+        depositChannelsSubtitle:
+          "Select an active chain lane, then attach the transfer hash and amount claimed.",
+        useChannel: "Use this channel",
+        selected: "Selected",
+        noCryptoChannels: "No active crypto deposit channels are available yet.",
+        cryptoClaimAmount: "Claimed amount",
+        cryptoClaimHash: "Transaction hash",
+        cryptoClaimAddress: "From address",
+        cryptoClaimAddressPlaceholder: "Optional sender wallet",
+        submitCryptoDeposit: "Submit crypto deposit claim",
+        submittingCryptoDeposit: "Submitting claim...",
+        payoutDeskTitle: "Fiat payout desk",
+        payoutDeskSubtitle:
+          "Save bank cards, mark a default payout lane, and reserve funds for withdrawal review.",
+        cardholderName: "Cardholder name",
+        cardholderNamePlaceholder: "Full legal name",
+        bankName: "Bank name",
+        bankNamePlaceholder: "Optional bank label",
+        cardBrand: "Card brand",
+        cardBrandPlaceholder: "Visa / Master / Local",
+        last4: "Last 4 digits",
+        saveBankCard: "Save bank card",
+        savingBankCard: "Saving bank card...",
+        savedBankCardsTitle: "Saved bank cards",
+        noBankCards: "No bank cards saved yet.",
+        setDefault: "Set default",
+        defaultBadge: "Default",
+        methodStatusLabel: "Method status",
+        selectBankCard: "Use for withdrawal",
+        withdrawalAmount: "Withdrawal amount",
+        selectedRouteHint: (label: string) => `Selected route: ${label}`,
+        requestWithdrawal: "Request withdrawal",
+        requestingWithdrawal: "Requesting withdrawal...",
+        cryptoDeskTitle: "Crypto payout deck",
+        cryptoDeskSubtitle:
+          "Store payout addresses by chain and token before requesting an on-chain withdrawal.",
+        cryptoChain: "Chain",
+        cryptoNetwork: "Network",
+        cryptoToken: "Token",
+        cryptoAddress: "Wallet address",
+        cryptoLabel: "Address label",
+        cryptoLabelPlaceholder: "Treasury wallet / personal vault",
+        saveCryptoRoute: "Save crypto route",
+        savingCryptoRoute: "Saving crypto route...",
+        savedCryptoRoutesTitle: "Saved crypto routes",
+        noCryptoRoutes: "No crypto payout routes saved yet.",
+        selectCryptoRoute: "Use for payout",
+        cryptoWithdrawalAmount: "Crypto withdrawal amount",
+        requestCryptoWithdrawal: "Request crypto withdrawal",
+        requestingCryptoWithdrawal: "Requesting crypto withdrawal...",
+        activityTitle: "Cashier timeline",
+        activitySubtitle:
+          "Track requested, approved, paying, credited, and reversed payment states without leaving the wallet route.",
+        depositTimelineTitle: "Recent deposits",
+        withdrawalTimelineTitle: "Recent withdrawals",
+        noTopUps: "No top-up requests have been submitted yet.",
+        noWithdrawals: "No withdrawal requests are visible yet.",
+        statusLabel: "Status",
+        topUpEntryTitle: (channelType: string) =>
+          channelType === "crypto" ? "Crypto deposit claim" : "Fiat top-up",
+        withdrawalEntryTitle: (channelType: string) =>
+          channelType === "crypto" ? "Crypto withdrawal" : "Fiat withdrawal",
+        topUpCreated:
+          "Top-up request submitted. The order will move through provider settlement before crediting the wallet.",
+        cryptoDepositCreated:
+          "Crypto deposit claim submitted. Finance will verify the chain transfer before crediting the wallet.",
+        bankCardSaved: "Bank card saved.",
+        defaultBankCardUpdated: "Default bank card updated.",
+        withdrawalCreated:
+          "Withdrawal request submitted. Funds are reserved while approval and payout progress.",
+        cryptoRouteSaved: "Crypto payout route saved.",
+        defaultCryptoRouteUpdated: "Default crypto payout route updated.",
+        cryptoWithdrawalCreated:
+          "Crypto withdrawal request submitted. Funds stay locked until the chain transfer is confirmed.",
+      },
     },
     rewardCenter: {
-      title: "Reward center",
+      title: "Rewards board",
       subtitle:
-        "Same `/rewards/center` and `/rewards/claim` endpoints as the web app.",
+        "Track streaks, live missions, and claimable bonus drops from one place.",
       summary: {
         bonusBalance: "B luck",
         checkInStreak: "Check-in streak",
         readyToClaim: "Ready to claim",
+        claimedMissions: "Claimed",
+      },
+      overviewTitle: "Today's reward board",
+      overviewSubtitle:
+        "Daily streaks, bonus balance, and mission momentum stay pinned here so the next claim is obvious.",
+      todayClaimedTitle: "Check-in cleared",
+      todayClaimedBody:
+        "Today's streak bonus already landed. Keep the board moving to line up the next claim.",
+      todayPendingTitle: "Next check-in open",
+      todayPendingBody:
+        "Your daily check-in is still open. Finish a live mission or keep the streak active to turn this board green.",
+      claimSpotlightTitle: "Ready to claim",
+      claimSpotlightSubtitle:
+        "This mission can be cleared right now. Review the payout, reset timer, and finish the claim without leaving the board.",
+      claimSpotlightAmount: "Ready payout",
+      claimSpotlightStatus: "Claim status",
+      claimSpotlightReset: "Reset timing",
+      claimSuccessTitle: "Reward redeemed",
+      claimSuccessBody:
+        "The payout has already been posted to your bonus balance. Keep the board moving for the next unlock.",
+      claimSuccessAmount: "Added now",
+      claimSuccessMission: "Mission",
+      claimSuccessBalance: "New B luck",
+      claimSuccessDismiss: "Dismiss receipt",
+      featuredTitle: "Featured mission",
+      featuredSubtitle:
+        "The next reward opportunity stays pinned up top with its payout, status, and reset timing.",
+      featuredEmpty:
+        "No featured mission is ready yet. Refresh the board after your next activity.",
+      pinnedOnlyHint:
+        "The featured mission above is the only item in this filter right now.",
+      missionQueueTitle: "Mission queue",
+      missionQueueSubtitle:
+        "Filter the board by status, then claim or review each mission without leaving this route.",
+      liveMissionLabel: "Live missions",
+      filterLabels: {
+        all: "All",
+        ready: "Ready",
+        in_progress: "In progress",
+        claimed: "Claimed",
+        disabled: "Disabled",
+      } as const,
+      filteredEmpty: "No missions match this filter right now.",
+      howItWorksTitle: "How rewards work",
+      howItWorks: {
+        streakTitle: "Keep the streak alive",
+        streakBody:
+          "Daily check-ins extend the streak and can auto-grant the daily mission bonus.",
+        claimTitle: "Claim when ready",
+        claimBody:
+          "Manual missions stay in queue until their progress bar is full and you tap claim.",
+        resetTitle: "Watch reset timing",
+        resetBody:
+          "Daily missions reset on schedule, so keep an eye on the timer before progress rolls over.",
       },
       refresh: "Refresh rewards",
       refreshing: "Refreshing...",
@@ -255,8 +438,24 @@ const mobileCopy = {
       title: "Session security",
       subtitle:
         "List active sessions, revoke a single session, or sign out everywhere.",
+      overviewTitle: "Security checkpoint",
+      overviewSubtitle:
+        "Review verification progress, device access, and password actions from one place.",
+      approvedBannerTitle: "Withdrawals unlocked",
+      approvedBannerBody:
+        "Identity is verified. Higher withdrawal limits and multiplayer access stay available on this device.",
+      pendingBannerTitle: "Finish identity review",
+      pendingBannerBody:
+        "Complete the hosted verification flow to unlock higher tiers, withdrawals, and multiplayer play.",
       currentSessionId: (value: string) => `Current session ID: ${value}`,
       expiresSummary: (value: string) => `Expires: ${value}`,
+      sessionCount: (count: number) =>
+        `${count} active session${count === 1 ? "" : "s"}`,
+      currentDeviceSummary: (value: string) => `This device expires ${value}`,
+      resetPasswordSubtitle:
+        "Rotate your password when you need to invalidate older credentials.",
+      signOutEverywhereSubtitle:
+        "Revoke every visible device session and require a fresh sign-in on the next launch.",
       refresh: "Refresh list",
       refreshing: "Refreshing...",
       resetPassword: "Reset password",
@@ -279,13 +478,21 @@ const mobileCopy = {
         title: "KYC verification",
         subtitle:
           "Track tier status here, then jump into the hosted flow on this device for document upload or resubmission.",
+        flowLabel: "Hosted verification path",
+        flowStep: (current: number, total: number) => `Step ${current} of ${total}`,
         loading: "Loading KYC profile...",
         refresh: "Refresh KYC",
         refreshing: "Refreshing...",
         open: "Open verification page",
+        approvedTitle: "Identity verified",
+        approvedBody:
+          "The current submission passed review and keeps higher limits available on this device.",
         currentTier: "Current tier",
         requestedTier: "Requested tier",
         status: "Review status",
+        documentTypeLabel: "Document type",
+        countryCodeLabel: "Country",
+        documentNumberLabel: "Document ref",
         submissionVersion: (value: number) => `Submission v${value}`,
         documents: (value: number) => `${value} document(s) on file`,
         noSubmission:
@@ -296,6 +503,34 @@ const mobileCopy = {
         riskFlags: (value: string) => `Risk flags: ${value}`,
         hostedHandoff:
           "Document capture stays in the hosted verification flow so you can resubmit from the same account without leaving the product path.",
+        stepIdentityTitle: "ID document",
+        stepIdentityDetail: "Passport, national ID, or driver's license",
+        documentStageTitle: "Choose a primary ID",
+        documentStageBody:
+          "Start with one identity document, then finish the upload set required for this tier.",
+        stepSelfieTitle: "Selfie check",
+        stepSelfieDetail: "Quick face scan on this device",
+        selfieReady: "Selfie on file",
+        selfieReadyBody:
+          "Face capture is already attached to this submission version.",
+        stepReviewTitle: "Review",
+        stepReviewDetail: "Fast approval or resubmission guidance",
+        reviewHistoryTitle: "Review history",
+        reviewHistoryEmpty:
+          "No review events yet. The next status change will appear here.",
+        slotUploaded: "Done",
+        slotPending: "Pending",
+        documentTypePassport: "Passport",
+        documentTypeNationalId: "National ID",
+        documentTypeDriverLicense: "Driver license",
+        documentTypeProofOfAddress: "Proof of address",
+        documentTypeSupporting: "Supporting doc",
+        slotIdentityFront: "Front",
+        slotIdentityBack: "Back",
+        slotSelfie: "Selfie",
+        slotProofOfAddress: "Proof",
+        slotSupporting: "Extra",
+        trustBadge: "Trust & privacy: data is encrypted",
         tier0: "Tier 0 demo",
         tier1: "Tier 1 small-stake",
         tier2: "Tier 2 withdraw + multiplayer",
@@ -305,11 +540,11 @@ const mobileCopy = {
   "zh-CN": {
     appHero: {
       kicker: "Reward System Native",
-      title: "移动端生产级会话生命周期。",
+      title: "把奖励玩法、卡牌桌游和可验证公平带到移动端。",
       subtitle:
-        "统一覆盖安全存储、冷启动恢复、后端驱动登出、会话自助管理和原生玩法路由。",
+        "从一个首页跳转到 gacha、德州、二十一点、预测市场、钱包奖励和社区互动。",
       authSubtitle:
-        "统一覆盖安全存储、冷启动恢复、后端驱动登出、会话自助管理，以及原生找回密码和邮箱验证流程。",
+        "登录后即可在这台设备上恢复余额、奖励进度和玩法路由，不丢失当前进度。",
       endpointLabel: "接口",
     },
     restoringSession: {
@@ -324,7 +559,8 @@ const mobileCopy = {
       birthDatePlaceholder: "YYYY-MM-DD",
       loginTitle: "登录",
       registerTitle: "创建账户",
-      loginSubtitle: "走后端真实会话生命周期：创建、持久化、恢复、撤销。",
+      loginSubtitle: "在这台设备上恢复钱包、奖励和正在进行的游戏流程。",
+      registerSubtitle: "创建玩家账户、接受当前条款，然后直接进入大厅。",
       tabs: {
         login: "登录",
         register: "注册",
@@ -333,6 +569,10 @@ const mobileCopy = {
         busy: "提交中...",
         login: "登录",
         register: "创建账户",
+      },
+      seededLogin: {
+        idle: "使用演示账户",
+        busy: "正在登录演示账户...",
       },
       forgotPasswordLink: "忘记密码？",
       verifyEmailLink: "打开验证链接",
@@ -368,6 +608,9 @@ const mobileCopy = {
       legal: {
         title: "当前生效条款",
         subtitle: "创建账户前，请先阅读并接受所有当前生效文档。",
+        selectedSummary: (selected: number, total: number) =>
+          `已选择 ${selected}/${total}`,
+        pendingSummary: (count: number) => `待接受文档 ${count} 份`,
         loading: "正在加载当前文档...",
         empty: "当前还没有配置生效中的法律文档。",
         versionLabel: (version: string) => `版本 ${version}`,
@@ -379,6 +622,8 @@ const mobileCopy = {
     legalGate: {
       title: "接受更新后的条款",
       subtitle: "已有新版本文档生效。先接受待签文档，再继续返回应用。",
+      pendingSummary: (count: number) => `待签更新 ${count} 份`,
+      acceptedSummary: (count: number) => `已接受 ${count} 份`,
       loading: "正在加载当前文档...",
       empty: "当前没有返回可签署文档。",
       versionLabel: (version: string) => `版本 ${version}`,
@@ -399,9 +644,17 @@ const mobileCopy = {
       open: "打开验证页",
     },
     signedIn: {
-      title: (email: string) => `当前登录：${email}`,
-      subtitle: (platform: string, role: string) =>
-        `平台：${platform} · 角色：${role}`,
+      title: (_email: string) => "账户资料",
+      subtitle: (_platform: string, _role: string) =>
+        "把账户状态、余额访问和退出控制集中放在一个页面里。",
+      profileTitle: "玩家资料",
+      profileSubtitle: "身份信息、会话状态和余额刷新统一放在这里，方便快速确认账户情况。",
+      verifiedBannerTitle: "账户已就绪",
+      verifiedBannerBody: "邮箱已验证，当前会话也处于健康状态。玩法和奖励路由可以继续完整使用。",
+      pendingBannerTitle: "继续完成账户设置",
+      pendingBannerBody: "先完成邮箱验证，再解锁玩法路由里的写操作和更高风险的账户变更。",
+      platformLabel: (value: string) => `平台 ${value}`,
+      roleLabel: (value: string) => `角色 ${value}`,
       unknownUser: "未知用户",
       unknownRole: "未知",
       emailVerified: "邮箱已验证",
@@ -409,6 +662,13 @@ const mobileCopy = {
       sessionActive: "会话有效",
       sessionLoading: "会话加载中",
       balance: (value: string) => `余额 ${value}`,
+      statusLabel: "状态",
+      balanceLabel: "余额",
+      roleSummaryLabel: "访问级别",
+      profileMonogramFallback: "P",
+      refreshBalanceSubtitle: "同步钱包关联余额，让这里显示最新奖励和资金数值。",
+      refreshSessionsSubtitle: "拉取最新设备会话状态，再进入更深的安全控制。",
+      signOutSubtitle: "结束当前移动端会话，下次打开应用时需要重新登录。",
       refreshBalance: "刷新余额",
       refreshSessions: "刷新会话",
       refreshing: "刷新中...",
@@ -483,15 +743,161 @@ const mobileCopy = {
         B_LUCK: "B luck",
         IAP_VOUCHER: "点券",
       },
+      payments: {
+        title: "出款操作台",
+        subtitle:
+          "把充值申请、链上入金申报、出款方式和提现申请收进同一条钱包路由里。",
+        summaryMethods: "已存路径",
+        summaryChannels: "充值通道",
+        summaryQueue: "审核队列",
+        summaryLockedShare: "锁定占比",
+        refresh: "刷新支付数据",
+        refreshing: "支付数据刷新中...",
+        inflowTitle: "入金工作台",
+        inflowSubtitle:
+          "创建法币充值申请，并提交链上转账凭证进入人工审核。",
+        topUpAmount: "充值金额",
+        topUpReference: "参考号",
+        topUpReferencePlaceholder: "可选的汇款或支付参考号",
+        createTopUp: "创建充值申请",
+        creatingTopUp: "充值申请提交中...",
+        depositChannelsTitle: "加密充值通道",
+        depositChannelsSubtitle:
+          "先选择一个可用链路，再提交转账哈希和申报金额。",
+        useChannel: "使用该通道",
+        selected: "已选择",
+        noCryptoChannels: "当前还没有可用的加密充值通道。",
+        cryptoClaimAmount: "申报金额",
+        cryptoClaimHash: "交易哈希",
+        cryptoClaimAddress: "来源地址",
+        cryptoClaimAddressPlaceholder: "可选的发送钱包地址",
+        submitCryptoDeposit: "提交加密充值申报",
+        submittingCryptoDeposit: "充值申报提交中...",
+        payoutDeskTitle: "法币出款台",
+        payoutDeskSubtitle:
+          "保存银行卡、设置默认出款路径，并为提现审核先冻结资金。",
+        cardholderName: "持卡人姓名",
+        cardholderNamePlaceholder: "与银行卡一致的实名",
+        bankName: "银行名称",
+        bankNamePlaceholder: "可选银行备注",
+        cardBrand: "卡组织",
+        cardBrandPlaceholder: "Visa / Master / 本地卡",
+        last4: "后四位",
+        saveBankCard: "保存银行卡",
+        savingBankCard: "银行卡保存中...",
+        savedBankCardsTitle: "已保存银行卡",
+        noBankCards: "当前还没有保存的银行卡。",
+        setDefault: "设为默认",
+        defaultBadge: "默认",
+        methodStatusLabel: "路径状态",
+        selectBankCard: "用于提现",
+        withdrawalAmount: "提现金额",
+        selectedRouteHint: (label: string) => `当前选择路径：${label}`,
+        requestWithdrawal: "提交提现申请",
+        requestingWithdrawal: "提现申请提交中...",
+        cryptoDeskTitle: "加密出款区",
+        cryptoDeskSubtitle:
+          "按链和代币保存出款地址，再发起链上提现申请。",
+        cryptoChain: "链",
+        cryptoNetwork: "网络",
+        cryptoToken: "代币",
+        cryptoAddress: "钱包地址",
+        cryptoLabel: "地址标签",
+        cryptoLabelPlaceholder: "金库地址 / 个人地址",
+        saveCryptoRoute: "保存加密路径",
+        savingCryptoRoute: "加密路径保存中...",
+        savedCryptoRoutesTitle: "已保存加密路径",
+        noCryptoRoutes: "当前还没有保存的加密出款路径。",
+        selectCryptoRoute: "用于出款",
+        cryptoWithdrawalAmount: "加密提现金额",
+        requestCryptoWithdrawal: "提交加密提现",
+        requestingCryptoWithdrawal: "加密提现提交中...",
+        activityTitle: "支付时间线",
+        activitySubtitle:
+          "不离开钱包路由，直接追踪 requested、approved、credited、paid 和 reversed 等状态变化。",
+        depositTimelineTitle: "最近充值",
+        withdrawalTimelineTitle: "最近提现",
+        noTopUps: "还没有充值申请记录。",
+        noWithdrawals: "还没有可见的提现申请。",
+        statusLabel: "状态",
+        topUpEntryTitle: (channelType: string) =>
+          channelType === "crypto" ? "加密充值申报" : "法币充值",
+        withdrawalEntryTitle: (channelType: string) =>
+          channelType === "crypto" ? "加密提现" : "法币提现",
+        topUpCreated:
+          "充值申请已提交。订单会先经过提供方结算，再写入钱包余额。",
+        cryptoDepositCreated:
+          "加密充值申报已提交。资金团队会先验证链上转账，再入账。",
+        bankCardSaved: "银行卡已保存。",
+        defaultBankCardUpdated: "默认银行卡已更新。",
+        withdrawalCreated:
+          "提现申请已提交。资金会先被冻结，再进入审核和出款流程。",
+        cryptoRouteSaved: "加密出款路径已保存。",
+        defaultCryptoRouteUpdated: "默认加密出款路径已更新。",
+        cryptoWithdrawalCreated:
+          "加密提现申请已提交。资金会保持锁定，直到链上转账确认完成。",
+      },
     },
     rewardCenter: {
       title: "奖励中心",
       subtitle:
-        "直接复用与 Web 相同的 `/rewards/center` 和 `/rewards/claim` 接口。",
+        "把签到连击、进行中的任务和可领取奖励集中放在一个页面里。",
       summary: {
         bonusBalance: "B luck",
         checkInStreak: "签到连击",
         readyToClaim: "可领取",
+        claimedMissions: "已领取",
+      },
+      overviewTitle: "今日奖励看板",
+      overviewSubtitle:
+        "连续签到、奖励余额和任务推进都会固定展示在这里，方便快速回看下一次领奖机会。",
+      todayClaimedTitle: "签到已完成",
+      todayClaimedBody:
+        "今天的签到奖励已经到账，继续推进任务队列即可准备下一次领取。",
+      todayPendingTitle: "今日签到待完成",
+      todayPendingBody:
+        "今天的签到还没结算，先保持连续天数或完成一个进行中的任务，让这块面板转成可领奖状态。",
+      claimSpotlightTitle: "当前可领取",
+      claimSpotlightSubtitle:
+        "这条任务现在就能领取。直接在当前页面确认奖励、重置时间并完成这次领取。",
+      claimSpotlightAmount: "本次奖励",
+      claimSpotlightStatus: "领取状态",
+      claimSpotlightReset: "重置时间",
+      claimSuccessTitle: "奖励已到账",
+      claimSuccessBody:
+        "这次奖励已经写入 B luck 余额，继续推进任务看板即可准备下一次解锁。",
+      claimSuccessAmount: "本次到账",
+      claimSuccessMission: "任务名称",
+      claimSuccessBalance: "最新 B luck",
+      claimSuccessDismiss: "收起回执",
+      featuredTitle: "主推任务",
+      featuredSubtitle:
+        "把当前最值得处理的一条任务固定在上方，直接看奖励、状态和重置时间。",
+      featuredEmpty: "当前还没有可主推的任务，完成下一次行为后再刷新看看。",
+      pinnedOnlyHint: "当前筛选下只有上方这一条主推任务。",
+      missionQueueTitle: "任务队列",
+      missionQueueSubtitle:
+        "按状态筛选当前任务，不离开这一页就能继续查看或领取。",
+      liveMissionLabel: "进行中任务",
+      filterLabels: {
+        all: "全部",
+        ready: "可领取",
+        in_progress: "进行中",
+        claimed: "已领取",
+        disabled: "已停用",
+      } as const,
+      filteredEmpty: "当前筛选下没有匹配的任务。",
+      howItWorksTitle: "奖励规则",
+      howItWorks: {
+        streakTitle: "保持签到连击",
+        streakBody:
+          "每日签到会延长连击，并可能自动发放当天的签到奖励。",
+        claimTitle: "进度满后领取",
+        claimBody:
+          "手动领取类任务会留在队列里，等进度条满后由你主动点击领取。",
+        resetTitle: "留意重置时间",
+        resetBody:
+          "按日任务会在固定时间重置，进度清零前记得完成。",
       },
       refresh: "刷新奖励",
       refreshing: "刷新中...",
@@ -540,8 +946,21 @@ const mobileCopy = {
     sessionSecurity: {
       title: "会话安全",
       subtitle: "查看活跃会话、撤销单个设备，或一键退出全部设备。",
+      overviewTitle: "安全检查",
+      overviewSubtitle: "把实名认证进度、设备访问和密码操作集中放在一个页面里。",
+      approvedBannerTitle: "提现权限已解锁",
+      approvedBannerBody:
+        "身份已通过验证，这台设备可以继续使用更高额度提现和多人玩法。",
+      pendingBannerTitle: "继续完成身份验证",
+      pendingBannerBody:
+        "完成托管验证流程后，才能解锁更高等级、提现权限和多人玩法。",
       currentSessionId: (value: string) => `当前会话 ID：${value}`,
       expiresSummary: (value: string) => `过期时间：${value}`,
+      sessionCount: (count: number) => `共 ${count} 个活跃会话`,
+      currentDeviceSummary: (value: string) => `本机有效期至 ${value}`,
+      resetPasswordSubtitle: "需要让旧凭据失效时，可以直接轮换密码。",
+      signOutEverywhereSubtitle:
+        "撤销当前可见的全部设备会话，下次打开应用时需要重新登录。",
       refresh: "刷新列表",
       refreshing: "刷新中...",
       resetPassword: "重置密码",
@@ -564,13 +983,21 @@ const mobileCopy = {
         title: "KYC 实名认证",
         subtitle:
           "先在这里查看等级和审核状态，再在本机打开托管验证页完成材料上传或补件。",
+        flowLabel: "托管验证流程",
+        flowStep: (current: number, total: number) => `第 ${current} / ${total} 步`,
         loading: "正在加载 KYC 档案...",
         refresh: "刷新 KYC",
         refreshing: "刷新中...",
         open: "打开验证页",
+        approvedTitle: "身份已通过验证",
+        approvedBody:
+          "当前提交版本已经审核通过，这台设备可以继续使用更高等级与提现权限。",
         currentTier: "当前等级",
         requestedTier: "申请等级",
         status: "审核状态",
+        documentTypeLabel: "证件类型",
+        countryCodeLabel: "国家/地区",
+        documentNumberLabel: "证件尾号",
         submissionVersion: (value: number) => `提交版本 v${value}`,
         documents: (value: number) => `已提交 ${value} 份材料`,
         noSubmission:
@@ -581,6 +1008,32 @@ const mobileCopy = {
         riskFlags: (value: string) => `风险标记：${value}`,
         hostedHandoff:
           "证件采集继续走托管验证流程，这样你可以在同一账号路径里直接补件或重提。",
+        stepIdentityTitle: "证件上传",
+        stepIdentityDetail: "护照、身份证或驾照",
+        documentStageTitle: "先选择主证件",
+        documentStageBody:
+          "先确认本次使用的身份材料，再把当前等级要求的上传项一次补齐。",
+        stepSelfieTitle: "自拍核验",
+        stepSelfieDetail: "在当前设备上快速完成人脸校验",
+        selfieReady: "自拍材料已在档",
+        selfieReadyBody: "当前提交版本已经附带自拍核验材料。",
+        stepReviewTitle: "人工审核",
+        stepReviewDetail: "快速审批或补件提示",
+        reviewHistoryTitle: "审核记录",
+        reviewHistoryEmpty: "当前还没有审核事件，下一次状态变化会显示在这里。",
+        slotUploaded: "已完成",
+        slotPending: "待上传",
+        documentTypePassport: "护照",
+        documentTypeNationalId: "身份证",
+        documentTypeDriverLicense: "驾照",
+        documentTypeProofOfAddress: "地址证明",
+        documentTypeSupporting: "补充材料",
+        slotIdentityFront: "正面",
+        slotIdentityBack: "反面",
+        slotSelfie: "自拍",
+        slotProofOfAddress: "住址",
+        slotSupporting: "补件",
+        trustBadge: "信任与隐私：数据已加密",
         tier0: "Tier 0 试玩",
         tier1: "Tier 1 小额玩法",
         tier2: "Tier 2 提现 + 多人",

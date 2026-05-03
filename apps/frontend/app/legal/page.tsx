@@ -90,58 +90,84 @@ export default async function LegalPage({
 
   return (
     <AuthPageShell>
-      <Card className="w-full max-w-3xl">
-        <CardHeader className="space-y-2 text-center">
-          <CardTitle>{t("legal.title")}</CardTitle>
-          <CardDescription>{t("legal.description")}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form action={acceptLegalAction} className="space-y-5">
-            {errorMessage && (
-              <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
-                {errorMessage}
-              </p>
-            )}
-            {documents.map((document) => (
-              <div
-                key={document.id}
-                className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4"
-              >
-                <div className="space-y-1">
-                  <p className="text-base font-semibold text-slate-900">
-                    {formatLegalSlug(document.slug)}
+      <Card className="retro-panel-featured w-full max-w-6xl overflow-hidden rounded-[2rem] border-none">
+        <CardContent className="retro-ivory-surface relative p-6 md:p-8">
+          <div className="pointer-events-none absolute inset-0 retro-dot-overlay opacity-15" />
+          <div className="relative space-y-6">
+            <CardHeader className="space-y-3 px-0 pt-0">
+              <span className="retro-kicker w-fit">{t("legal.title")}</span>
+              <div className="space-y-2">
+                <CardTitle className="text-[2.55rem] tracking-[-0.05em] text-[var(--retro-ink)]">
+                  {t("legal.title")}
+                </CardTitle>
+                <CardDescription className="max-w-3xl text-base leading-7 text-[rgba(15,17,31,0.68)]">
+                  {t("legal.description")}
+                </CardDescription>
+              </div>
+            </CardHeader>
+
+            <form action={acceptLegalAction} className="grid gap-6 xl:grid-cols-[0.82fr,1.18fr]">
+              <div className="space-y-5">
+                {errorMessage && (
+                  <p className="rounded-[1rem] border-2 border-[var(--retro-red)] bg-[#ffebe6] px-4 py-3 text-sm text-[var(--retro-ink)]">
+                    {errorMessage}
                   </p>
-                  <p className="text-xs text-slate-500">
-                    {t("legal.versionLabel", { version: document.version })}
+                )}
+
+                <div className="rounded-[1.35rem] border border-[rgba(15,17,31,0.12)] bg-white/84 px-5 py-5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--retro-orange)]">
+                    {t("legal.submit")}
+                  </p>
+                  <p className="mt-3 text-sm leading-6 text-[rgba(15,17,31,0.64)]">
+                    {t("legal.description")}
                   </p>
                 </div>
-                <div
-                  className="prose prose-sm max-h-72 overflow-y-auto text-slate-700"
-                  dangerouslySetInnerHTML={{ __html: document.html }}
-                />
-                <label className="flex items-start gap-3 text-sm text-slate-700">
-                  <input
-                    type="checkbox"
-                    name={`accept:${document.id}`}
-                    className="mt-1"
-                    required
-                  />
-                  <span>
-                    {t("legal.checkboxLabel", {
-                      slug: formatLegalSlug(document.slug),
-                      version: document.version,
-                    })}
-                  </span>
-                </label>
+
+                <SubmitButton
+                  loadingLabel={t("common.loading")}
+                  idleLabel={t("legal.submit")}
+                >
+                  {t("legal.submit")}
+                </SubmitButton>
               </div>
-            ))}
-            <SubmitButton
-              loadingLabel={t("common.loading")}
-              idleLabel={t("legal.submit")}
-            >
-              {t("legal.submit")}
-            </SubmitButton>
-          </form>
+
+              <div className="space-y-4">
+                {documents.map((document) => (
+                  <div
+                    key={document.id}
+                    className="rounded-[1.45rem] border border-[rgba(15,17,31,0.12)] bg-white/84 p-5 shadow-[3px_3px_0px_0px_rgba(15,17,31,0.12)]"
+                  >
+                    <div className="space-y-1">
+                      <p className="text-base font-semibold text-[var(--retro-ink)]">
+                        {formatLegalSlug(document.slug)}
+                      </p>
+                      <p className="text-xs text-[rgba(15,17,31,0.52)]">
+                        {t("legal.versionLabel", { version: document.version })}
+                      </p>
+                    </div>
+                    <div
+                      className="prose prose-sm mt-4 max-h-72 overflow-y-auto text-[rgba(15,17,31,0.78)]"
+                      dangerouslySetInnerHTML={{ __html: document.html }}
+                    />
+                    <label className="mt-4 flex items-start gap-3 text-sm text-[var(--retro-ink)]">
+                      <input
+                        type="checkbox"
+                        name={`accept:${document.id}`}
+                        className="mt-1 h-4 w-4 rounded border-[rgba(15,17,31,0.22)]"
+                        required
+                      />
+                      <span>
+                        {t("legal.checkboxLabel", {
+                          slug: formatLegalSlug(document.slug),
+                          version: document.version,
+                        })}
+                      </span>
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </form>
+          </div>
         </CardContent>
       </Card>
     </AuthPageShell>

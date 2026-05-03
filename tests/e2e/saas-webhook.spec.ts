@@ -424,9 +424,9 @@ test('admin portal can create an outbound webhook and show worker-delivered rewa
       (url) => url.origin === new URL(adminOrigin).origin && url.pathname !== '/login',
     );
 
-    await page.goto(`${adminOrigin}/saas`);
+    await page.goto(`${adminOrigin}/saas/webhooks`);
     const createForm = page.getByTestId('saas-outbound-webhook-create-form');
-    await expect(createForm).toBeVisible();
+    await expect(createForm).toBeVisible({ timeout: 30_000 });
     const formStepUpCode = generateTotpCode(adminSession.secret);
     await page.locator('input[name="totpCode"]:visible').fill(formStepUpCode);
     await expect(

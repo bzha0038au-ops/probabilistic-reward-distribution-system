@@ -1,0 +1,10 @@
+{
+  "origin": "top-left, x rightwards, y downwards",
+  "activeTab": "play",
+  "stage": "ticket",
+  "scratchTotal": 0,
+  "displayCash": 20,
+  "scratchableSlot": 0,
+  "revealedSlots": [],
+  "runCount": 1
+}

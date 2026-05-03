@@ -59,7 +59,68 @@ const SYSTEM_CONFIG_INTEGER_FIELD_DEFAULTS = {
 
 type SystemConfigStringField = keyof typeof SYSTEM_CONFIG_STRING_FIELD_DEFAULTS
 type SystemConfigBooleanField = (typeof SYSTEM_CONFIG_BOOLEAN_FIELDS)[number]
-type SystemConfigIntegerField = keyof typeof SYSTEM_CONFIG_INTEGER_FIELD_DEFAULTS
+type SystemConfigIntegerField =
+  keyof typeof SYSTEM_CONFIG_INTEGER_FIELD_DEFAULTS
+
+type SystemConfigDraftSelection = {
+  stringFields: readonly SystemConfigStringField[]
+  booleanFields: readonly SystemConfigBooleanField[]
+  integerFields: readonly SystemConfigIntegerField[]
+}
+
+const FULL_SYSTEM_CONFIG_SELECTION = {
+  stringFields: Object.keys(
+    SYSTEM_CONFIG_STRING_FIELD_DEFAULTS,
+  ) as SystemConfigStringField[],
+  booleanFields: [...SYSTEM_CONFIG_BOOLEAN_FIELDS],
+  integerFields: Object.keys(
+    SYSTEM_CONFIG_INTEGER_FIELD_DEFAULTS,
+  ) as SystemConfigIntegerField[],
+} satisfies SystemConfigDraftSelection
+
+const HIGH_RISK_SYSTEM_CONFIG_SELECTION = {
+  stringFields: [
+    "poolBalance",
+    "drawCost",
+    "weightJitterPct",
+    "bonusUnlockWagerRatio",
+    "authFailureWindowMinutes",
+    "authFailureFreezeThreshold",
+    "adminFailureFreezeThreshold",
+  ],
+  booleanFields: [
+    "maintenanceMode",
+    "registrationEnabled",
+    "loginEnabled",
+    "drawEnabled",
+    "paymentDepositEnabled",
+    "paymentWithdrawEnabled",
+    "antiAbuseAutoFreezeEnabled",
+    "withdrawRiskNewCardFirstWithdrawalReviewEnabled",
+    "weightJitterEnabled",
+    "bonusAutoReleaseEnabled",
+  ],
+  integerFields: [],
+} satisfies SystemConfigDraftSelection
+
+const BLACKJACK_SYSTEM_CONFIG_SELECTION = {
+  stringFields: [
+    "blackjackMinStake",
+    "blackjackMaxStake",
+    "blackjackWinPayoutMultiplier",
+    "blackjackPushPayoutMultiplier",
+    "blackjackNaturalPayoutMultiplier",
+  ],
+  booleanFields: [
+    "blackjackDealerHitsSoft17",
+    "blackjackDoubleDownAllowed",
+    "blackjackSplitAcesAllowed",
+    "blackjackHitSplitAcesAllowed",
+    "blackjackResplitAllowed",
+    "blackjackSplitTenValueCardsAllowed",
+  ],
+  integerFields: ["blackjackMaxSplitHands"],
+} satisfies SystemConfigDraftSelection
 
 const readConfigStringValue = (
   config: Record<string, unknown> | null,
@@ -92,12 +153,15 @@ const readConfigIntegerValue = (
 const buildSystemConfigDraftPayload = (
   formData: FormData,
   currentConfig: Record<string, unknown> | null,
+  selection: SystemConfigDraftSelection = FULL_SYSTEM_CONFIG_SELECTION,
 ) => {
   const nextStringValues = {
     poolBalance: toNumberString(formData.get("poolBalance")),
     drawCost: toNumberString(formData.get("drawCost")),
     weightJitterPct: toNumberString(formData.get("weightJitterPct")),
-    bonusUnlockWagerRatio: toNumberString(formData.get("bonusUnlockWagerRatio")),
+    bonusUnlockWagerRatio: toNumberString(
+      formData.get("bonusUnlockWagerRatio"),
+    ),
     authFailureWindowMinutes: toNumberString(
       formData.get("authFailureWindowMinutes"),
     ),
@@ -136,9 +200,12 @@ const buildSystemConfigDraftPayload = (
       formData.get("withdrawRiskNewCardFirstWithdrawalReviewEnabled") === "on",
     weightJitterEnabled: formData.get("weightJitterEnabled") === "on",
     bonusAutoReleaseEnabled: formData.get("bonusAutoReleaseEnabled") === "on",
-    blackjackDealerHitsSoft17: formData.get("blackjackDealerHitsSoft17") === "on",
-    blackjackDoubleDownAllowed: formData.get("blackjackDoubleDownAllowed") === "on",
-    blackjackSplitAcesAllowed: formData.get("blackjackSplitAcesAllowed") === "on",
+    blackjackDealerHitsSoft17:
+      formData.get("blackjackDealerHitsSoft17") === "on",
+    blackjackDoubleDownAllowed:
+      formData.get("blackjackDoubleDownAllowed") === "on",
+    blackjackSplitAcesAllowed:
+      formData.get("blackjackSplitAcesAllowed") === "on",
     blackjackHitSplitAcesAllowed:
       formData.get("blackjackHitSplitAcesAllowed") === "on",
     blackjackResplitAllowed: formData.get("blackjackResplitAllowed") === "on",
@@ -153,23 +220,21 @@ const buildSystemConfigDraftPayload = (
 
   const payload: Record<string, string | number | boolean> = {}
 
-  for (const key of Object.keys(nextStringValues) as SystemConfigStringField[]) {
+  for (const key of selection.stringFields) {
     const nextValue = nextStringValues[key]
     if (nextValue !== readConfigStringValue(currentConfig, key)) {
       payload[key] = nextValue
     }
   }
 
-  for (const key of SYSTEM_CONFIG_BOOLEAN_FIELDS) {
+  for (const key of selection.booleanFields) {
     const nextValue = nextBooleanValues[key]
     if (nextValue !== readConfigBooleanValue(currentConfig, key)) {
       payload[key] = nextValue
     }
   }
 
-  for (const key of Object.keys(
-    nextIntegerValues,
-  ) as SystemConfigIntegerField[]) {
+  for (const key of selection.integerFields) {
     const nextValue = nextIntegerValues[key]
     if (nextValue !== readConfigIntegerValue(currentConfig, key)) {
       payload[key] = nextValue
@@ -205,8 +270,9 @@ const parseSupportedFlows = (formData: FormData) =>
       formData
         .getAll("supportedFlows")
         .map((value) => value.toString())
-        .filter((value): value is "deposit" | "withdrawal" =>
-          value === "deposit" || value === "withdrawal",
+        .filter(
+          (value): value is "deposit" | "withdrawal" =>
+            value === "deposit" || value === "withdrawal",
         ),
     ),
   )
@@ -221,6 +287,64 @@ const setAdminSessionCookie = (cookies: Cookies, token: string) => {
   })
 }
 
+const createConfigDraftAction = (
+  selection: SystemConfigDraftSelection,
+  noChangesMessage: string,
+) => {
+  const action: Action = async ({ request, fetch, cookies }) => {
+    const formData = await request.formData()
+    const controlCenterResponse = await apiRequest<ControlCenterResponse>(
+      fetch,
+      cookies,
+      "/admin/control-center",
+    )
+
+    if (!controlCenterResponse.ok) {
+      return fail(controlCenterResponse.status, {
+        error:
+          controlCenterResponse.error?.message ??
+          "Failed to load current config before creating draft.",
+      })
+    }
+
+    const payload = buildSystemConfigDraftPayload(
+      formData,
+      controlCenterResponse.data?.systemConfig ?? null,
+      selection,
+    )
+    const reason = parseOptionalString(formData.get("changeReason"))
+    if (reason) {
+      payload.reason = reason
+    }
+    if (Object.keys(payload).length === (reason ? 1 : 0)) {
+      return fail(400, {
+        error: noChangesMessage,
+      })
+    }
+
+    const response = await apiRequest(
+      fetch,
+      cookies,
+      "/admin/control-center/system-config/drafts",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+    )
+
+    if (!response.ok) {
+      return fail(response.status, {
+        error: response.error?.message ?? "Failed to save config draft.",
+      })
+    }
+
+    return { success: true }
+  }
+
+  return action
+}
+
 export const loadControlCenterPage = async ({
   fetch,
   cookies,
@@ -231,7 +355,11 @@ export const loadControlCenterPage = async ({
       await Promise.all([
         apiRequest(fetch, cookies, "/admin/prizes"),
         apiRequest(fetch, cookies, "/admin/analytics/summary"),
-        apiRequest<ControlCenterResponse>(fetch, cookies, "/admin/control-center"),
+        apiRequest<ControlCenterResponse>(
+          fetch,
+          cookies,
+          "/admin/control-center",
+        ),
         apiRequest(fetch, cookies, "/admin/mfa/status"),
       ])
 
@@ -391,55 +519,18 @@ export const controlCenterActions = {
 
     return { success: true }
   },
-  configDraft: async ({ request, fetch, cookies }) => {
-    const formData = await request.formData()
-    const controlCenterResponse = await apiRequest<ControlCenterResponse>(
-      fetch,
-      cookies,
-      "/admin/control-center",
-    )
-
-    if (!controlCenterResponse.ok) {
-      return fail(controlCenterResponse.status, {
-        error:
-          controlCenterResponse.error?.message ??
-          "Failed to load current config before creating draft.",
-      })
-    }
-
-    const payload = buildSystemConfigDraftPayload(
-      formData,
-      controlCenterResponse.data?.systemConfig ?? null,
-    )
-    const reason = parseOptionalString(formData.get("changeReason"))
-    if (reason) {
-      payload.reason = reason
-    }
-    if (Object.keys(payload).length === (reason ? 1 : 0)) {
-      return fail(400, {
-        error: "No config changes detected.",
-      })
-    }
-
-    const response = await apiRequest(
-      fetch,
-      cookies,
-      "/admin/control-center/system-config/drafts",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      },
-    )
-
-    if (!response.ok) {
-      return fail(response.status, {
-        error: response.error?.message ?? "Failed to save config draft.",
-      })
-    }
-
-    return { success: true }
-  },
+  configDraft: createConfigDraftAction(
+    FULL_SYSTEM_CONFIG_SELECTION,
+    "No config changes detected.",
+  ),
+  configDraftHighRisk: createConfigDraftAction(
+    HIGH_RISK_SYSTEM_CONFIG_SELECTION,
+    "No high-risk config changes detected.",
+  ),
+  configDraftBlackjack: createConfigDraftAction(
+    BLACKJACK_SYSTEM_CONFIG_SELECTION,
+    "No blackjack rule changes detected.",
+  ),
   providerDraft: async ({ request, fetch, cookies }) => {
     const formData = await request.formData()
     const priority = parseOptionalNumber(formData.get("priority"))

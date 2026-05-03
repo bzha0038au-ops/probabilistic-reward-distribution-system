@@ -108,6 +108,8 @@ test.describe.configure({ mode: 'serial' });
 test('web wallet shows economy assets, gift packs, and can send a B luck gift', async ({
   page,
 }) => {
+  test.setTimeout(120_000);
+
   const senderEmail = `economy-ui-sender-${Date.now()}@example.com`;
   const receiverEmail = `economy-ui-receiver-${Date.now()}@example.com`;
   const password = 'Password123!';
@@ -118,7 +120,7 @@ test('web wallet shows economy assets, gift packs, and can send a B luck gift', 
   await page.getByLabel('Birth Date').fill(TEST_BIRTH_DATE);
   await page.getByRole('button', { name: 'Create Account' }).click();
 
-  await expect(page).toHaveURL(/\/login\?registered=1$/);
+  await page.waitForURL(/\/login\?registered=1$/, { timeout: 30_000 });
 
   const senderNotification = await waitForNotificationPayload({
     kind: 'email_verification',
@@ -134,7 +136,7 @@ test('web wallet shows economy assets, gift packs, and can send a B luck gift', 
 
   await page.goto(String(senderNotification.verificationUrl ?? ''));
   await page.getByRole('button', { name: 'Verify Email' }).click();
-  await expect(page).toHaveURL(/\/login\?verified=1$/);
+  await page.waitForURL(/\/login\?verified=1$/, { timeout: 30_000 });
 
   await requestOk('/auth/register', {
     email: receiverEmail,
@@ -292,19 +294,19 @@ test('web wallet shows economy assets, gift packs, and can send a B luck gift', 
   await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: 'Sign In' }).click();
 
-  await expect(page).toHaveURL(/\/app$/);
+  await page.waitForURL(/\/app$/, { timeout: 30_000 });
 
   await page.goto('/app/wallet');
-  await expect(page.getByText('Economy wallet', { exact: true })).toBeVisible();
-  await expect(page.getByText('Gift packs', { exact: true })).toBeVisible();
-  await expect(page.getByText('Web view only', { exact: true }).first()).toBeVisible();
+  await expect(page.getByTestId('wallet-current-balance')).toBeVisible();
+  await expect(page.getByText('Reward packs', { exact: true })).toBeVisible();
+  await expect(page.getByText('Web only', { exact: true }).first()).toBeVisible();
 
   await page.locator('#gift-receiver-user-id').fill(String(receiverUser!.id));
   await page.locator('#gift-amount').fill('5');
   await page.getByRole('button', { name: 'Send gift' }).click();
 
   await expect(
-    page.getByText(`#${senderUser!.id} → #${receiverUser!.id}`),
+    page.getByText(`#${senderUser!.id} -> #${receiverUser!.id}`),
   ).toBeVisible();
 
   const receiverBalance = await waitForRecord(

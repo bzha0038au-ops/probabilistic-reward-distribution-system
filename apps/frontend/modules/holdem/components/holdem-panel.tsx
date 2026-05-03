@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { TbArrowLeft, TbMinus, TbPlus, TbShieldCheck, TbTrophy } from "react-icons/tb";
 import {
   HOLD_EM_CREATE_MAX_SEAT_OPTIONS,
   HOLDEM_CONFIG,
@@ -44,15 +45,22 @@ import { DealerFeed } from "@/components/dealer-feed";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { browserUserApiClient } from "@/lib/api/user-client";
 import { cn } from "@/lib/utils";
+import {
+  GameMetricTile,
+  GamePill,
+  GameSectionBlock,
+  GameStatusNotice,
+  GameSurfaceCard,
+} from "@/modules/game/components/game-domain-ui";
 import { HoldemReplayDetail } from "@/modules/holdem/components/holdem-replay-detail";
 
 const suitSymbols = {
@@ -155,9 +163,12 @@ const copy = {
     pot: "Pot",
     winners: "Winners",
     fairness: "Fairness commit",
+    fairGame: "Fair game",
     actionClock: "Action clock",
     timeBank: "Time bank",
     currentBet: "Current bet",
+    betAmount: "Bet amount",
+    potentialWin: "Potential win",
     hand: "Hand",
     viewReplay: "Open replay",
     hideReplay: "Hide replay",
@@ -291,9 +302,12 @@ const copy = {
     pot: "底池",
     winners: "赢家",
     fairness: "公平性提交",
+    fairGame: "公平牌局",
     actionClock: "行动时限",
     timeBank: "时间银行",
     currentBet: "当前下注",
+    betAmount: "下注额度",
+    potentialWin: "潜在赢取",
     hand: "手牌",
     viewReplay: "打开回放",
     hideReplay: "收起回放",
@@ -361,6 +375,12 @@ function formatAmount(value: string) {
   });
 }
 
+function parseAmountValue(value: string | number | null | undefined) {
+  const numeric =
+    typeof value === "number" ? value : Number((value ?? "0").toString().trim());
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
 function formatPercent(value: number) {
   if (!Number.isFinite(value)) {
     return String(value);
@@ -390,6 +410,29 @@ function formatRakePolicy(copy: HoldemCopy, table: Pick<HoldemTable, "tableType"
     policy.capAmount,
   )}`;
   return policy.noFlopNoDrop ? `${base} · ${copy.rakeNoFlopNoDrop}` : base;
+}
+
+function formatStreetLabel(
+  copy: HoldemCopy,
+  stage: HoldemTable["stage"] | null | undefined,
+) {
+  if (stage === "flop") {
+    return copy.stageFlop;
+  }
+
+  if (stage === "turn") {
+    return copy.stageTurn;
+  }
+
+  if (stage === "river") {
+    return copy.stageRiver;
+  }
+
+  if (stage === "showdown") {
+    return copy.stageShowdown;
+  }
+
+  return copy.stagePreflop;
 }
 
 function formatDurationMs(value: number | null) {
@@ -444,10 +487,10 @@ function CardFace(props: { card: HoldemCardView }) {
   return (
     <div
       className={cn(
-        "flex h-24 w-16 flex-col justify-between rounded-2xl border p-3 text-left shadow-[0_14px_26px_rgba(15,23,42,0.22)]",
+        "flex h-24 w-16 flex-col justify-between rounded-[1.35rem] border-2 p-3 text-left",
         hidden
-          ? "border-white/10 bg-slate-950/80 text-slate-500"
-          : "border-amber-100/70 bg-white text-slate-950",
+          ? "border-[#202745] bg-[linear-gradient(180deg,rgba(9,11,27,0.94),rgba(17,23,45,0.96))] text-slate-500 shadow-[4px_4px_0px_0px_rgba(3,5,14,0.58)]"
+          : "border-[rgba(15,17,31,0.94)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(246,240,234,0.98))] text-[var(--retro-ink)] shadow-[4px_4px_0px_0px_rgba(15,17,31,0.18)]",
         !hidden && isRedSuit(props.card) ? "text-rose-600" : null,
       )}
     >
@@ -469,14 +512,132 @@ function SeatBadge(props: { active: boolean; children: string }) {
   return (
     <span
       className={cn(
-        "rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.22em]",
+        "rounded-full border-2 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.22em]",
         props.active
-          ? "border-amber-200/60 bg-amber-200/15 text-amber-50"
-          : "border-white/12 bg-white/5 text-slate-300",
+          ? "border-[rgba(255,213,61,0.42)] bg-[rgba(255,213,61,0.14)] text-[var(--retro-gold)]"
+          : "border-[#202745] bg-[rgba(255,255,255,0.04)] text-slate-300",
       )}
     >
       {props.children}
     </span>
+  );
+}
+
+function formatSeatDisplayName(
+  seat: HoldemTable["seats"][number] | null,
+  copy: HoldemCopy,
+) {
+  if (!seat || seat.userId === null) {
+    return copy.openSeat;
+  }
+
+  return seat.displayName ?? `Seat ${seat.seatIndex + 1}`;
+}
+
+function formatSeatAvatarLabel(seat: HoldemTable["seats"][number] | null) {
+  if (!seat || seat.userId === null) {
+    return "•";
+  }
+
+  const displayName = seat.displayName?.trim();
+  if (!displayName) {
+    return String(seat.seatIndex + 1);
+  }
+
+  const parts = displayName.split(/\s+/).filter(Boolean);
+  const initials = parts.slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "");
+  return initials.join("").slice(0, 2) || displayName.slice(0, 1).toUpperCase();
+}
+
+function TableSeatNode(props: {
+  seat: HoldemTable["seats"][number] | null;
+  c: HoldemCopy;
+  align?: "left" | "right" | "center";
+}) {
+  const isOpen = !props.seat || props.seat.userId === null;
+  const roleLabels: string[] = [];
+  if (props.seat?.isDealer) {
+    roleLabels.push(props.c.dealer);
+  }
+  if (props.seat?.isSmallBlind) {
+    roleLabels.push(props.c.smallBlind);
+  }
+  if (props.seat?.isBigBlind) {
+    roleLabels.push(props.c.bigBlind);
+  }
+  const stateLabel = !props.seat
+    ? props.c.waitingSeat
+    : props.seat.winner
+      ? props.c.winners
+      : props.seat.isCurrentTurn
+        ? props.c.turn
+        : props.seat.status === "folded"
+          ? props.c.foldedSeat
+          : props.seat.sittingOut
+            ? props.c.sittingOutSeat
+            : props.seat.status === "all_in"
+              ? props.c.allInSeat
+              : props.c.activeSeat;
+
+  return (
+    <div
+      className={cn(
+        "rounded-[1.5rem] border-2 px-3 py-3 shadow-[4px_4px_0px_0px_rgba(3,5,14,0.56)]",
+        isOpen
+          ? "border-[#403125] bg-[rgba(22,18,16,0.92)] text-amber-50/70"
+          : props.seat?.isCurrentTurn
+            ? "border-[var(--retro-gold)] bg-[rgba(58,42,12,0.94)] text-white"
+            : props.seat?.winner
+              ? "border-emerald-400/60 bg-[rgba(11,56,39,0.94)] text-white"
+              : "border-[#403125] bg-[rgba(18,16,18,0.94)] text-white",
+        props.align === "right" ? "text-right" : props.align === "center" ? "text-center" : "",
+      )}
+    >
+      <div
+        className={cn(
+          "flex items-center gap-3",
+          props.align === "right" ? "flex-row-reverse" : "flex-row",
+        )}
+      >
+        <div
+          className={cn(
+            "flex size-11 shrink-0 items-center justify-center rounded-full border-2 text-sm font-black uppercase",
+            isOpen
+              ? "border-[#6d5636] bg-[rgba(255,206,84,0.08)] text-amber-100/65"
+              : "border-[var(--retro-gold)] bg-[rgba(255,206,84,0.18)] text-[var(--retro-gold)]",
+          )}
+        >
+          {formatSeatAvatarLabel(props.seat)}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-black uppercase tracking-[0.04em]">
+            {formatSeatDisplayName(props.seat, props.c)}
+          </p>
+          <p className="mt-1 text-lg font-black tracking-[-0.04em]">
+            {isOpen ? "—" : formatAmount(props.seat?.stackAmount ?? "0.00")}
+          </p>
+        </div>
+      </div>
+
+      <div
+        className={cn(
+          "mt-3 flex flex-wrap gap-2 text-[10px] font-semibold uppercase tracking-[0.2em]",
+          props.align === "right" ? "justify-end" : props.align === "center" ? "justify-center" : "",
+        )}
+      >
+        {roleLabels.map((roleLabel) => (
+          <span
+            key={`${props.seat?.seatIndex ?? "open"}-${roleLabel}`}
+            className="rounded-full border border-[rgba(255,213,61,0.34)] bg-[rgba(255,213,61,0.14)] px-2 py-1 text-[var(--retro-gold)]"
+          >
+            {roleLabel}
+          </span>
+        ))}
+        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-white/70">
+          {stateLabel}
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -505,14 +666,14 @@ function SeatCard(props: {
   return (
     <div
       className={cn(
-        "rounded-[28px] border p-4 shadow-[0_18px_42px_rgba(15,23,42,0.32)] transition-colors",
+        "rounded-[1.7rem] border-2 p-4 shadow-[4px_4px_0px_0px_rgba(3,5,14,0.58)] transition-colors",
         isOpen
-          ? "border-white/8 bg-white/[0.03]"
+          ? "border-dashed border-[#202745] bg-[rgba(255,255,255,0.03)]"
           : props.seat.winner
-            ? "border-emerald-300/55 bg-emerald-300/12"
+            ? "border-emerald-300/55 bg-[rgba(34,197,94,0.14)]"
             : props.seat.isCurrentTurn
-              ? "border-amber-300/55 bg-amber-300/12"
-              : "border-white/10 bg-slate-950/35",
+              ? "border-[rgba(255,213,61,0.58)] bg-[rgba(255,213,61,0.14)]"
+              : "border-[#202745] bg-[rgba(255,255,255,0.04)]",
       )}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -533,7 +694,10 @@ function SeatCard(props: {
           ) : null}
         </div>
         {!isOpen ? (
-          <Badge variant="outline" className="border-white/15 bg-white/5 text-white">
+          <Badge
+            variant="outline"
+            className="border-[#202745] bg-[rgba(255,255,255,0.04)] text-white"
+          >
             {stateLabel}
           </Badge>
         ) : null}
@@ -550,7 +714,7 @@ function SeatCard(props: {
                 />
               ))
             ) : (
-              <div className="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-sm text-slate-400">
+              <div className="rounded-[1.2rem] border border-dashed border-[#202745] px-4 py-6 text-sm text-slate-400">
                 {props.c.waitingSeat}
               </div>
             )}
@@ -1296,6 +1460,64 @@ export function HoldemPanel() {
         : holdemRealtimeStatus === "live"
           ? c.realtimeLive
           : c.realtimeConnecting;
+  const tablePotAmount = activeTable
+    ? activeTable.pots
+        .reduce((total, pot) => total + (Number(pot.amount) || 0), 0)
+        .toFixed(2)
+    : "0.00";
+  const tableStageLabel = activeTable
+    ? formatStreetLabel(c, activeTable.stage)
+    : c.statusWaiting;
+  const opponentSeats =
+    activeTable && activeTable.heroSeatIndex !== null
+      ? activeTable.seats
+          .filter((seat) => seat.seatIndex !== activeTable.heroSeatIndex)
+          .sort((left, right) => left.seatIndex - right.seatIndex)
+      : [];
+  const topLeftSeat = opponentSeats[0] ?? null;
+  const topRightSeat = opponentSeats[1] ?? null;
+  const leftSeat = opponentSeats[2] ?? null;
+  const rightSeat = opponentSeats[3] ?? null;
+  const heroPocketCards = Array.from(
+    { length: 2 },
+    (_, index): HoldemCardView =>
+      heroSeat?.cards[index] ?? {
+        rank: null,
+        suit: null,
+        hidden: true,
+      },
+  );
+  const availableActionList = activeTable?.availableActions?.actions ?? [];
+  const featuredActions = [
+    availableActionList.includes("fold") ? "fold" : null,
+    availableActionList.includes("check")
+      ? "check"
+      : availableActionList.includes("call")
+        ? "call"
+        : null,
+    availableActionList.includes("raise")
+      ? "raise"
+      : availableActionList.includes("bet")
+        ? "bet"
+        : availableActionList.includes("all_in")
+          ? "all_in"
+          : null,
+  ].filter((value, index, allValues): value is HoldemAction => {
+    if (value === null) {
+      return false;
+    }
+    return allValues.indexOf(value) === index;
+  });
+  const overflowActions = availableActionList.filter(
+    (action) => !featuredActions.includes(action),
+  );
+  const toCallAmount = parseAmountValue(activeTable?.availableActions?.toCall);
+  const actionAmountValue = parseAmountValue(actionAmount);
+  const actionStep = Math.max(parseAmountValue(activeTable?.bigBlind ?? "1.00"), 1);
+  const potentialWinAmount = (
+    parseAmountValue(tablePotAmount) +
+    Math.max(toCallAmount, actionAmountValue)
+  ).toFixed(2);
 
   async function runTableMutation(
     key: string,
@@ -1321,6 +1543,38 @@ export function HoldemPanel() {
     await refreshPlayMode();
     setMessage(`${c.table} #${response.data.table.id}`);
   }
+
+  const stepActionAmount = useCallback(
+    (direction: "down" | "up") => {
+      setActionAmount((currentValue) => {
+        const nextValue =
+          direction === "down"
+            ? Math.max(0, parseAmountValue(currentValue) - actionStep)
+            : parseAmountValue(currentValue) + actionStep;
+        return nextValue.toFixed(2);
+      });
+    },
+    [actionStep],
+  );
+
+  const runAction = useCallback(
+    async (action: HoldemAction) => {
+      if (!activeTable) {
+        return;
+      }
+
+      await runTableMutation(action, () =>
+        browserUserApiClient.actOnHoldemTable(activeTable.id, {
+          action,
+          amount:
+            action === "bet" || action === "raise"
+              ? actionAmount.trim()
+              : undefined,
+        }),
+      );
+    },
+    [actionAmount, activeTable],
+  );
 
   async function sendTableMessage(payload: {
     kind: "chat" | "emoji";
@@ -1363,28 +1617,80 @@ export function HoldemPanel() {
   }
 
   return (
-    <section className="grid gap-6 xl:grid-cols-[340px,minmax(0,1fr)]">
-      <Card className="border-slate-900 bg-[radial-gradient(circle_at_top,_rgba(34,197,94,0.16),_rgba(2,6,23,1))] text-slate-100 shadow-[0_28px_80px_rgba(15,23,42,0.42)]">
-        <CardHeader>
-          <CardTitle>{c.title}</CardTitle>
-          <CardDescription className="text-slate-300">
-            {c.description}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <PlayModeSwitcher
-            gameKey="holdem"
-            snapshot={holdemPlayMode}
-            disabled={busyAction !== null || heroSeated}
-            loading={updatingPlayMode}
-            onSelect={(type) => void handleChangePlayMode(type)}
-          />
+    <section className="grid gap-6 2xl:grid-cols-[360px,minmax(0,1fr)]">
+      <div className="order-2 space-y-6 2xl:order-1">
+        <GameSurfaceCard tone="light" className="overflow-hidden">
+          <CardContent className="p-0">
+            <div className="retro-ivory-surface relative overflow-hidden px-6 py-7">
+              <div className="absolute inset-0 retro-dot-overlay opacity-20" />
+              <div className="relative space-y-4">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="space-y-2">
+                    <Badge className="retro-badge retro-badge-gold border-none">
+                      {c.table}
+                    </Badge>
+                    <div className="space-y-2">
+                      <CardTitle className="text-[2.4rem] tracking-[-0.05em] text-[var(--retro-orange)]">
+                        {c.title}
+                      </CardTitle>
+                      <CardDescription className="text-sm leading-7 text-[rgba(15,17,31,0.68)]">
+                        {c.description}
+                      </CardDescription>
+                    </div>
+                  </div>
+                  <GamePill tone="accent" surface="light">
+                    {realtimeStatusLabel}
+                  </GamePill>
+                </div>
 
-          <div className="rounded-3xl border border-white/10 bg-black/20 p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.26em] text-emerald-200/80">
-              {c.createTable}
-            </p>
-            <div className="mt-3 space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <GameMetricTile
+                    tone="light"
+                    label={c.lobby}
+                    value={tables?.tables.length ?? 0}
+                    valueClassName="text-2xl font-black tracking-[-0.04em]"
+                  />
+                  <GameMetricTile
+                    tone="light"
+                    label={c.effectiveBuyIn}
+                    value={scaledBuyIn(createBuyIn) ?? formatAmount(createBuyIn)}
+                    valueClassName="text-2xl font-black tracking-[-0.04em] text-[var(--retro-violet)]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-5 p-6">
+              <PlayModeSwitcher
+                gameKey="holdem"
+                snapshot={holdemPlayMode}
+                disabled={busyAction !== null || heroSeated}
+                loading={updatingPlayMode}
+                onSelect={(type) => void handleChangePlayMode(type)}
+              />
+            </div>
+          </CardContent>
+        </GameSurfaceCard>
+
+        <GameSurfaceCard className="overflow-hidden">
+          <CardContent className="space-y-5 p-6">
+            <GameSectionBlock className="space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--retro-gold)]">
+                    {c.createTable}
+                  </p>
+                  <p className="text-sm text-slate-300">
+                    {createTableType === "casual"
+                      ? c.casualTableHint
+                      : createTableType === "tournament"
+                        ? c.tournamentTableHint
+                        : c.cashTableHint}
+                  </p>
+                </div>
+                <GamePill tone="warning">{formatTableType(c, createTableType)}</GamePill>
+              </div>
+
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
                   {c.tableMode}
@@ -1405,10 +1711,10 @@ export function HoldemPanel() {
                         onClick={() => setCreateTableType(tableType)}
                         data-testid={`holdem-create-table-type-${tableType}`}
                         className={cn(
-                          "rounded-full border px-3 py-2 text-sm font-semibold transition-colors",
+                          "rounded-full border-2 px-3 py-2 text-sm font-semibold transition-colors",
                           active
-                            ? "border-emerald-300/45 bg-emerald-300/12 text-white"
-                            : "border-white/10 bg-white/[0.04] text-slate-300 hover:bg-white/[0.08]",
+                            ? "border-[rgba(255,213,61,0.42)] bg-[rgba(255,213,61,0.14)] text-[var(--retro-gold)]"
+                            : "border-[#202745] bg-[rgba(255,255,255,0.04)] text-slate-300 hover:bg-[rgba(255,255,255,0.08)]",
                         )}
                       >
                         {label}
@@ -1416,13 +1722,6 @@ export function HoldemPanel() {
                     );
                   })}
                 </div>
-                <p className="mt-2 text-xs text-slate-400">
-                  {createTableType === "casual"
-                    ? c.casualTableHint
-                    : createTableType === "tournament"
-                      ? c.tournamentTableHint
-                      : c.cashTableHint}
-                </p>
               </div>
 
               <div>
@@ -1439,10 +1738,10 @@ export function HoldemPanel() {
                         onClick={() => setCreateMaxSeats(seatCount)}
                         data-testid={`holdem-create-max-seats-${seatCount}`}
                         className={cn(
-                          "rounded-full border px-3 py-2 text-sm font-semibold transition-colors",
+                          "rounded-full border-2 px-3 py-2 text-sm font-semibold transition-colors",
                           active
-                            ? "border-emerald-300/45 bg-emerald-300/12 text-white"
-                            : "border-white/10 bg-white/[0.04] text-slate-300 hover:bg-white/[0.08]",
+                            ? "border-[rgba(34,197,94,0.45)] bg-[rgba(34,197,94,0.14)] text-emerald-100"
+                            : "border-[#202745] bg-[rgba(255,255,255,0.04)] text-slate-300 hover:bg-[rgba(255,255,255,0.08)]",
                         )}
                       >
                         {seatCount}
@@ -1452,82 +1751,90 @@ export function HoldemPanel() {
                 </div>
               </div>
 
-              {createTableType === "casual" ? (
-                <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
-                    {c.botPlayers}
-                  </p>
-                  <Input
-                    value={createBotCount}
-                    onChange={(event) => setCreateBotCount(event.target.value)}
-                    inputMode="numeric"
-                    aria-label={c.botPlayers}
-                    className="border-white/10 bg-white/[0.04] text-white"
-                    data-testid="holdem-create-bot-count-input"
-                  />
-                  <p className="mt-2 text-xs text-slate-400">{c.casualBotHint}</p>
-                </div>
-              ) : null}
-
-              <Input
-                value={createName}
-                onChange={(event) => setCreateName(event.target.value)}
-                placeholder={c.tableNamePlaceholder}
-                className="border-white/10 bg-white/[0.04] text-white placeholder:text-slate-400"
-              />
-              <Input
-                value={createBuyIn}
-                onChange={(event) => setCreateBuyIn(event.target.value)}
-                inputMode="decimal"
-                className="border-white/10 bg-white/[0.04] text-white"
-                data-testid="holdem-create-buy-in-input"
-              />
-              {createTableType === "tournament" ? (
-                <>
-                  <div>
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
-                      {c.tournamentStartingStack}
-                    </p>
+              <div className="grid gap-3">
+                {createTableType === "casual" ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="holdem-create-bot-count">{c.botPlayers}</Label>
                     <Input
-                      value={createTournamentStartingStack}
-                      onChange={(event) =>
-                        setCreateTournamentStartingStack(event.target.value)
-                      }
-                      inputMode="decimal"
-                      aria-label={c.tournamentStartingStack}
-                      placeholder={c.tournamentStartingStack}
-                      className="border-white/10 bg-white/[0.04] text-white"
-                      data-testid="holdem-create-tournament-starting-stack"
-                    />
-                  </div>
-                  <div>
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
-                      {c.tournamentPayoutPlaces}
-                    </p>
-                    <Input
-                      value={createTournamentPayoutPlaces}
-                      onChange={(event) =>
-                        setCreateTournamentPayoutPlaces(event.target.value)
-                      }
+                      id="holdem-create-bot-count"
+                      value={createBotCount}
+                      onChange={(event) => setCreateBotCount(event.target.value)}
                       inputMode="numeric"
-                      aria-label={c.tournamentPayoutPlaces}
-                      placeholder={c.tournamentPayoutPlaces}
-                      className="border-white/10 bg-white/[0.04] text-white"
-                      data-testid="holdem-create-tournament-payout-places"
+                      aria-label={c.botPlayers}
+                      className="retro-field-dark h-12"
+                      data-testid="holdem-create-bot-count-input"
                     />
+                    <p className="text-xs text-slate-400">{c.casualBotHint}</p>
                   </div>
-                  <p className="text-xs text-slate-400">
-                    {c.tournamentPayoutPlacesHint}
-                  </p>
-                </>
-              ) : null}
-              {scaledBuyIn(createBuyIn) ? (
-                <p className="text-xs text-emerald-100/80">
-                  {c.effectiveBuyIn}: {scaledBuyIn(createBuyIn)}
-                </p>
-              ) : null}
+                ) : null}
+
+                <Input
+                  value={createName}
+                  onChange={(event) => setCreateName(event.target.value)}
+                  placeholder={c.tableNamePlaceholder}
+                  className="retro-field-dark h-12"
+                />
+                <Input
+                  value={createBuyIn}
+                  onChange={(event) => setCreateBuyIn(event.target.value)}
+                  inputMode="decimal"
+                  className="retro-field-dark h-12"
+                  data-testid="holdem-create-buy-in-input"
+                />
+
+                {createTableType === "tournament" ? (
+                  <div className="grid gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="holdem-create-tournament-starting-stack">
+                        {c.tournamentStartingStack}
+                      </Label>
+                      <Input
+                        id="holdem-create-tournament-starting-stack"
+                        value={createTournamentStartingStack}
+                        onChange={(event) =>
+                          setCreateTournamentStartingStack(event.target.value)
+                        }
+                        inputMode="decimal"
+                        aria-label={c.tournamentStartingStack}
+                        placeholder={c.tournamentStartingStack}
+                        className="retro-field-dark h-12"
+                        data-testid="holdem-create-tournament-starting-stack"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="holdem-create-tournament-payout-places">
+                        {c.tournamentPayoutPlaces}
+                      </Label>
+                      <Input
+                        id="holdem-create-tournament-payout-places"
+                        value={createTournamentPayoutPlaces}
+                        onChange={(event) =>
+                          setCreateTournamentPayoutPlaces(event.target.value)
+                        }
+                        inputMode="numeric"
+                        aria-label={c.tournamentPayoutPlaces}
+                        placeholder={c.tournamentPayoutPlaces}
+                        className="retro-field-dark h-12"
+                        data-testid="holdem-create-tournament-payout-places"
+                      />
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      {c.tournamentPayoutPlacesHint}
+                    </p>
+                  </div>
+                ) : null}
+
+                {scaledBuyIn(createBuyIn) ? (
+                  <GameStatusNotice tone="info">
+                    {c.effectiveBuyIn}: {scaledBuyIn(createBuyIn)}
+                  </GameStatusNotice>
+                ) : null}
+              </div>
+
               <Button
-                className="w-full rounded-full bg-emerald-400 text-slate-950 hover:bg-emerald-300"
+                variant="arcadeDark"
+                size="xl"
+                className="w-full"
                 disabled={busyAction === "create"}
                 onClick={() =>
                   void runTableMutation("create", () =>
@@ -1570,649 +1877,704 @@ export function HoldemPanel() {
               >
                 {busyAction === "create" ? c.createBusy : c.create}
               </Button>
+            </GameSectionBlock>
+
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.26em] text-slate-400">
+                {c.lobby}
+              </p>
+              <Button
+                variant="arcadeOutline"
+                onClick={() => void refreshLobby(selectedTableId)}
+              >
+                {c.refresh}
+              </Button>
             </div>
-          </div>
 
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-[0.26em] text-slate-400">
-              {c.lobby}
-            </p>
-            <Button
-              variant="ghost"
-              className="rounded-full border border-white/10 text-slate-200 hover:bg-white/10 hover:text-white"
-              onClick={() => void refreshLobby(selectedTableId)}
-            >
-              {c.refresh}
-            </Button>
-          </div>
-
-          <div className="space-y-3">
-            {loadingLobby ? (
-              <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-sm text-slate-400">
-                {c.loading}
-              </div>
-            ) : tables?.tables.length ? (
-              tables.tables.map((table) => (
-                <button
-                  key={table.id}
-                  type="button"
-                  onClick={() => {
-                    if (table.id === selectedTableId) {
-                      if (selectedTable?.table.id !== table.id) {
-                        void refreshTable(table.id);
-                        void refreshTableMessages(table.id);
+            <div className="space-y-3">
+              {loadingLobby ? (
+                <GameStatusNotice tone="neutral">{c.loading}</GameStatusNotice>
+              ) : tables?.tables.length ? (
+                tables.tables.map((table) => (
+                  <button
+                    key={table.id}
+                    type="button"
+                    onClick={() => {
+                      if (table.id === selectedTableId) {
+                        if (selectedTable?.table.id !== table.id) {
+                          void refreshTable(table.id);
+                          void refreshTableMessages(table.id);
+                        }
+                        return;
                       }
-                      return;
-                    }
-                    setSelectedTable(null);
-                    setTableMessages([]);
-                    setSelectedTableId(table.id);
-                  }}
-                  className={cn(
-                    "w-full rounded-3xl border p-4 text-left transition-colors",
-                    table.id === selectedTableId
-                      ? "border-emerald-300/50 bg-emerald-300/10"
-                      : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]",
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="font-semibold text-white">{table.name}</p>
-                      <p className="mt-1 text-sm text-slate-400">
-                        {c.blinds}: {formatAmount(table.smallBlind)} /{" "}
-                        {formatAmount(table.bigBlind)}
-                      </p>
-                      <p className="mt-1 text-sm text-slate-400">
-                        {c.tableType}: {formatTableType(c, table.tableType)}
-                      </p>
-                    </div>
-                    <Badge
-                      variant="outline"
-                      className="border-white/15 bg-white/5 text-white"
-                    >
-                      {table.status === "active" ? c.statusActive : c.statusWaiting}
-                    </Badge>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-3 text-sm text-slate-300">
-                    <span>
-                      {c.players}: {table.occupiedSeats}/{table.maxSeats}
-                    </span>
-                    <span>
-                      Buy-in: {formatAmount(table.minimumBuyIn)} -{" "}
-                      {formatAmount(table.maximumBuyIn)}
-                    </span>
-                    <span>
-                      {c.rakePolicy}: {formatRakePolicy(c, table)}
-                    </span>
-                  </div>
-                </button>
-              ))
-            ) : (
-              <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-sm text-slate-400">
-                {c.noTables}
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="overflow-hidden border-slate-800 bg-slate-950 text-slate-100 shadow-[0_28px_80px_rgba(15,23,42,0.42)]">
-        <CardHeader className="border-b border-white/5 bg-[linear-gradient(135deg,_rgba(120,53,15,0.45),_rgba(20,83,45,0.18)_35%,_rgba(2,6,23,0.96)_100%)]">
-          <CardTitle data-testid="holdem-active-table-name">
-            {activeTable ? activeTable.name : c.title}
-          </CardTitle>
-          <CardDescription className="text-slate-300">
-            {activeTable ? c.board : c.emptySelection}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6 p-6">
-          <div className="rounded-2xl border border-sky-400/20 bg-sky-400/10 px-4 py-3 text-sm text-sky-100">
-            {realtimeStatusLabel}
-          </div>
-          {error ? (
-            <div className="rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">
-              {error}
-            </div>
-          ) : null}
-          {message ? (
-            <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
-              {message}
-            </div>
-          ) : null}
-
-          {activeTable ? (
-            <>
-              <div className="rounded-[40px] border border-[#5d3412] bg-[radial-gradient(circle_at_top,_rgba(34,197,94,0.32),_rgba(15,23,42,0.98)_65%)] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_30px_60px_rgba(2,6,23,0.5)]">
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-100/70">
-                      {c.table}
-                    </p>
-                    <p className="mt-1 text-lg font-semibold text-white">
-                      {activeTable.status === "active" ? c.statusActive : c.statusWaiting}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-3 text-sm text-emerald-50/90">
-                    <span>
-                      {c.currentBet}: {formatAmount(activeTable.availableActions?.currentBet ?? "0.00")}
-                    </span>
-                    <span>
-                      {c.blinds}: {formatAmount(activeTable.smallBlind)} /{" "}
-                      {formatAmount(activeTable.bigBlind)}
-                    </span>
-                    <span>
-                      {c.tableType}: {formatTableType(c, activeTable.tableType)}
-                    </span>
-                    <span>
-                      {c.rakePolicy}: {formatRakePolicy(c, activeTable)}
-                    </span>
-                    <span>
-                      {c.fairness}:{" "}
-                      {activeTable.fairness?.commitHash.slice(0, 12) ?? "—"}
-                    </span>
-                    <span>
-                      {c.actionClock}: {formatDurationMs(pendingActorClockMs)}
-                    </span>
-                    <span>
-                      {c.timeBank}: {formatDurationMs(pendingActorTimeBankMs)}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="mt-6 flex flex-wrap items-center justify-center gap-4">
-                  {Array.from({ length: 5 }, (_, index) => activeTable.communityCards[index] ?? null).map(
-                    (card, index) => (
-                      <CardFace
-                        key={`community-${index}`}
-                        card={card ?? { rank: null, suit: null, hidden: true }}
-                      />
-                    ),
-                  )}
-                </div>
-
-                <div className="mt-6 grid gap-3 lg:grid-cols-3">
-                  {activeTable.pots.length > 0 ? (
-                    activeTable.pots.map((pot) => (
-                      <div
-                        key={`${pot.kind}-${pot.potIndex}`}
-                        className="rounded-2xl border border-white/10 bg-black/20 p-4"
-                      >
-                        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">
-                          {pot.kind === "main" ? c.pot : `${c.pot} ${pot.potIndex}`}
-                        </p>
-                        <p className="mt-2 text-2xl font-semibold text-white">
-                          {formatAmount(pot.amount)}
-                        </p>
-                        {pot.winnerSeatIndexes.length > 0 ? (
-                          <p className="mt-2 text-sm text-emerald-100">
-                            {c.winners}:{" "}
-                            {pot.winnerSeatIndexes.map((seatIndex) => `#${seatIndex + 1}`).join(", ")}
-                          </p>
-                        ) : null}
-                      </div>
-                    ))
-                  ) : (
-                    <div className="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-sm text-slate-400 lg:col-span-3">
-                      {c.noRecentHands}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {activeTable.seats.map((seat) => (
-                  <SeatCard key={seat.seatIndex} table={activeTable} seat={seat} c={c} />
-                ))}
-              </div>
-
-              <div className="grid gap-6 xl:grid-cols-[1.1fr,0.9fr]">
-                <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">
-                        {c.action}
-                      </p>
-                      <p className="mt-1 text-sm text-slate-300">{c.amountHint}</p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      className="rounded-full border border-white/10 text-slate-200 hover:bg-white/10 hover:text-white"
-                      onClick={() => activeTable && void refreshTable(activeTable.id)}
-                    >
-                      {loadingTable ? c.loading : c.refresh}
-                    </Button>
-                  </div>
-
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <Input
-                      value={joinBuyIn}
-                      onChange={(event) => setJoinBuyIn(event.target.value)}
-                      inputMode="decimal"
-                      className="border-white/10 bg-white/[0.04] text-white"
-                      data-testid="holdem-join-buyin-input"
-                    />
-                    <Input
-                      value={actionAmount}
-                      onChange={(event) => setActionAmount(event.target.value)}
-                      inputMode="decimal"
-                      className="border-white/10 bg-white/[0.04] text-white"
-                      data-testid="holdem-action-amount-input"
-                    />
-                  </div>
-                  {scaledBuyIn(joinBuyIn) ? (
-                    <p className="mt-3 text-xs text-emerald-100/80">
-                      {c.effectiveBuyIn}: {scaledBuyIn(joinBuyIn)}
-                    </p>
-                  ) : null}
-
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    {!heroSeated ? (
-                      <Button
-                        className="rounded-full bg-emerald-400 text-slate-950 hover:bg-emerald-300"
-                        disabled={busyAction === "join"}
-                        onClick={() =>
-                          activeTable &&
-                          void runTableMutation("join", () =>
-                            browserUserApiClient.joinHoldemTable(activeTable.id, {
-                              buyInAmount: joinBuyIn.trim(),
-                            }),
-                          )
-                        }
-                      >
-                        {busyAction === "join" ? c.joinBusy : c.join}
-                      </Button>
-                    ) : (
-                      <>
-                        <Button
-                          variant="outline"
-                          className="rounded-full border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]"
-                          disabled={busyAction === "leave"}
-                          onClick={() =>
-                            activeTable &&
-                            void runTableMutation("leave", () =>
-                              browserUserApiClient.leaveHoldemTable(activeTable.id),
-                            )
-                          }
-                        >
-                          {busyAction === "leave" ? c.leaveBusy : c.leave}
-                        </Button>
-                        {heroSeat ? (
-                          <Button
-                            variant="outline"
-                            className="rounded-full border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]"
-                            disabled={busyAction !== null}
-                            onClick={() =>
-                              activeTable &&
-                              void runTableMutation(
-                                heroSeat.sittingOut ? "sitIn" : "sitOut",
-                                () =>
-                                  browserUserApiClient.setHoldemSeatMode(
-                                    activeTable.id,
-                                    {
-                                      sittingOut: !heroSeat.sittingOut,
-                                    },
-                                  ),
-                              )
-                            }
-                          >
-                            {heroSeat.sittingOut
-                              ? busyAction === "sitIn"
-                                ? c.sitInBusy
-                                : c.sitIn
-                              : busyAction === "sitOut"
-                                ? c.sitOutBusy
-                                : c.sitOut}
-                          </Button>
-                        ) : null}
-                        {activeTable.status === "waiting" && activeSummary?.canStart ? (
-                          <Button
-                            className="rounded-full bg-amber-300 text-slate-950 hover:bg-amber-200"
-                            disabled={busyAction === "start"}
-                            onClick={() =>
-                              activeTable &&
-                              void runTableMutation("start", () =>
-                                browserUserApiClient.startHoldemTable(activeTable.id),
-                              )
-                            }
-                          >
-                            {busyAction === "start" ? c.startBusy : c.start}
-                          </Button>
-                        ) : null}
-                      </>
+                      setSelectedTable(null);
+                      setTableMessages([]);
+                      setSelectedTableId(table.id);
+                    }}
+                    className={cn(
+                      "w-full rounded-[1.6rem] border-2 p-4 text-left shadow-[4px_4px_0px_0px_rgba(3,5,14,0.58)] transition-colors",
+                      table.id === selectedTableId
+                        ? "border-[rgba(255,213,61,0.42)] bg-[rgba(255,213,61,0.14)]"
+                        : "border-[#202745] bg-[rgba(255,255,255,0.04)] hover:bg-[rgba(255,255,255,0.08)]",
                     )}
-                  </div>
-
-                  {heroSeated &&
-                  activeTable.tableType === "casual" &&
-                  activeTable.status === "waiting" &&
-                  openSeatCount > 0 ? (
-                    <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
-                      <p className="text-xs font-semibold uppercase tracking-[0.26em] text-slate-400">
-                        {c.botPlayers}
-                      </p>
-                      <p className="mt-2 text-xs text-slate-400">{c.casualBotHint}</p>
-                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                        <Input
-                          value={tableBotCount}
-                          onChange={(event) => setTableBotCount(event.target.value)}
-                          inputMode="numeric"
-                          aria-label={c.botPlayers}
-                          className="border-white/10 bg-white/[0.04] text-white"
-                          data-testid="holdem-add-bot-count-input"
-                        />
-                        <Input
-                          value={tableBotBuyIn}
-                          onChange={(event) => setTableBotBuyIn(event.target.value)}
-                          inputMode="decimal"
-                          aria-label={c.botBuyIn}
-                          className="border-white/10 bg-white/[0.04] text-white"
-                          data-testid="holdem-add-bot-buyin-input"
-                        />
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-white">{table.name}</p>
+                        <p className="mt-1 text-sm text-slate-400">
+                          {c.blinds}: {formatAmount(table.smallBlind)} /{" "}
+                          {formatAmount(table.bigBlind)}
+                        </p>
+                        <p className="mt-1 text-sm text-slate-400">
+                          {c.tableType}: {formatTableType(c, table.tableType)}
+                        </p>
                       </div>
-                      <Button
-                        className="mt-3 rounded-full bg-fuchsia-300 text-slate-950 hover:bg-fuchsia-200"
-                        disabled={busyAction === "addBots"}
-                        onClick={() =>
-                          activeTable &&
-                          void runTableMutation("addBots", () =>
-                            browserUserApiClient.addHoldemBots(activeTable.id, {
-                              count: Math.max(
-                                1,
-                                Number.parseInt(tableBotCount.trim(), 10) || 1,
-                              ),
-                              buyInAmount: tableBotBuyIn.trim(),
-                            }),
-                          )
-                        }
+                      <GamePill tone={table.status === "active" ? "success" : "warning"}>
+                        {table.status === "active" ? c.statusActive : c.statusWaiting}
+                      </GamePill>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-3 text-sm text-slate-300">
+                      <span>
+                        {c.players}: {table.occupiedSeats}/{table.maxSeats}
+                      </span>
+                      <span>
+                        {c.buyIn}: {formatAmount(table.minimumBuyIn)} -{" "}
+                        {formatAmount(table.maximumBuyIn)}
+                      </span>
+                      <span>
+                        {c.rakePolicy}: {formatRakePolicy(c, table)}
+                      </span>
+                    </div>
+                  </button>
+                ))
+              ) : (
+                <GameStatusNotice tone="neutral">{c.noTables}</GameStatusNotice>
+              )}
+            </div>
+          </CardContent>
+        </GameSurfaceCard>
+      </div>
+
+      <div className="order-1 space-y-6 2xl:order-2">
+        <GameStatusNotice tone="info">{realtimeStatusLabel}</GameStatusNotice>
+        {error ? <GameStatusNotice tone="danger">{error}</GameStatusNotice> : null}
+        {message ? <GameStatusNotice tone="success">{message}</GameStatusNotice> : null}
+
+        {activeTable ? (
+          <>
+            <GameSurfaceCard className="overflow-hidden">
+              <CardContent className="p-0">
+                <div className="relative overflow-hidden bg-[radial-gradient(circle_at_top,rgba(37,41,71,0.96),rgba(8,10,19,0.99))] px-4 py-5 sm:px-6">
+                  <div className="absolute inset-0 opacity-35 [background-image:radial-gradient(circle_at_20%_20%,rgba(255,213,61,0.08),transparent_30%),radial-gradient(circle_at_80%_0%,rgba(97,88,255,0.14),transparent_32%),linear-gradient(180deg,rgba(255,255,255,0.03),transparent)]" />
+                  <div className="relative space-y-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <Link
+                        href="/app"
+                        aria-label={c.lobby}
+                        className="flex size-11 shrink-0 items-center justify-center rounded-full border-2 border-[rgba(255,255,255,0.12)] bg-[rgba(12,14,26,0.82)] text-[var(--retro-ivory)] shadow-[3px_3px_0px_0px_rgba(0,0,0,0.3)] transition-colors hover:border-[var(--retro-gold)] hover:text-[var(--retro-gold)]"
                       >
-                        {busyAction === "addBots" ? c.addBotsBusy : c.addBots}
-                      </Button>
-                    </div>
-                  ) : null}
-
-                  {heroSeat ? (
-                    <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-slate-300">
-                      {c.timeBank}: {formatDurationMs(heroTimeBankMs)}
-                    </div>
-                  ) : null}
-
-                  {activeTable.availableActions ? (
-                    <>
-                      <div className="mt-5 grid gap-3 text-sm text-slate-300 sm:grid-cols-3">
-                        <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                          <p className="text-[11px] uppercase tracking-[0.28em] text-slate-500">
-                            {c.toCall}
-                          </p>
-                          <p className="mt-1 text-lg font-semibold text-white">
-                            {formatAmount(activeTable.availableActions.toCall)}
-                          </p>
+                        <TbArrowLeft className="size-5" />
+                      </Link>
+                      <div className="min-w-0 text-center">
+                        <CardTitle className="text-[2rem] uppercase tracking-[-0.04em] text-[var(--retro-gold)] sm:text-[2.4rem]">
+                          {c.title}
+                        </CardTitle>
+                        <CardDescription
+                          className="mt-1 truncate text-sm uppercase tracking-[0.26em] text-white/68"
+                          data-testid="holdem-active-table-name"
+                        >
+                          {activeTable.name}
+                        </CardDescription>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex size-11 items-center justify-center rounded-full border-2 border-[rgba(255,213,61,0.35)] bg-[rgba(255,213,61,0.12)] text-[var(--retro-gold)]">
+                          <TbTrophy className="size-5" />
                         </div>
-                        <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                          <p className="text-[11px] uppercase tracking-[0.28em] text-slate-500">
-                            {c.minRaiseTo}
-                          </p>
-                          <p className="mt-1 text-lg font-semibold text-white">
-                            {activeTable.availableActions.minimumRaiseTo
-                              ? formatAmount(activeTable.availableActions.minimumRaiseTo)
-                              : "—"}
-                          </p>
-                        </div>
-                        <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                          <p className="text-[11px] uppercase tracking-[0.28em] text-slate-500">
-                            {c.currentBet}
-                          </p>
-                          <p className="mt-1 text-lg font-semibold text-white">
-                            {formatAmount(activeTable.availableActions.currentBet)}
-                          </p>
+                        <div className="flex size-11 items-center justify-center rounded-full border-2 border-[rgba(255,255,255,0.12)] bg-[rgba(12,14,26,0.82)] text-emerald-200">
+                          <TbShieldCheck className="size-5" />
                         </div>
                       </div>
+                    </div>
 
-                      <div className="mt-5 flex flex-wrap gap-3">
-                        {activeTable.availableActions.actions.map((action) => (
+                    <div className="flex flex-wrap justify-center gap-2">
+                      <GamePill tone="warning">{formatTableType(c, activeTable.tableType)}</GamePill>
+                      <GamePill
+                        tone={activeTable.status === "active" ? "success" : "info"}
+                      >
+                        {activeTable.status === "active" ? c.statusActive : c.statusWaiting}
+                      </GamePill>
+                      <GamePill tone="neutral">{tableStageLabel}</GamePill>
+                      <GamePill tone="neutral">
+                        {c.table} #{activeTable.id}
+                      </GamePill>
+                    </div>
+
+                    <div className="rounded-[2rem] border-2 border-[#5a4422] bg-[linear-gradient(180deg,rgba(31,25,20,0.98),rgba(14,13,16,0.98))] p-3 shadow-[6px_6px_0px_0px_rgba(0,0,0,0.35)] sm:p-4">
+                      <div className="grid gap-3">
+                        <div className="grid grid-cols-2 gap-3">
+                          <TableSeatNode seat={topLeftSeat} c={c} />
+                          <TableSeatNode seat={topRightSeat} c={c} align="right" />
+                        </div>
+
+                        <div className="grid grid-cols-[86px_minmax(0,1fr)_86px] items-center gap-3 sm:grid-cols-[120px_minmax(0,1fr)_120px]">
+                          <TableSeatNode seat={leftSeat} c={c} />
+
+                          <div className="relative min-h-[29rem] overflow-hidden rounded-[3rem] border-[5px] border-[#6a4a25] bg-[radial-gradient(circle_at_top,rgba(46,90,46,0.98),rgba(17,45,25,0.98))] px-3 py-5 shadow-[inset_0_0_0_2px_rgba(248,202,87,0.08)]">
+                            <div className="absolute inset-4 rounded-[2.4rem] border border-[rgba(255,255,255,0.08)]" />
+                            <div className="relative flex h-full flex-col items-center">
+                              <div className="text-center">
+                                <p className="text-[0.68rem] font-black uppercase tracking-[0.28em] text-white/62">
+                                  {c.pot}
+                                </p>
+                                <p className="mt-1 text-[2rem] font-black tracking-[-0.06em] text-[var(--retro-gold)]">
+                                  {formatAmount(tablePotAmount)}
+                                </p>
+                              </div>
+
+                              <div className="mt-5 flex flex-wrap justify-center gap-2 sm:gap-3">
+                                {Array.from({ length: 5 }, (_, index) => activeTable.communityCards[index] ?? null).map(
+                                  (card, index) => (
+                                    <CardFace
+                                      key={`community-${index}`}
+                                      card={card ?? { rank: null, suit: null, hidden: true }}
+                                    />
+                                  ),
+                                )}
+                              </div>
+
+                              <div className="mt-5 flex items-end justify-center gap-2">
+                                <span className="size-7 rounded-full border-2 border-[#f8d97e] bg-[#f7d567] shadow-[0_4px_0_0_rgba(0,0,0,0.22)]" />
+                                <span className="size-8 rounded-full border-2 border-[#d9e7ff] bg-[#ffffff] shadow-[0_4px_0_0_rgba(0,0,0,0.22)]" />
+                                <span className="size-10 rounded-full border-2 border-[#a7cfff] bg-[#6da8ff] shadow-[0_4px_0_0_rgba(0,0,0,0.22)]" />
+                                <span className="size-9 rounded-full border-2 border-[#f7b1a4] bg-[#e15b43] shadow-[0_4px_0_0_rgba(0,0,0,0.22)]" />
+                              </div>
+
+                              {activeTable.pots.length > 1 ? (
+                                <div className="mt-4 flex flex-wrap justify-center gap-2">
+                                  {activeTable.pots.slice(1).map((pot) => (
+                                    <GamePill key={`${pot.kind}-${pot.potIndex}`} tone="neutral">
+                                      {c.pot} {pot.potIndex}: {formatAmount(pot.amount)}
+                                    </GamePill>
+                                  ))}
+                                </div>
+                              ) : null}
+
+                              <div className="mt-auto w-full max-w-[15rem] rounded-[1.65rem] border-2 border-[var(--retro-gold)] bg-[rgba(9,12,18,0.88)] px-4 py-4 text-center shadow-[4px_4px_0px_0px_rgba(0,0,0,0.26)]">
+                                <div className="flex justify-center gap-2">
+                                  {heroPocketCards.map((card, index) => (
+                                    <CardFace
+                                      key={`hero-pocket-${index}`}
+                                      card={card}
+                                    />
+                                  ))}
+                                </div>
+                                <p className="mt-3 text-[0.72rem] font-black uppercase tracking-[0.24em] text-white/58">
+                                  {c.hero}
+                                </p>
+                                <p className="mt-1 text-[1.85rem] font-black tracking-[-0.05em] text-white">
+                                  {formatAmount(heroSeat?.stackAmount ?? "0.00")}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <TableSeatNode seat={rightSeat} c={c} align="right" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {!heroSeated ? (
+                      <div className="rounded-[1.8rem] border-2 border-[rgba(255,255,255,0.12)] bg-[rgba(12,14,26,0.88)] p-4">
+                        <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                          <Input
+                            value={joinBuyIn}
+                            onChange={(event) => setJoinBuyIn(event.target.value)}
+                            inputMode="decimal"
+                            className="retro-field-dark h-12"
+                            data-testid="holdem-join-buyin-input"
+                          />
                           <Button
-                            key={action}
-                            variant={action === "fold" ? "outline" : "default"}
-                            className={cn(
-                              "rounded-full",
-                              action === "fold"
-                                ? "border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]"
-                                : "bg-cyan-400 text-slate-950 hover:bg-cyan-300",
-                            )}
-                            disabled={busyAction === action}
-                            data-testid={`holdem-action-button-${action}`}
+                            variant="arcade"
+                            size="xl"
+                            disabled={busyAction === "join"}
                             onClick={() =>
-                              activeTable &&
-                              void runTableMutation(action, () =>
-                                browserUserApiClient.actOnHoldemTable(activeTable.id, {
-                                  action,
-                                  amount:
-                                    action === "bet" || action === "raise"
-                                      ? actionAmount.trim()
-                                      : undefined,
+                              void runTableMutation("join", () =>
+                                browserUserApiClient.joinHoldemTable(activeTable.id, {
+                                  buyInAmount: joinBuyIn.trim(),
                                 }),
                               )
                             }
                           >
-                            {action === "fold"
-                              ? c.fold
-                              : action === "check"
-                                ? c.check
-                                : action === "call"
-                                  ? c.call
+                            {busyAction === "join" ? c.joinBusy : c.join}
+                          </Button>
+                        </div>
+                        {scaledBuyIn(joinBuyIn) ? (
+                          <GameStatusNotice tone="info" className="mt-3">
+                            {c.effectiveBuyIn}: {scaledBuyIn(joinBuyIn)}
+                          </GameStatusNotice>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    {heroSeated && activeTable.availableActions ? (
+                      <div className="space-y-3">
+                        <div className="grid gap-3 md:grid-cols-[1.2fr,0.8fr]">
+                          <div className="rounded-[1.8rem] border-2 border-[rgba(255,255,255,0.12)] bg-[rgba(12,14,26,0.88)] p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.24)]">
+                            <p className="text-[0.68rem] font-black uppercase tracking-[0.26em] text-white/58">
+                              {c.betAmount}
+                            </p>
+                            <div className="mt-3 grid grid-cols-[auto,1fr,auto] items-center gap-3">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="rounded-full border-[#4a4f66] bg-[rgba(255,255,255,0.04)] text-white hover:bg-[rgba(255,255,255,0.08)]"
+                                onClick={() => stepActionAmount("down")}
+                              >
+                                <TbMinus className="size-4" />
+                              </Button>
+                              <Input
+                                value={actionAmount}
+                                onChange={(event) => setActionAmount(event.target.value)}
+                                inputMode="decimal"
+                                aria-label={c.betAmount}
+                                className="h-12 border-0 bg-transparent px-0 text-center text-2xl font-black tracking-[-0.05em] text-white shadow-none ring-0 focus-visible:ring-0"
+                                data-testid="holdem-action-amount-input"
+                              />
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="rounded-full border-[#4a4f66] bg-[rgba(255,255,255,0.04)] text-white hover:bg-[rgba(255,255,255,0.08)]"
+                                onClick={() => stepActionAmount("up")}
+                              >
+                                <TbPlus className="size-4" />
+                              </Button>
+                            </div>
+                          </div>
+
+                          <div className="rounded-[1.8rem] border-2 border-[rgba(255,255,255,0.12)] bg-[rgba(12,14,26,0.88)] p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.24)]">
+                            <p className="text-[0.68rem] font-black uppercase tracking-[0.26em] text-white/58">
+                              {c.potentialWin}
+                            </p>
+                            <p className="mt-4 text-right text-[2rem] font-black tracking-[-0.06em] text-[var(--retro-gold)]">
+                              {formatAmount(potentialWinAmount)}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-3 md:grid-cols-3">
+                          {featuredActions.map((action) => {
+                            const label =
+                              action === "fold"
+                                ? c.fold
+                                : action === "check"
+                                  ? c.check
+                                  : action === "call"
+                                    ? `${c.call} ${formatAmount(activeTable.availableActions?.toCall ?? "0.00")}`
+                                    : action === "bet"
+                                      ? `${c.bet} ${formatAmount(actionAmount)}`
+                                      : action === "raise"
+                                        ? `${c.raise} ${formatAmount(actionAmount)}`
+                                        : c.allIn;
+
+                            return (
+                              <Button
+                                key={action}
+                                variant={action === "fold" ? "arcadeOutline" : action === "check" || action === "call" ? "arcadeDark" : "arcade"}
+                                size="xl"
+                                disabled={busyAction === action}
+                                data-testid={`holdem-action-button-${action}`}
+                                className={cn(
+                                  "h-14 w-full text-base font-black uppercase tracking-[0.08em]",
+                                  action === "fold"
+                                    ? "border-[rgba(255,132,112,0.45)] bg-[rgba(109,34,28,0.95)] text-white hover:bg-[rgba(128,40,33,0.95)] hover:text-white"
+                                    : action === "check" || action === "call"
+                                      ? "bg-[var(--retro-gold)] text-[var(--retro-ink)]"
+                                      : "bg-[#79b34a] text-[#12230d] hover:bg-[#8bc55c]",
+                                )}
+                                onClick={() => void runAction(action)}
+                              >
+                                {label}
+                              </Button>
+                            );
+                          })}
+                        </div>
+
+                        {overflowActions.length > 0 ? (
+                          <div className="flex flex-wrap gap-2">
+                            {overflowActions.map((action) => (
+                              <Button
+                                key={action}
+                                variant="arcadeOutline"
+                                disabled={busyAction === action}
+                                data-testid={`holdem-action-button-${action}`}
+                                onClick={() => void runAction(action)}
+                              >
+                                {action === "all_in"
+                                  ? c.allIn
                                   : action === "bet"
                                     ? c.bet
                                     : action === "raise"
                                       ? c.raise
-                                      : c.allIn}
-                          </Button>
-                        ))}
-                      </div>
-                    </>
-                  ) : null}
-                </div>
-
-                <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
-                  <div className="space-y-5">
-                    <DealerFeed
-                      aiLabel={c.dealerAiTag}
-                      dealerLabel={c.dealerHost}
-                      emptyLabel={c.dealerFeedEmpty}
-                      events={activeTable.dealerEvents}
-                      ruleLabel={c.dealerRuleTag}
-                      title={c.dealerFeedTitle}
-                    />
-
-                    <div>
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">
-                          {c.tableChat}
-                        </p>
-                        {loadingMessages ? (
-                          <span className="text-xs text-slate-500">{c.loading}</span>
-                        ) : null}
-                      </div>
-                      <div className="mt-4 space-y-3">
-                        {tableMessages.length > 0 ? (
-                          tableMessages.map((entry) => (
-                            <div
-                              key={`chat-${entry.id}`}
-                              className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3"
-                            >
-                              <div className="flex items-center justify-between gap-3">
-                                <p className="text-sm font-semibold text-white">
-                                  {entry.displayName} · #{entry.seatIndex + 1}
-                                </p>
-                                <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
-                                  {new Date(entry.createdAt).toLocaleTimeString()}
-                                </p>
-                              </div>
-                              <p className="mt-2 text-sm text-slate-200">
-                                {entry.kind === "chat" ? entry.text : entry.emoji}
-                              </p>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-sm text-slate-400">
-                            {c.tableChatEmpty}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {holdemTableEmojiValues.map((emoji) => (
-                          <Button
-                            key={emoji}
-                            variant="outline"
-                            size="sm"
-                            className="rounded-full border-white/10 bg-white/[0.04] px-3 text-lg text-white hover:bg-white/[0.08]"
-                            disabled={!canSendTableMessages || sendingMessage}
-                            onClick={() => void sendTableMessage({ kind: "emoji", emoji })}
-                          >
-                            {emoji}
-                          </Button>
-                        ))}
-                      </div>
-
-                      <div className="mt-2 flex items-center justify-between">
-                        <p className="text-xs uppercase tracking-[0.24em] text-slate-500">
-                          {c.tableChatReactions}
-                        </p>
-                        {!canSendTableMessages ? (
-                          <p className="text-xs text-slate-500">{c.tableChatSeatOnly}</p>
-                        ) : null}
-                      </div>
-
-                      <div className="mt-4 flex gap-3">
-                        <Input
-                          value={chatDraft}
-                          onChange={(event) => setChatDraft(event.target.value)}
-                          placeholder={c.tableChatPlaceholder}
-                          className="border-white/10 bg-white/[0.04] text-white placeholder:text-slate-400"
-                          maxLength={180}
-                          disabled={!canSendTableMessages || sendingMessage}
-                        />
-                        <Button
-                          className="rounded-full bg-cyan-400 text-slate-950 hover:bg-cyan-300"
-                          disabled={
-                            !canSendTableMessages ||
-                            sendingMessage ||
-                            chatDraft.trim().length === 0
-                          }
-                          onClick={() =>
-                            void sendTableMessage({
-                              kind: "chat",
-                              text: chatDraft.trim(),
-                            })
-                          }
-                        >
-                          {sendingMessage ? c.tableChatSending : c.tableChatSend}
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">
-                        {c.recentHands}
-                      </p>
-                      <div className="mt-4 space-y-3">
-                    {activeTable.recentHands.length > 0 ? (
-                      activeTable.recentHands.map((hand) => (
-                        <div
-                          key={`hand-${hand.handNumber}`}
-                          className="rounded-2xl border border-white/10 bg-black/20 p-4"
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <p className="font-semibold text-white">
-                              Hand #{hand.handNumber}
-                            </p>
-                            <div className="flex flex-wrap items-center justify-end gap-2">
-                              <Badge
-                                variant="outline"
-                                className="border-white/15 bg-white/5 text-white"
-                              >
-                                {formatAmount(hand.potAmount)}
-                              </Badge>
-                              {hand.roundId ? (
-                                <Button
-                                  asChild
-                                  variant="outline"
-                                  size="sm"
-                                  className="rounded-full border-cyan-400/20 bg-cyan-400/10 text-cyan-100 hover:bg-cyan-400/20"
-                                >
-                                  <Link
-                                    href={`/app/holdem/hands/${encodeURIComponent(hand.roundId)}`}
-                                  >
-                                    {c.replayDetail}
-                                  </Link>
-                                </Button>
-                              ) : null}
-                              {hand.roundId ? (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="rounded-full border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]"
-                                  onClick={() => void toggleReplay(hand.roundId)}
-                                >
-                                  {selectedReplayRoundId === hand.roundId
-                                    ? c.hideReplay
-                                    : c.viewReplay}
-                                </Button>
-                              ) : null}
-                            </div>
-                          </div>
-                          <p className="mt-2 text-sm text-slate-300">
-                            {c.winners}: {hand.winnerLabels.join(", ") || "—"}
-                          </p>
-                          <p className="mt-1 text-xs text-slate-500">
-                            {c.replayRake}: {formatAmount(hand.rakeAmount)}
-                          </p>
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            {hand.boardCards.map((card, index) => (
-                              <CardFace
-                                key={`recent-${hand.handNumber}-${index}`}
-                                card={{ rank: card.rank, suit: card.suit, hidden: false }}
-                              />
+                                      : action === "call"
+                                        ? c.call
+                                        : action === "check"
+                                          ? c.check
+                                          : c.fold}
+                              </Button>
                             ))}
                           </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <GameMetricTile
+                        label={c.toCall}
+                        value={formatAmount(activeTable.availableActions?.toCall ?? "0.00")}
+                      />
+                      <GameMetricTile
+                        label={c.minRaiseTo}
+                        value={
+                          activeTable.availableActions?.minimumRaiseTo
+                            ? formatAmount(activeTable.availableActions.minimumRaiseTo)
+                            : "—"
+                        }
+                      />
+                      <GameMetricTile
+                        label={c.currentBet}
+                        value={formatAmount(activeTable.availableActions?.currentBet ?? "0.00")}
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {heroSeated ? (
+                        <>
+                          <Button
+                            variant="arcadeOutline"
+                            disabled={busyAction === "leave"}
+                            onClick={() =>
+                              void runTableMutation("leave", () =>
+                                browserUserApiClient.leaveHoldemTable(activeTable.id),
+                              )
+                            }
+                          >
+                            {busyAction === "leave" ? c.leaveBusy : c.leave}
+                          </Button>
+                          {heroSeat ? (
+                            <Button
+                              variant="arcadeOutline"
+                              disabled={busyAction !== null}
+                              onClick={() =>
+                                void runTableMutation(
+                                  heroSeat.sittingOut ? "sitIn" : "sitOut",
+                                  () =>
+                                    browserUserApiClient.setHoldemSeatMode(activeTable.id, {
+                                      sittingOut: !heroSeat.sittingOut,
+                                    }),
+                                )
+                              }
+                            >
+                              {heroSeat.sittingOut
+                                ? busyAction === "sitIn"
+                                  ? c.sitInBusy
+                                  : c.sitIn
+                                : busyAction === "sitOut"
+                                  ? c.sitOutBusy
+                                  : c.sitOut}
+                            </Button>
+                          ) : null}
+                          {activeTable.status === "waiting" && activeSummary?.canStart ? (
+                            <Button
+                              variant="arcadeDark"
+                              disabled={busyAction === "start"}
+                              onClick={() =>
+                                void runTableMutation("start", () =>
+                                  browserUserApiClient.startHoldemTable(activeTable.id),
+                                )
+                              }
+                            >
+                              {busyAction === "start" ? c.startBusy : c.start}
+                            </Button>
+                          ) : null}
+                        </>
+                      ) : null}
+                      <Button
+                        variant="arcadeOutline"
+                        onClick={() => void refreshTable(activeTable.id)}
+                      >
+                        {loadingTable ? c.loading : c.refresh}
+                      </Button>
+                    </div>
+
+                    <GameStatusNotice tone="success">
+                      {c.fairGame}: {activeTable.fairness?.commitHash.slice(0, 16) ?? "—"} ·{" "}
+                      {c.actionClock}: {formatDurationMs(pendingActorClockMs)} · {c.timeBank}:{" "}
+                      {formatDurationMs(heroSeated ? heroTimeBankMs : pendingActorTimeBankMs)}
+                    </GameStatusNotice>
+                  </div>
+                </div>
+              </CardContent>
+            </GameSurfaceCard>
+
+            {heroSeated &&
+            activeTable.tableType === "casual" &&
+            activeTable.status === "waiting" &&
+            openSeatCount > 0 ? (
+              <GameSurfaceCard tone="light" className="overflow-hidden">
+                <CardContent className="space-y-4 p-6">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[rgba(15,17,31,0.5)]">
+                      {c.botPlayers}
+                    </p>
+                    <p className="mt-2 text-sm text-[rgba(15,17,31,0.62)]">
+                      {c.casualBotHint}
+                    </p>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Input
+                      value={tableBotCount}
+                      onChange={(event) => setTableBotCount(event.target.value)}
+                      inputMode="numeric"
+                      aria-label={c.botPlayers}
+                      className="retro-field h-12"
+                      data-testid="holdem-add-bot-count-input"
+                    />
+                    <Input
+                      value={tableBotBuyIn}
+                      onChange={(event) => setTableBotBuyIn(event.target.value)}
+                      inputMode="decimal"
+                      aria-label={c.botBuyIn}
+                      className="retro-field h-12"
+                      data-testid="holdem-add-bot-buyin-input"
+                    />
+                  </div>
+                  <Button
+                    variant="arcadeDark"
+                    disabled={busyAction === "addBots"}
+                    onClick={() =>
+                      void runTableMutation("addBots", () =>
+                        browserUserApiClient.addHoldemBots(activeTable.id, {
+                          count: Math.max(1, Number.parseInt(tableBotCount.trim(), 10) || 1),
+                          buyInAmount: tableBotBuyIn.trim(),
+                        }),
+                      )
+                    }
+                  >
+                    {busyAction === "addBots" ? c.addBotsBusy : c.addBots}
+                  </Button>
+                </CardContent>
+              </GameSurfaceCard>
+            ) : null}
+
+            <GameSurfaceCard className="hidden overflow-hidden 2xl:block">
+              <CardHeader className="pb-0">
+                <CardTitle>{c.players}</CardTitle>
+                <CardDescription className="text-slate-300">{c.hand}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 p-6 pt-5">
+                <div className="grid gap-4 md:grid-cols-2">
+                  {activeTable.seats.map((seat) => (
+                    <SeatCard
+                      key={seat.seatIndex}
+                      table={activeTable}
+                      seat={seat}
+                      c={c}
+                    />
+                  ))}
+                </div>
+              </CardContent>
+            </GameSurfaceCard>
+
+            <GameSurfaceCard className="overflow-hidden">
+              <CardContent className="space-y-5 p-6">
+                <DealerFeed
+                  aiLabel={c.dealerAiTag}
+                  dealerLabel={c.dealerHost}
+                  emptyLabel={c.dealerFeedEmpty}
+                  events={activeTable.dealerEvents}
+                  ruleLabel={c.dealerRuleTag}
+                  title={c.dealerFeedTitle}
+                />
+
+                <GameSectionBlock className="space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">
+                      {c.tableChat}
+                    </p>
+                    {loadingMessages ? (
+                      <span className="text-xs text-slate-500">{c.loading}</span>
+                    ) : null}
+                  </div>
+
+                  <div className="space-y-3">
+                    {tableMessages.length > 0 ? (
+                      tableMessages.map((entry) => (
+                        <div
+                          key={`chat-${entry.id}`}
+                          className="rounded-[1.25rem] border-2 border-[#202745] bg-[rgba(255,255,255,0.04)] px-4 py-3"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm font-semibold text-white">
+                              {entry.displayName} · #{entry.seatIndex + 1}
+                            </p>
+                            <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
+                              {new Date(entry.createdAt).toLocaleTimeString()}
+                            </p>
+                          </div>
+                          <p className="mt-2 text-sm text-slate-200">
+                            {entry.kind === "chat" ? entry.text : entry.emoji}
+                          </p>
                         </div>
                       ))
                     ) : (
-                      <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-sm text-slate-400">
-                        {c.noRecentHands}
-                      </div>
+                      <GameStatusNotice tone="neutral">{c.tableChatEmpty}</GameStatusNotice>
                     )}
-
-                    {loadingReplayRoundId ? (
-                      <div className="rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-5 text-sm text-slate-300">
-                        {c.replayLoading}
-                      </div>
-                    ) : null}
-
-                    {replayError ? (
-                      <div className="rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-5 text-sm text-rose-100">
-                        {replayError}
-                      </div>
-                    ) : null}
-
-                    {selectedReplayVisible && selectedReplayHistory ? (
-                      <HoldemReplayDetail
-                        history={selectedReplayHistory}
-                        mode="inline"
-                      />
-                    ) : null}
-                      </div>
-                    </div>
                   </div>
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="rounded-3xl border border-dashed border-white/10 px-6 py-16 text-center text-slate-400">
+
+                  <div className="flex flex-wrap gap-2">
+                    {holdemTableEmojiValues.map((emoji) => (
+                      <Button
+                        key={emoji}
+                        variant="outline"
+                        size="sm"
+                        className="rounded-full border-[#202745] bg-[rgba(255,255,255,0.04)] px-3 text-lg text-white hover:bg-[rgba(255,255,255,0.08)]"
+                        disabled={!canSendTableMessages || sendingMessage}
+                        onClick={() => void sendTableMessage({ kind: "emoji", emoji })}
+                      >
+                        {emoji}
+                      </Button>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs uppercase tracking-[0.24em] text-slate-500">
+                      {c.tableChatReactions}
+                    </p>
+                    {!canSendTableMessages ? (
+                      <p className="text-xs text-slate-500">{c.tableChatSeatOnly}</p>
+                    ) : null}
+                  </div>
+
+                  <div className="flex gap-3">
+                    <Input
+                      value={chatDraft}
+                      onChange={(event) => setChatDraft(event.target.value)}
+                      placeholder={c.tableChatPlaceholder}
+                      className="retro-field-dark h-12"
+                      maxLength={180}
+                      disabled={!canSendTableMessages || sendingMessage}
+                    />
+                    <Button
+                      variant="arcadeDark"
+                      disabled={
+                        !canSendTableMessages ||
+                        sendingMessage ||
+                        chatDraft.trim().length === 0
+                      }
+                      onClick={() =>
+                        void sendTableMessage({
+                          kind: "chat",
+                          text: chatDraft.trim(),
+                        })
+                      }
+                    >
+                      {sendingMessage ? c.tableChatSending : c.tableChatSend}
+                    </Button>
+                  </div>
+                </GameSectionBlock>
+              </CardContent>
+            </GameSurfaceCard>
+
+            <GameSurfaceCard className="overflow-hidden">
+              <CardHeader>
+                <CardTitle>{c.recentHands}</CardTitle>
+                <CardDescription className="text-slate-300">
+                  {c.replayTimeline}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 p-6 pt-0">
+                {activeTable.recentHands.length > 0 ? (
+                  activeTable.recentHands.map((hand) => (
+                    <GameSectionBlock key={`hand-${hand.handNumber}`} className="space-y-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-white">Hand #{hand.handNumber}</p>
+                          <p className="mt-1 text-sm text-slate-300">
+                            {c.winners}: {hand.winnerLabels.join(", ") || "—"}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          <GamePill tone="neutral">{formatAmount(hand.potAmount)}</GamePill>
+                          {hand.roundId ? (
+                            <Button
+                              asChild
+                              variant="outline"
+                              size="sm"
+                              className="rounded-full border-cyan-400/20 bg-cyan-400/10 text-cyan-100 hover:bg-cyan-400/20"
+                            >
+                              <Link
+                                href={`/app/holdem/hands/${encodeURIComponent(hand.roundId)}`}
+                              >
+                                {c.replayDetail}
+                              </Link>
+                            </Button>
+                          ) : null}
+                          {hand.roundId ? (
+                            <Button
+                              variant="arcadeOutline"
+                              size="sm"
+                              onClick={() => void toggleReplay(hand.roundId)}
+                            >
+                              {selectedReplayRoundId === hand.roundId
+                                ? c.hideReplay
+                                : c.viewReplay}
+                            </Button>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        {hand.boardCards.map((card, index) => (
+                          <CardFace
+                            key={`recent-${hand.handNumber}-${index}`}
+                            card={{ rank: card.rank, suit: card.suit, hidden: false }}
+                          />
+                        ))}
+                      </div>
+
+                      <p className="text-xs text-slate-500">
+                        {c.replayRake}: {formatAmount(hand.rakeAmount)}
+                      </p>
+                    </GameSectionBlock>
+                  ))
+                ) : (
+                  <GameStatusNotice tone="neutral">{c.noRecentHands}</GameStatusNotice>
+                )}
+
+                {loadingReplayRoundId ? (
+                  <GameStatusNotice tone="neutral">{c.replayLoading}</GameStatusNotice>
+                ) : null}
+
+                {replayError ? (
+                  <GameStatusNotice tone="danger">{replayError}</GameStatusNotice>
+                ) : null}
+
+                {selectedReplayVisible && selectedReplayHistory ? (
+                  <HoldemReplayDetail history={selectedReplayHistory} mode="inline" />
+                ) : null}
+              </CardContent>
+            </GameSurfaceCard>
+          </>
+        ) : (
+          <GameSurfaceCard tone="light">
+            <CardContent className="px-6 py-16 text-center text-[rgba(15,17,31,0.62)]">
               {c.emptySelection}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            </CardContent>
+          </GameSurfaceCard>
+        )}
+      </div>
     </section>
   );
 }

@@ -153,6 +153,7 @@ describe("Portal dashboard UI", () => {
           handleSelectSandboxProject={() => {}}
           isPending={false}
           latestSandboxSecret={null}
+          overviewSubview={"snippet"}
           overviewUiCopy={defaultSaasOverviewUiCopy.overview}
           sandboxProject={projects[2]}
           sandboxProjectKeys={[]}
@@ -293,6 +294,7 @@ describe("Portal dashboard UI", () => {
     renderTestComponent(
       <PortalDashboardBillingPage
         billingCurrency="USD"
+        billingSubview="overview"
         billingInsights={{
           alerts: {
             forecast30dExceeded: false,
@@ -394,6 +396,106 @@ describe("Portal dashboard UI", () => {
     expect(document.body.textContent).toContain(
       "Budget 1500.00 + credits 300.00",
     );
+
+    cleanupComponents();
+
+    renderTestComponent(
+      <PortalDashboardBillingPage
+        billingCurrency="USD"
+        billingSubview="credits"
+        billingInsights={{
+          alerts: {
+            forecast30dExceeded: false,
+            forecast7dExceeded: false,
+            hardCapReached: false,
+            thresholdExceeded: false,
+          },
+          budgetPolicy: {
+            alertEmailEnabled: true,
+            alertThresholdPct: 80,
+            alertWebhookConfigured: false,
+            alertWebhookUrl: null,
+            hardCap: "1800.00",
+            monthlyBudget: "1500.00",
+            state: {
+              forecast30dAlertedAt: null,
+              forecast7dAlertedAt: null,
+              hardCapAlertedAt: null,
+              hardCapReachedAt: null,
+              month: "2026-04",
+              thresholdAlertedAt: null,
+            },
+          },
+          currency: "USD",
+          dailyReport: [],
+          forecasts: {
+            trailing30d: {
+              dailyRunRate: "0.00",
+              exceedsBudget: false,
+              projectedTotalAmount: "0.00",
+              projectedUsageAmount: "0.00",
+              trailingDays: 30,
+            },
+            trailing7d: {
+              dailyRunRate: "0.00",
+              exceedsBudget: false,
+              projectedTotalAmount: "0.00",
+              projectedUsageAmount: "0.00",
+              trailingDays: 7,
+            },
+          },
+          summary: {
+            availableCreditAmount: "300.00",
+            baseMonthlyFee: "0.00",
+            budgetThresholdAmount: "1440.00",
+            currentTotalAmount: "220.00",
+            currentUsageAmount: "220.00",
+            effectiveBudgetAmount: "1800.00",
+            hardCap: "1800.00",
+            hardCapReached: false,
+            monthlyBudget: "1500.00",
+            remainingBudgetAmount: "1580.00",
+            remainingHardCapAmount: "1580.00",
+            thresholdBreached: false,
+            trailing30dUsageAmount: "220.00",
+            trailing7dUsageAmount: "220.00",
+          },
+          tenantId: 10,
+          window: {
+            daysElapsed: 12,
+            daysRemaining: 18,
+            generatedAt: "2026-04-30T00:00:00.000Z",
+            monthEnd: "2026-05-01T00:00:00.000Z",
+            monthStart: "2026-04-01T00:00:00.000Z",
+          },
+        }}
+        currentBudgetPolicy={null}
+        currentTenant={tenantEntries[0] as never}
+        currentTenantBillingDisputes={[]}
+        currentTenantBillingRuns={[]}
+        currentTenantId={10}
+        currentTenantTopUps={[
+          {
+            amount: "300.00",
+            createdAt: "2026-04-30T00:00:00.000Z",
+            currency: "USD",
+            id: 1,
+            source: "local_manual_credit",
+            status: "applied",
+            tenantId: 10,
+          },
+        ] as never}
+        handleBillingRedirect={() => {}}
+        handleCreateBillingDispute={(event) => {
+          event.preventDefault();
+        }}
+        handleUpdateBudgetPolicy={(event) => {
+          event.preventDefault();
+        }}
+        isPending={false}
+      />,
+    );
+
     expect(document.body.textContent).toContain("Local manual credit");
   });
 });

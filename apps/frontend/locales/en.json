@@ -71,6 +71,9 @@
     "navHoldem": "Hold'em",
     "navBlackjack": "Blackjack",
     "navFairness": "Fairness",
+    "navHome": "Home",
+    "navGames": "Games",
+    "navProfile": "Profile",
     "navRewards": "Rewards",
     "navWallet": "Wallet",
     "navPayments": "Payments",
@@ -81,11 +84,33 @@
     "notificationBellLabel": "Open notifications",
     "notificationsTitle": "Notifications",
     "notificationsDescription": "KYC reviews, withdrawal progress, and settled markets now land here in one shared activity feed.",
+    "notificationsCommandTitle": "Command Center",
+    "notificationsCommandDescription": "Track critical account alerts, game settlements, and review queues from one player-facing activity board.",
     "notificationsEmpty": "No notifications yet.",
+    "notificationsEmptyFiltered": "No notifications in this filter yet.",
     "notificationsUnreadCount": "{count} unread",
+    "notificationsUnreadBadge": "Unread",
+    "notificationsReadBadge": "Read",
     "notificationsMarkRead": "Mark read",
     "notificationsReadAll": "Mark all read",
     "notificationsRefresh": "Refresh notifications",
+    "notificationsFilterAll": "All alerts",
+    "notificationsFilterRewards": "Rewards",
+    "notificationsFilterGames": "Games",
+    "notificationsFilterMarket": "Market",
+    "notificationsFilterSecurity": "Security",
+    "notificationsFilterAccount": "Account",
+    "notificationsFilterGame": "Game results",
+    "notificationsFilterSystem": "System",
+    "notificationsSummaryUnread": "Unread queue",
+    "notificationsSummarySecurity": "Security alerts",
+    "notificationsSummaryGame": "Game updates",
+    "notificationsSummaryAction": "Action required",
+    "notificationsActionQueueTitle": "Action Queue",
+    "notificationsActionQueueDescription": "Unread items that still need a player response.",
+    "notificationsAllCaughtUp": "All visible alerts are already handled.",
+    "notificationsNewestTitle": "Feed Totals",
+    "notificationsNewestDescription": "Live counts for the current notification mix.",
     "verificationGateTitle": "Verify your email to unlock the account",
     "verificationGateDescription": "This account can sign in, but high-risk actions stay blocked until email verification is complete.",
     "verificationGateBody": "Verify the inbox address on file to continue with draws and other protected actions. We can send a fresh verification link if needed.",
@@ -104,7 +129,33 @@
     "description": "Post a thread, reply in public, and let the backend anti-spam guard decide whether the content stays live or moves into the admin moderation queue.",
     "antiSpamBadge": "KYC-tier rate limits",
     "reviewBadge": "Auto moderation queue",
+    "summaryThreads": "Threads live",
+    "summaryPosts": "Visible posts",
+    "summaryOpen": "Open threads",
+    "summaryLocked": "Locked threads",
+    "searchLabel": "Search threads",
+    "searchPlaceholder": "Search by title or author id",
+    "filterAll": "All",
+    "filterOpen": "Open",
+    "filterLocked": "Locked",
+    "filterActive": "High activity",
+    "filterStrategy": "Strategy",
+    "filterMarket": "Market",
+    "filterGeneral": "General",
+    "noMatchesTitle": "No threads match this filter.",
+    "noMatchesDescription": "Try a different keyword or switch back to a broader topic filter.",
+    "previewStrategy": "When should you bring this move into a live table session?",
+    "previewMarket": "What is your call on the next market move?",
+    "previewGeneral": "Jump into the latest player conversation and share your take.",
+    "previewLocked": "This thread is paused, but you can still review the discussion trail.",
+    "scoreLabel": "Posts",
+    "replyCount": "{count} replies",
+    "topContributorsTitle": "Top contributors",
+    "topContributorsEmpty": "Contributors will populate once visible threads start moving.",
+    "activeDiscussionsTitle": "Active discussions",
+    "activeDiscussionEmpty": "The next active thread will appear here once players start posting.",
     "createTitle": "Start a thread",
+    "createClose": "Close composer",
     "createDescription": "New threads publish immediately unless spam signals or policy thresholds push them into review.",
     "listTitle": "Recent threads",
     "listDescription": "Visible threads only. Auto-hidden submissions stay out of this list until an admin restores them.",
@@ -160,6 +211,17 @@
     "banner": "Live Banner",
     "gachaTitle": "Slot Machine",
     "gachaDescription": "Turn the existing prize engine into a slot-machine flow: three-reel presentation, instant settlement, pity progress, and a verifiable fairness commit underneath the animation layer.",
+    "gachaRouteTitle": "Gacha",
+    "gachaRouteSubtitle": "Reward Draw",
+    "gachaLuckyStreak": "Lucky streak",
+    "gachaBonusLabel": "Bonus",
+    "gachaDrawCta": "Draw",
+    "gachaNextReveal": "Next reveal",
+    "gachaGiftPacks": "Gift Packs",
+    "gachaHistory": "History",
+    "gachaRecentWins": "Recent wins",
+    "gachaRecentWinsSubtitle": "Latest highlights from this route and the live pool",
+    "gachaPoolFallback": "Live pool",
     "title": "Slot Machine",
     "subtitle": "Every spin rides on the committed prize engine. The visible reels are presentation only; the real settlement still comes from the live pool, fairness epoch, and wallet ledger.",
     "modeLabel": "Slot",
@@ -281,6 +343,7 @@
     "portfolioEmptyFilteredDescription": "No records match this status filter yet.",
     "portfolioMarketCount": "Markets",
     "portfolioPositionCount": "Positions",
+    "marketCountValue": "{count} markets",
     "portfolioPageValue": "Page {page}",
     "openPortfolio": "My markets",
     "browseMarkets": "Browse markets",
@@ -292,6 +355,12 @@
     "loadingDetail": "Loading market...",
     "loadingPortfolio": "Loading your market history...",
     "loadFailed": "Failed to load market data.",
+    "summaryLiveMarkets": "Live markets",
+    "summaryTotalPool": "Total live pool",
+    "summaryPositionCount": "Open positions",
+    "filterOpenNow": "Open now",
+    "filterEndingSoon": "Ending soon",
+    "filterLargestPool": "Largest pool",
     "emptyTitle": "No markets live right now.",
     "emptyDescription": "Come back after the next round opens or ask an operator to publish a market.",
     "openMarket": "Open market",
@@ -317,6 +386,15 @@
     "poolBreakdown": "Pool breakdown",
     "poolDescription": "Each outcome shows the current amount staked and how much of the shared pool it represents.",
     "poolShareValue": "{share} of pool",
+    "resolutionSourceLabel": "Resolution source",
+    "rulesLabel": "Rules",
+    "tradePreviewTitle": "Trade preview",
+    "tradePreviewDescription": "Select an outcome, preview the current line, and jump into the full market when you want to place the position.",
+    "probabilityBoard": "Probability board",
+    "previewStakeLabel": "Preview stake",
+    "impliedPriceLabel": "Current line",
+    "estimateSharesLabel": "Est. shares",
+    "potentialReturnLabel": "Potential return",
     "betTitle": "Place a position",
     "betDescription": "Choose one outcome, enter your stake, and lock funds against this market until settlement or cancellation. Winning payouts are distributed pari-mutuel after vig.",
     "marketLockedNotice": "This market is not accepting new positions.",
@@ -374,128 +452,147 @@
   "marketing": {
     "nav": {
       "brand": "Prize Pool Engine",
-      "dashboard": "Dashboard",
+      "games": "Games",
+      "rewards": "Rewards",
+      "fairness": "Fairness",
+      "dashboard": "Player Hub",
       "signIn": "Sign In",
-      "getStarted": "Get Started"
+      "getStarted": "Get Started",
+      "themeLight": "Light",
+      "themeDark": "Night"
     },
     "hero": {
-      "badge": "Probabilistic Reward Distribution",
-      "title": "Transaction-safe prize draws with configurable probability and ledger accuracy.",
-      "description": "Model wallet-backed draws, dynamic prize pools, and operations visibility inside a full-stack system built for concurrency, audits, and clean service boundaries.",
-      "primaryCta": "Launch the Demo",
-      "secondaryCta": "View Dashboard",
+      "badge": "Season ladder live",
+      "title": "Play reward-driven card tables, open packs, and track every win with provable fairness.",
+      "description": "Jump between Blackjack, Quick Eight, Hold'em, reward draws, and prediction markets. Wallet, missions, and fairness proofs stay inside one browser-native play surface.",
+      "primaryCta": "Play Now",
+      "secondaryCta": "Explore Live Routes",
       "stats": {
-        "transactionIntegrity": "Transaction integrity",
-        "modularDomains": "Modular domains",
-        "paymentRisk": "Payment risk"
+        "transactionIntegrity": "Fair routes",
+        "modularDomains": "Live tables",
+        "paymentRisk": "Daily missions"
+      },
+      "signalLabels": {
+        "proof": "Proof",
+        "live": "Live",
+        "daily": "Daily",
+        "sessionFlow": "Session flow"
       },
       "card1": {
-        "title": "Draw Engine Snapshot",
-        "description": "Balance lock → Weighted pick → Inventory lock → Ledger",
+        "title": "Featured board",
+        "description": "Fast routes for tables, rewards, missions, and prediction rounds.",
         "items": [
-          { "label": "Wallet balance check", "value": "Atomic" },
-          { "label": "Prize eligibility filter", "value": "Dynamic" },
-          { "label": "Inventory lock", "value": "Row-level" },
-          { "label": "Ledger logging", "value": "Guaranteed" }
+          { "label": "Blackjack", "value": "Live" },
+          { "label": "Quick Eight", "value": "Hot" },
+          { "label": "Hold'em", "value": "Tables" },
+          { "label": "Markets", "value": "Open" }
         ]
       },
       "card2": {
-        "title": "Operations Control Surface",
-        "description": "Adjust weights, monitor pool balance, audit draw stats.",
-        "body": "Live configuration with audit trails. Every change is reflected instantly in the draw engine."
+        "title": "Today's reward track",
+        "description": "Streak bonuses, wallet snapshots, and fairness checks.",
+        "body": "Claim missions, track live activity, and verify outcome hashes without leaving the live play surface."
       }
     },
     "stack": {
-      "title": "Built on a modern stack",
-      "description": "This portfolio system prioritizes type safety, transactional integrity, and fast iteration.",
+      "title": "Live signals",
+      "lead": "Everything shaping the live play surface.",
+      "description": "Everything shaping the session, from tables to proof surfaces.",
       "items": [
-        "Next.js App Router",
-        "PostgreSQL",
-        "Auth.js",
-        "Drizzle ORM",
-        "Shadcn UI",
-        "Row-Level Locking"
+        "Blackjack Tables",
+        "Quick Eight Picks",
+        "Texas Hold'em",
+        "Reward Draws",
+        "Prediction Markets",
+        "Fairness Verifier"
       ]
     },
     "metrics": [
       {
-        "value": "6+",
-        "label": "Domain modules wired",
-        "detail": "Users, wallet, prizes, draw engine, analytics, system config."
+        "value": "14.2K",
+        "label": "Active players",
+        "detail": "Players rotating between tables, markets, and reward loops."
       },
       {
-        "value": "100%",
-        "label": "Transactional coverage",
-        "detail": "Draw operations execute inside atomic transactions."
+        "value": "96%",
+        "label": "Rounds settled live",
+        "detail": "Most routes resolve instantly with wallet and ledger updates."
       },
       {
-        "value": "0",
-        "label": "Real payment risk",
-        "detail": "Virtual balance only. Perfect for portfolio demos."
+        "value": "24h",
+        "label": "Reward event cadence",
+        "detail": "Daily missions, featured drops, and fairness checkpoints stay in motion."
       }
     ],
+    "metricsPanel": {
+      "kicker": "Live scoreboard",
+      "badge": "Always on",
+      "supportTitle": "Reward cadence",
+      "supportLead": "Players stay inside one reward loop.",
+      "supportDescription": "Missions, tables, and proof routes stay close together so the landing flow reads like one product instead of separate product shells."
+    },
     "features": {
-      "eyebrow": "Core Modules",
-      "title": "A full-stack reward platform, wired end to end",
-      "description": "Borrowing structure from the landing template, these sections highlight the data consistency, concurrency controls, and operational tooling that make the system portfolio-grade.",
+      "eyebrow": "Player loop",
+      "title": "One product, multiple play surfaces",
+      "description": "The landing experience should point players toward the routes they actually use: tables, wallet, rewards, community, and fairness.",
       "rows": [
         {
-          "title": "Wallet + Ledger Integrity",
-          "description": "Every draw uses atomic balance locks, immutable ledger entries, and clear audit trails for both debits and rewards.",
+          "title": "Table-first game lobby",
+          "description": "Move from featured games into dedicated routes for Blackjack, Quick Eight, and Hold'em with clear reward signals and live player context.",
           "image": "/assets/landing/feature.svg",
           "bullets": [
             {
-              "label": "Atomic updates",
-              "copy": "Balance and inventory are locked per draw."
+              "label": "Live risk reads",
+              "copy": "Each entry point highlights pace, status, and momentum."
             },
             {
-              "label": "Clear audit trail",
-              "copy": "Transactions are immutable and traceable."
+              "label": "Reward range",
+              "copy": "Players can scan which routes feel active before they commit."
             }
           ]
         },
         {
-          "title": "Dynamic Prize Pool Control",
-          "description": "Configurable weights, threshold gating, and stock locks prevent overselling while keeping probability updates instant.",
+          "title": "Wallet, rewards, and progress",
+          "description": "Treat credits like part of the play loop, not a banking dashboard. Missions, balance, and reward history should feel active and collectible.",
           "image": "/assets/landing/feature2.svg",
           "reverse": true,
           "bullets": [
             {
-              "label": "Atomic updates",
-              "copy": "Balance and inventory are locked per draw."
+              "label": "Mission board",
+              "copy": "Daily goals and streaks sit next to the wallet, not behind it."
             },
             {
-              "label": "Clear audit trail",
-              "copy": "Transactions are immutable and traceable."
+              "label": "Wallet history",
+              "copy": "Ledger activity should read like a reward log, not admin software."
             }
           ]
         },
         {
-          "title": "Analytics Surface",
-          "description": "Monitor draw volume, reward distribution, pool balance, and user spend ranking with real-time visibility.",
+          "title": "Fairness and community trust",
+          "description": "Keep proof surfaces and player discussion visible so the platform feels transparent, social, and durable.",
           "image": "/assets/landing/feature3.svg",
           "bullets": [
             {
-              "label": "Atomic updates",
-              "copy": "Balance and inventory are locked per draw."
+              "label": "Proof on every route",
+              "copy": "Fairness checks stay close to the outcomes they validate."
             },
             {
-              "label": "Clear audit trail",
-              "copy": "Transactions are immutable and traceable."
+              "label": "Community momentum",
+              "copy": "Players should see active discussion, not an empty support page."
             }
           ]
         }
       ]
     },
     "cta": {
-      "title": "Ready to stress-test the engine?",
-      "description": "Spin up the demo, configure prizes, and watch the ledger update in real time.",
+      "title": "Ready to take a seat?",
+      "description": "Create an account and move between tables, markets, rewards, and fairness without losing context.",
       "primary": "Create Account",
-      "secondary": "Open Dashboard"
+      "secondary": "View Game Lobby"
     },
     "footer": {
-      "copyright": "© 2026 Prize Pool Engine. Portfolio prototype.",
-      "app": "App",
+      "copyright": "© 2026 Prize Pool Engine. Reward-driven play.",
+      "app": "Player Hub",
       "signIn": "Sign In"
     }
   }

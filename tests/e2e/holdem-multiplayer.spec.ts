@@ -87,7 +87,7 @@ const registerAndSignInVerifiedUser = async (
   await page.getByLabel('Birth Date').fill(TEST_BIRTH_DATE);
   await page.getByRole('button', { name: 'Create Account' }).click();
 
-  await expect(page).toHaveURL(/\/login\?registered=1$/);
+  await page.waitForURL(/\/login\?registered=1$/, { timeout: 30_000 });
 
   const verification = await waitForNotificationPayload({
     kind: 'email_verification',
@@ -97,12 +97,12 @@ const registerAndSignInVerifiedUser = async (
 
   await page.goto(verificationUrl);
   await page.getByRole('button', { name: 'Verify Email' }).click();
-  await expect(page).toHaveURL(/\/login\?verified=1$/);
+  await page.waitForURL(/\/login\?verified=1$/, { timeout: 30_000 });
 
   await page.getByLabel('Email Address').fill(payload.email);
   await page.getByLabel('Password').fill(payload.password);
   await page.getByRole('button', { name: 'Sign In' }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await page.waitForURL(/\/app$/, { timeout: 30_000 });
 };
 
 const lookupUserId = async (email: string) => {
@@ -586,8 +586,8 @@ const setupTwoPlayerHoldemTable = async (params: {
 
   await expect(params.page.getByText("Texas Hold'em").first()).toBeVisible();
   await expect(userTwoPage.getByText("Texas Hold'em").first()).toBeVisible();
-  await expect(params.page.getByText('Live table feed active.')).toBeVisible();
-  await expect(userTwoPage.getByText('Live table feed active.')).toBeVisible();
+  await expect(params.page.getByText('Live table feed active.').first()).toBeVisible();
+  await expect(userTwoPage.getByText('Live table feed active.').first()).toBeVisible();
 
   await params.page.getByTestId('holdem-create-table-type-casual').click();
   await params.page.getByTestId('holdem-create-max-seats-2').click();

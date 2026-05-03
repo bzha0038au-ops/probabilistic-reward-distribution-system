@@ -2,6 +2,7 @@
   import { page } from "$app/stores"
   import { getContext } from "svelte"
 
+  import AdminPageHeader from "$lib/components/admin-page-header.svelte"
   import CollusionLineChart from "$lib/components/collusion-line-chart.svelte"
 
   interface RiskUserStatus {
@@ -124,13 +125,13 @@
       : t("risk.collusion.users.freezeNone")
 </script>
 
-<header class="space-y-2">
-  <p class="text-xs font-semibold uppercase tracking-[0.25em] text-primary">
-    {t("risk.collusion.eyebrow")}
-  </p>
-  <h1 class="text-3xl font-semibold">{t("risk.collusion.title")}</h1>
-  <p class="text-sm text-slate-600">{t("risk.collusion.description")}</p>
-</header>
+<AdminPageHeader
+  context="Threat Workspace · collusion"
+  eyebrow={t("risk.collusion.eyebrow")}
+  title={t("risk.collusion.title")}
+  description={t("risk.collusion.description")}
+  tone="threat"
+/>
 
 {#if data.error}
   <div class="alert alert-error mt-6 text-sm">
@@ -230,7 +231,9 @@
   </div>
 </section>
 
-<section class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+<section
+  class="admin-summary-grid mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4"
+>
   {#each summaryCards as card}
     <article class="card border border-base-300 bg-base-100 shadow-sm">
       <div class="card-body gap-1">
@@ -365,7 +368,7 @@
                 <td class="text-slate-600">{formatDate(item.lastSeenAt)}</td>
                 <td>
                   {#if item.user}
-                    <div class="flex flex-wrap justify-end gap-2">
+                    <div class="admin-inline-actions">
                       {#if item.user.manualFlagged}
                         <form method="post" action="?/clearManualFlag">
                           <input

@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Retro Pop Slots</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&amp;family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+                "primary": "#a73a00",
+                "on-secondary-container": "#6e5c00",
+                "surface": "#f9f9f9",
+                "background": "#f9f9f9",
+                "primary-container": "#ff5c00",
+                "on-primary": "#ffffff",
+                "on-primary-fixed-variant": "#802a00",
+                "error": "#ba1a1a",
+                "on-secondary": "#ffffff",
+                "on-surface-variant": "#5b4137",
+                "surface-dim": "#dadada",
+                "tertiary-fixed": "#d8e2ff",
+                "tertiary-container": "#4f90ff",
+                "surface-tint": "#a73a00",
+                "surface-variant": "#e2e2e2",
+                "inverse-surface": "#303030",
+                "surface-container-lowest": "#ffffff",
+                "on-tertiary-fixed-variant": "#004493",
+                "tertiary": "#005bc1",
+                "surface-bright": "#f9f9f9",
+                "on-tertiary-fixed": "#001a41",
+                "on-tertiary-container": "#00295f",
+                "secondary": "#705d00",
+                "secondary-container": "#fcd400",
+                "on-primary-container": "#521800",
+                "surface-container": "#eeeeee",
+                "on-error": "#ffffff",
+                "primary-fixed": "#ffdbce",
+                "secondary-fixed-dim": "#e9c400",
+                "on-secondary-fixed": "#221b00",
+                "on-primary-fixed": "#370e00",
+                "primary-fixed-dim": "#ffb59a",
+                "on-background": "#1b1b1b",
+                "outline": "#8f7065",
+                "error-container": "#ffdad6",
+                "surface-container-high": "#e8e8e8",
+                "tertiary-fixed-dim": "#adc6ff",
+                "inverse-primary": "#ffb59a",
+                "on-secondary-fixed-variant": "#544600",
+                "on-tertiary": "#ffffff",
+                "on-error-container": "#93000a",
+                "on-surface": "#1b1b1b",
+                "secondary-fixed": "#ffe16d",
+                "surface-container-highest": "#e2e2e2",
+                "outline-variant": "#e4beb1",
+                "inverse-on-surface": "#f1f1f1",
+                "surface-container-low": "#f3f3f3"
+        },
+        "borderRadius": {
+                "DEFAULT": "0.25rem",
+                "lg": "0.5rem",
+                "xl": "0.75rem",
+                "full": "9999px"
+        },
+        "spacing": {
+                "margin-mobile": "20px",
+                "xl": "32px",
+                "unit": "4px",
+                "lg": "24px",
+                "xs": "4px",
+                "md": "16px",
+                "gutter": "16px",
+                "sm": "8px"
+        },
+        "fontFamily": {
+                "headline-md": [
+                        "Plus Jakarta Sans"
+                ],
+                "label-sm": [
+                        "Plus Jakarta Sans"
+                ],
+                "label-bold": [
+                        "Plus Jakarta Sans"
+                ],
+                "display-xl": [
+                        "Plus Jakarta Sans"
+                ],
+                "body-lg": [
+                        "Plus Jakarta Sans"
+                ],
+                "headline-lg": [
+                        "Plus Jakarta Sans"
+                ],
+                "body-md": [
+                        "Plus Jakarta Sans"
+                ]
+        },
+        "fontSize": {
+                "headline-md": [
+                        "24px",
+                        {
+                                "lineHeight": "1.3",
+                                "fontWeight": "700"
+                        }
+                ],
+                "label-sm": [
+                        "12px",
+                        {
+                                "lineHeight": "1.2",
+                                "fontWeight": "600"
+                        }
+                ],
+                "label-bold": [
+                        "14px",
+                        {
+                                "lineHeight": "1.2",
+                                "fontWeight": "700"
+                        }
+                ],
+                "display-xl": [
+                        "48px",
+                        {
+                                "lineHeight": "1.1",
+                                "letterSpacing": "-0.02em",
+                                "fontWeight": "800"
+                        }
+                ],
+                "body-lg": [
+                        "18px",
+                        {
+                                "lineHeight": "1.5",
+                                "fontWeight": "600"
+                        }
+                ],
+                "headline-lg": [
+                        "32px",
+                        {
+                                "lineHeight": "1.2",
+                                "letterSpacing": "-0.01em",
+                                "fontWeight": "800"
+                        }
+                ],
+                "body-md": [
+                        "16px",
+                        {
+                                "lineHeight": "1.5",
+                                "fontWeight": "500"
+                        }
+                ]
+        }
+},
+    },
+  }
+</script>
+<style>
+        .halftone-bg {
+            background-image: radial-gradient(circle, #e5e2e1 2px, transparent 2px);
+            background-size: 10px 10px;
+        }
+        .retro-shadow {
+            box-shadow: 4px 4px 0px 0px rgba(28, 27, 27, 1);
+        }
+        .retro-shadow-sm {
+            box-shadow: 2px 2px 0px 0px rgba(28, 27, 27, 1);
+        }
+        .retro-active:active {
+            transform: translate(2px, 2px);
+            box-shadow: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-background text-on-background min-h-screen flex flex-col pt-16 pb-20 md:pb-0 md:pt-0 font-body-md overflow-x-hidden">
+<!-- TopAppBar Mobile / Nav Web -->
+<header class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-4 h-16 bg-surface border-b-2 border-on-surface shadow-[0px_4px_0px_0px_rgba(28,27,27,1)] md:hidden">
+<div class="flex items-center gap-sm">
+<div class="w-8 h-8 rounded-full border-2 border-on-surface overflow-hidden retro-shadow-sm bg-primary-container">
+<img alt="User Profile Avatar" class="w-full h-full object-cover" data-alt="A stylized, flat vector portrait of a playful character in a retro-pop aesthetic. Bold outlines, vibrant colors like electric orange and deep indigo, with a subtle halftone texture overlay. Light background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBps_9zl3aT4dADrYds-zoB0vbALkTXGEioUbDzD1-xVP8nAGr1jV03Chr01MmLfMq_P4SMadHL-ngdqDFLM0vZnWHGPDYEmFuFdWyhZhb772ublnhZ4vP3I1r1Rnci2Ubwl6HQtnz_UrzZkMImbrEt1JHLmCzzd9yM0CuiHBcKzqakTG80j657__vUVpq_SZd7w20HobWVHWz9q_xILvnTFgosia3uB8lEDSAoNnjMC8i0krGyI27djJSbpNlavyU2I-sDhadlO6Nz"/>
+</div>
+<h1 class="font-headline-md text-headline-md text-on-surface uppercase tracking-tight">REWARDS HUB</h1>
+</div>
+<div class="bg-surface-container border-2 border-on-surface px-sm py-xs rounded-full retro-shadow-sm flex items-center gap-xs">
+<span class="material-symbols-outlined text-secondary-container" style="font-variation-settings: 'FILL' 1;">monetization_on</span>
+<span class="font-label-bold text-label-bold text-on-surface">$1,240.50</span>
+</div>
+</header>
+<!-- Web Navigation Layout -->
+<div class="hidden md:flex h-screen fixed left-0 top-0 w-80 border-r-2 border-on-surface bg-surface flex-col p-6 z-40 shadow-[4px_0px_0px_0px_rgba(28,27,27,1)]">
+<div class="flex items-center gap-sm mb-lg pb-sm border-b-2 border-on-surface">
+<h1 class="font-headline-lg text-headline-lg text-on-surface uppercase tracking-tight">LUCKY SLOTS</h1>
+</div>
+<div class="flex items-center gap-md mb-lg p-md border-2 border-on-surface rounded-lg bg-surface-container retro-shadow">
+<div class="w-12 h-12 rounded-full border-2 border-on-surface overflow-hidden bg-primary-container">
+<img alt="User Profile Avatar" class="w-full h-full object-cover" data-alt="A stylized, flat vector portrait of a playful character in a retro-pop aesthetic. Bold outlines, vibrant colors like electric orange and deep indigo, with a subtle halftone texture overlay. Light background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA_3e56eB6ktxMkZIJ-_nJ5l8ibcBdlOP31OWHdVoNR9OdagSkR-ss3H_d2paXLfH8WsJ_CDrKwTeSgEBlgoNanHFiT6U0D7TMNDR03Jes7IeY1QuyRSeaHGbhX_fAZEfD1XFc8H5n4JwaqexMvwAYlqVuH_hBYs5dzI8d-vYTaPIDeZwfKPaU3YaYclunXofrz75sD2mFrnevcmxHAdSoYktX2A_1Wd0FVIbjKWisuSITwr7JRV3H35BVspC6ehmMD2XcpBRpu1mJO"/>
+</div>
+<div>
+<p class="font-label-bold text-label-bold text-on-surface">Lucky Player</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant">Level 42 Pro</p>
+</div>
+</div>
+<nav class="flex flex-col gap-sm flex-1">
+<a class="flex items-center gap-sm p-sm rounded-lg border-2 border-on-surface text-on-surface hover:bg-surface-container transition-colors retro-active" href="#">
+<span class="material-symbols-outlined">sports_esports</span>
+<span class="font-label-bold text-label-bold">Lobby</span>
+</a>
+<a class="flex items-center gap-sm p-sm rounded-lg border-2 border-on-surface bg-primary-container text-on-primary retro-shadow hover:bg-primary transition-colors retro-active" href="#">
+<span class="material-symbols-outlined">casino</span>
+<span class="font-label-bold text-label-bold">Gacha</span>
+</a>
+<a class="flex items-center gap-sm p-sm rounded-lg border-2 border-transparent text-on-surface hover:border-on-surface hover:bg-surface-container transition-colors" href="#">
+<span class="material-symbols-outlined">account_balance_wallet</span>
+<span class="font-label-bold text-label-bold">Wallet</span>
+</a>
+<a class="flex items-center gap-sm p-sm rounded-lg border-2 border-transparent text-on-surface hover:border-on-surface hover:bg-surface-container transition-colors" href="#">
+<span class="material-symbols-outlined">groups</span>
+<span class="font-label-bold text-label-bold">Social</span>
+</a>
+</nav>
+</div>
+<!-- Main Content Canvas -->
+<main class="flex-1 flex flex-col items-center justify-center p-md md:ml-80 relative overflow-hidden bg-background halftone-bg">
+<!-- Win Indicator Top -->
+<div class="mb-lg w-full max-w-md bg-secondary-container border-2 border-on-surface rounded-xl p-md retro-shadow flex flex-col items-center justify-center relative overflow-hidden">
+<div class="absolute inset-0 opacity-20 halftone-bg"></div>
+<p class="font-label-bold text-label-bold text-on-secondary-container uppercase tracking-widest mb-xs z-10">Total Win</p>
+<h2 class="font-headline-xl text-headline-xl text-on-secondary-container z-10">450 COINS</h2>
+<div class="absolute -right-4 -top-4 bg-secondary border-2 border-on-surface rounded-full w-16 h-16 flex items-center justify-center retro-shadow-sm transform rotate-12 z-20">
+<span class="font-headline-md text-headline-md text-on-secondary">x3</span>
+</div>
+</div>
+<!-- Slot Machine Container -->
+<div class="w-full max-w-md bg-surface border-4 border-on-surface rounded-2xl p-md retro-shadow relative z-10">
+<!-- Slot Machine Header Deco -->
+<div class="absolute -top-6 left-1/2 transform -translate-x-1/2 bg-primary-container border-2 border-on-surface px-lg py-xs rounded-full retro-shadow-sm z-20">
+<span class="font-headline-md text-headline-md text-on-primary uppercase tracking-wider">MEGA SPIN</span>
+</div>
+<!-- Reels Frame -->
+<div class="bg-surface-container-highest border-2 border-on-surface rounded-xl p-sm mt-sm mb-lg flex gap-sm justify-between shadow-[inset_0_4px_8px_rgba(0,0,0,0.1)]">
+<!-- Reel 1 -->
+<div class="flex-1 bg-surface border-2 border-on-surface rounded-lg overflow-hidden h-48 flex flex-col items-center justify-center relative shadow-[inset_0_2px_4px_rgba(0,0,0,0.05)]">
+<div class="absolute inset-0 bg-gradient-to-b from-surface-container-highest via-transparent to-surface-container-highest opacity-50 pointer-events-none"></div>
+<img alt="Star Symbol" class="w-20 h-20 object-contain drop-shadow-md mb-2" data-alt="A flat vector illustration of a bright yellow, five-pointed star with a thick black outline. The style is retro-pop, featuring solid colors and a subtle drop shadow to make it pop against a light background. Minimalist and playful." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCNDpLL1zXT1CuKRdymhZj4fc_BojzEBW5ShYI6TbFqgJi_PRRLbd4hrvliulh5k0gJPNrYzNZ2xosFAJPjDx57B3YqLTVJkheFK4CZ8RH3mX7VnKPHX5mb1SzbAhACmbKKgq9JTdIVrcyEKhg-hOYbA5B39w14i0NV5GuHXoP8APKbuplH2YBbt895sWhDnsx_qcD7no08ILFWNY75s3RrHwsJKVOHwPgccgTSqQRJvn0W9zUdLB0HvCvWsBrOeRRPvAVmC_UqKA8J"/>
+</div>
+<!-- Reel 2 -->
+<div class="flex-1 bg-surface border-2 border-on-surface rounded-lg overflow-hidden h-48 flex flex-col items-center justify-center relative shadow-[inset_0_2px_4px_rgba(0,0,0,0.05)]">
+<div class="absolute inset-0 bg-gradient-to-b from-surface-container-highest via-transparent to-surface-container-highest opacity-50 pointer-events-none"></div>
+<img alt="Diamond Symbol" class="w-20 h-20 object-contain drop-shadow-md mb-2" data-alt="A flat vector illustration of a shiny blue diamond with a thick black outline. The style is retro-pop, featuring solid colors, bold geometric shapes, and a subtle drop shadow to make it pop against a light background. Minimalist and playful." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDSBnQ60WlXJIQNig7RgZ0PFZrNcxx9qwe_LXBHDfFkqVsIYDiqKKcRaDS9d8dV9hbRmjAfM-SztfgIbYiVIQMyRe_NYj9_Tzn_LyVulf1oyi3BybyQuB1L0hD3UvNcsC-hysWbpzerjFpFLThSTj7ozfw7E0mzJ71nmxKgXLtunjL_BGIuoDMqDCyk3AKt_2x8OpFo02gYfdrxSSCI7D7FsLNSHKjtU2EKakpr_3TV1MDn3TUhdnLJrd7SakYgkldBMMuFKMi8P63I"/>
+</div>
+<!-- Reel 3 -->
+<div class="flex-1 bg-surface border-2 border-on-surface rounded-lg overflow-hidden h-48 flex flex-col items-center justify-center relative shadow-[inset_0_2px_4px_rgba(0,0,0,0.05)]">
+<div class="absolute inset-0 bg-gradient-to-b from-surface-container-highest via-transparent to-surface-container-highest opacity-50 pointer-events-none"></div>
+<img alt="Star Symbol" class="w-20 h-20 object-contain drop-shadow-md mb-2" data-alt="A flat vector illustration of a bright yellow, five-pointed star with a thick black outline. The style is retro-pop, featuring solid colors and a subtle drop shadow to make it pop against a light background. Minimalist and playful." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCEWjJP5EPILZWKh0rWgXTpZAJfhZktp4BPHUNkzFpHChg54qiAOXYxmy6u7ODNA0eA8Hfubn8kNdx4UuBz2Ky_Is4sFhVKzSXjdnl39oqL3W-FWQQAgJU4YBEWXu-9Lrob3pFlgZaAjgIR54ioX4qnx1hd6_PyKtQb8t6YhfzTh_3eMto6RXI3AsnEZkKnliW5F0KneOjDIgVWBEfqa1gvM0hqdXTYaw0zjS6f9z0qqtMn7DJM6FznP0GoEIEarYzLxS8L6reCGQ9q"/>
+</div>
+</div>
+<!-- Spin Controls -->
+<div class="flex flex-col items-center gap-md">
+<div class="flex justify-between w-full px-sm">
+<div class="flex flex-col items-center">
+<span class="font-label-sm text-label-sm text-tertiary uppercase">Bet</span>
+<div class="bg-surface-container border-2 border-on-surface rounded-full px-md py-xs mt-xs">
+<span class="font-label-bold text-label-bold text-on-surface">50</span>
+</div>
+</div>
+<div class="flex flex-col items-center">
+<span class="font-label-sm text-label-sm text-tertiary uppercase">Lines</span>
+<div class="bg-surface-container border-2 border-on-surface rounded-full px-md py-xs mt-xs">
+<span class="font-label-bold text-label-bold text-on-surface">10</span>
+</div>
+</div>
+</div>
+<button class="w-full bg-primary-container border-2 border-on-surface rounded-xl py-md font-headline-lg text-headline-lg text-on-primary uppercase tracking-widest retro-shadow retro-active transition-transform">
+                    SPIN
+                </button>
+<div class="flex justify-center gap-sm mt-xs w-full">
+<button class="flex-1 bg-surface-variant border-2 border-on-surface rounded-lg py-xs font-label-bold text-label-bold text-on-surface retro-shadow-sm retro-active transition-transform">Auto</button>
+<button class="flex-1 bg-surface-variant border-2 border-on-surface rounded-lg py-xs font-label-bold text-label-bold text-on-surface retro-shadow-sm retro-active transition-transform">Max Bet</button>
+</div>
+</div>
+</div>
+<!-- Decorative Elements Background -->
+<div class="absolute top-20 right-10 opacity-30 pointer-events-none hidden md:block">
+<span class="material-symbols-outlined text-tertiary-container" style="font-size: 80px; font-variation-settings: 'FILL' 1;">stars</span>
+</div>
+<div class="absolute bottom-20 left-10 opacity-30 pointer-events-none hidden md:block">
+<span class="material-symbols-outlined text-secondary-container" style="font-size: 100px; font-variation-settings: 'FILL' 1;">diamond</span>
+</div>
+</main>
+<!-- BottomNavBar Mobile -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-2 py-3 bg-surface border-t-2 border-on-surface shadow-[0px_-2px_10px_rgba(0,0,0,0.05)] md:hidden">
+<a class="flex flex-col items-center justify-center text-on-surface p-1" href="#">
+<span class="material-symbols-outlined mb-1">sports_esports</span>
+<span class="font-label-sm text-[10px] font-bold uppercase">Lobby</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-primary-container text-on-primary border-2 border-on-surface rounded-lg p-2 retro-shadow-sm transform -translate-y-2" href="#">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 1;">casino</span>
+<span class="font-label-sm text-[10px] font-bold uppercase">Gacha</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface p-1" href="#">
+<span class="material-symbols-outlined mb-1">account_balance_wallet</span>
+<span class="font-label-sm text-[10px] font-bold uppercase">Wallet</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface p-1" href="#">
+<span class="material-symbols-outlined mb-1">groups</span>
+<span class="font-label-sm text-[10px] font-bold uppercase">Social</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface p-1" href="#">
+<span class="material-symbols-outlined mb-1">menu</span>
+<span class="font-label-sm text-[10px] font-bold uppercase">Menu</span>
+</a>
+</nav>
+</body></html>

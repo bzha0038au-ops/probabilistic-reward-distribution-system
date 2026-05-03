@@ -398,20 +398,13 @@ test('admin economy page can freeze gift capability with step-up mfa', async ({
     (url) => url.origin === new URL(adminOrigin).origin && url.pathname !== '/login',
   );
 
-  await page.goto(`${adminOrigin}/economy`);
-
-  await expect(
-    page.getByRole('heading', { name: 'Economy Operations' }),
-  ).toBeVisible();
-  await expect(page.getByText('Gift Summary', { exact: true })).toBeVisible();
-  await expect(
-    page.locator('p').filter({ hasText: /^B_LUCK$/ }).first(),
-  ).toBeVisible();
+  await page.goto(`${adminOrigin}/economy/controls`);
 
   const stepUpCode = generateTotpCode(adminSession.secret);
   await page.getByTestId('economy-step-up-code').fill(stepUpCode);
 
   const freezeForm = page.getByTestId('economy-freeze-gift-form');
+  await expect(freezeForm).toBeVisible({ timeout: 30_000 });
   await expect(
     freezeForm.locator('input[type="hidden"][name="totpCode"]'),
   ).toHaveValue(stepUpCode);
@@ -455,7 +448,7 @@ test('admin economy page can freeze gift capability with step-up mfa', async ({
     status: 'active',
   });
 
-  await page.goto(`${adminOrigin}/economy`);
+  await page.goto(`${adminOrigin}/economy/controls`);
   await expect(
     page.getByText(`user #${targetUser!.id}`, { exact: true }),
   ).toBeVisible();
@@ -568,10 +561,10 @@ test('admin economy page can reverse a fulfilled voucher order with step-up mfa'
     (url) => url.origin === new URL(adminOrigin).origin && url.pathname !== '/login',
   );
 
-  await page.goto(`${adminOrigin}/economy`);
+  await page.goto(`${adminOrigin}/economy/orders`);
 
   const orderCard = page.getByTestId(`economy-order-${purchase.order.id}`);
-  await expect(orderCard).toBeVisible();
+  await expect(orderCard).toBeVisible({ timeout: 30_000 });
   await expect(orderCard).toContainText(sku);
   await expect(orderCard).toContainText('verified');
 

@@ -7,7 +7,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import type { PortalSelection } from "@/modules/portal/lib/portal";
+import type {
+  PortalSelection,
+  PortalUsageSubview,
+} from "@/modules/portal/lib/portal";
 
 import {
   formatDate,
@@ -22,123 +25,31 @@ type UsagePageProps = {
   currentProject: PortalSelection["currentProject"];
   currentProjectObservability: PortalSelection["currentProjectObservability"];
   currentProjectUsage: PortalSelection["currentProjectUsage"];
+  usageSubview: PortalUsageSubview | null;
 };
 
 export function PortalDashboardUsagePage({
   currentProject,
   currentProjectObservability,
   currentProjectUsage,
+  usageSubview,
 }: UsagePageProps) {
-  return (
-    <>
-      <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <Card className="border-slate-200 bg-white/90">
-          <CardHeader className="gap-2">
-            <CardTitle>Usage and quota</CardTitle>
-            <CardDescription>
-              Read current aggregate quota pressure from active keys and inspect
-              the latest metered events.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-5">
-            {currentProject ? (
-              <>
-                <div className="grid gap-3">
-                  {[
-                    [
-                      "Burst",
-                      formatWindow(
-                        currentProject.apiRateLimitUsage?.aggregate.burst,
-                      ),
-                    ],
-                    [
-                      "Hourly",
-                      formatWindow(
-                        currentProject.apiRateLimitUsage?.aggregate.hourly,
-                      ),
-                    ],
-                    [
-                      "Daily",
-                      formatWindow(
-                        currentProject.apiRateLimitUsage?.aggregate.daily,
-                      ),
-                    ],
-                  ].map(([label, value]) => (
-                    <div
-                      key={label}
-                      className="rounded-3xl border border-slate-200 bg-slate-50/80 p-4"
-                    >
-                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
-                        {label}
-                      </p>
-                      <p className="mt-2 text-sm leading-6 text-slate-700">
-                        {value}
-                      </p>
-                    </div>
-                  ))}
-                </div>
+  const activeSubview = usageSubview ?? "overview";
 
-                <div className="rounded-3xl border border-slate-200 bg-slate-50/80 p-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge className="rounded-full bg-sky-100 text-sky-800 hover:bg-sky-100">
-                      {currentProject.environment}
-                    </Badge>
-                    <span className="text-sm text-slate-600">
-                      Draw cost {currentProject.drawCost}{" "}
-                      {currentProject.currency}
-                    </span>
-                  </div>
-                  <p className="mt-3 text-sm leading-6 text-slate-600">
-                    Project-level limits: burst{" "}
-                    {currentProject.apiRateLimitBurst}, hourly{" "}
-                    {currentProject.apiRateLimitHourly}, daily{" "}
-                    {currentProject.apiRateLimitDaily}. Active keys{" "}
-                    {currentProject.apiRateLimitUsage?.activeKeyCount ?? 0}.
-                  </p>
-                </div>
-
-                <div className="grid gap-3">
-                  <h3 className="text-sm font-semibold text-slate-900">
-                    Recent usage events
-                  </h3>
-                  {currentProjectUsage.length > 0 ? (
-                    currentProjectUsage.slice(0, 6).map((event) => (
-                      <div
-                        key={event.id}
-                        className="rounded-3xl border border-slate-200 bg-white p-4"
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-sm font-medium text-slate-900">
-                            {event.eventType}
-                          </p>
-                          <span className="text-xs text-slate-500">
-                            {formatDate(event.createdAt)}
-                          </span>
-                        </div>
-                        <p className="mt-2 text-sm text-slate-600">
-                          {event.units} unit(s) · {event.amount}{" "}
-                          {event.currency}
-                        </p>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-slate-500">
-                      No usage events are visible for the current project yet.
-                    </p>
-                  )}
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-slate-500">
-                Select a project to inspect quota windows and metered usage.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="border-slate-200 bg-slate-950 text-slate-100">
-          <CardHeader className="gap-2">
-            <CardTitle className="text-white">
+  if (activeSubview === "quota") {
+    return (
+      <section className="grid gap-6">
+        <Card className="portal-shell-card-dark portal-fade-up portal-fade-up-delay-2 overflow-hidden rounded-[2rem] text-slate-100">
+          <CardHeader className="gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge className="rounded-full bg-white/10 px-3 py-1 text-slate-200 hover:bg-white/10">
+                Distribution
+              </Badge>
+              <Badge className="rounded-full bg-white/10 px-3 py-1 text-slate-200 hover:bg-white/10">
+                30-day window
+              </Badge>
+            </div>
+            <CardTitle className="tracking-[-0.04em] text-white">
               30-day draw observability
             </CardTitle>
             <CardDescription className="text-slate-400">
@@ -178,7 +89,7 @@ export function PortalDashboardUsagePage({
                   ].map(([label, value]) => (
                     <div
                       key={label}
-                      className="rounded-3xl border border-white/10 bg-white/[0.05] p-4"
+                      className="portal-kpi-card rounded-[1.45rem] p-4"
                     >
                       <p className="text-xs uppercase tracking-[0.22em] text-slate-400">
                         {label}
@@ -190,7 +101,7 @@ export function PortalDashboardUsagePage({
                   ))}
                 </div>
 
-                <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-4 text-sm leading-6 text-slate-300">
+                <div className="portal-kpi-card rounded-[1.5rem] p-4 text-sm leading-6 text-slate-300">
                   Hit rate drift{" "}
                   <span
                     className={cn(
@@ -218,7 +129,7 @@ export function PortalDashboardUsagePage({
                     .map((bucket) => (
                       <div
                         key={bucket.bucketKey}
-                        className="rounded-3xl border border-white/10 bg-black/20 p-4"
+                        className="portal-kpi-card rounded-[1.5rem] p-4"
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <p className="text-sm font-medium text-white">
@@ -242,9 +153,9 @@ export function PortalDashboardUsagePage({
                                 {formatPercent(bucket.actualProbability)}
                               </span>
                             </div>
-                            <div className="mt-2 h-2 rounded-full bg-white/10">
+                            <div className="portal-progress-track mt-2 h-2 bg-white/10">
                               <div
-                                className="h-2 rounded-full bg-sky-400"
+                                className="portal-progress-fill h-2 rounded-full"
                                 style={{
                                   width: getDistributionBarWidth(
                                     bucket.actualProbability,
@@ -261,7 +172,7 @@ export function PortalDashboardUsagePage({
                                 {formatPercent(bucket.expectedProbability)}
                               </span>
                             </div>
-                            <div className="mt-2 h-2 rounded-full bg-white/10">
+                            <div className="portal-progress-track mt-2 h-2 bg-white/10">
                               <div
                                 className="h-2 rounded-full bg-white/40"
                                 style={{
@@ -291,6 +202,124 @@ export function PortalDashboardUsagePage({
           </CardContent>
         </Card>
       </section>
-    </>
+    );
+  }
+
+  return (
+    <section className="grid gap-6">
+      <Card className="portal-shell-card-strong portal-fade-up portal-fade-up-delay-1 overflow-hidden rounded-[2rem] bg-white/94">
+        <CardHeader className="gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge className="rounded-full bg-sky-100 px-3 py-1 text-sky-800 hover:bg-sky-100">
+              Project observability
+            </Badge>
+            {currentProject ? (
+              <Badge className="rounded-full bg-white text-slate-700 shadow-sm hover:bg-white">
+                {currentProject.name} · {currentProject.environment}
+              </Badge>
+            ) : null}
+          </div>
+          <CardTitle className="tracking-[-0.04em] text-slate-950">
+            Usage and quota
+          </CardTitle>
+          <CardDescription>
+            Read current aggregate quota pressure from active keys and inspect
+            the latest metered events.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-5">
+          {currentProject ? (
+            <>
+              <div className="grid gap-3 md:grid-cols-3">
+                {[
+                  [
+                    "Burst",
+                    formatWindow(
+                      currentProject.apiRateLimitUsage?.aggregate.burst,
+                    ),
+                  ],
+                  [
+                    "Hourly",
+                    formatWindow(
+                      currentProject.apiRateLimitUsage?.aggregate.hourly,
+                    ),
+                  ],
+                  [
+                    "Daily",
+                    formatWindow(
+                      currentProject.apiRateLimitUsage?.aggregate.daily,
+                    ),
+                  ],
+                ].map(([label, value]) => (
+                  <div
+                    key={label}
+                    className="portal-soft-metric rounded-[1.45rem] p-4"
+                  >
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+                      {label}
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-slate-700">
+                      {value}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="portal-banner rounded-[1.55rem] border border-sky-100 bg-sky-50/75 p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge className="rounded-full bg-sky-100 text-sky-800 hover:bg-sky-100">
+                    {currentProject.environment}
+                  </Badge>
+                  <span className="text-sm text-slate-600">
+                    Draw cost {currentProject.drawCost}{" "}
+                    {currentProject.currency}
+                  </span>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-slate-600">
+                  Project-level limits: burst {currentProject.apiRateLimitBurst}
+                  , hourly {currentProject.apiRateLimitHourly}, daily{" "}
+                  {currentProject.apiRateLimitDaily}. Active keys{" "}
+                  {currentProject.apiRateLimitUsage?.activeKeyCount ?? 0}.
+                </p>
+              </div>
+
+              <div className="grid gap-3">
+                <h3 className="text-sm font-semibold text-slate-900">
+                  Recent usage events
+                </h3>
+                {currentProjectUsage.length > 0 ? (
+                  currentProjectUsage.slice(0, 6).map((event) => (
+                    <div
+                      key={event.id}
+                      className="portal-soft-metric rounded-[1.45rem] p-4"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-medium text-slate-900">
+                          {event.eventType}
+                        </p>
+                        <span className="text-xs text-slate-500">
+                          {formatDate(event.createdAt)}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm text-slate-600">
+                        {event.units} unit(s) · {event.amount} {event.currency}
+                      </p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-slate-500">
+                    No usage events are visible for the current project yet.
+                  </p>
+                )}
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-slate-500">
+              Select a project to inspect quota windows and metered usage.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    </section>
   );
 }

@@ -1,13 +1,13 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
-  StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
 import type {
+  PredictionMarketCategory,
   PredictionMarketDetail,
   PredictionMarketHistoryResponse,
   PredictionMarketPortfolioFilter,
@@ -19,10 +19,15 @@ import type {
   PredictionMarketSummary,
 } from "@reward/shared-types/prediction-market";
 
-import { mobileFeedbackTheme, mobilePalette as palette } from "../theme";
+import {
+  mobileChromeTheme,
+  mobileFeedbackTheme,
+  mobilePalette as palette,
+} from "../theme";
 import type { MobileRouteLabels, MobileRouteScreens } from "../route-copy";
 import { buildTestId } from "../testing";
 import { ActionButton, SectionCard } from "../ui";
+import { predictionMarketRouteScreenStyles as styles } from "./prediction-market-route-screen.styles";
 import { RouteSwitcher } from "./route-switcher";
 import type { MobileAppRoute, MobileStyles } from "./types";
 
@@ -64,6 +69,8 @@ type PredictionMarketRouteScreenProps = {
   onPlacePredictionPosition: () => void;
 };
 
+type CategoryFilter = "all" | PredictionMarketCategory;
+
 const PORTFOLIO_FILTERS: readonly PredictionMarketPortfolioFilter[] = [
   "all",
   "open",
@@ -71,23 +78,112 @@ const PORTFOLIO_FILTERS: readonly PredictionMarketPortfolioFilter[] = [
   "refunded",
 ];
 
+function formatCategoryLabel(category: PredictionMarketCategory) {
+  return category.charAt(0).toUpperCase() + category.slice(1);
+}
+
+function formatTagLabel(tag: string) {
+  return tag.replaceAll("-", " ").toUpperCase();
+}
+
+function getMarketTimeLabel(
+  copy: MobileRouteScreens["predictionMarket"],
+  status: PredictionMarketStatus,
+) {
+  if (status === "resolved") {
+    return copy.resolvedAt;
+  }
+
+  if (status === "cancelled") {
+    return copy.lastUpdated;
+  }
+
+  if (status === "open") {
+    return copy.locksAt;
+  }
+
+  return copy.resolvesAt;
+}
+
+function getMarketTimeValue(
+  market: PredictionMarketSummary | PredictionMarketDetail,
+) {
+  if (market.status === "resolved") {
+    return market.resolvedAt;
+  }
+
+  if (market.status === "cancelled") {
+    return market.updatedAt;
+  }
+
+  if (market.status === "open") {
+    return market.locksAt;
+  }
+
+  return market.resolvesAt;
+}
+
+function buildOutcomeSummaries(
+  market: PredictionMarketSummary | PredictionMarketDetail,
+) {
+  return market.outcomes
+    .map((outcome) => {
+      const pool = getOutcomePool(market, outcome.key);
+      const share = formatPoolShare(pool.totalStakeAmount, market.totalPoolAmount);
+
+      return {
+        key: outcome.key,
+        label: outcome.label,
+        totalStakeAmount: pool.totalStakeAmount,
+        positionCount: pool.positionCount,
+        share,
+        numericShare: Number.parseFloat(share.replace("%", "")) || 0,
+      };
+    })
+    .sort((left, right) => right.numericShare - left.numericShare);
+}
+
 export function PredictionMarketRouteScreen(
   props: PredictionMarketRouteScreenProps,
 ) {
-  const activeMarketTitle = props.selectedPredictionMarket?.title
-    ? props.selectedPredictionMarket.title
+  const [selectedCategory, setSelectedCategory] =
+    useState<CategoryFilter>("all");
+  const predictionMarketHistoryItems = props.predictionMarketHistory?.items ?? [];
+  const hasPredictionMarketHistoryItems = predictionMarketHistoryItems.length > 0;
+  const predictionMarkets = props.predictionMarkets ?? [];
+  const selectedMarketSummary =
+    predictionMarkets.find((market) => market.id === props.selectedPredictionMarketId) ??
+    null;
+  const featuredMarket =
+    props.selectedPredictionMarket ?? selectedMarketSummary ?? predictionMarkets[0] ?? null;
+  const featuredOutcomes = featuredMarket
+    ? buildOutcomeSummaries(featuredMarket)
+    : [];
+  const primaryOutcome = featuredOutcomes[0] ?? null;
+  const categoryFilters = useMemo(
+    () => Array.from(new Set(predictionMarkets.map((market) => market.category))),
+    [predictionMarkets],
+  );
+  const filteredMarkets = useMemo(() => {
+    if (selectedCategory === "all") {
+      return predictionMarkets;
+    }
+
+    return predictionMarkets.filter((market) => market.category === selectedCategory);
+  }, [predictionMarkets, selectedCategory]);
+  const activeMarketTitle = featuredMarket?.title
+    ? featuredMarket.title
     : props.loadingPredictionMarkets
       ? props.screenCopy.summaryLoading
       : props.screenCopy.summaryEmpty;
-  const predictionMarketHistoryItems = props.predictionMarketHistory?.items ?? [];
-  const hasPredictionMarketHistoryItems = predictionMarketHistoryItems.length > 0;
+  const activeCategoryLabel =
+    selectedCategory === "all"
+      ? props.screenCopy.portfolioFilterLabels.all
+      : formatCategoryLabel(selectedCategory);
 
   return (
     <>
-      <SectionCard
-        title={props.screenCopy.routeTitle}
-        subtitle={props.screenCopy.routeSubtitle}
-      >
+      <SectionCard title={props.screenCopy.routeTitle}>
         <RouteSwitcher
           styles={props.styles}
           currentRoute={props.currentRoute}
@@ -95,39 +191,59 @@ export function PredictionMarketRouteScreen(
           navigationLocked={props.routeNavigationLocked}
           onOpenRoute={props.onOpenRoute}
         />
-        <View style={props.styles.routeSummaryRow}>
-          <View style={props.styles.routeSummaryCard}>
-            <Text style={props.styles.routeSummaryLabel}>
-              {props.screenCopy.summaryBalance}
-            </Text>
-            <Text style={props.styles.routeSummaryValue}>
-              {props.formatAmount(props.balance)}
+
+        <View style={styles.overviewCard}>
+          <View style={styles.overviewArtBand} />
+          <View style={styles.overviewBadge}>
+            <Text style={styles.overviewBadgeText}>
+              {featuredMarket?.title.trim().charAt(0).toUpperCase() ?? "?"}
             </Text>
           </View>
-          <View style={props.styles.routeSummaryCard}>
-            <Text style={props.styles.routeSummaryLabel}>
+          <View style={styles.overviewTopRow}>
+            <Text style={styles.overviewEyebrow}>
               {props.screenCopy.summaryActiveMarket}
             </Text>
-            <Text style={props.styles.routeSummaryValue}>
-              {activeMarketTitle}
-            </Text>
+            <View style={styles.overviewPill}>
+              <Text style={styles.overviewPillText}>{activeCategoryLabel}</Text>
+            </View>
           </View>
-          <View style={props.styles.routeSummaryCard}>
-            <Text style={props.styles.routeSummaryLabel}>
-              {props.screenCopy.summaryHoldings}
-            </Text>
-            <Text style={props.styles.routeSummaryValue}>
-              {props.predictionMarketPositionCount}
-            </Text>
+          <Text style={styles.overviewTitle}>{activeMarketTitle}</Text>
+          <Text style={styles.overviewBody}>
+            {featuredMarket?.description ?? props.screenCopy.noDescription}
+          </Text>
+          <View style={styles.overviewSummaryRow}>
+            <View style={styles.overviewSummaryCard}>
+              <Text style={styles.overviewSummaryLabel}>
+                {props.screenCopy.totalPool}
+              </Text>
+              <Text style={styles.overviewSummaryValue}>
+                {featuredMarket
+                  ? props.formatAmount(featuredMarket.totalPoolAmount)
+                  : props.screenCopy.summaryEmpty}
+              </Text>
+            </View>
+            <View style={styles.overviewSummaryCard}>
+              <Text style={styles.overviewSummaryLabel}>
+                {props.screenCopy.summaryHoldings}
+              </Text>
+              <Text style={styles.overviewSummaryValue}>
+                {props.predictionMarketPositionCount}
+              </Text>
+            </View>
+            <View style={styles.overviewSummaryCard}>
+              <Text style={styles.overviewSummaryLabel}>
+                {props.screenCopy.selectOutcome}
+              </Text>
+              <Text style={styles.overviewSummaryValue}>
+                {primaryOutcome?.label ?? props.screenCopy.chooseOutcome}
+              </Text>
+            </View>
           </View>
         </View>
         {props.verificationCallout}
       </SectionCard>
 
-      <SectionCard
-        title={props.screenCopy.sectionTitle}
-        subtitle={props.screenCopy.sectionSubtitle}
-      >
+      <SectionCard title={props.screenCopy.sectionTitle}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionHeading}>
             {props.screenCopy.marketListTitle}
@@ -148,34 +264,185 @@ export function PredictionMarketRouteScreen(
           />
         </View>
 
-        {props.loadingPredictionMarkets && !props.predictionMarkets ? (
+        {props.loadingPredictionMarkets && predictionMarkets.length === 0 ? (
           <View style={props.styles.loaderRow}>
             <ActivityIndicator color={palette.accent} />
             <Text style={props.styles.loaderText}>
               {props.screenCopy.refreshingMarkets}
             </Text>
           </View>
-        ) : props.predictionMarkets && props.predictionMarkets.length > 0 ? (
+        ) : featuredMarket ? (
           <>
+            <View style={styles.heroCard}>
+              <View style={styles.heroHalftone} />
+
+              <View style={styles.heroContent}>
+                <View style={styles.heroLeft}>
+                  <View style={styles.heroBadge}>
+                    <Text style={styles.heroBadgeText}>
+                      {featuredMarket.tags[0]
+                        ? formatTagLabel(featuredMarket.tags[0])
+                        : formatCategoryLabel(featuredMarket.category)}
+                    </Text>
+                  </View>
+
+                  <Text style={styles.heroTitle}>{featuredMarket.title}</Text>
+                  <Text style={styles.heroDescription}>
+                    {featuredMarket.description ?? props.screenCopy.noDescription}
+                  </Text>
+
+                  <View style={styles.heroMetaRow}>
+                    <Text style={styles.heroMetaText}>
+                      {getMarketTimeLabel(props.screenCopy, featuredMarket.status)}{" "}
+                      {props.formatOptionalTimestamp(getMarketTimeValue(featuredMarket)) ??
+                        props.screenCopy.summaryEmpty}
+                    </Text>
+                    <Text style={styles.heroMetaText}>
+                      {props.screenCopy.totalPool}{" "}
+                      {props.formatAmount(featuredMarket.totalPoolAmount)}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.heroOddsCard}>
+                  <View style={styles.heroOddsHeader}>
+                    <Text style={styles.heroOddsLabel}>
+                      {props.screenCopy.selectOutcome}
+                    </Text>
+                    <Text style={styles.heroOddsValue}>
+                      {primaryOutcome ? `${primaryOutcome.share} ${primaryOutcome.label}` : "—"}
+                    </Text>
+                  </View>
+
+                  <View style={styles.heroProgressTrack}>
+                    {featuredOutcomes.slice(0, 2).map((outcome, index) => (
+                      <View
+                        key={`hero-progress-${outcome.key}`}
+                        style={[
+                          styles.heroProgressFill,
+                          index === 0
+                            ? styles.heroProgressFillPrimary
+                            : styles.heroProgressFillSecondary,
+                          { width: `${Math.max(outcome.numericShare, 8)}%` },
+                        ]}
+                      >
+                        <Text style={styles.heroProgressText}>
+                          {outcome.label.toUpperCase()}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+
+                  <View style={styles.heroOutcomeButtonRow}>
+                    {featuredOutcomes.slice(0, 2).map((outcome) => (
+                      <Pressable
+                        key={`hero-outcome-${outcome.key}`}
+                        onPress={() => {
+                          props.onSelectPredictionMarket(featuredMarket.id);
+                          props.onSelectPredictionOutcome(outcome.key);
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={outcome.label}
+                        accessibilityState={{
+                          selected:
+                            props.selectedPredictionMarketId === featuredMarket.id &&
+                            props.selectedPredictionOutcomeKey === outcome.key,
+                        }}
+                        style={[
+                          styles.heroOutcomeButton,
+                          props.selectedPredictionMarketId === featuredMarket.id &&
+                          props.selectedPredictionOutcomeKey === outcome.key
+                            ? styles.heroOutcomeButtonSelected
+                            : null,
+                        ]}
+                      >
+                        <Text style={styles.heroOutcomeButtonTitle}>
+                          {outcome.label}
+                        </Text>
+                        <Text style={styles.heroOutcomeButtonMeta}>
+                          {outcome.share} ·{" "}
+                          {props.formatAmount(outcome.totalStakeAmount)}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  {featuredOutcomes.length > 2 ? (
+                    <View style={styles.extraOutcomeList}>
+                      {featuredOutcomes.slice(2).map((outcome) => (
+                        <View
+                          key={`extra-outcome-${outcome.key}`}
+                          style={styles.extraOutcomeRow}
+                        >
+                          <Text style={styles.extraOutcomeLabel}>{outcome.label}</Text>
+                          <Text style={styles.extraOutcomeValue}>{outcome.share}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.categoryRow}>
+              <Pressable
+                onPress={() => setSelectedCategory("all")}
+                accessibilityRole="button"
+                accessibilityLabel={props.screenCopy.portfolioFilterLabels.all}
+                accessibilityState={{ selected: selectedCategory === "all" }}
+                style={[
+                  styles.categoryChip,
+                  selectedCategory === "all" ? styles.categoryChipActive : null,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.categoryChipText,
+                    selectedCategory === "all" ? styles.categoryChipTextActive : null,
+                  ]}
+                >
+                  {props.screenCopy.portfolioFilterLabels.all}
+                </Text>
+              </Pressable>
+              {categoryFilters.map((category) => {
+                const active = selectedCategory === category;
+
+                return (
+                  <Pressable
+                    key={`prediction-category-${category}`}
+                    onPress={() => setSelectedCategory(category)}
+                    accessibilityRole="button"
+                    accessibilityLabel={formatCategoryLabel(category)}
+                    accessibilityState={{ selected: active }}
+                    style={[
+                      styles.categoryChip,
+                      active ? styles.categoryChipActive : null,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.categoryChipText,
+                        active ? styles.categoryChipTextActive : null,
+                      ]}
+                    >
+                      {formatCategoryLabel(category)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
             <View style={styles.marketList}>
-              {props.predictionMarkets.map((market) => {
+              {!filteredMarkets.length ? (
+                <View style={styles.marketEmptyCard}>
+                  <Text style={styles.marketEmptyTitle}>{activeCategoryLabel}</Text>
+                  <Text style={styles.helperText}>{props.screenCopy.noMarkets}</Text>
+                </View>
+              ) : null}
+
+              {filteredMarkets.map((market) => {
                 const selected = market.id === props.selectedPredictionMarketId;
-                const secondaryTimeLabel =
-                  market.status === "resolved"
-                    ? props.screenCopy.resolvedAt
-                    : market.status === "cancelled"
-                      ? props.screenCopy.lastUpdated
-                      : market.status === "open"
-                        ? props.screenCopy.locksAt
-                        : props.screenCopy.resolvesAt;
-                const secondaryTimeValue =
-                  market.status === "resolved"
-                    ? market.resolvedAt
-                    : market.status === "cancelled"
-                      ? market.updatedAt
-                      : market.status === "open"
-                        ? market.locksAt
-                        : market.resolvesAt;
+                const outcomes = buildOutcomeSummaries(market);
 
                 return (
                   <Pressable
@@ -191,37 +458,84 @@ export function PredictionMarketRouteScreen(
                       selected ? styles.marketCardSelected : null,
                     ]}
                   >
-                    <View style={styles.marketCardHeader}>
-                      <Text style={styles.marketCardTitle}>{market.title}</Text>
-                      <View
-                        style={[
-                          styles.statusPill,
-                          getMarketStatusTone(market.status),
-                        ]}
-                      >
-                        <Text style={styles.statusPillText}>
-                          {props.screenCopy.marketStatusLabels[market.status]}
+                    <View style={styles.marketCardAccent} />
+
+                    <View style={styles.marketCardTopRow}>
+                      <View style={styles.marketLabelChip}>
+                        <Text style={styles.marketLabelChipText}>
+                          {formatCategoryLabel(market.category)}
                         </Text>
                       </View>
+                      <Text style={styles.marketTimeText}>
+                        {getMarketTimeLabel(props.screenCopy, market.status)}{" "}
+                        {props.formatOptionalTimestamp(getMarketTimeValue(market)) ??
+                          props.screenCopy.summaryEmpty}
+                      </Text>
                     </View>
+
+                    <Text style={styles.marketCardTitle}>{market.title}</Text>
                     <Text style={styles.marketCardBody}>
                       {market.description ?? props.screenCopy.noDescription}
                     </Text>
-                    <View style={styles.marketCardMetaRow}>
-                      <Text style={styles.marketCardMetaLabel}>
-                        {props.screenCopy.totalPool}
-                      </Text>
-                      <Text style={styles.marketCardMetaValue}>
+
+                    {outcomes.length >= 2 ? (
+                      <>
+                        <View style={styles.marketShareHeader}>
+                          <Text style={styles.marketSharePrimary}>
+                            {outcomes[0]?.label} {outcomes[0]?.share}
+                          </Text>
+                          <Text style={styles.marketShareSecondary}>
+                            {outcomes[1]?.label} {outcomes[1]?.share}
+                          </Text>
+                        </View>
+                        <View style={styles.marketShareTrack}>
+                          <View
+                            style={[
+                              styles.marketShareFillPrimary,
+                              {
+                                width: `${Math.max(outcomes[0]?.numericShare ?? 0, 8)}%`,
+                              },
+                            ]}
+                          />
+                          <View
+                            style={[
+                              styles.marketShareFillSecondary,
+                              {
+                                width: `${Math.max(outcomes[1]?.numericShare ?? 0, 8)}%`,
+                              },
+                            ]}
+                          />
+                        </View>
+                      </>
+                    ) : null}
+
+                    {outcomes.length > 2 ? (
+                      <View style={styles.marketOutcomeList}>
+                        {outcomes.slice(0, 3).map((outcome) => (
+                          <View
+                            key={`market-outcome-list-${market.id}-${outcome.key}`}
+                            style={styles.marketOutcomeRow}
+                          >
+                            <Text style={styles.marketOutcomeLabel}>
+                              {outcome.label}
+                            </Text>
+                            <Text style={styles.marketOutcomeValue}>
+                              {outcome.share}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
+
+                    <View style={styles.marketFooterRow}>
+                      <Text style={styles.marketFooterPool}>
+                        {props.screenCopy.totalPool}{" "}
                         {props.formatAmount(market.totalPoolAmount)}
                       </Text>
-                    </View>
-                    <View style={styles.marketCardMetaRow}>
-                      <Text style={styles.marketCardMetaLabel}>
-                        {secondaryTimeLabel}
-                      </Text>
-                      <Text style={styles.marketCardMetaValue}>
-                        {props.formatOptionalTimestamp(secondaryTimeValue) ??
-                          props.screenCopy.summaryEmpty}
+                      <Text style={styles.marketFooterAction}>
+                        {selected
+                          ? props.screenCopy.marketDetailTitle
+                          : props.screenCopy.focusMarket}
                       </Text>
                     </View>
                   </Pressable>
@@ -257,14 +571,14 @@ export function PredictionMarketRouteScreen(
                   onPlacePredictionPosition={props.onPlacePredictionPosition}
                 />
               ) : (
-                <Text style={props.styles.gachaHint}>
+                <Text style={styles.helperText}>
                   {props.screenCopy.noMarketSelected}
                 </Text>
               )}
             </View>
           </>
         ) : (
-          <Text style={props.styles.gachaHint}>{props.screenCopy.noMarkets}</Text>
+          <Text style={styles.helperText}>{props.screenCopy.noMarkets}</Text>
         )}
       </SectionCard>
 
@@ -382,13 +696,13 @@ export function PredictionMarketRouteScreen(
             ))}
           </View>
         ) : props.predictionMarketHistory ? (
-          <Text style={props.styles.gachaHint}>
+          <Text style={styles.helperText}>
             {props.predictionMarketHistoryStatus === "all"
               ? props.screenCopy.noHoldings
               : props.screenCopy.noFilteredHoldings}
           </Text>
         ) : (
-          <Text style={props.styles.gachaHint}>{props.screenCopy.noHoldings}</Text>
+          <Text style={styles.helperText}>{props.screenCopy.noHoldings}</Text>
         )}
 
         {props.predictionMarketHistory ? (
@@ -458,109 +772,57 @@ function PredictionMarketDetailPanel(props: PredictionMarketDetailPanelProps) {
   );
   const marketOpen = props.market.status === "open";
   const selectedOutcomeLabel = selectedOutcome?.label ?? props.screenCopy.chooseOutcome;
+  const outcomes = buildOutcomeSummaries(props.market);
 
   return (
     <View style={styles.detailStack}>
-      <View style={styles.detailHeader}>
-        <View style={styles.detailHeaderCopy}>
-          <Text style={styles.detailTitle}>{props.market.title}</Text>
-          <Text style={styles.detailDescription}>
-            {props.market.description ?? props.screenCopy.noDescription}
-          </Text>
+      <View style={styles.detailHeroCard}>
+        <View style={styles.detailHeader}>
+          <View style={styles.detailHeaderCopy}>
+            <Text style={styles.detailTitle}>{props.market.title}</Text>
+            <Text style={styles.detailDescription}>
+              {props.market.description ?? props.screenCopy.noDescription}
+            </Text>
+          </View>
+          <View
+            style={[styles.statusPill, getMarketStatusTone(props.market.status)]}
+          >
+            <Text style={styles.statusPillText}>
+              {props.screenCopy.marketStatusLabels[props.market.status]}
+            </Text>
+          </View>
         </View>
-        <View
-          style={[
-            styles.statusPill,
-            getMarketStatusTone(props.market.status),
-          ]}
-        >
-          <Text style={styles.statusPillText}>
-            {props.screenCopy.marketStatusLabels[props.market.status]}
-          </Text>
-        </View>
-      </View>
 
-      <View style={styles.metricGrid}>
-        <MetricCard
-          label={props.screenCopy.marketStatus}
-          value={props.screenCopy.marketStatusLabels[props.market.status]}
-        />
-        <MetricCard
-          label={props.screenCopy.settlementStatus}
-          value={getSettlementLabel(props.screenCopy, props.market)}
-        />
-        <MetricCard
-          label={props.screenCopy.totalPool}
-          value={props.formatAmount(props.market.totalPoolAmount)}
-        />
-        <MetricCard
-          label={props.screenCopy.yourExposure}
-          value={props.formatAmount(exposureLabel)}
-        />
-        <MetricCard
-          label={props.screenCopy.mechanism}
-          value={props.screenCopy.mechanismPariMutuel}
-        />
-        <MetricCard
-          label={props.screenCopy.openPositions}
-          value={`${props.market.userPositions.filter((position) => position.status === "open").length}`}
-        />
-        <MetricCard
-          label={props.screenCopy.opensAt}
-          value={
-            props.formatOptionalTimestamp(props.market.opensAt) ??
-            props.screenCopy.summaryEmpty
-          }
-        />
-        <MetricCard
-          label={props.screenCopy.locksAt}
-          value={
-            props.formatOptionalTimestamp(props.market.locksAt) ??
-            props.screenCopy.summaryEmpty
-          }
-        />
-        <MetricCard
-          label={props.screenCopy.resolvesAt}
-          value={
-            props.formatOptionalTimestamp(props.market.resolvesAt) ??
-            props.screenCopy.summaryEmpty
-          }
-        />
-        <MetricCard
-          label={props.screenCopy.resolvedAt}
-          value={
-            props.formatOptionalTimestamp(props.market.resolvedAt) ??
-            props.screenCopy.summaryEmpty
-          }
-        />
-        <MetricCard
-          label={props.screenCopy.lastUpdated}
-          value={
-            props.formatOptionalTimestamp(props.market.updatedAt) ??
-            props.screenCopy.summaryEmpty
-          }
-        />
-        <MetricCard
-          label={props.screenCopy.winningOutcome}
-          value={
-            props.market.winningOutcomeKey
-              ? getOutcomeLabel(props.market, props.market.winningOutcomeKey)
-              : props.screenCopy.winningOutcomePending
-          }
-        />
+        <View style={styles.metricGrid}>
+          <MetricCard
+            label={props.screenCopy.totalPool}
+            value={props.formatAmount(props.market.totalPoolAmount)}
+          />
+          <MetricCard
+            label={props.screenCopy.yourExposure}
+            value={props.formatAmount(exposureLabel)}
+          />
+          <MetricCard
+            label={props.screenCopy.settlementStatus}
+            value={getSettlementLabel(props.screenCopy, props.market)}
+          />
+          <MetricCard
+            label={props.screenCopy.winningOutcome}
+            value={
+              props.market.winningOutcomeKey
+                ? getOutcomeLabel(props.market, props.market.winningOutcomeKey)
+                : props.screenCopy.winningOutcomePending
+            }
+          />
+        </View>
       </View>
 
       <View style={styles.outcomeStack}>
         <Text style={styles.detailSubheading}>{props.screenCopy.selectOutcome}</Text>
         <View style={styles.outcomeList}>
-          {props.market.outcomes.map((outcome) => {
-            const pool = getOutcomePool(props.market, outcome.key);
+          {outcomes.map((outcome) => {
             const selected = outcome.key === props.selectedOutcomeKey;
             const winning = props.market.winningOutcomeKey === outcome.key;
-            const poolShare = formatPoolShare(
-              pool.totalStakeAmount,
-              props.market.totalPoolAmount,
-            );
 
             return (
               <Pressable
@@ -587,11 +849,11 @@ function PredictionMarketDetailPanel(props: PredictionMarketDetailPanelProps) {
                   ) : null}
                 </View>
                 <Text style={styles.outcomeMeta}>
-                  {pool.positionCount > 0
+                  {outcome.positionCount > 0
                     ? props.screenCopy.outcomePool(
-                        props.formatAmount(pool.totalStakeAmount),
-                        pool.positionCount,
-                        poolShare,
+                        props.formatAmount(outcome.totalStakeAmount),
+                        outcome.positionCount,
+                        outcome.share,
                       )
                     : props.screenCopy.noOutcomePools}
                 </Text>
@@ -609,15 +871,15 @@ function PredictionMarketDetailPanel(props: PredictionMarketDetailPanelProps) {
       </View>
 
       <View style={styles.betPanel}>
-        <Text style={props.styles.fieldLabel}>
+        <Text style={styles.betPanelLabel}>
           {props.screenCopy.selectedOutcome}
         </Text>
         <Text style={styles.selectedOutcomeValue}>{selectedOutcomeLabel}</Text>
-        <Text style={props.styles.fieldLabel}>{props.screenCopy.stakeAmount}</Text>
+        <Text style={styles.betPanelLabel}>{props.screenCopy.stakeAmount}</Text>
         <TextInput
           value={props.stakeAmount}
           onChangeText={props.onChangeStakeAmount}
-          style={props.styles.input}
+          style={styles.stakeInput}
           keyboardType="decimal-pad"
           autoCorrect={false}
           placeholder={props.stakeAmount}
@@ -641,6 +903,7 @@ function PredictionMarketDetailPanel(props: PredictionMarketDetailPanelProps) {
             !marketOpen ||
             !props.selectedOutcomeKey
           }
+          fullWidth
           testID="prediction-market-place-position-button"
         />
       </View>
@@ -669,7 +932,7 @@ function PredictionMarketDetailPanel(props: PredictionMarketDetailPanelProps) {
             ))}
           </View>
         ) : (
-          <Text style={styles.betHint}>{props.screenCopy.noPositions}</Text>
+          <Text style={styles.helperText}>{props.screenCopy.noPositions}</Text>
         )}
       </View>
     </View>
@@ -823,10 +1086,7 @@ function PredictionMarketPositionCard(props: PredictionMarketPositionCardProps) 
           </Text>
         </View>
         <View
-          style={[
-            styles.statusPill,
-            getPositionStatusTone(props.positionStatus),
-          ]}
+          style={[styles.statusPill, getPositionStatusTone(props.positionStatus)]}
         >
           <Text style={styles.statusPillText}>{props.positionStatusLabel}</Text>
         </View>
@@ -868,7 +1128,7 @@ function MetricCard(props: { label: string; value: string }) {
 }
 
 function getOutcomeLabel(
-  market: PredictionMarketDetail | PredictionMarketPortfolioMarket,
+  market: PredictionMarketDetail | PredictionMarketPortfolioMarket | PredictionMarketSummary,
   outcomeKey: string,
 ) {
   return (
@@ -877,7 +1137,10 @@ function getOutcomeLabel(
   );
 }
 
-function getOutcomePool(market: PredictionMarketDetail, outcomeKey: string) {
+function getOutcomePool(
+  market: PredictionMarketDetail | PredictionMarketSummary,
+  outcomeKey: string,
+) {
   return (
     market.outcomePools.find((pool) => pool.outcomeKey === outcomeKey) ?? {
       outcomeKey,
@@ -952,353 +1215,3 @@ function getPortfolioStatusTone(status: PredictionMarketPortfolioStatus) {
       return styles.statusPillActive;
   }
 }
-
-const styles = StyleSheet.create({
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  exposureCallout: {
-    gap: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: mobileFeedbackTheme.info.borderColor,
-    backgroundColor: mobileFeedbackTheme.info.backgroundColor,
-    padding: 14,
-  },
-  exposureCalloutKicker: {
-    color: mobileFeedbackTheme.info.accentColor,
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-  },
-  exposureCalloutBody: {
-    color: palette.text,
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  sectionHeading: {
-    color: palette.text,
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  filterToolbar: {
-    gap: 10,
-  },
-  filterRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  filterChip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.panelMuted,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  filterChipActive: {
-    borderColor: palette.accent,
-    backgroundColor: "rgba(57, 208, 255, 0.14)",
-  },
-  filterChipText: {
-    color: palette.textMuted,
-    fontSize: 12,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  filterChipTextActive: {
-    color: palette.text,
-  },
-  marketList: {
-    gap: 10,
-  },
-  marketCard: {
-    gap: 10,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.panelMuted,
-    padding: 14,
-  },
-  marketCardSelected: {
-    borderColor: palette.accent,
-    backgroundColor: "rgba(57, 208, 255, 0.12)",
-  },
-  marketCardHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  marketCardTitle: {
-    flex: 1,
-    color: palette.text,
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  marketCardBody: {
-    color: palette.textMuted,
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  marketCardMetaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  marketCardMetaLabel: {
-    color: palette.textMuted,
-    fontSize: 12,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  marketCardMetaValue: {
-    color: palette.text,
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  marketDetailPanel: {
-    gap: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.panelMuted,
-    padding: 14,
-  },
-  detailStack: {
-    gap: 14,
-  },
-  detailHeader: {
-    gap: 12,
-  },
-  detailHeaderCopy: {
-    gap: 8,
-  },
-  detailTitle: {
-    color: palette.text,
-    fontSize: 18,
-    fontWeight: "800",
-  },
-  detailDescription: {
-    color: palette.textMuted,
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  detailSubheading: {
-    color: palette.text,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  metricGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  metricCard: {
-    width: "48%",
-    gap: 4,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.input,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  metricLabel: {
-    color: palette.textMuted,
-    fontSize: 11,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  metricValue: {
-    color: palette.text,
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  outcomeStack: {
-    gap: 10,
-  },
-  outcomeList: {
-    gap: 10,
-  },
-  outcomeCard: {
-    gap: 8,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.input,
-    padding: 12,
-  },
-  outcomeCardSelected: {
-    borderColor: palette.accent,
-    backgroundColor: "rgba(57, 208, 255, 0.12)",
-  },
-  outcomeCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  outcomeTitle: {
-    flex: 1,
-    color: palette.text,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  outcomeMeta: {
-    color: palette.textMuted,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  outcomeSecondaryMeta: {
-    color: palette.success,
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  betPanel: {
-    gap: 10,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.input,
-    padding: 12,
-  },
-  selectedOutcomeValue: {
-    color: palette.text,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  betHint: {
-    color: palette.textMuted,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  positionSection: {
-    gap: 10,
-  },
-  positionList: {
-    gap: 10,
-  },
-  positionCard: {
-    gap: 10,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.input,
-    padding: 12,
-  },
-  positionCardHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  positionOutcome: {
-    color: palette.text,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  positionTimestamp: {
-    color: palette.textMuted,
-    fontSize: 12,
-  },
-  positionMetaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  positionMetaLabel: {
-    color: palette.textMuted,
-    fontSize: 12,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  positionMetaValue: {
-    color: palette.text,
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  statusPill: {
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  statusPillText: {
-    color: palette.text,
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  statusPillMuted: {
-    borderColor: palette.border,
-    backgroundColor: palette.input,
-  },
-  statusPillActive: {
-    borderColor: mobileFeedbackTheme.active.borderColor,
-    backgroundColor: mobileFeedbackTheme.active.backgroundColor,
-  },
-  statusPillSuccess: {
-    borderColor: mobileFeedbackTheme.success.borderColor,
-    backgroundColor: mobileFeedbackTheme.success.backgroundColor,
-  },
-  statusPillWarning: {
-    borderColor: mobileFeedbackTheme.warning.borderColor,
-    backgroundColor: mobileFeedbackTheme.warning.backgroundColor,
-  },
-  statusPillDanger: {
-    borderColor: mobileFeedbackTheme.danger.borderColor,
-    backgroundColor: mobileFeedbackTheme.danger.backgroundColor,
-  },
-  winnerPill: {
-    borderColor: "#b7791f",
-    backgroundColor: "#3a2411",
-  },
-  holdingsList: {
-    gap: 10,
-  },
-  holdingCard: {
-    gap: 10,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.panelMuted,
-    padding: 14,
-  },
-  portfolioHeader: {
-    gap: 12,
-  },
-  portfolioHeaderCopy: {
-    gap: 8,
-  },
-  portfolioBadgeStack: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  portfolioMetaStack: {
-    gap: 8,
-  },
-  paginationRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  paginationLabel: {
-    color: palette.textMuted,
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  paginationActions: {
-    flexDirection: "row",
-    gap: 8,
-  },
-});

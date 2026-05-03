@@ -1,0 +1,14 @@
+{
+  "origin": "top-left, x rightwards, y downwards",
+  "route": "#/play/decision",
+  "activeTab": "play",
+  "stage": "decision",
+  "scratchTotal": 40,
+  "displayCash": 20,
+  "scratchableSlot": null,
+  "revealedSlots": [
+    0,
+    1
+  ],
+  "runCount": 2
+}

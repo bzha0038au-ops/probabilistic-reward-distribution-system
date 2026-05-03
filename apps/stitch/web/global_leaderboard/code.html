@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+
+<html class="" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Leaderboard - Retro-Modern Web3 Play</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&amp;family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;900&amp;family=Be+Vietnam+Pro:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-family: 'Material Symbols Outlined';
+            font-weight: normal;
+            font-style: normal;
+            font-size: 24px;
+            line-height: 1;
+            letter-spacing: normal;
+            text-transform: none;
+            display: inline-block;
+            white-space: nowrap;
+            word-wrap: normal;
+            direction: ltr;
+            -webkit-font-feature-settings: 'liga';
+            -webkit-font-smoothing: antialiased;
+        }
+        .bg-halftone {
+            background-image: radial-gradient(circle at center, #4d4732 1px, transparent 1px);
+            background-size: 8px 8px;
+        }
+    </style>
+<script id="tailwind-config">tailwind.config = {darkMode: "class", theme: {extend: {colors: {"surface-bright": "#fdf8f8", "outline-variant": "#dfc0b5", "on-secondary-fixed": "#0f0069", "primary-fixed": "#ffdbce", "surface-dim": "#ddd9d8", "tertiary-fixed-dim": "#dfc566", "surface-container-low": "#f7f2f2", "on-tertiary-container": "#4c3e00", "tertiary-fixed": "#fce17e", "surface-tint": "#a73a00", primary: "#7f2a00", "on-secondary": "#ffffff", "surface-container-highest": "#e6e1e1", "on-primary-fixed-variant": "#802a00", "surface-container": "#f1edec", "on-primary": "#ffffff", "surface-variant": "#e6e1e1", outline: "#8c7168", "surface-container-lowest": "#ffffff", tertiary: "#705d00", "secondary-fixed-dim": "#c3c0ff", "on-tertiary-fixed": "#221b00", "error-container": "#ffdad6", error: "#ba1a1a", "surface-container-high": "#ece7e7", "on-error-container": "#93000a", "on-primary-fixed": "#370e00", "inverse-on-surface": "#f4f0ef", "on-tertiary": "#ffffff", "on-surface-variant": "#58423a", "on-secondary-container": "#fffbff", "on-background": "#1c1b1b", secondary: "#4b41e1", "inverse-surface": "#313030", background: "#fdf8f8", "secondary-fixed": "#e2dfff", "primary-container": "#a73a00", "on-primary-container": "#ffcebc", "secondary-container": "#655dfb", "inverse-primary": "#ffb599", surface: "#fdf8f8", "on-tertiary-fixed-variant": "#544600", "on-error": "#ffffff", "primary-fixed-dim": "#ffb599", "on-surface": "#1c1b1b", "on-secondary-fixed-variant": "#3322cc", "tertiary-container": "#c2aa4e"}, borderRadius: {DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px"}, spacing: {xl: "32px", "container-max": "1440px", gutter: "16px", base: "8px", xs: "4px", sm: "8px", lg: "24px", md: "16px", margin: "20px", unit: "4px"}, fontFamily: {h2: ["Space Grotesk"], button: ["Space Grotesk"], h1: ["Space Grotesk"], "body-md": ["Be Vietnam Pro"], "label-caps": ["Space Grotesk"], h3: ["Space Grotesk"], "body-lg": ["Be Vietnam Pro"], "headline-xl": ["Plus Jakarta Sans"], "label-bold": ["Be Vietnam Pro"], "label-sm": ["Be Vietnam Pro"], "headline-md": ["Plus Jakarta Sans"], "headline-lg": ["Plus Jakarta Sans"]}, fontSize: {h2: ["48px", {lineHeight: "1.2", letterSpacing: "-0.01em", fontWeight: "700"}], button: ["16px", {lineHeight: "1.0", fontWeight: "600"}], h1: ["64px", {lineHeight: "1.1", letterSpacing: "-0.02em", fontWeight: "700"}], "body-md": ["16px", {lineHeight: "24px", fontWeight: "400"}], "label-caps": ["14px", {lineHeight: "1.2", letterSpacing: "0.05em", fontWeight: "700"}], h3: ["32px", {lineHeight: "1.2", fontWeight: "600"}], "body-lg": ["18px", {lineHeight: "28px", fontWeight: "400"}], "headline-xl": ["40px", {lineHeight: "48px", letterSpacing: "-0.02em", fontWeight: "800"}], "label-bold": ["14px", {lineHeight: "20px", fontWeight: "700"}], "label-sm": ["12px", {lineHeight: "16px", fontWeight: "500"}], "headline-md": ["24px", {lineHeight: "30px", fontWeight: "700"}], "headline-lg": ["32px", {lineHeight: "38px", letterSpacing: "-0.01em", fontWeight: "800"}]}}}};</script>
+</head>
+<body class="bg-background text-on-surface font-body-md text-body-md min-h-screen flex flex-col">
+<!-- TopAppBar from JSON -->
+<header class="fixed bg-slate-950 text-yellow-400 font-['Space_Grotesk'] uppercase tracking-tighter font-bold full-width top-0 border-b-2 border-slate-800 shadow-[0px_4px_0px_0px_rgba(0,0,0,1)] flex justify-between items-center w-full px-8 h-20 z-50">
+<div class="text-2xl font-black text-yellow-400 italic border-2 border-yellow-400 px-3 py-1 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">Retro-Modern Web3 Play</div>
+<nav class="hidden md:flex gap-8">
+<a class="text-slate-400 font-medium hover:text-yellow-300 hover:bg-slate-900 active:translate-y-1 active:shadow-none transition-all duration-100" href="#">Lobby</a>
+<a class="text-slate-400 font-medium hover:text-yellow-300 hover:bg-slate-900 active:translate-y-1 active:shadow-none transition-all duration-100" href="#">Tables</a>
+<a class="text-slate-400 font-medium hover:text-yellow-300 hover:bg-slate-900 active:translate-y-1 active:shadow-none transition-all duration-100" href="#">Predictions</a>
+<a class="text-slate-400 font-medium hover:text-yellow-300 hover:bg-slate-900 active:translate-y-1 active:shadow-none transition-all duration-100" href="#">Wallet</a>
+<a class="text-slate-400 font-medium hover:text-yellow-300 hover:bg-slate-900 active:translate-y-1 active:shadow-none transition-all duration-100" href="#">Fairness</a>
+</nav>
+<div class="flex items-center gap-6">
+<div class="flex gap-4">
+<span class="material-symbols-outlined cursor-pointer hover:text-yellow-300">notifications</span>
+<span class="material-symbols-outlined cursor-pointer hover:text-yellow-300">settings</span>
+</div>
+<button class="bg-slate-900 text-yellow-400 border-2 border-yellow-400 px-6 py-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:text-yellow-300 hover:bg-slate-800 active:translate-y-1 active:shadow-none transition-all duration-100">Connect Wallet</button>
+</div>
+</header>
+<div class="flex pt-20 flex-1">
+<!-- SideNavBar from JSON -->
+<aside class="hidden md:flex bg-slate-900 text-yellow-400 font-['Space_Grotesk'] text-sm font-bold uppercase h-full w-64 border-r-2 rounded-none border-slate-800 shadow-[4px_0px_0px_0px_rgba(0,0,0,1)] fixed left-0 top-20 h-[calc(100vh-5rem)] flex-col p-4 z-40">
+<div class="mb-8">
+<h2 class="text-xl font-black mb-1">Player Hub</h2>
+<p class="text-slate-400 text-xs">Legendary Rank</p>
+</div>
+<nav class="flex flex-col gap-2 flex-1">
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined">group</span> Social
+                </a>
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined">military_tech</span> Missions
+                </a>
+<!-- Active Item -->
+<a class="flex items-center gap-4 bg-yellow-400 text-black p-3 rounded-lg border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">leaderboard</span> Leaderboard
+                </a>
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined">psychology</span> Strategy
+                </a>
+<a class="flex items-center gap-4 text-slate-400 p-3 hover:text-slate-100 hover:bg-slate-800 rounded-lg hover:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined">help_center</span> Support
+                </a>
+</nav>
+<div class="mt-auto flex flex-col gap-4">
+<button class="bg-yellow-400 text-black border-2 border-black py-3 rounded-lg shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-y-1 active:shadow-none transition-all uppercase font-black tracking-wider">Daily Spin</button>
+<div class="flex flex-col gap-2 pt-4 border-t-2 border-slate-800">
+<a class="flex items-center gap-4 text-slate-500 text-xs hover:text-slate-300" href="#">
+<span class="material-symbols-outlined text-base">verified_user</span> Audit Log
+                    </a>
+<a class="flex items-center gap-4 text-slate-500 text-xs hover:text-slate-300" href="#">
+<span class="material-symbols-outlined text-base">enhanced_encryption</span> Security
+                    </a>
+</div>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="md:ml-64 flex-1 p-gutter max-w-[1440px] mx-auto w-full flex flex-col gap-lg pb-24">
+<!-- Header & Filters -->
+<section class="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mt-8">
+<div>
+<h1 class="font-h1 text-h1 text-on-surface mb-2 tracking-tight">GLOBAL <span class="text-primary-container">STANDINGS</span></h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl">The ultimate arena. Prove your strategy, dominate the tables, and cement your legacy on the blockchain.</p>
+</div>
+<div class="flex gap-sm bg-surface-container-high p-base border-2 border-outline-variant shadow-[4px_4px_0px_0px_#111125] rounded-DEFAULT">
+<button class="font-button text-button px-6 py-2 bg-primary-container text-on-primary-container border-2 border-on-primary-container shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-[2px] active:translate-x-[2px] active:shadow-none transition-all">Daily</button>
+<button class="font-button text-button px-6 py-2 text-on-surface-variant hover:text-primary-fixed transition-colors">Weekly</button>
+<button class="font-button text-button px-6 py-2 text-on-surface-variant hover:text-primary-fixed transition-colors">All-Time</button>
+</div>
+</section>
+<!-- Your Rank Sticky Card -->
+<section class="bg-surface-container border-2 border-primary-container shadow-[8px_8px_0px_0px_#ffd700] p-md flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+<div class="absolute inset-0 bg-halftone opacity-20 pointer-events-none"></div>
+<div class="flex items-center gap-6 relative z-10">
+<div class="w-20 h-20 bg-surface-bright border-2 border-primary-container rounded-full flex items-center justify-center text-primary-container shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+<span class="font-h2 text-h2">#42</span>
+</div>
+<div>
+<h3 class="font-label-caps text-label-caps text-primary-fixed uppercase tracking-widest mb-1">Your Current Status</h3>
+<p class="font-h3 text-h3 text-on-surface">Player_One_Ready</p>
+<div class="flex gap-4 mt-2">
+<span class="bg-secondary-container text-on-secondary-container px-3 py-1 text-xs font-bold uppercase rounded-full border border-on-secondary-container">Gold Tier</span>
+<span class="text-on-surface-variant flex items-center gap-1 text-sm"><span class="material-symbols-outlined text-sm text-tertiary-fixed">trending_up</span> Top 5%</span>
+</div>
+</div>
+</div>
+<div class="flex gap-8 relative z-10 w-full md:w-auto bg-surface-container-highest p-4 border-2 border-outline-variant shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+<div class="flex flex-col">
+<span class="font-label-caps text-label-caps text-on-surface-variant">Win Rate</span>
+<span class="font-h3 text-h3 text-primary-fixed">68.4%</span>
+</div>
+<div class="w-px bg-outline-variant"></div>
+<div class="flex flex-col">
+<span class="font-label-caps text-label-caps text-on-surface-variant">Total Winnings</span>
+<span class="font-h3 text-h3 text-tertiary-fixed">14.5k W3P</span>
+</div>
+</div>
+</section>
+<!-- Hall of Fame (Bento Grid) -->
+<section>
+<div class="flex items-center gap-4 mb-6">
+<span class="material-symbols-outlined text-primary-fixed text-4xl" style="font-variation-settings: 'FILL' 1;">stars</span>
+<h2 class="font-h2 text-h2 text-on-surface uppercase">Hall of Fame</h2>
+<div class="h-1 flex-1 bg-outline-variant ml-4"></div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-gutter items-end">
+<!-- 2nd Place -->
+<div class="bg-surface-container border-2 border-tertiary-fixed-dim shadow-[4px_4px_0px_0px_#adc6ff] p-6 relative overflow-hidden h-72 flex flex-col justify-end transform hover:-translate-y-2 transition-transform duration-200">
+<div class="absolute top-4 right-4 text-tertiary-fixed-dim font-h1 text-h1 opacity-50">2</div>
+<img alt="Avatar" class="absolute -top-10 -left-10 w-48 h-48 rounded-full border-4 border-tertiary-fixed-dim opacity-40" data-alt="A striking digital portrait avatar of a sci-fi character in a retro-pop aesthetic. The character wears an iridescent silver visor and a structured, geometric jacket. The background is a clean, deep navy void with subtle halftone dot patterns. The lighting is crisp and flat, emphasizing thick black stroke outlines around the character, evoking a premium collectible card feel." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDKZrC7xtepPzl1QptQZ1cK87u4E-T9BOAZYnkeQr5awTVD2XbkZOiBzqcRRdyyVwPjw-uL8RMomC88-gvijB-PpmuNqe7cn1z7KPWzhGCjC9iYQwAjxv7OCOME_faqNjIxKyfqmbM_KOB8AZ02YIGkyimUcLsjouTP7NpklQTlhoHPJihla2NVPgURbauWKtjgYtjycs7xkd2uLtyVzTU187WBC7lh5jlSl2_FZcp_IAj6KB4ZvRctzOyB85ya5diV-tYnrwJWh2Hd"/>
+<div class="relative z-10 bg-surface-bright border-2 border-outline-variant p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+<h4 class="font-h3 text-h3 text-on-surface truncate">CryptoNinja</h4>
+<p class="font-body-md text-primary-fixed">Win Rate: 74.2%</p>
+</div>
+</div>
+<!-- 1st Place -->
+<div class="bg-surface-container border-2 border-primary-container shadow-[8px_8px_0px_0px_#ffd700] p-6 relative overflow-hidden h-80 flex flex-col justify-end transform -translate-y-4 hover:-translate-y-6 transition-transform duration-200 z-10">
+<div class="absolute top-4 right-4 text-primary-container font-h1 text-[80px] leading-none opacity-50">1</div>
+<div class="absolute inset-0 bg-halftone opacity-30 pointer-events-none"></div>
+<img alt="Avatar" class="absolute -top-12 -left-12 w-64 h-64 rounded-full border-4 border-primary-container opacity-50" data-alt="A heroic digital portrait avatar of a triumphant character in a vibrant retro-pop art style. The character is adorned with glowing gold accessories and an ornate, stylized crown. The backdrop is a dynamic explosion of gold and deep purple geometric shapes with prominent halftone texturing. Thick, graphic black outlines define the forms, giving it the appearance of a rare, high-value winner's badge." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBwxv-1Vy9KxRsI_bDOyYvt5sFotf5YOGOGWWEAZOx779u6bR0BhC3-kgBSZ-Y3ICcS8IN6xWUPoBtDXKCknbpgxtsoT2EYhCgjVw_je3BdkIHt9N74dwi1BDp4OqHkAXyk-tzGKyVxkxRHMkHcua4LUvOu6Hmqb2kuXBFBnIp11fon_raVWRHXXjn5xsh8iIOyqvMtnX2uacmnvDzQsXVUdtvdLL24Ui4JugRYNdfApTrJjLINYZn8nd4L7-Waml1_WyvXhGjMyLKB"/>
+<div class="relative z-10 bg-surface-bright border-2 border-primary-container p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+<div class="flex items-center gap-2 mb-1">
+<span class="material-symbols-outlined text-primary-fixed text-sm" style="font-variation-settings: 'FILL' 1;">military_tech</span>
+<span class="font-label-caps text-label-caps text-primary-fixed">GRAND CHAMPION</span>
+</div>
+<h4 class="font-h2 text-h2 text-on-surface truncate leading-none mb-2">WhaleSlayer</h4>
+<p class="font-h3 text-h3 text-tertiary-fixed">82.1% <span class="text-sm font-body-md text-on-surface-variant">Win Rate</span></p>
+</div>
+</div>
+<!-- 3rd Place -->
+<div class="bg-surface-container border-2 border-outline shadow-[4px_4px_0px_0px_#999077] p-6 relative overflow-hidden h-64 flex flex-col justify-end transform hover:-translate-y-2 transition-transform duration-200">
+<div class="absolute top-4 right-4 text-outline font-h1 text-h1 opacity-50">3</div>
+<div class="relative z-10 bg-surface-bright border-2 border-outline-variant p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+<h4 class="font-h3 text-h3 text-on-surface truncate">DiamondHands</h4>
+<p class="font-body-md text-primary-fixed">Win Rate: 71.9%</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Leaderboard List -->
+<section class="bg-surface-container border-2 border-outline-variant shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
+<div class="p-6 bg-surface-bright border-b-2 border-outline-variant flex justify-between items-center">
+<h3 class="font-h3 text-h3 text-on-surface">Top Contenders</h3>
+<div class="relative w-64">
+<span class="material-symbols-outlined absolute left-3 top-1/2 transform -translate-y-1/2 text-outline-variant">search</span>
+<input class="w-full bg-surface-container-highest border-2 border-outline-variant text-on-surface font-body-md py-2 pl-10 pr-4 focus:border-primary-fixed focus:outline-none placeholder-outline-variant transition-colors" placeholder="Search player..." type="text"/>
+</div>
+</div>
+<div class="flex flex-col">
+<!-- Table Header -->
+<div class="grid grid-cols-12 gap-4 p-4 border-b-2 border-outline-variant bg-surface-container-highest font-label-caps text-label-caps text-on-surface-variant uppercase">
+<div class="col-span-1 text-center">Rank</div>
+<div class="col-span-5">Player</div>
+<div class="col-span-3 text-right">Win Rate</div>
+<div class="col-span-3 text-right">Total Winnings</div>
+</div>
+<!-- Rows -->
+<div class="grid grid-cols-12 gap-4 p-4 border-b-2 border-surface-bright items-center hover:bg-surface-bright transition-colors cursor-pointer group">
+<div class="col-span-1 font-h3 text-h3 text-outline text-center group-hover:text-primary-fixed transition-colors">4</div>
+<div class="col-span-5 flex items-center gap-3">
+<div class="w-10 h-10 bg-secondary-container border border-outline-variant rounded-full flex items-center justify-center text-on-secondary-container font-bold">Z</div>
+<span class="font-button text-button text-on-surface">ZeroCool</span>
+</div>
+<div class="col-span-3 text-right font-body-lg text-primary-fixed">70.5%</div>
+<div class="col-span-3 text-right font-body-md text-on-surface-variant">45,200 W3P</div>
+</div>
+<div class="grid grid-cols-12 gap-4 p-4 border-b-2 border-surface-bright items-center hover:bg-surface-bright transition-colors cursor-pointer group">
+<div class="col-span-1 font-h3 text-h3 text-outline text-center group-hover:text-primary-fixed transition-colors">5</div>
+<div class="col-span-5 flex items-center gap-3">
+<div class="w-10 h-10 bg-tertiary-container border border-outline-variant rounded-full flex items-center justify-center text-on-tertiary-container font-bold">L</div>
+<span class="font-button text-button text-on-surface">LaserPointer</span>
+</div>
+<div class="col-span-3 text-right font-body-lg text-primary-fixed">69.8%</div>
+<div class="col-span-3 text-right font-body-md text-on-surface-variant">42,150 W3P</div>
+</div>
+<div class="grid grid-cols-12 gap-4 p-4 border-b-2 border-surface-bright items-center hover:bg-surface-bright transition-colors cursor-pointer group bg-surface-container-high">
+<div class="col-span-1 font-h3 text-h3 text-primary-container text-center">42</div>
+<div class="col-span-5 flex items-center gap-3">
+<div class="w-10 h-10 bg-primary-container border-2 border-on-primary-container rounded-full flex items-center justify-center text-on-primary-container font-bold">P</div>
+<span class="font-button text-button text-primary-fixed">Player_One_Ready <span class="ml-2 text-xs bg-primary-fixed text-on-primary-fixed px-2 py-0.5 rounded-sm">YOU</span></span>
+</div>
+<div class="col-span-3 text-right font-body-lg text-primary-fixed">68.4%</div>
+<div class="col-span-3 text-right font-body-md text-on-surface">14,500 W3P</div>
+</div>
+<div class="grid grid-cols-12 gap-4 p-4 items-center hover:bg-surface-bright transition-colors cursor-pointer group">
+<div class="col-span-1 font-h3 text-h3 text-outline text-center group-hover:text-primary-fixed transition-colors">43</div>
+<div class="col-span-5 flex items-center gap-3">
+<div class="w-10 h-10 bg-error-container border border-outline-variant rounded-full flex items-center justify-center text-on-error-container font-bold">R</div>
+<span class="font-button text-button text-on-surface">RogueTrader</span>
+</div>
+<div class="col-span-3 text-right font-body-lg text-primary-fixed">68.1%</div>
+<div class="col-span-3 text-right font-body-md text-on-surface-variant">14,200 W3P</div>
+</div>
+</div>
+<div class="p-4 border-t-2 border-outline-variant flex justify-center bg-surface-bright">
+<button class="font-button text-button text-on-surface hover:text-primary-fixed flex items-center gap-2 transition-colors">Load More <span class="material-symbols-outlined text-sm">expand_more</span></button>
+</div>
+</section>
+</main>
+</div>
+<!-- Footer from JSON -->
+<footer class="bg-slate-950 text-yellow-400 font-['Space_Grotesk'] text-xs font-black uppercase tracking-widest full-width border-t-2 border-slate-800 w-full py-12 px-8 flex flex-col md:flex-row justify-between items-center gap-8 relative z-50">
+<div class="text-lg text-yellow-400">Retro-Modern Web3 Play</div>
+<div>© 2024 RETRO-MODERN WEB3 PLAY. PROVABLY FAIR.</div>
+<nav class="flex flex-wrap justify-center gap-6">
+<a class="text-slate-500 hover:text-yellow-400 transition-colors underline-offset-4 hover:underline" href="#">Whitepaper</a>
+<a class="text-slate-500 hover:text-yellow-400 transition-colors underline-offset-4 hover:underline" href="#">Tokenomics</a>
+<a class="text-slate-500 hover:text-yellow-400 transition-colors underline-offset-4 hover:underline" href="#">Audit Report</a>
+<a class="text-slate-500 hover:text-yellow-400 transition-colors underline-offset-4 hover:underline" href="#">Privacy</a>
+<a class="text-slate-500 hover:text-yellow-400 transition-colors underline-offset-4 hover:underline" href="#">Terms</a>
+</nav>
+</footer>
+</body></html>

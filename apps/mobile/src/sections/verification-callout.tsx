@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import type { MobileVerificationCalloutCopy } from '../mobile-copy';
-import { mobilePalette } from '../theme';
+import { mobileChromeTheme, mobilePalette } from '../theme';
 import { ActionButton } from '../ui';
 
 type VerificationCalloutProps = {
@@ -38,17 +38,19 @@ export function VerificationCallout(props: VerificationCalloutProps) {
 
 const styles = StyleSheet.create({
   callout: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#3b2d10',
-    backgroundColor: '#211b10',
+    borderRadius: 20,
+    borderWidth: mobileChromeTheme.borderWidth,
+    borderColor: mobilePalette.border,
+    backgroundColor: '#fff3c2',
     padding: 16,
     gap: 12,
+    ...mobileChromeTheme.cardShadowSm,
   },
   title: {
     color: mobilePalette.text,
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '800',
   },
   subtitle: {
     color: mobilePalette.textMuted,

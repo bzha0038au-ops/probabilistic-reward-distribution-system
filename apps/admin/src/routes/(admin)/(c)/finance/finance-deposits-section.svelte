@@ -36,6 +36,11 @@
       class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
     >
       <div>
+        <p
+          class="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-[var(--admin-primary)]"
+        >
+          Deposit Queue
+        </p>
         <h2 class="card-title">{t("finance.deposits.title")}</h2>
         <p class="text-sm text-slate-500">
           {t("finance.deposits.description")}
@@ -43,9 +48,13 @@
       </div>
     </div>
 
-    <div class="overflow-x-auto mt-4">
-      <table class="table">
-        <thead>
+    <div
+      class="admin-table-scroll admin-table-scroll--wide mt-4 overflow-x-auto rounded-[0.95rem] border border-[var(--admin-border)]"
+    >
+      <table class="table admin-table-compact">
+        <thead
+          class="font-mono text-[0.68rem] uppercase tracking-[0.18em] text-slate-500"
+        >
           <tr>
             <th>{t("finance.deposits.headers.id")}</th>
             <th>{t("finance.deposits.headers.userId")}</th>
@@ -60,41 +69,60 @@
         <tbody>
           {#each filteredDeposits as deposit}
             <tr>
-              <td>{deposit.id}</td>
-              <td>{deposit.userId}</td>
-              <td>{deposit.amount}</td>
+              <td class="font-mono text-xs">{deposit.id}</td>
+              <td class="font-mono text-xs">{deposit.userId}</td>
+              <td class="font-mono text-xs">{deposit.amount}</td>
               <td>{support.depositStatusLabel(deposit.status)}</td>
               <td>
                 <div class="space-y-1 text-xs">
                   <div>{support.processingModeLabel(deposit.metadata)}</div>
                   {#if support.financeStateLabel(Reflect.get(deposit.metadata ?? {}, "userVisibleStatus"), "deposit")}
                     <div class="text-slate-500">
-                      User: {support.financeStateLabel(Reflect.get(deposit.metadata ?? {}, "userVisibleStatus"), "deposit")}
+                      User: {support.financeStateLabel(
+                        Reflect.get(
+                          deposit.metadata ?? {},
+                          "userVisibleStatus",
+                        ),
+                        "deposit",
+                      )}
                     </div>
                   {/if}
                   {#if support.providerStatusLabel(Reflect.get(deposit.metadata ?? {}, "providerStatus"), "deposit")}
                     <div class="text-slate-500">
-                      Channel: {support.providerStatusLabel(Reflect.get(deposit.metadata ?? {}, "providerStatus"), "deposit")}
+                      Channel: {support.providerStatusLabel(
+                        Reflect.get(deposit.metadata ?? {}, "providerStatus"),
+                        "deposit",
+                      )}
                     </div>
                   {/if}
                   {#if support.financeStateLabel(Reflect.get(deposit.metadata ?? {}, "settlementStatus"), "deposit")}
                     <div class="text-slate-500">
-                      Settlement: {support.financeStateLabel(Reflect.get(deposit.metadata ?? {}, "settlementStatus"), "deposit")}
+                      Settlement: {support.financeStateLabel(
+                        Reflect.get(deposit.metadata ?? {}, "settlementStatus"),
+                        "deposit",
+                      )}
                     </div>
                   {/if}
                   {#if support.ledgerStateLabel(Reflect.get(deposit.metadata ?? {}, "ledgerState"))}
                     <div class="text-slate-500">
-                      {support.ledgerStateLabel(Reflect.get(deposit.metadata ?? {}, "ledgerState"))}
+                      {support.ledgerStateLabel(
+                        Reflect.get(deposit.metadata ?? {}, "ledgerState"),
+                      )}
                     </div>
                   {/if}
                   {#if readString(Reflect.get(deposit.metadata ?? {}, "failureReason"))}
                     <div class="text-slate-500">
-                      Failure: {readString(Reflect.get(deposit.metadata ?? {}, "failureReason"))}
+                      Failure: {readString(
+                        Reflect.get(deposit.metadata ?? {}, "failureReason"),
+                      )}
                     </div>
                   {/if}
                   {#if support.manualFallbackStatusLabel(deposit.metadata, "deposit")}
                     <div class="text-slate-500">
-                      {support.manualFallbackStatusLabel(deposit.metadata, "deposit")}
+                      {support.manualFallbackStatusLabel(
+                        deposit.metadata,
+                        "deposit",
+                      )}
                     </div>
                   {/if}
                   {#if support.manualFallbackReasonLabel(deposit.metadata)}
@@ -117,7 +145,9 @@
               <td>
                 {#if support.formatReview(deposit.metadata)}
                   <div class="space-y-1 text-xs">
-                    <div>{support.formatReview(deposit.metadata)?.action ?? "-"}</div>
+                    <div>
+                      {support.formatReview(deposit.metadata)?.action ?? "-"}
+                    </div>
                     {#if support.formatReview(deposit.metadata)?.adminId}
                       <div class="text-slate-500">
                         Admin #{support.formatReview(deposit.metadata)?.adminId}
@@ -130,12 +160,14 @@
                     {/if}
                     {#if support.formatReview(deposit.metadata)?.processingChannel}
                       <div class="text-slate-500">
-                        {support.formatReview(deposit.metadata)?.processingChannel}
+                        {support.formatReview(deposit.metadata)
+                          ?.processingChannel}
                       </div>
                     {/if}
                     {#if support.formatReview(deposit.metadata)?.settlementReference}
                       <div class="text-slate-500">
-                        {support.formatReview(deposit.metadata)?.settlementReference}
+                        {support.formatReview(deposit.metadata)
+                          ?.settlementReference}
                       </div>
                     {/if}
                     {#if support.formatReview(deposit.metadata)?.operatorNote}
@@ -148,28 +180,64 @@
                   <span class="text-xs text-slate-400">-</span>
                 {/if}
               </td>
-              <td>{formatDate(deposit.createdAt)}</td>
+              <td class="font-mono text-xs">{formatDate(deposit.createdAt)}</td>
               <td class="text-right">
                 {#if isCrypto(deposit.channelType)}
-                  <div class="flex justify-end gap-2">
+                  <div class="admin-inline-actions">
                     {#if deposit.status !== "credited" && deposit.status !== "reversed"}
                       <form method="post" action="?/confirmCryptoDeposit">
                         <input type="hidden" name="id" value={deposit.id} />
-                        <input type="hidden" name="totpCode" value={stepUpCode} />
-                        <input type="hidden" name="processingChannel" value={processingChannel} />
-                        <input type="hidden" name="settlementReference" value={settlementReference} />
-                        <input type="hidden" name="confirmations" value={confirmations} />
-                        <input type="hidden" name="operatorNote" value={operatorNote} />
+                        <input
+                          type="hidden"
+                          name="totpCode"
+                          value={stepUpCode}
+                        />
+                        <input
+                          type="hidden"
+                          name="processingChannel"
+                          value={processingChannel}
+                        />
+                        <input
+                          type="hidden"
+                          name="settlementReference"
+                          value={settlementReference}
+                        />
+                        <input
+                          type="hidden"
+                          name="confirmations"
+                          value={confirmations}
+                        />
+                        <input
+                          type="hidden"
+                          name="operatorNote"
+                          value={operatorNote}
+                        />
                         <button class="btn btn-xs btn-primary" type="submit">
                           {t("finance.deposits.actionCryptoConfirm")}
                         </button>
                       </form>
                       <form method="post" action="?/rejectCryptoDeposit">
                         <input type="hidden" name="id" value={deposit.id} />
-                        <input type="hidden" name="totpCode" value={stepUpCode} />
-                        <input type="hidden" name="processingChannel" value={processingChannel} />
-                        <input type="hidden" name="settlementReference" value={settlementReference} />
-                        <input type="hidden" name="operatorNote" value={operatorNote} />
+                        <input
+                          type="hidden"
+                          name="totpCode"
+                          value={stepUpCode}
+                        />
+                        <input
+                          type="hidden"
+                          name="processingChannel"
+                          value={processingChannel}
+                        />
+                        <input
+                          type="hidden"
+                          name="settlementReference"
+                          value={settlementReference}
+                        />
+                        <input
+                          type="hidden"
+                          name="operatorNote"
+                          value={operatorNote}
+                        />
                         <button class="btn btn-xs btn-outline" type="submit">
                           {t("finance.deposits.actionCryptoReject")}
                         </button>
@@ -178,10 +246,26 @@
                     {#if deposit.status === "credited"}
                       <form method="post" action="?/reverseDeposit">
                         <input type="hidden" name="id" value={deposit.id} />
-                        <input type="hidden" name="totpCode" value={stepUpCode} />
-                        <input type="hidden" name="processingChannel" value={processingChannel} />
-                        <input type="hidden" name="settlementReference" value={settlementReference} />
-                        <input type="hidden" name="operatorNote" value={operatorNote} />
+                        <input
+                          type="hidden"
+                          name="totpCode"
+                          value={stepUpCode}
+                        />
+                        <input
+                          type="hidden"
+                          name="processingChannel"
+                          value={processingChannel}
+                        />
+                        <input
+                          type="hidden"
+                          name="settlementReference"
+                          value={settlementReference}
+                        />
+                        <input
+                          type="hidden"
+                          name="operatorNote"
+                          value={operatorNote}
+                        />
                         <button class="btn btn-xs btn-outline" type="submit">
                           {t("finance.deposits.actionReverse")}
                         </button>
@@ -189,66 +273,165 @@
                     {/if}
                   </div>
                 {:else if deposit.status === "requested" || deposit.status === "provider_pending" || deposit.status === "provider_succeeded" || deposit.status === "credited"}
-                  <div class="flex justify-end gap-2">
+                  <div class="admin-inline-actions">
                     {#if deposit.status === "requested"}
                       <form method="post" action="?/markDepositProviderPending">
                         <input type="hidden" name="id" value={deposit.id} />
-                        <input type="hidden" name="totpCode" value={stepUpCode} />
-                        <input type="hidden" name="processingChannel" value={processingChannel} />
-                        <input type="hidden" name="settlementReference" value={settlementReference} />
-                        <input type="hidden" name="operatorNote" value={operatorNote} />
+                        <input
+                          type="hidden"
+                          name="totpCode"
+                          value={stepUpCode}
+                        />
+                        <input
+                          type="hidden"
+                          name="processingChannel"
+                          value={processingChannel}
+                        />
+                        <input
+                          type="hidden"
+                          name="settlementReference"
+                          value={settlementReference}
+                        />
+                        <input
+                          type="hidden"
+                          name="operatorNote"
+                          value={operatorNote}
+                        />
                         <button class="btn btn-xs btn-primary" type="submit">
                           {t("finance.deposits.actionProviderPending")}
                         </button>
                       </form>
                       <form method="post" action="?/markDepositProviderFailed">
                         <input type="hidden" name="id" value={deposit.id} />
-                        <input type="hidden" name="totpCode" value={stepUpCode} />
-                        <input type="hidden" name="processingChannel" value={processingChannel} />
-                        <input type="hidden" name="settlementReference" value={settlementReference} />
-                        <input type="hidden" name="operatorNote" value={operatorNote} />
+                        <input
+                          type="hidden"
+                          name="totpCode"
+                          value={stepUpCode}
+                        />
+                        <input
+                          type="hidden"
+                          name="processingChannel"
+                          value={processingChannel}
+                        />
+                        <input
+                          type="hidden"
+                          name="settlementReference"
+                          value={settlementReference}
+                        />
+                        <input
+                          type="hidden"
+                          name="operatorNote"
+                          value={operatorNote}
+                        />
                         <button class="btn btn-xs btn-outline" type="submit">
                           {t("finance.deposits.actionProviderFail")}
                         </button>
                       </form>
                       <form method="post" action="?/reverseDeposit">
                         <input type="hidden" name="id" value={deposit.id} />
-                        <input type="hidden" name="totpCode" value={stepUpCode} />
-                        <input type="hidden" name="processingChannel" value={processingChannel} />
-                        <input type="hidden" name="settlementReference" value={settlementReference} />
-                        <input type="hidden" name="operatorNote" value={operatorNote} />
+                        <input
+                          type="hidden"
+                          name="totpCode"
+                          value={stepUpCode}
+                        />
+                        <input
+                          type="hidden"
+                          name="processingChannel"
+                          value={processingChannel}
+                        />
+                        <input
+                          type="hidden"
+                          name="settlementReference"
+                          value={settlementReference}
+                        />
+                        <input
+                          type="hidden"
+                          name="operatorNote"
+                          value={operatorNote}
+                        />
                         <button class="btn btn-xs btn-outline" type="submit">
                           {t("finance.deposits.actionReverse")}
                         </button>
                       </form>
                     {/if}
                     {#if deposit.status === "provider_pending"}
-                      <form method="post" action="?/markDepositProviderSucceeded">
+                      <form
+                        method="post"
+                        action="?/markDepositProviderSucceeded"
+                      >
                         <input type="hidden" name="id" value={deposit.id} />
-                        <input type="hidden" name="totpCode" value={stepUpCode} />
-                        <input type="hidden" name="processingChannel" value={processingChannel} />
-                        <input type="hidden" name="settlementReference" value={settlementReference} />
-                        <input type="hidden" name="operatorNote" value={operatorNote} />
+                        <input
+                          type="hidden"
+                          name="totpCode"
+                          value={stepUpCode}
+                        />
+                        <input
+                          type="hidden"
+                          name="processingChannel"
+                          value={processingChannel}
+                        />
+                        <input
+                          type="hidden"
+                          name="settlementReference"
+                          value={settlementReference}
+                        />
+                        <input
+                          type="hidden"
+                          name="operatorNote"
+                          value={operatorNote}
+                        />
                         <button class="btn btn-xs btn-primary" type="submit">
                           {t("finance.deposits.actionProviderSucceeded")}
                         </button>
                       </form>
                       <form method="post" action="?/markDepositProviderFailed">
                         <input type="hidden" name="id" value={deposit.id} />
-                        <input type="hidden" name="totpCode" value={stepUpCode} />
-                        <input type="hidden" name="processingChannel" value={processingChannel} />
-                        <input type="hidden" name="settlementReference" value={settlementReference} />
-                        <input type="hidden" name="operatorNote" value={operatorNote} />
+                        <input
+                          type="hidden"
+                          name="totpCode"
+                          value={stepUpCode}
+                        />
+                        <input
+                          type="hidden"
+                          name="processingChannel"
+                          value={processingChannel}
+                        />
+                        <input
+                          type="hidden"
+                          name="settlementReference"
+                          value={settlementReference}
+                        />
+                        <input
+                          type="hidden"
+                          name="operatorNote"
+                          value={operatorNote}
+                        />
                         <button class="btn btn-xs btn-outline" type="submit">
                           {t("finance.deposits.actionProviderFail")}
                         </button>
                       </form>
                       <form method="post" action="?/reverseDeposit">
                         <input type="hidden" name="id" value={deposit.id} />
-                        <input type="hidden" name="totpCode" value={stepUpCode} />
-                        <input type="hidden" name="processingChannel" value={processingChannel} />
-                        <input type="hidden" name="settlementReference" value={settlementReference} />
-                        <input type="hidden" name="operatorNote" value={operatorNote} />
+                        <input
+                          type="hidden"
+                          name="totpCode"
+                          value={stepUpCode}
+                        />
+                        <input
+                          type="hidden"
+                          name="processingChannel"
+                          value={processingChannel}
+                        />
+                        <input
+                          type="hidden"
+                          name="settlementReference"
+                          value={settlementReference}
+                        />
+                        <input
+                          type="hidden"
+                          name="operatorNote"
+                          value={operatorNote}
+                        />
                         <button class="btn btn-xs btn-outline" type="submit">
                           {t("finance.deposits.actionReverse")}
                         </button>
@@ -257,20 +440,52 @@
                     {#if deposit.status === "provider_succeeded"}
                       <form method="post" action="?/creditDeposit">
                         <input type="hidden" name="id" value={deposit.id} />
-                        <input type="hidden" name="totpCode" value={stepUpCode} />
-                        <input type="hidden" name="processingChannel" value={processingChannel} />
-                        <input type="hidden" name="settlementReference" value={settlementReference} />
-                        <input type="hidden" name="operatorNote" value={operatorNote} />
+                        <input
+                          type="hidden"
+                          name="totpCode"
+                          value={stepUpCode}
+                        />
+                        <input
+                          type="hidden"
+                          name="processingChannel"
+                          value={processingChannel}
+                        />
+                        <input
+                          type="hidden"
+                          name="settlementReference"
+                          value={settlementReference}
+                        />
+                        <input
+                          type="hidden"
+                          name="operatorNote"
+                          value={operatorNote}
+                        />
                         <button class="btn btn-xs btn-primary" type="submit">
                           {t("finance.deposits.actionCredit")}
                         </button>
                       </form>
                       <form method="post" action="?/reverseDeposit">
                         <input type="hidden" name="id" value={deposit.id} />
-                        <input type="hidden" name="totpCode" value={stepUpCode} />
-                        <input type="hidden" name="processingChannel" value={processingChannel} />
-                        <input type="hidden" name="settlementReference" value={settlementReference} />
-                        <input type="hidden" name="operatorNote" value={operatorNote} />
+                        <input
+                          type="hidden"
+                          name="totpCode"
+                          value={stepUpCode}
+                        />
+                        <input
+                          type="hidden"
+                          name="processingChannel"
+                          value={processingChannel}
+                        />
+                        <input
+                          type="hidden"
+                          name="settlementReference"
+                          value={settlementReference}
+                        />
+                        <input
+                          type="hidden"
+                          name="operatorNote"
+                          value={operatorNote}
+                        />
                         <button class="btn btn-xs btn-outline" type="submit">
                           {t("finance.deposits.actionReverse")}
                         </button>
@@ -279,10 +494,26 @@
                     {#if deposit.status === "credited"}
                       <form method="post" action="?/reverseDeposit">
                         <input type="hidden" name="id" value={deposit.id} />
-                        <input type="hidden" name="totpCode" value={stepUpCode} />
-                        <input type="hidden" name="processingChannel" value={processingChannel} />
-                        <input type="hidden" name="settlementReference" value={settlementReference} />
-                        <input type="hidden" name="operatorNote" value={operatorNote} />
+                        <input
+                          type="hidden"
+                          name="totpCode"
+                          value={stepUpCode}
+                        />
+                        <input
+                          type="hidden"
+                          name="processingChannel"
+                          value={processingChannel}
+                        />
+                        <input
+                          type="hidden"
+                          name="settlementReference"
+                          value={settlementReference}
+                        />
+                        <input
+                          type="hidden"
+                          name="operatorNote"
+                          value={operatorNote}
+                        />
                         <button class="btn btn-xs btn-outline" type="submit">
                           {t("finance.deposits.actionReverse")}
                         </button>

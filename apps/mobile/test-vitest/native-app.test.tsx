@@ -118,7 +118,33 @@ const nativeAppMocks = vi.hoisted(() => {
     resetWallet: vi.fn(),
     rewardCenter: null as unknown,
     routeCopy: {
-      cards: [],
+      cards: {
+        gacha: {
+          body: "Gacha body",
+          open: "Open Gacha",
+          title: "Gacha",
+        },
+        rewards: {
+          body: "Rewards body",
+          open: "Open Rewards",
+          title: "Rewards",
+        },
+        wallet: {
+          body: "Wallet body",
+          open: "Open Wallet",
+          title: "Wallet",
+        },
+        security: {
+          body: "Security body",
+          open: "Open Security",
+          title: "Security",
+        },
+        fairness: {
+          body: "Fairness body",
+          open: "Open Fairness",
+          title: "Fairness",
+        },
+      },
       heroes: {
         account: { subtitle: "Account subtitle" },
         blackjack: { subtitle: "Blackjack subtitle" },
@@ -151,6 +177,8 @@ const nativeAppMocks = vi.hoisted(() => {
         security: "Security",
         wallet: "Wallet",
       },
+      homeFeaturedLabel: "Featured",
+      homeMoreTitle: "More routes",
       screens: {
         blackjack: {},
         gacha: {},
